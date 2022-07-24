@@ -1,7 +1,7 @@
 use crate::asset::{addr_validate_to_lower, AssetInfo};
 use cosmwasm_std::{
-    attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
-    StdError, StdResult, Uint128, WasmMsg,
+    attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env,
+    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw20_base::msg::{ExecuteMsg as CW20ExecuteMsg, QueryMsg as Cw20QueryMsg};
 use cw_storage_plus::Item;
@@ -217,4 +217,15 @@ pub fn validate_sent_native_token_balance(
     } else {
         Ok(())
     }
+}
+
+/// ## Description
+/// Converts [`Decimal`] to [`Decimal256`].
+pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
+    Decimal256::from_atomics(dec_value.atomics(), dec_value.decimal_places()).map_err(|_| {
+        StdError::generic_err(format!(
+            "Failed to convert Decimal {} to Decimal256",
+            dec_value
+        ))
+    })
 }

@@ -1,13 +1,15 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
 
-const MAX_TOTAL_FEE_BPS: u16 = 10_000;
-const MAX_PROTOCOL_FEE_BPS: u16 = 10_000;
-const MAX_DEV_FEE_BPS: u16 = 10_000;
+const MAX_total_fee_bps: Decimal = 10_000;
+const MAX_protocol_fee_bps: Decimal = 10_000;
+const MAX_dev_fee_bps: Decimal = 10_000;
+
+pub const TWAP_PRECISION = 9;
 
 // / This enum describes available Pool types.
 // / ## Available pool types
@@ -63,9 +65,9 @@ pub enum SwapType {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
-    pub total_fee_bps: u16,
-    pub protocol_fee_bps: u16,
-    pub dev_fee_bps: u16,
+    pub total_fee_bps: Decimal,
+    pub protocol_fee_bps: Decimal,
+    pub dev_fee_bps: Decimal,
     pub dev_addr_bps: Option<Addr>,
 }
 

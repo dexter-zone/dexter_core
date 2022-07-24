@@ -212,6 +212,13 @@ impl AssetInfo {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AssetExchangeRate {
+    pub offer_info: AssetInfo,
+    pub ask_info: AssetInfo,
+    pub rate: Uint128,
+}
+
 // /// This structure stores the main parameters for a  pair
 // #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 // pub struct PoolInfo {

@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::asset::{Asset, AssetInfo};
+use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{FeeInfo, PoolType, SwapKind};
 
@@ -40,20 +40,26 @@ pub type ConfigResponse = Config;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
-    pub total_fee_bps: u16,
+    pub total_fee_bps: Decimal,
     /// The amount of fees (in bps) collected by the Protocol from this pool type
-    pub protocol_fee_bps: u16,
+    pub protocol_fee_bps: Decimal,
     /// The amount of fees (in bps) collected by the devs from this pool type
-    pub dev_fee_bps: u16,
+    pub dev_fee_bps: Decimal,
     /// The address to which the collected developer fee is transferred
     pub dev_fee_collector: Option<Addr>,
 }
 
 /// ## Description
-/// This structure describes the custom struct for each query response.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct CumulativePriceResponse {
-    pub price_cumulative_last: Uint128,
+    pub exchange_info: AssetExchangeRate,
+    pub total_share: Uint128,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct CumulativePricesResponse {
+    pub exchange_infos: Vec<AssetExchangeRate>,
     pub total_share: Uint128,
 }
 
@@ -201,6 +207,8 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
+    FeeParams {},
+    PoolId {},
     OnJoinPool {
         assets_in: Vec<Asset>,
     },
@@ -214,47 +222,12 @@ pub enum QueryMsg {
         ask_asset: AssetInfo,
         amount: Uint128,
     },
-    FeeParams {},
-    PoolId {},
-    CumulativePrices {},
-    QueryShares {
-        amount: Uint128,
+    CumulativePrice {
+        offer_asset: AssetInfo,
+        ask_asset: AssetInfo,
     },
+    CumulativePrices {},
 }
-
-// /// ## Description
-// /// This structure describes the custom struct for each query response.
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct SimulateSwapResponse {
-//     pub assets: [Asset; 2],
-//     pub total_share: Uint128,
-// }
-
-// /// ## Description
-// /// This structure describes the custom struct for each query response.
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct PoolResponse {
-//     pub assets: [Asset; 2],
-//     pub total_share: Uint128,
-// }
-
-// /// ## Description
-// /// SimulationResponse returns swap simulation response
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct SimulationResponse {
-//     pub return_amount: Uint128,
-//     pub spread_amount: Uint128,
-//     pub commission_amount: Uint128,
-// }
-
-// /// ## Description
-// /// ReverseSimulationResponse returns reverse swap simulation response
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct ReverseSimulationResponse {
-//     pub offer_amount: Uint128,
-//     pub spread_amount: Uint128,
-//     pub commission_amount: Uint128,
-// }
 
 // /// ## Description
 // /// This structure describes the custom struct for each query response.
