@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::Uint128;
 use cw_storage_plus::Item;
 use dexter::pool::Config;
 use schemars::JsonSchema;

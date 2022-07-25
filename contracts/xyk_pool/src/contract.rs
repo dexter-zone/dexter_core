@@ -166,7 +166,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        // ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
+        ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
@@ -422,9 +422,17 @@ pub fn query_on_swap(
         cur_offer_asset_bal = config.assets[1].amount;
         cur_ask_asset_bal = config.assets[0].amount;
     } else {
-        return Err(StdError::generic_err(
-            "Given offer asset doesn't belong to pairs",
-        ));
+        Ok(SwapResponse {
+            trade_params: Trade {
+                amount_in: Uint128::zero(),
+                amount_out: Uint128::zero(),
+                spread: Uint128::zero(),
+                total_fee: Uint128::zero(),
+                protocol_fee: Uint128::zero(),,
+                dev_fee: Uint128::zero(),,
+            },
+            response: ResponseType::Failure {},
+        })
     }
 
     let mut offer_asset: Asset;
@@ -730,84 +738,3 @@ pub fn accumulate_prices(
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::default())
 }
-
-// /// ## Description
-// /// Returns an [`ContractError`] on failure, otherwise if `belief_price` and `max_spread` both are given, we compute new spread else we just use swap
-// /// spread to check `max_spread`.
-// /// ## Params
-// /// * **belief_price** is the object of type [`Option<Decimal>`]. Sets the belief price.
-// /// * **max_spread** is the object of type [`Option<Decimal>`]. Sets the maximum spread.
-// /// * **offer_amount** is the object of type [`Uint128`]. Sets the offer amount.
-// /// * **return_amount** is the object of type [`Uint128`]. Sets the return amount.
-// /// * **spread_amount** is the object of type [`Uint128`]. Sets the spread amount.
-// pub fn assert_max_spread(
-//     belief_price: Option<Decimal>,
-//     max_spread: Option<Decimal>,
-//     offer_amount: Uint128,
-//     return_amount: Uint128,
-//     spread_amount: Uint128,
-// ) -> Result<(), ContractError> {
-//     let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE)?;
-//     let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE)?;
-
-//     let max_spread = max_spread.unwrap_or(default_spread);
-//     if max_spread.gt(&max_allowed_spread) {
-//         return Err(ContractError::AllowedSpreadAssertion {});
-//     }
-
-//     if let Some(belief_price) = belief_price {
-//         let expected_return = offer_amount * belief_price.inv().unwrap();
-//         let spread_amount = expected_return
-//             .checked_sub(return_amount)
-//             .unwrap_or_else(|_| Uint128::zero());
-
-//         if return_amount < expected_return
-//             && Decimal::from_ratio(spread_amount, expected_return) > max_spread
-//         {
-//             return Err(ContractError::MaxSpreadAssertion {});
-//         }
-//     } else if Decimal::from_ratio(spread_amount, return_amount + spread_amount) > max_spread {
-//         return Err(ContractError::MaxSpreadAssertion {});
-//     }
-
-//     Ok(())
-// }
-
-// /// ## Description
-// /// Ensures each prices are not dropped as much as slippage tolerance rate.
-// /// Returns an [`ContractError`] on failure, otherwise returns [`Ok`].
-// /// ## Params
-// /// * **slippage_tolerance** is the object of type [`Option<Decimal>`].
-// ///
-// /// * **deposits** are an array of [`Uint128`] type items.
-// ///
-// /// * **pools** are an array of [`Asset`] type items.
-// fn assert_slippage_tolerance(
-//     slippage_tolerance: Option<Decimal>,
-//     deposits: &[Uint128; 2],
-//     pools: &[Asset; 2],
-// ) -> Result<(), ContractError> {
-//     let default_slippage = Decimal::from_str(DEFAULT_SLIPPAGE)?;
-//     let max_allowed_slippage = Decimal::from_str(MAX_ALLOWED_SLIPPAGE)?;
-
-//     let slippage_tolerance = slippage_tolerance.unwrap_or(default_slippage);
-//     if slippage_tolerance.gt(&max_allowed_slippage) {
-//         return Err(ContractError::AllowedSpreadAssertion {});
-//     }
-
-//     let slippage_tolerance: Decimal256 = decimal2decimal256(slippage_tolerance)?;
-//     let one_minus_slippage_tolerance = Decimal256::one() - slippage_tolerance;
-//     let deposits: [Uint256; 2] = [deposits[0].into(), deposits[1].into()];
-//     let pools: [Uint256; 2] = [pools[0].amount.into(), pools[1].amount.into()];
-
-//     // Ensure each prices are not dropped as much as slippage tolerance rate
-//     if Decimal256::from_ratio(deposits[0], deposits[1]) * one_minus_slippage_tolerance
-//         > Decimal256::from_ratio(pools[0], pools[1])
-//         || Decimal256::from_ratio(deposits[1], deposits[0]) * one_minus_slippage_tolerance
-//             > Decimal256::from_ratio(pools[1], pools[0])
-//     {
-//         return Err(ContractError::MaxSlippageAssertion {});
-//     }
-
-//     Ok(())
-// }

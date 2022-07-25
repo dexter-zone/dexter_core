@@ -198,6 +198,7 @@ pub struct Trade {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// ## Description
+    UpdateConfig {params: Binary}
     UpdateLiquidity { assets: Vec<Asset> },
 }
 

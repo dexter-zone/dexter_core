@@ -111,7 +111,6 @@ pub fn query_supply(querier: &QuerierWrapper, contract_addr: Addr) -> StdResult<
 /// Returns the token precision at the specified asset of type [`AssetInfo`].
 /// ## Params
 /// * **querier** is the object of type [`QuerierWrapper`].
-///
 /// * **asset_info** is the object of type [`AssetInfo`].
 pub fn query_token_precision(querier: &QuerierWrapper, asset_info: AssetInfo) -> StdResult<u8> {
     Ok(match asset_info {
