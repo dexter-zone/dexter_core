@@ -63,6 +63,12 @@ pub fn instantiate(
     // check valid token info
     msg.validate()?;
 
+    let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
+
+    if params.amp == 0 || params.amp > MAX_AMP {
+        return Err(ContractError::IncorrectAmp {});
+    }
+
     // Create [`Asset`] from [`AssetInfo`]
     let assets = msg
         .asset_infos
@@ -88,6 +94,13 @@ pub fn instantiate(
         price1_cumulative_last: Uint128::zero(),
         block_time_last: 0,
     };
+
+    let math_config = MathConfig {
+        init_amp:  params.amp * AMP_PRECISION,
+        init_amp_time: env.block.time.seconds(),
+        next_amp:  params.amp * AMP_PRECISION,
+        next_amp_time: env.block.time.seconds(),
+    }
 
     CONFIG.save(deps.storage, &config)?;
     TWAPINFO.save(deps.storage, &twap)?;

@@ -1,5 +1,5 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_std::{Addr, Decimal, Uint128};
+use cosmwasm_std::{Addr, Decimal, Uint128, Binary};
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -206,6 +206,7 @@ pub enum ExecuteMsg {
         lp_token_name: Option<String>,
         lp_token_symbol: Option<String>,
         pool_manager: Option<String>,
+        init_params: Option<Binary>,
     },
     JoinPool {
         pool_id: Uint128,

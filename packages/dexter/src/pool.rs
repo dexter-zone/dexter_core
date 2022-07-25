@@ -79,6 +79,8 @@ pub struct InstantiateMsg {
     pub lp_token_code_id: u64,
     pub lp_token_name: Option<String>,
     pub lp_token_symbol: Option<String>,
+    /// Optional binary serialised parameters for custom pool types
+    pub init_params: Option<Binary>,
 }
 
 impl InstantiateMsg {
@@ -198,7 +200,7 @@ pub struct Trade {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// ## Description
-    UpdateConfig {params: Binary}
+    UpdateConfig {params: Binary},
     UpdateLiquidity { assets: Vec<Asset> },
 }
 

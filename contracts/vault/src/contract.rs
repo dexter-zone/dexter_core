@@ -107,6 +107,7 @@ pub fn execute(
             lp_token_name,
             lp_token_symbol,
             pool_manager,
+            init_params
         } => execute_create_pool(
             deps,
             env,
@@ -301,6 +302,7 @@ pub fn execute_create_pool(
     lp_token_name: Option<String>,
     lp_token_symbol: Option<String>,
     pool_manager: Option<String>,
+    init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
@@ -366,6 +368,7 @@ pub fn execute_create_pool(
                 lp_token_code_id: config.lp_token_code_id,
                 lp_token_name: lp_token_name,
                 lp_token_symbol,
+                init_params
             })?,
             funds: vec![],
             label: "dexter-pool-".to_string() + &pool_id.to_string(),
