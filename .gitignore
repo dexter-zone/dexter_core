@@ -13,5 +13,4 @@ Cargo.lock
 /contracts/vesting/*
 /contracts/keeper/*
 /contracts/stable_3pool/*
-/contracts/stable_pool/*
 /contracts/weighted_pool/*
