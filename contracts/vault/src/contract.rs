@@ -430,6 +430,22 @@ pub fn execute_join_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
+    let mut missing_assets: Vec<Asset> = vec![];
+
+    // If some assets are omitted then add them explicitly with 0 deposit
+    pool_info.assets.iter().for_each(|(asset_info, amount)| {
+        if !assets_in.iter().any(|asset| asset.info.eq(asset_info)) {
+            missing_assets.push(
+                Asset {
+                    amount: Uint128::zero(),
+                    info: asset_info.clone(),
+                }                
+            );
+        }
+    });    
+    assets_in.extend(missing_assets);
+
+
     // assert slippage tolerance
     // assert_slippage_tolerance(slippage_tolerance, &deposits, &pools)?;
 
@@ -578,6 +594,19 @@ pub fn execute_exit_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
+    // If some assets are omitted then add them explicitly with 0 deposit
+    pool_info.assets.iter().for_each(|(asset_info, amount)| {
+        if !assets_in.iter().any(|asset| asset.info.eq(asset_info)) {
+            missing_assets.push(
+                Asset {
+                    amount: Uint128::zero(),
+                    info: asset_info.clone(),
+                }                
+            );
+        }
+    });    
+    assets_in.extend(missing_assets);
+
     // assert slippage tolerance
     // assert_slippage_tolerance(slippage_tolerance, &deposits, &pools)?;
 
@@ -717,6 +746,19 @@ pub fn execute_swap(
     let mut pool_info = POOLS
         .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
+
+    // If some assets are omitted then add them explicitly with 0 deposit
+    pool_info.assets.iter().for_each(|(asset_info, _)| {
+        if !assets_in.iter().any(|asset| asset.info.eq(asset_info)) {
+            missing_assets.push(
+                Asset {
+                    amount: Uint128::zero(),
+                    info: asset_info.clone(),
+                }                
+            );
+        }
+    });    
+    assets_in.extend(missing_assets);
 
     if deadline.is_some() {
         return Err(ContractError::DeadlineExpired {});

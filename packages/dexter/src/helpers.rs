@@ -1,7 +1,7 @@
-use crate::asset::{addr_validate_to_lower, AssetInfo};
+use crate::asset::{addr_validate_to_lower,Asset, AssetInfo};
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
+    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg, Api
 };
 use cw20_base::msg::{ExecuteMsg as CW20ExecuteMsg, QueryMsg as Cw20QueryMsg};
 use cw_storage_plus::Item;
@@ -165,9 +165,7 @@ pub fn claim_ownership(
 /// Checks swap parameters. Otherwise returns [`Err`]
 /// ## Params
 /// * **offer_amount** is a [`Uint128`] representing an amount of offer tokens.
-///
 /// * **ask_amount** is a [`Uint128`] representing an amount of ask tokens.
-///
 /// * **swap_amount** is a [`Uint128`] representing an amount to swap.
 pub fn check_swap_parameters(
     offer_amount: Uint128,
@@ -251,4 +249,59 @@ fn adjust_precision(
             10_u128.pow((current_precision - new_precision) as u32),
         ))?,
     })
+}
+
+
+
+/// ## Description
+/// Select offer and ask pools based on given offer and ask infos.
+/// This function works with pools with up to 5 assets. Returns (offer_pool, ask_pool) in case of success.
+/// If it is impossible to define offer and ask pools, returns [`ContractError`].
+/// ## Params
+/// * **offer_asset_info** - asset info of the offer asset.
+/// * **ask_asset_info** - asset info of the ask asset.
+/// * **pools** - list of pools.
+pub(crate) fn select_pools(
+    offer_asset_info: Option<&AssetInfo>,
+    ask_asset_info: Option<&AssetInfo>,
+    pools: &[Asset],
+) -> Result<(Asset, Asset), StdError> {
+    if pools.len() == 2 {
+        match (offer_asset_info, ask_asset_info) {
+            (Some(offer_asset_info), _) => {
+                let (offer_ind, offer_pool) = pools
+                    .iter()
+                    .find_position(|pool| pool.info.eq(offer_asset_info))
+                    .ok_or(StdError::AssetMismatch {})?;
+                Ok((offer_pool.clone(), pools[(offer_ind + 1) % 2].clone()))
+            }
+            (_, Some(ask_asset_info)) => {
+                let (ask_ind, ask_pool) = pools
+                    .iter()
+                    .find_position(|pool| pool.info.eq(ask_asset_info))
+                    .ok_or(StdError::AssetMismatch {})?;
+                Ok((pools[(ask_ind + 1) % 2].clone(), ask_pool.clone()))
+            }
+            _ => Err(StdError::VariableAssetMissed {}), // Should always be unreachable
+        }
+    } else if let (Some(offer_asset_info), Some(ask_asset_info)) =
+        (offer_asset_info, ask_asset_info)
+    {
+        if ask_asset_info.eq(offer_asset_info) {
+            return Err(StdError::SameAssets {});
+        }
+
+        let offer_pool = pools
+            .iter()
+            .find(|pool| pool.info.eq(offer_asset_info))
+            .ok_or(StdError::AssetMismatch {})?;
+        let ask_pool = pools
+            .iter()
+            .find(|pool| pool.info.eq(ask_asset_info))
+            .ok_or(StdError::AssetMismatch {})?;
+
+        Ok((offer_pool.clone(), ask_pool.clone()))
+    } else {
+        Err(StdError::VariableAssetMissed {}) // Should always be unreachable
+    }
 }
