@@ -4,22 +4,24 @@ use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
+use crate::decimal_checked_ops::DecimalCheckedOps;
 
-const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
-const MAX_PROTOCOL_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
-const MAX_DEV_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
-
+// TWAP PRECISION is 9 decimal places
 pub const TWAP_PRECISION: Decimal =Decimal::new(Uint128::new(9));
-// / This enum describes available Pool types.
-// / ## Available pool types
-// / ```
-// / # use dexter::vault::PoolType::{Stable, Xyk, Weighted, meta-stable, Custom};
-// / Xyk {};
-// / Stable {};
-// / Weighted {};
-// / MetaStable {};
-// / Custom(String::from("Custom"));
-// / ```
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    {{PoolType}} enum Type    x----------------x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+/// This enum describes available Pool types.
+/// ## Available pool types
+/// ```
+/// Xyk
+/// Stable
+/// Weighted
+/// MetaStable
+/// Custom(String::from("Custom"));
+/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PoolType {
@@ -48,53 +50,77 @@ impl Display for PoolType {
     }
 }
 
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    {{SwapType}} enum Type    x----------------x-------------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
 /// This enum describes available Swap types.
 /// ## Available swap types
 /// ```
-/// # use dexter::vault::SwapType::{GiveOut, GiveIn};
-/// GiveIn {};
-/// GiveOut {};
+/// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
+/// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SwapType {
     GiveIn {},
     GiveOut {},
+    /// Custom swap type
+    Custom(String),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct FeeInfo {
-    pub total_fee_bps: Decimal,
-    pub protocol_fee_bps: Decimal,
-    pub dev_fee_bps: Decimal,
-    pub dev_addr_bps: Option<Addr>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum SwapKind {
-    In {},
-    Out {},
-}
-
-impl Display for SwapKind {
+impl Display for SwapType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
-            SwapKind::In {} => fmt.write_str("in"),
-            SwapKind::Out {} => fmt.write_str("out"),
+            SwapType::GiveIn {} => fmt.write_str("give-in"),
+            SwapType::GiveOut {} => fmt.write_str("give-out"),
+            SwapType::Custom(swap_type) => fmt.write_str(format!("custom-{}", swap_type).as_str()),
         }
     }
 }
 
-/// ## Description - This structure describes the main control config of factory.
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    {{FeeInfo}} struct Type    x----------------x-------------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+// Maximum total commission in bps that can be charged on any supported pool by Dexter
+const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
+// Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
+const MAX_PROTOCOL_FEE_BPS: u16 = 50;
+// Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
+const MAX_DEV_FEE_BPS: u16 = 25;
+
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SingleSwapRequest {
-    pub pool_id: Uint128,
-    pub asset_in: AssetInfo,
-    pub asset_out: AssetInfo,
-    pub swap_type: SwapKind,
-    pub amount: Uint128,
+pub struct FeeInfo {
+    pub total_fee_bps: Decimal,
+    pub protocol_fee_bps: u16,
+    pub dev_fee_bps: u16,
+    pub dev_addr_bps: Option<Addr>,
 }
+
+impl FeeInfo { 
+
+    /// This method is used to check fee bps.
+    pub fn valid_fee_bps(&self) -> bool {
+        self.total_fee_bps <= MAX_TOTAL_FEE_BPS
+            && self.protocol_fee_bps <= MAX_PROTOCOL_FEE_BPS
+            && self.dev_fee_bps <= MAX_DEV_FEE_BPS
+    }    
+
+    // Returns the number of tokens charged as total fee, protocol fee and dev fee 
+    pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
+        let total_fee = self.total_fee_bps.checked_mul_uint128(amount).unwrap();
+        let protocol_fee = total_fee.checked_mul(Uint128::from(self.protocol_fee_bps as u128)).unwrap();
+        let dev_fee = total_fee.checked_mul(Uint128::from(self.dev_fee_bps as u128)).unwrap();
+        (total_fee, protocol_fee, dev_fee)
+    }
+}
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    Generic struct Types      x----------------x-------------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description - This structure describes the main control config of factory.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -123,7 +149,7 @@ pub struct PoolConfig {
     pub is_disabled: bool,
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
-    pub is_generator_disabled: bool,
+    pub is_generator_disabled: bool
 }
 
 /// ## Description - This is an intermediate structure for storing the key of a pair and used in reply of submessage.
@@ -152,16 +178,29 @@ pub struct PoolInfo {
     pub pool_manager: Option<String>,
 }
 
-impl PoolConfig {
-    /// This method is used to check fee bps.
-    /// ## Params
-    /// `&self` is the type of the caller object.
-    pub fn valid_fee_bps(&self) -> bool {
-        self.fee_info.total_fee_bps <= MAX_TOTAL_FEE_BPS
-            && self.fee_info.protocol_fee_bps <= MAX_PROTOCOL_FEE_BPS
-            && self.fee_info.dev_fee_bps <= MAX_DEV_FEE_BPS
-    }
+/// ## Description - This structure describes the main control config of factory.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SingleSwapRequest {
+    pub pool_id: Uint128,
+    pub asset_in: AssetInfo,
+    pub asset_out: AssetInfo,
+    pub swap_type: SwapType,
+    pub amount: Uint128,
 }
+
+// struct BatchSwapStep {
+//     bytes32 poolId;
+//     uint256 assetInIndex;
+//     uint256 assetOutIndex;
+//     uint256 amount;
+//     bytes userData;
+// }
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -173,13 +212,6 @@ pub struct InstantiateMsg {
     pub generator_address: Option<String>,
 }
 
-// struct BatchSwapStep {
-//     bytes32 poolId;
-//     uint256 assetInIndex;
-//     uint256 assetOutIndex;
-//     uint256 amount;
-//     bytes userData;
-// }
 
 /// ## Description -  This structure describes the execute messages of the contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -227,8 +259,6 @@ pub enum ExecuteMsg {
     //     limit: Option<Vec<Uint128>>,
     //     deadline: Option<Uint128>,
     // },
-    /// Deregister removes a previously created pair
-    // Deregister { asset_infos: Vec<AssetInfo> },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {
         owner: String,
@@ -276,6 +306,17 @@ pub enum QueryMsg {
     // },
 }
 
+
+/// ## Description -  This structure describes a migration message.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MigrateMsg {}
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    Response Types      x----------------x----------------x--------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+
 /// ## Description -  A custom struct for each query response that returns controls settings of contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ConfigResponse {
@@ -288,7 +329,3 @@ pub struct ConfigResponse {
 
 pub type PoolConfigResponse = PoolConfig;
 pub type PoolInfoResponse = PoolInfo;
-
-/// ## Description -  This structure describes a migration message.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct MigrateMsg {}

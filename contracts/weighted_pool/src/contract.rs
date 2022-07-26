@@ -445,7 +445,7 @@ pub fn query_on_swap(
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
-        SwapKind::In {} => {
+        SwapKind::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recepient from the Vault
             (calc_amount, spread_amount, commission_amount) = calc_offer_amount(
                 offer_pool.amount,
@@ -463,7 +463,7 @@ pub fn query_on_swap(
                 amount: calc_amount,
             };
         }
-        SwapKind::Out {} => {
+        SwapKind::GiveOut {} => {
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
             (calc_amount, spread_amount, commission_amount) =  calc_ask_amount(
                 offer_pool.amount,

@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use dexter::asset::AssetInfo;
-use dexter::helpers::OwnershipProposal;
+use dexter::helper::OwnershipProposal;
 use dexter::vault::{Config, PoolConfig, PoolInfo};
 
 pub const CONFIG: Item<Config> = Item::new("config");

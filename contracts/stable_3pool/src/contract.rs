@@ -624,7 +624,7 @@ pub fn query_on_swap(
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
-        SwapKind::In {} => {
+        SwapKind::GiveIn {} => {
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount,
@@ -646,7 +646,7 @@ pub fn query_on_swap(
                 amount: calc_amount,
             };
         }
-        SwapKind::Out {} => {            
+        SwapKind::GiveOut {} => {            
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
                 amount,
