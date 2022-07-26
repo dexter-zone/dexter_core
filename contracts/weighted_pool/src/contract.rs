@@ -24,7 +24,7 @@ use crate::utils::{
     accumulate_prices,calc_ask_amount, calc_offer_amount};
 
 use dexter::querier::query_supply;
-use dexter::vault::{SwapKind, TWAP_PRECISION};
+use dexter::vault::{SwapType, TWAP_PRECISION};
 
 use protobuf::Message;
 use std::vec;
@@ -409,7 +409,7 @@ pub fn query_on_exit_pool(
 pub fn query_on_swap(
     deps: Deps,
     env: Env,
-    swap_type: SwapKind,
+    swap_type: SwapType,
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
@@ -445,7 +445,7 @@ pub fn query_on_swap(
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
-        SwapKind::GiveIn {} => {
+        SwapType::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recepient from the Vault
             (calc_amount, spread_amount, commission_amount) = calc_offer_amount(
                 offer_pool.amount,
@@ -463,7 +463,7 @@ pub fn query_on_swap(
                 amount: calc_amount,
             };
         }
-        SwapKind::GiveOut {} => {
+        SwapType::GiveOut {} => {
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
             (calc_amount, spread_amount, commission_amount) =  calc_ask_amount(
                 offer_pool.amount,

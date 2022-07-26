@@ -253,7 +253,7 @@ pub enum ExecuteMsg {
         recepient: Option<String>,
     },
     // BatchSwap {
-    //     swap_kind: SwapKind,
+    //     swap_kind: SwapType,
     //     batch_swap_steps: Vec<BatchSwapStep>,
     //     assets: Vec<Asset>,
     //     limit: Option<Vec<Uint128>>,
@@ -300,7 +300,7 @@ pub enum QueryMsg {
         pool_addr: Addr,
     },
     // QuerybatchSwap {
-    //     swap_kind: SwapKind,
+    //     swap_kind: SwapType,
     //     batch_swap_steps: Vec<BatchSwapStep>,
     //     assets: Vec<Asset>,
     // },

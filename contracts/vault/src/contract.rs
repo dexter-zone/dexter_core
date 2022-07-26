@@ -1110,7 +1110,7 @@ pub fn build_update_pool_state_msg(
     }))
 }
 
-// pub fn query_batch_swap(deps: Deps, swap_kind: SwapKind,
+// pub fn query_batch_swap(deps: Deps, swap_kind: SwapType,
 // batch_swap_steps: Vec<BatchSwapStep>,
 // assets: Vec<Asset>,) -> StdResult<PoolInfo> {
 //     let pool_addr = POOLS.load(deps.storage, &pool_key(&asset_infos))?;

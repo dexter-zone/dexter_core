@@ -3,17 +3,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
-use crate::vault::{FeeInfo, PoolType, SwapKind};
+use crate::vault::{FeeInfo, PoolType, SwapType};
 
 use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
+use crate::helper::{is_valid_name, is_valid_symbol};
 
-/// the default slippage
-pub const DEFAULT_SLIPPAGE: &str = "0.005";
-/// the maximum allowed slippage
-pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
-
-pub const TWAP_PRECISION: u8 = 6;
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x      Gneneric struct Types      x----------------x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description
 /// This structure describes the main control config of pair.
@@ -33,34 +31,53 @@ pub struct Config {
     pub block_time_last: u64,
 }
 
-pub type ConfigResponse = Config;
-
 /// ## Description
+/// This structure describes the basic settings for creating a contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct FeeResponse {
-    /// The total fees (in bps) charged by a pool of this type
-    pub total_fee_bps: Decimal,
-    /// The amount of fees (in bps) collected by the Protocol from this pool type
-    pub protocol_fee_bps: Decimal,
-    /// The amount of fees (in bps) collected by the devs from this pool type
-    pub dev_fee_bps: Decimal,
-    /// The address to which the collected developer fee is transferred
-    pub dev_fee_collector: Option<Addr>,
+pub struct Trade {
+    pub amount_in: Uint128,
+    pub amount_out: Uint128,
+    pub spread: Uint128,
+    pub total_fee: Uint128,
+    pub protocol_fee: Uint128,
+    pub dev_fee: Uint128,
 }
 
-/// ## Description
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct CumulativePriceResponse {
-    pub exchange_info: AssetExchangeRate,
-    pub total_share: Uint128,
+#[serde(rename_all = "snake_case")]
+pub enum ResponseType {
+    Success {},
+    Failure {},
 }
 
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct CumulativePricesResponse {
-    pub exchange_infos: Vec<AssetExchangeRate>,
-    pub total_share: Uint128,
+impl Display for ResponseType {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        match self {
+            ResponseType::Success {} => fmt.write_str("success"),
+            ResponseType::Failure {} => fmt.write_str("fail"),
+        }
+    }
 }
+
+impl ResponseType {
+    /// Returns true if the ResponseType is success. Otherwise returns false.
+    /// ## Params
+    /// * **self** is the type of the caller object.
+    pub fn is_success(&self) -> bool {
+        match self {
+            ResponseType::Success {} => true,
+            ResponseType::Failure {} => false,
+        }
+    }
+}
+
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x      Instantiate, Execute Msgs and Queries       x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
 
 /// ## Description
 /// This structure describes the basic settings for creating a contract.
@@ -104,93 +121,6 @@ impl InstantiateMsg {
     }
 }
 
-fn is_valid_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    if bytes.len() < 3 || bytes.len() > 50 {
-        return false;
-    }
-    true
-}
-
-fn is_valid_symbol(symbol: &str) -> bool {
-    let bytes = symbol.as_bytes();
-    if bytes.len() < 3 || bytes.len() > 12 {
-        return false;
-    }
-    for byte in bytes.iter() {
-        if (*byte != 45) && (*byte < 65 || *byte > 90) && (*byte < 97 || *byte > 122) {
-            return false;
-        }
-    }
-    true
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponseType {
-    Success {},
-    Failure {},
-}
-
-impl Display for ResponseType {
-    fn fmt(&self, fmt: &mut Formatter) -> Result {
-        match self {
-            ResponseType::Success {} => fmt.write_str("success"),
-            ResponseType::Failure {} => fmt.write_str("fail"),
-        }
-    }
-}
-
-impl ResponseType {
-    /// Returns true if the ResponseType is success. Otherwise returns false.
-    /// ## Params
-    /// * **self** is the type of the caller object.
-    pub fn is_success(&self) -> bool {
-        match self {
-            ResponseType::Success {} => true,
-            ResponseType::Failure {} => false,
-        }
-    }
-}
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AfterJoinResponse {
-    pub return_assets: Vec<Asset>,
-    pub new_shares: Uint128,
-    pub response: ResponseType,
-}
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AfterExitResponse {
-    /// Assets which will be transferred to the recepient against tokens being burnt
-    pub assets_out: Vec<Asset>,
-    /// Number of LP tokens to burn
-    pub burn_shares: Uint128,
-    /// Operation will be a `Success` or `Failure`
-    pub response: ResponseType,
-}
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SwapResponse {
-    pub trade_params: Trade,
-    /// Operation will be a `Success` or `Failure`
-    pub response: ResponseType,
-}
-
-/// ## Description
-/// This structure describes the basic settings for creating a contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct Trade {
-    pub amount_in: Uint128,
-    pub amount_out: Uint128,
-    pub spread: Uint128,
-    pub total_fee: Uint128,
-    pub protocol_fee: Uint128,
-    pub dev_fee: Uint128,
-}
 
 /// ## Description
 ///
@@ -220,7 +150,7 @@ pub enum QueryMsg {
         burn_amount: Uint128,
     },
     OnSwap {
-        swap_type: SwapKind,
+        swap_type: SwapType,
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
         amount: Uint128,
@@ -231,6 +161,69 @@ pub enum QueryMsg {
     },
     CumulativePrices {},
 }
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x     Response Types       x----------------x----------------x------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+pub type ConfigResponse = Config;
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct FeeResponse {
+    /// The total fees (in bps) charged by a pool of this type
+    pub total_fee_bps: Decimal,
+    /// The amount of fees (in bps) collected by the Protocol from this pool type
+    pub protocol_fee_bps: Decimal,
+    /// The amount of fees (in bps) collected by the devs from this pool type
+    pub dev_fee_bps: Decimal,
+    /// The address to which the collected developer fee is transferred
+    pub dev_fee_collector: Option<Addr>,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct CumulativePriceResponse {
+    pub exchange_info: AssetExchangeRate,
+    pub total_share: Uint128,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct CumulativePricesResponse {
+    pub exchange_infos: Vec<AssetExchangeRate>,
+    pub total_share: Uint128,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AfterJoinResponse {
+    pub return_assets: Vec<Asset>,
+    pub new_shares: Uint128,
+    pub response: ResponseType,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AfterExitResponse {
+    /// Assets which will be transferred to the recepient against tokens being burnt
+    pub assets_out: Vec<Asset>,
+    /// Number of LP tokens to burn
+    pub burn_shares: Uint128,
+    /// Operation will be a `Success` or `Failure`
+    pub response: ResponseType,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SwapResponse {
+    pub trade_params: Trade,
+    /// Operation will be a `Success` or `Failure`
+    pub response: ResponseType,
+}
+
+
 
 // /// ## Description
 // /// This structure describes the custom struct for each query response.
@@ -247,3 +240,10 @@ pub enum QueryMsg {
 /// We currently take no arguments for migrations.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
+
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x     Response Types       x----------------x----------------x------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+

@@ -298,3 +298,24 @@ fn adjust_precision(
 }
 
 
+
+pub fn is_valid_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    if bytes.len() < 3 || bytes.len() > 50 {
+        return false;
+    }
+    true
+}
+
+pub fn is_valid_symbol(symbol: &str) -> bool {
+    let bytes = symbol.as_bytes();
+    if bytes.len() < 3 || bytes.len() > 12 {
+        return false;
+    }
+    for byte in bytes.iter() {
+        if (*byte != 45) && (*byte < 65 || *byte > 90) && (*byte < 97 || *byte > 122) {
+            return false;
+        }
+    }
+    true
+}

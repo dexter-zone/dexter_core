@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{StdError, StdResult, Uint128};
 use cw20::{Cw20Coin, Logo, MinterResponse};
+use crate::helper::{is_valid_name, is_valid_symbol};
+
+
 
 /// ## Description -  This structure describes the basic settings for creating a token contract.
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
@@ -54,31 +57,4 @@ impl InstantiateMsg {
         }
         Ok(())
     }
-}
-
-/// ## Description -  Checks the validity of the token name
-/// ## Params
-/// * **name** is the object of type [`str`]. the name to check
-fn is_valid_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    if bytes.len() < 3 || bytes.len() > 50 {
-        return false;
-    }
-    true
-}
-
-/// ## Description -  Checks the validity of the token symbol
-/// ## Params
-/// * **symbol** is the object of type [`str`]. the symbol to check
-fn is_valid_symbol(symbol: &str) -> bool {
-    let bytes = symbol.as_bytes();
-    if bytes.len() < 3 || bytes.len() > 12 {
-        return false;
-    }
-    for byte in bytes.iter() {
-        if (*byte != 45) && (*byte < 65 || *byte > 90) && (*byte < 97 || *byte > 122) {
-            return false;
-        }
-    }
-    true
 }
