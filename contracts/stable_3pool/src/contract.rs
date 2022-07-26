@@ -257,6 +257,7 @@ pub fn execute_update_pool_liquidity(
     }
 
     CONFIG.save(deps.storage, &config)?;
+    TWAPINFO.save(deps.storage, &twap)?;
 
     let event = Event::new("dexter-pool::update-liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
@@ -619,7 +620,7 @@ pub fn query_on_swap(
     let mut offer_asset: Asset;
     let mut ask_asset: Asset;
     let (spread_amount, commission_amount): (Uint128, Uint128);
-    let mut calc_amount: Uint128 Uint128::zero();
+    let mut calc_amount = Uint128::zero();
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {

@@ -121,8 +121,9 @@ pub fn execute(
             pool_id,
             recepient,
             assets,
+            lp_to_mint,
             auto_stake,
-        } => execute_join_pool(deps, env, info, pool_id, recepient, assets, auto_stake),
+        } => execute_join_pool(deps, env, info, pool_id, recepient, assets, lp_to_mint,auto_stake),
         ExecuteMsg::Swap {
             swap_request,
             limit,
@@ -424,6 +425,7 @@ pub fn execute_join_pool(
     pool_id: Uint128,
     op_recepient: Option<String>,
     mut assets_in: Vec<Asset>,
+    lp_to_mint: Option<Uint128>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
     let mut pool_info = POOLS
@@ -454,7 +456,9 @@ pub fn execute_join_pool(
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
-                assets_in: assets_in.clone(),
+                assets_in: Some(assets_in.clone()),
+                lp_to_mint: Some(mint_amount)
+
             })?,
         }))?;
 

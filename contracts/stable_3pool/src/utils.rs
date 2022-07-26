@@ -202,11 +202,8 @@ pub(crate) fn compute_swap(
 /// Accumulate token prices for the assets in the pool.
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
-///
 /// * **env** is an object of type [`Env`].
-///
 /// * **config** is an object of type [`Config`].
-///
 /// * **pools** is an array of [`Asset`] type items. These are the assets available in the pool.
 pub fn accumulate_prices(
     deps: Deps,

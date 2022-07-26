@@ -213,7 +213,8 @@ pub enum QueryMsg {
     FeeParams {},
     PoolId {},
     OnJoinPool {
-        assets_in: Vec<Asset>,
+        assets_in: Option<Vec<Asset>>,
+        mint_amount: Option<Uint128>,
     },
     OnExitPool {
         assets_out: Option<Vec<Asset>>,

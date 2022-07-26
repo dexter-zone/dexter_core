@@ -210,7 +210,8 @@ pub enum ExecuteMsg {
     JoinPool {
         pool_id: Uint128,
         recepient: Option<String>,
-        assets: Vec<Asset>,
+        assets: Option<Vec<Asset>>,
+        lp_to_mint: Option<Uint128>,
         auto_stake: Option<bool>,
     },
     Swap {
