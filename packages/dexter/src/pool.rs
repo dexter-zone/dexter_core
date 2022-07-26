@@ -6,7 +6,6 @@ use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 use crate::vault::{FeeInfo, PoolType, SwapKind};
 
 use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
-use cw20::Cw20ReceiveMsg;
 use std::fmt::{Display, Formatter, Result};
 
 /// the default slippage

@@ -1,12 +1,6 @@
-use crate::asset::{Asset, AssetInfo};
-// use crate::pool::{QueryMsg as PoolQueryMsg, ReverseSimulationResponse, SimulationResponse};
-use crate::vault::{
-    ConfigResponse as VaultConfigResponse, FeeInfo, PoolConfigResponse, PoolType,
-    QueryMsg as VaultQueryMsg,
-};
-
+use crate::asset::{AssetInfo};
 use cosmwasm_std::{
-    to_binary, Addr, AllBalanceResponse, BalanceResponse, BankQuery, Coin, Decimal, QuerierWrapper,
+    to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper,
     QueryRequest, StdResult, Uint128, WasmQuery,
 };
 
@@ -18,9 +12,7 @@ const NATIVE_TOKEN_PRECISION: u8 = 6;
 /// Returns the balance of the denom at the specified account address.
 /// ## Params
 /// * **querier** is the object of type [`QuerierWrapper`].
-///
 /// * **account_addr** is the object of type [`Addr`].
-///
 /// * **denom** is the object of type [`String`].
 pub fn query_balance(
     querier: &QuerierWrapper,
@@ -35,27 +27,11 @@ pub fn query_balance(
 }
 
 /// ## Description
-/// Returns the total balance for all coins at the specified account address.
-/// ## Params
-/// * **querier** is the object of type [`QuerierWrapper`].
-///
-/// * **account_addr** is the object of type [`Addr`].
-pub fn query_all_balances(querier: &QuerierWrapper, account_addr: Addr) -> StdResult<Vec<Coin>> {
-    let all_balances: AllBalanceResponse =
-        querier.query(&QueryRequest::Bank(BankQuery::AllBalances {
-            address: String::from(account_addr),
-        }))?;
-    Ok(all_balances.amount)
-}
-
-/// ## Description
 /// Returns the token balance at the specified contract address.
 /// ## Params
 /// * **querier** is the object of type [`QuerierWrapper`].
-///
 /// * **contract_addr** is the object of type [`Addr`]. Sets the address of the contract for which
 /// the balance will be requested
-///
 /// * **account_addr** is the object of type [`Addr`].
 pub fn query_token_balance(
     querier: &QuerierWrapper,
@@ -77,26 +53,11 @@ pub fn query_token_balance(
     Ok(res.balance)
 }
 
-/// ## Description
-/// Returns the token symbol at the specified contract address.
-/// ## Params
-/// * **querier** is the object of type [`QuerierWrapper`].
-///
-/// * **contract_addr** is the object of type [`Addr`].
-pub fn query_token_symbol(querier: &QuerierWrapper, contract_addr: Addr) -> StdResult<String> {
-    let res: TokenInfoResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: String::from(contract_addr),
-        msg: to_binary(&Cw20QueryMsg::TokenInfo {})?,
-    }))?;
-
-    Ok(res.symbol)
-}
 
 /// ## Description
 /// Returns the total supply at the specified contract address.
 /// ## Params
 /// * **querier** is the object of type [`QuerierWrapper`].
-///
 /// * **contract_addr** is the object of type [`Addr`].
 pub fn query_supply(querier: &QuerierWrapper, contract_addr: Addr) -> StdResult<Uint128> {
     let res: TokenInfoResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
@@ -123,79 +84,3 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: AssetInfo) ->
         }
     })
 }
-
-/// ## Description
-/// Returns the config of factory contract address.
-/// ## Params
-/// * **querier** is the object of type [`QuerierWrapper`].
-///
-/// * **vault_contract** is the object of type [`Addr`].
-pub fn query_vault_config(
-    querier: &QuerierWrapper,
-    vault_contract: Addr,
-) -> StdResult<VaultConfigResponse> {
-    querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: vault_contract.to_string(),
-        msg: to_binary(&VaultQueryMsg::Config {})?,
-    }))
-}
-
-/// ## Description
-/// Returns the fee information at the specified pair type.
-/// ## Params
-/// * **vault_contract** is the object of type [`Addr`].
-/// * **pool_type** is the object of type [`PoolType`].
-pub fn query_fee_info(
-    querier: &QuerierWrapper,
-    vault_contract: Addr,
-    pool_type: PoolType,
-) -> StdResult<FeeInfo> {
-    let res: PoolConfigResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: vault_contract.to_string(),
-        msg: to_binary(&VaultQueryMsg::PoolConfig { pool_type })?,
-    }))?;
-
-    Ok(res.fee_info)
-}
-
-// /// ## Description
-// /// Returns information about the simulation of the swap in a [`SimulationResponse`] object.
-// /// ## Params
-// /// * **querier** is the object of type [`QuerierWrapper`].
-// ///
-// /// * **pair_contract** is the object of type [`Addr`].
-// ///
-// /// * **offer_asset** is the object of type [`Asset`].
-// pub fn simulate(
-//     querier: &QuerierWrapper,
-//     pair_contract: Addr,
-//     offer_asset: &Asset,
-// ) -> StdResult<SimulationResponse> {
-//     querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-//         contract_addr: pair_contract.to_string(),
-//         msg: to_binary(&PoolQueryMsg::Simulation {
-//             offer_asset: offer_asset.clone(),
-//         })?,
-//     }))
-// }
-
-// /// ## Description
-// /// Returns information about the reverse simulation in a [`ReverseSimulationResponse`] object.
-// /// ## Params
-// /// * **querier** is the object of type [`QuerierWrapper`].
-// ///
-// /// * **pair_contract** is the object of type [`Addr`].
-// ///
-// /// * **ask_asset** is the object of type [`Asset`].
-// pub fn reverse_simulate(
-//     querier: &QuerierWrapper,
-//     pair_contract: &Addr,
-//     ask_asset: &Asset,
-// ) -> StdResult<ReverseSimulationResponse> {
-//     querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-//         contract_addr: pair_contract.to_string(),
-//         msg: to_binary(&PoolQueryMsg::ReverseSimulation {
-//             ask_asset: ask_asset.clone(),
-//         })?,
-//     }))
-// }

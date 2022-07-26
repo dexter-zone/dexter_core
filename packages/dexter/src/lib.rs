@@ -1,10 +1,11 @@
 pub mod asset;
-pub mod helpers;
 pub mod keeper;
 pub mod lp_token;
 pub mod pool;
 pub mod querier;
 pub mod vault;
+pub mod error;
+pub mod helper;
 
 #[allow(clippy::all)]
 mod uints {

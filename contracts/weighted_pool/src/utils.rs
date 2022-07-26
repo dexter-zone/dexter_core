@@ -11,7 +11,6 @@ use itertools::Itertools;
 
 use dexter::asset::{Asset, AssetInfo, AssetInfoExt};
 use dexter::pool::TWAP_PRECISION;
-use dexter::querier::{query_fee_info, query_vault_config};
 use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;

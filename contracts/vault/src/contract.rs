@@ -11,7 +11,7 @@ use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, POOLS, POOL_CONFIGS, TMP_POOL_INF
 use crate::response::MsgInstantiateContractResponse;
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 // use dexter::generator::Cw20HookMsg as GeneratorHookMsg;
-use dexter::helpers::build_transfer_cw20_from_user_msg;
+use dexter::helper::build_transfer_cw20_from_user_msg;
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
     PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
@@ -19,7 +19,7 @@ use dexter::vault::{
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use dexter::helpers::{
+use dexter::helper::{
     build_send_native_asset_msg, build_transfer_cw20_token_msg, claim_ownership,
     drop_ownership_proposal, propose_new_owner,
 };
@@ -524,7 +524,6 @@ pub fn execute_join_pool(
                 // If native tokens to return > 0, send native tokens back to sender
                 if !after_join_res.return_assets[index].amount.is_zero() {
                     execute_msgs.push(build_send_native_asset_msg(
-                        deps.as_ref(),
                         info.sender.clone(),
                         &assets_in[index].info.as_string(),
                         after_join_res.return_assets[index].amount,
@@ -690,7 +689,6 @@ pub fn execute_exit_pool(
             } else {
                 // Transfer Number of Native tokens the Pool Math instructs to return
                 execute_msgs.push(build_send_native_asset_msg(
-                    deps.as_ref(),
                     recepient.clone(),
                     &after_burn_res.assets_out[index].info.as_string(),
                     after_burn_res.assets_out[index].amount,
@@ -868,7 +866,6 @@ pub fn execute_swap(
                 if native_tokens_sent > offer_asset.amount {
                     let extra = native_tokens_sent.checked_sub(offer_asset.amount)?;
                     execute_msgs.push(build_send_native_asset_msg(
-                        deps.as_ref(),
                         info.sender.clone(),
                         &offer_asset.info.as_string(),
                         extra,
@@ -896,7 +893,6 @@ pub fn execute_swap(
             // Transfer Native tokens from Vault to the recepient
             else {
                 execute_msgs.push(build_send_native_asset_msg(
-                    deps.as_ref(),
                     recepient.clone(),
                     &ask_asset.info.as_string(),
                     ask_asset.amount,
@@ -953,7 +949,6 @@ pub fn execute_swap(
         // Execute Msg :: Protocol Fee transfer to dv contract
         if !swap_response.trade_params.protocol_fee.is_zero() && config.fee_collector.is_some() {
             execute_msgs.push(build_send_native_asset_msg(
-                deps.as_ref(),
                 config.fee_collector.unwrap(),
                 &ask_asset.info.as_string(),
                 swap_response.trade_params.protocol_fee,
@@ -965,7 +960,6 @@ pub fn execute_swap(
         }
         if !swap_response.trade_params.dev_fee.is_zero() && pool_info.dev_addr_bps.is_some() {
             execute_msgs.push(build_send_native_asset_msg(
-                deps.as_ref(),
                 pool_info.dev_addr_bps.unwrap(),
                 &ask_asset.info.as_string(),
                 swap_response.trade_params.dev_fee,

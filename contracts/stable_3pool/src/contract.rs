@@ -11,7 +11,7 @@ use cosmwasm_std::{
 use crate::response::MsgInstantiateContractResponse;
 use cw2::set_contract_version;
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
-use dexter::asset::{addr_validate_to_lower, format_lp_token_name, check_name_format, Asset, AssetInfo, AssetExchangeRate, PoolInfo};
+use dexter::asset::{addr_validate_to_lower, check_name_format, Asset, AssetInfo, AssetExchangeRate, PoolInfo};
 use dexter::vault::PoolType;
 use dexter::helper::{adjust_precision};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
