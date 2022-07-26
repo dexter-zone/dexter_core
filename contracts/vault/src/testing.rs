@@ -2,19 +2,23 @@ use crate::contract::{
     accumulate_prices, assert_max_spread, compute_offer_amount, compute_swap, execute, instantiate,
     query_pair_info, query_pool, query_share, query_simulation, reply,
 };
+use crate::state::CONFIG;
 use crate::error::ContractError;
 use crate::math::{calc_ask_amount, calc_offer_amount, AMP_PRECISION};
 use crate::mock_querier::mock_dependencies;
 
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
-use astroport::asset::{Asset, AssetInfo, PairInfo};
+use dexter::asset::{Asset, AssetInfo, PairInfo};
+use dexter::vault::{
+    ConfigResponse, ExecuteMsg, InstantiateMsg, PairConfig, PairType, PairsResponse, QueryMsg,
+};
 
-use astroport::pair::{
+use dexter::pool::{
     Cw20HookMsg, ExecuteMsg, InstantiateMsg, PoolResponse, SimulationResponse, StablePoolParams,
     TWAP_PRECISION,
 };
-use astroport::token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, BlockInfo, Coin, CosmosMsg, Decimal, DepsMut, Env, Reply,
@@ -22,6 +26,7 @@ use cosmwasm_std::{
 };
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 use protobuf::Message;
+
 
 fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
     let data = MsgInstantiateContractResponse {
@@ -45,6 +50,12 @@ fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
 }
 
 #[test]
+fn pair_type_to_string() {
+    assert_eq!(PairType::Xyk {}.to_string(), "xyk");
+    assert_eq!(PairType::Stable {}.to_string(), "stable");
+}
+
+#[test]
 fn proper_initialization() {
     let mut deps = mock_dependencies(&[]);
 
@@ -54,7 +65,7 @@ fn proper_initialization() {
     )]);
 
     let msg = InstantiateMsg {
-        factory_addr: String::from("factory"),
+        factory_addr: String::from("vault"),
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
