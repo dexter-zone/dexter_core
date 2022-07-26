@@ -241,11 +241,11 @@ fn adjust_precision(
     new_precision: u8,
 ) -> StdResult<Uint128> {
     Ok(match current_precision.cmp(&new_precision) {
-        Ordering::Equal => value,
-        Ordering::Less => value.checked_mul(Uint128::new(
+        std::cmp::Ordering::Equal => value,
+        std::cmp::Ordering::Less => value.checked_mul(Uint128::new(
             10_u128.pow((new_precision - current_precision) as u32),
         ))?,
-        Ordering::Greater => value.checked_div(Uint128::new(
+        std::cmp::Ordering::Greater => value.checked_div(Uint128::new(
             10_u128.pow((current_precision - new_precision) as u32),
         ))?,
     })

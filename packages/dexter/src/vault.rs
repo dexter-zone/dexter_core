@@ -5,11 +5,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
 
-const MAX_total_fee_bps: Decimal = 10_000;
-const MAX_protocol_fee_bps: Decimal = 10_000;
-const MAX_dev_fee_bps: Decimal = 10_000;
+const MAX_TOTAL_FEE_BPS: cosmwasm_std::Decimal = cosmwasm_std::Decimal::new(Uint128::new(10_000));
+const MAX_PROTOCOL_FEE_BPS: cosmwasm_std::Decimal = cosmwasm_std::Decimal::new(Uint128::new(10_000));
+const MAX_DEV_FEE_BPS: cosmwasm_std::Decimal = cosmwasm_std::Decimal::new(Uint128::new(10_000));
 
-pub const TWAP_PRECISION = 9;
+pub const TWAP_PRECISION:cosmwasm_std::Decimal = cosmwasm_std::Decimal::new(Uint128::new(9));
 
 // / This enum describes available Pool types.
 // / ## Available pool types
