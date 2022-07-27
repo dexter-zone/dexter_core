@@ -120,7 +120,7 @@ pub fn claim_ownership(
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 
-/// @dev Helper function which returns a cosmos wasm msg to transfer cw20 tokens to a recepient address
+/// @dev Helper function which returns a cosmos wasm msg to transfer cw20 tokens to a recipient address
 /// @param recipient : Address to be transferred cw20 tokens to
 /// @param token_contract_address : Contract address of the cw20 token to transfer
 /// @param amount : Number of tokens to transfer
@@ -139,7 +139,7 @@ pub fn build_transfer_cw20_token_msg(
     }))
 }
 
-/// @dev Helper function which returns a cosmos wasm msg to send native tokens to recepient
+/// @dev Helper function which returns a cosmos wasm msg to send native tokens to recipient
 /// @param recipient : Contract Address to be transferred native tokens to
 /// @param denom : Native token to transfer
 /// @param amount : Number of tokens to transfer
@@ -157,11 +157,11 @@ pub fn build_send_native_asset_msg(
     }))
 }
 
-/// Helper Function. Returns CosmosMsg which transfers CW20 Tokens from owner to recepient. (Transfers DEX from user to itself )
+/// Helper Function. Returns CosmosMsg which transfers CW20 Tokens from owner to recipient. (Transfers DEX from user to itself )
 pub fn build_transfer_cw20_from_user_msg(
     cw20_token_address: String,
     owner: String,
-    recepient: String,
+    recipient: String,
     amount: Uint128,
 ) -> StdResult<CosmosMsg> {
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -169,11 +169,38 @@ pub fn build_transfer_cw20_from_user_msg(
         funds: vec![],
         msg: to_binary(&cw20::Cw20ExecuteMsg::TransferFrom {
             owner,
-            recipient: recepient,
+            recipient: recipient,
             amount,
         })?,
     }))
 }
+
+
+/// Helper Function. Returns CosmosMsg which transfers CW20 Tokens from owner to recipient. (Transfers DEX from user to itself )
+pub fn build_transfer_token_to_user_msg(
+    asset: AssetInfo,
+    recipient: Addr,
+    amount: Uint128,
+) -> StdResult<CosmosMsg> {
+
+    match asset {
+        AssetInfo::NativeToken { denom, } => {
+            Ok(build_send_native_asset_msg(
+                recipient,
+                &denom,
+                amount,
+            )?)
+        },
+        AssetInfo::Token { contract_addr, } => {
+            Ok(build_transfer_cw20_token_msg(
+                recipient,
+                contract_addr.to_string(),
+                amount
+            )?)
+        },
+    }
+}
+
 
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

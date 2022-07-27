@@ -238,7 +238,7 @@ pub enum ExecuteMsg {
     },
     JoinPool {
         pool_id: Uint128,
-        recepient: Option<String>,
+        recipient: Option<String>,
         assets: Option<Vec<Asset>>,
         lp_to_mint: Option<Uint128>,
         auto_stake: Option<bool>,
@@ -247,7 +247,7 @@ pub enum ExecuteMsg {
         swap_request: SingleSwapRequest,
         limit: Option<Uint128>,
         deadline: Option<Uint128>,
-        recepient: Option<String>,
+        recipient: Option<String>,
     },
     // BatchSwap {
     //     swap_kind: SwapType,
@@ -275,7 +275,7 @@ pub enum Cw20HookMsg {
     /// Withdrawing liquidity from the pool
     ExitPool {
         pool_id: Uint128,
-        recepient: Option<String>,
+        recipient: Option<String>,
         assets: Option<Vec<Asset>>,
         burn_amount: Option<Uint128>,
     },
@@ -294,7 +294,7 @@ pub enum QueryMsg {
         pool_id: Uint128,
     },
     GetPoolByAddress {
-        pool_addr: Addr,
+        pool_addr: String,
     },
     // QuerybatchSwap {
     //     swap_kind: SwapType,

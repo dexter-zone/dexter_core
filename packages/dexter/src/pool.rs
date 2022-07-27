@@ -147,7 +147,7 @@ pub enum QueryMsg {
     },
     OnExitPool {
         assets_out: Option<Vec<Asset>>,
-        burn_amount: Uint128,
+        burn_amount: Option<Uint128>,
     },
     OnSwap {
         swap_type: SwapType,
@@ -215,7 +215,7 @@ pub struct AfterJoinResponse {
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AfterExitResponse {
-    /// Assets which will be transferred to the recepient against tokens being burnt
+    /// Assets which will be transferred to the recipient against tokens being burnt
     pub assets_out: Vec<Asset>,
     /// Number of LP tokens to burn
     pub burn_shares: Uint128,

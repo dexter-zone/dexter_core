@@ -559,7 +559,7 @@ pub fn query_on_swap(
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
         SwapType::GiveIn {} => {
-            // Calculate the number of ask_asset tokens to be transferred to the recepient from the Vault
+            // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
             let (return_amount, spread_amount, commission_amount) = compute_swap(
                 cur_offer_asset_bal,
                 query_token_precision(&deps.querier, offer_asset_info)?,
