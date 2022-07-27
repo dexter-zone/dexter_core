@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PoolType",
+  "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable Weighted MetaStable Custom(String::from(\"Custom\")); ```",
+  "oneOf": [
+    {
+      "description": "XYK pool type",
+      "type": "object",
+      "required": [
+        "xyk"
+      ],
+      "properties": {
+        "xyk": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Stable pool type",
+      "type": "object",
+      "required": [
+        "stable"
+      ],
+      "properties": {
+        "stable": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Weighted pool type",
+      "type": "object",
+      "required": [
+        "weighted"
+      ],
+      "properties": {
+        "weighted": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Meta-Stable pool type",
+      "type": "object",
+      "required": [
+        "meta_stable"
+      ],
+      "properties": {
+        "meta_stable": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Custom pool type",
+      "type": "object",
+      "required": [
+        "custom"
+      ],
+      "properties": {
+        "custom": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

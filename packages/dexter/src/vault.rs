@@ -122,7 +122,7 @@ impl FeeInfo {
 // ----------------x----------------x    Generic struct Types      x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-/// ## Description - This structure describes the main control config of factory.
+/// ## Description - This structure describes the main control config of Vault.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
@@ -176,7 +176,7 @@ pub struct PoolInfo {
     pub developer_addr: Option<Addr>,
 }
 
-/// ## Description - This structure describes the main control config of factory.
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct SingleSwapRequest {
     pub pool_id: Uint128,
@@ -211,7 +211,6 @@ pub struct InstantiateMsg {
 }
 
 
-/// ## Description -  This structure describes the execute messages of the contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
@@ -281,7 +280,6 @@ pub enum Cw20HookMsg {
     },
 }
 
-/// ## Description -  This structure describes the query messages of the contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {

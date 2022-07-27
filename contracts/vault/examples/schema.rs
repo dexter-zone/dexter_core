@@ -3,9 +3,10 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
-use dexter::asset::PoolInfo;
+use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, PairsResponse, QueryMsg,
+    Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
+    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest, FeeInfo,
 };
 
 fn main() {
@@ -17,8 +18,23 @@ fn main() {
     export_schema(&schema_for!(InstantiateMsg), &out_dir);
     export_schema(&schema_for!(ExecuteMsg), &out_dir);
     export_schema(&schema_for!(QueryMsg), &out_dir);
+
+    export_schema(&schema_for!(Config), &out_dir);
+    export_schema(&schema_for!(Asset), &out_dir);
+    export_schema(&schema_for!(AssetInfo), &out_dir);
     export_schema(&schema_for!(PoolInfo), &out_dir);
-    export_schema(&schema_for!(PairsResponse), &out_dir);
+    export_schema(&schema_for!(SingleSwapRequest), &out_dir);
+    export_schema(&schema_for!(FeeInfo), &out_dir);
+    export_schema(&schema_for!(PoolType), &out_dir);
+
+    
     export_schema(&schema_for!(ConfigResponse), &out_dir);
+    export_schema(&schema_for!(PoolConfigResponse), &out_dir);
+    export_schema(&schema_for!(PoolInfoResponse), &out_dir);
+
+    export_schema(&schema_for!(Cw20HookMsg), &out_dir);
     export_schema(&schema_for!(MigrateMsg), &out_dir);
+
+
+
 }
