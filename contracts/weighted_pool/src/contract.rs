@@ -309,9 +309,9 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
         total_fee_bps: config.fee_info.total_fee_bps,
-        protocol_fee_bps: config.fee_info.protocol_fee_bps,
-        dev_fee_bps: config.fee_info.dev_fee_bps,
-        dev_fee_collector: config.fee_info.dev_addr_bps,
+        protocol_fee_percent: config.fee_info.protocol_fee_percent,
+        dev_fee_percent: config.fee_info.dev_fee_percent,
+        dev_fee_collector: config.fee_info.developer_addr,
     })
 }
 
@@ -483,8 +483,8 @@ pub fn query_on_swap(
         }
     }
 
-    let protocol_fee = commission_amount * config.fee_info.protocol_fee_bps;
-    let dev_fee = commission_amount * config.fee_info.dev_fee_bps;
+    let protocol_fee = commission_amount * config.fee_info.protocol_fee_percent;
+    let dev_fee = commission_amount * config.fee_info.dev_fee_percent;
 
     Ok(SwapResponse {
         trade_params: Trade {

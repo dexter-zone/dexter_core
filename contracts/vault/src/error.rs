@@ -49,7 +49,7 @@ pub enum ContractError {
     PoolConfigDuplicate {},
 
     #[error("Fee bps in pair config must be smaller than or equal to 10,000")]
-    InvalidFeeBps {},
+    InvalidFeeInfo {},
 
     #[error("Pool config not found")]
     PoolConfigNotFound {},

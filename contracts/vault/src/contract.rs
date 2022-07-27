@@ -3,29 +3,27 @@ use cosmwasm_std::{
     MessageInfo, Order, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, WasmMsg, WasmQuery,
 };
+use protobuf::Message;
+use std::collections::HashSet;
 
 use crate::error::ContractError;
-
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, POOLS, POOL_CONFIGS, TMP_POOL_INFO};
-
 use crate::response::MsgInstantiateContractResponse;
+
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
-// use dexter::generator::Cw20HookMsg as GeneratorHookMsg;
 use dexter::helper::build_transfer_cw20_from_user_msg;
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
-    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
+    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest, FeeInfo,
 };
-
-use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 use dexter::helper::{
     build_send_native_asset_msg, build_transfer_cw20_token_msg, claim_ownership,
     drop_ownership_proposal, propose_new_owner,
 };
 use dexter::pool::InstantiateMsg as PoolInstantiateMsg;
-use protobuf::Message;
-use std::collections::HashSet;
+
+use cw2::{get_contract_version, set_contract_version};
+use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-vault";
@@ -33,6 +31,10 @@ const CONTRACT_NAME: &str = "dexter-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_POOL_REPLY_ID: u64 = 1;
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x      Instantiate Contract : Execute function     x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -65,8 +67,8 @@ pub fn instantiate(
     // Save Pool Config info
     for pc in msg.pool_configs.iter() {
         // validate fee bps limits
-        if !pc.valid_fee_bps() {
-            return Err(ContractError::InvalidFeeBps {});
+        if !pc.fee_info.valid_fee_info() {
+            return Err(ContractError::InvalidFeeInfo {});
         }
         POOL_CONFIGS.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
@@ -74,6 +76,11 @@ pub fn instantiate(
 
     Ok(Response::new())
 }
+
+// ----------------x----------------x----------------x------------------x----------------x----------------
+// ----------------x----------------x  Execute function :: Entry Point  x----------------x----------------
+// ----------------x----------------x----------------x------------------x----------------x----------------
+
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
@@ -99,14 +106,13 @@ pub fn execute(
         ExecuteMsg::UpdatePoolConfig {
             pool_type,
             is_disabled,
-            is_generator_disabled,
-        } => execute_update_pool_config(deps, info, pool_type, is_disabled, is_generator_disabled),
+            new_fee_info,
+        } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
         ExecuteMsg::CreatePool {
             pool_type,
             asset_infos,
             lp_token_name,
             lp_token_symbol,
-            pool_manager,
             init_params
         } => execute_create_pool(
             deps,
@@ -115,7 +121,7 @@ pub fn execute(
             asset_infos,
             lp_token_name,
             lp_token_symbol,
-            pool_manager,
+            init_params
         ),
         ExecuteMsg::JoinPool {
             pool_id,
@@ -185,11 +191,8 @@ pub fn execute(
 /// otherwise returns the [`Response`] with the specified attributes if the operation was successful
 /// ## Params
 /// * **deps** is the object of type [`DepsMut`].
-///
 /// * **env** is the object of type [`Env`].
-///
 /// * **info** is the object of type [`MessageInfo`].
-///
 /// * **cw20_msg** is the object of type [`Cw20ReceiveMsg`].
 pub fn receive_cw20(
     deps: DepsMut,
@@ -207,11 +210,24 @@ pub fn receive_cw20(
     }
 }
 
+// ----------------x----------------x----------------x-----------------------x----------------x----------------
+// ----------------x----------------x  Execute :: Functional implementation  x----------------x----------------
+// ----------------x----------------x----------------x-----------------------x----------------x----------------
+
+
+
+//--------x---------------x--------------x-----
+//--------x  Execute :: Config Updates   x-----
+//--------x---------------x--------------x-----
+
+
 /// ## Description - Updates general settings. Returns an [`ContractError`] on failure or the following [`Config`]
 /// data will be updated if successful.
 ///
 /// ## Params
-/// * **param** is the object of type [`UpdateConfig`] that contains information to update.
+/// * **lp_token_code_id** optional parameter. The new id of the LP token code to be used for instantiating new LP tokens along-with the Pools
+/// * **fee_collector** optional parameter. The new address of the fee collector to be used for collecting fees from LP tokens
+/// * **generator_address** optional parameter. New address of the generator to be used for staking LP tokens via `auto_stake`
 ///
 /// ##Executor - Only owner can execute it
 pub fn execute_update_config(
@@ -248,38 +264,51 @@ pub fn execute_update_config(
     Ok(Response::new().add_attribute("action", "update_config"))
 }
 
+
 /// ## Description - Updates pool configuration. Returns an [`ContractError`] on failure or
 /// the following [`PoolConfig`] data will be updated if successful.
 ///
 /// ## Params
-/// * **pool_config** is the object of type [`PoolConfig`] that contains information to update.
+/// * **is_disabled** Optional parameter. If set to `true`, the instantiation of new pool instances will be disabled. If set to `false`, they will be enabled.
+/// * **is_generator_disabled**  Optional parameter. If set to `true`, the generator will not be able to support 
 ///
 /// ## Executor
-/// Only owner can execute it
+/// Only owner or the Pool's developer address can execute it
 pub fn execute_update_pool_config(
     deps: DepsMut,
     info: MessageInfo,
     pool_type: PoolType,
     is_disabled: Option<bool>,
-    is_generator_disabled: Option<bool>,
+    new_fee_info: Option<FeeInfo>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-
-    // permission check
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
     let mut pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?;
 
+    // permission check :: Only owner or the Pool's developer address can execute it
+    if pool_config.fee_info.developer_addr.is_some() {
+        if info.sender.clone() != config.owner && info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap() {
+            return Err(ContractError::Unauthorized {});
+        }
+    } else {
+        if info.sender.clone() != config.owner {
+            return Err(ContractError::Unauthorized {});
+        }
+    }
+
+    // Disable or enable pool instances creation 
     if let Some(is_disabled) = is_disabled {
         pool_config.is_disabled = is_disabled;
     }
 
-    if let Some(is_generator_disabled) = is_generator_disabled {
-        pool_config.is_generator_disabled = is_generator_disabled;
+    // Update fee info
+    if let Some(new_fee_info) = new_fee_info {
+        if !new_fee_info.valid_fee_info() {
+            return Err(ContractError::InvalidFeeInfo {});
+        }
+        pool_config.fee_info = new_fee_info;
     }
 
+    // Save pool config
     POOL_CONFIGS.save(
         deps.storage,
         pool_config.pool_type.to_string(),
@@ -289,12 +318,22 @@ pub fn execute_update_pool_config(
     Ok(Response::new().add_attribute("action", "update_pool_config"))
 }
 
+
+//--------x---------------x--------------x-----
+//--------x  Execute :: Create Pool      x-----
+//--------x---------------x--------------x-----
+
+
+
 /// ## Description - Creates a new pool with the specified parameters in the `asset_infos` variable. Returns an [`ContractError`] on failure or
 /// returns the address of the contract if the creation was successful.
 ///
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`].
-/// * **asset_infos** is an array with two items the type of [`AssetInfo`].
+/// * **asset_infos** is a vector consisting of type [`AssetInfo`].
+/// * **lp_token_name** is the name of the LP token to be used for instantiating new LP tokens along-with the Pools.
+/// * **lp_token_symbol** is the symbol of the LP token to be used for instantiating new LP tokens along-with the Pools.
+/// * **init_params** is the object of type [`Binary`] which contains any custom params required by the Pool instance for its initialization.
 pub fn execute_create_pool(
     deps: DepsMut,
     env: Env,
@@ -302,9 +341,9 @@ pub fn execute_create_pool(
     mut asset_infos: Vec<AssetInfo>,
     lp_token_name: Option<String>,
     lp_token_symbol: Option<String>,
-    pool_manager: Option<String>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
+    
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
         a.to_string()
@@ -349,8 +388,7 @@ pub fn execute_create_pool(
         lp_token_addr: None,
         assets: assets,
         pool_type: pool_config.pool_type.clone(),
-        dev_addr_bps: pool_config.fee_info.clone().dev_addr_bps,
-        pool_manager: pool_manager,
+        developer_addr: pool_config.fee_info.clone().developer_addr
     };
 
     TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
@@ -424,7 +462,7 @@ pub fn execute_join_pool(
     info: MessageInfo,
     pool_id: Uint128,
     op_recepient: Option<String>,
-    mut assets_in: Vec<Asset>,
+    mut assets_in: Option<Vec<Asset>>,
     lp_to_mint: Option<Uint128>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
@@ -435,8 +473,8 @@ pub fn execute_join_pool(
     let mut missing_assets: Vec<Asset> = vec![];
 
     // If some assets are omitted then add them explicitly with 0 deposit
-    pool_info.assets.iter().for_each(|(asset_info, amount)| {
-        if !assets_in.iter().any(|asset| asset.info.eq(asset_info)) {
+    pool_info.assets.iter().for_each(|asset| {
+        if !assets_in.iter().any(|asset_in| asset_in.info.eq(&asset.info)) {
             missing_assets.push(
                 Asset {
                     amount: Uint128::zero(),
@@ -457,8 +495,7 @@ pub fn execute_join_pool(
             contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
                 assets_in: Some(assets_in.clone()),
-                lp_to_mint: Some(mint_amount)
-
+                mint_amount: lp_to_mint,
             })?,
         }))?;
 
@@ -591,7 +628,7 @@ pub fn execute_exit_pool(
     pool_id: Uint128,
     op_recepient: Option<String>,
     mut assets_out: Option<Vec<Asset>>,
-    burn_amount: Uint128,
+    burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let mut pool_info = POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
@@ -937,9 +974,9 @@ pub fn execute_swap(
             )
         }
         // Execute Msg :: Dev Fee transfer
-        if !swap_response.trade_params.dev_fee.is_zero() && pool_info.dev_addr_bps.is_some() {
+        if !swap_response.trade_params.dev_fee.is_zero() && pool_info.developer_addr.is_some() {
             execute_msgs.push(build_transfer_cw20_token_msg(
-                pool_info.dev_addr_bps.unwrap(),
+                pool_info.developer_addr.unwrap(),
                 ask_asset.info.as_string(),
                 swap_response.trade_params.dev_fee,
             )?);
@@ -958,9 +995,9 @@ pub fn execute_swap(
                 swap_response.trade_params.protocol_fee.to_string(),
             )
         }
-        if !swap_response.trade_params.dev_fee.is_zero() && pool_info.dev_addr_bps.is_some() {
+        if !swap_response.trade_params.dev_fee.is_zero() && pool_info.developer_addr.is_some() {
             execute_msgs.push(build_send_native_asset_msg(
-                pool_info.dev_addr_bps.unwrap(),
+                pool_info.developer_addr.unwrap(),
                 &ask_asset.info.as_string(),
                 swap_response.trade_params.dev_fee,
             )?);
@@ -1109,10 +1146,3 @@ pub fn build_update_pool_state_msg(
         msg: to_binary(&dexter::pool::ExecuteMsg::UpdateLiquidity { assets })?,
     }))
 }
-
-// pub fn query_batch_swap(deps: Deps, swap_kind: SwapType,
-// batch_swap_steps: Vec<BatchSwapStep>,
-// assets: Vec<Asset>,) -> StdResult<PoolInfo> {
-//     let pool_addr = POOLS.load(deps.storage, &pool_key(&asset_infos))?;
-//     query_pool_info(deps, &pool_addr)
-// }

@@ -86,33 +86,33 @@ impl Display for SwapType {
 // Maximum total commission in bps that can be charged on any supported pool by Dexter
 const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_PROTOCOL_FEE_BPS: u16 = 50;
+const MAX_PROTOCOL_FEE_PERCENT: u16 = 50;
 // Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_DEV_FEE_BPS: u16 = 25;
+const MAX_DEV_FEE_PERCENT: u16 = 25;
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
     pub total_fee_bps: Decimal,
-    pub protocol_fee_bps: u16,
-    pub dev_fee_bps: u16,
-    pub dev_addr_bps: Option<Addr>,
+    pub protocol_fee_percent: u16,
+    pub dev_fee_percent: u16,
+    pub developer_addr: Option<Addr>,
 }
 
 impl FeeInfo { 
 
     /// This method is used to check fee bps.
-    pub fn valid_fee_bps(&self) -> bool {
+    pub fn valid_fee_info(&self) -> bool {
         self.total_fee_bps <= MAX_TOTAL_FEE_BPS
-            && self.protocol_fee_bps <= MAX_PROTOCOL_FEE_BPS
-            && self.dev_fee_bps <= MAX_DEV_FEE_BPS
+            && self.protocol_fee_percent <= MAX_PROTOCOL_FEE_PERCENT
+            && self.dev_fee_percent <= MAX_DEV_FEE_PERCENT
     }    
 
     // Returns the number of tokens charged as total fee, protocol fee and dev fee 
     pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
         let total_fee = self.total_fee_bps.checked_mul_uint128(amount).unwrap();
-        let protocol_fee = total_fee.checked_mul(Uint128::from(self.protocol_fee_bps as u128)).unwrap();
-        let dev_fee = total_fee.checked_mul(Uint128::from(self.dev_fee_bps as u128)).unwrap();
+        let protocol_fee = total_fee.checked_mul(Uint128::from(self.protocol_fee_percent as u128)).unwrap();
+        let dev_fee = total_fee.checked_mul(Uint128::from(self.dev_fee_percent as u128)).unwrap();
         (total_fee, protocol_fee, dev_fee)
     }
 }
@@ -139,7 +139,7 @@ pub struct Config {
 /// This structure stores a pool type's configuration.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolConfig {
-    /// ID of contract which is allowed to create pools of this type
+    /// ID of contract which is used to create pools of this type
     pub code_id: u64,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
@@ -173,9 +173,7 @@ pub struct PoolInfo {
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
     /// The address to which the collected developer fee is transferred
-    pub dev_addr_bps: Option<Addr>,
-    /// Address having admin priviledges on the pool. Will be used when the 'Self-balancing Index Pools' feature will be made live   
-    pub pool_manager: Option<String>,
+    pub developer_addr: Option<Addr>,
 }
 
 /// ## Description - This structure describes the main control config of factory.
@@ -228,7 +226,7 @@ pub enum ExecuteMsg {
     UpdatePoolConfig {
         pool_type: PoolType,
         is_disabled: Option<bool>,
-        is_generator_disabled: Option<bool>,
+        new_fee_info: Option<FeeInfo>,
     },
     /// CreatePool instantiates pool contract
     CreatePool {
@@ -236,7 +234,6 @@ pub enum ExecuteMsg {
         asset_infos: Vec<AssetInfo>,
         lp_token_name: Option<String>,
         lp_token_symbol: Option<String>,
-        pool_manager: Option<String>,
         init_params: Option<Binary>,
     },
     JoinPool {
@@ -280,7 +277,7 @@ pub enum Cw20HookMsg {
         pool_id: Uint128,
         recepient: Option<String>,
         assets: Option<Vec<Asset>>,
-        burn_amount: Uint128,
+        burn_amount: Option<Uint128>,
     },
 }
 

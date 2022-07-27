@@ -163,6 +163,14 @@ pub enum QueryMsg {
 }
 
 
+/// ## Description
+/// This structure describes a migration message.
+/// We currently take no arguments for migrations.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MigrateMsg {}
+
+
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -175,9 +183,9 @@ pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
     pub total_fee_bps: Decimal,
     /// The amount of fees (in bps) collected by the Protocol from this pool type
-    pub protocol_fee_bps: Decimal,
+    pub protocol_fee_percent: Decimal,
     /// The amount of fees (in bps) collected by the devs from this pool type
-    pub dev_fee_bps: Decimal,
+    pub dev_fee_percent: Decimal,
     /// The address to which the collected developer fee is transferred
     pub dev_fee_collector: Option<Addr>,
 }
@@ -234,16 +242,3 @@ pub struct SwapResponse {
 //     pub price0_cumulative_last: Uint128,
 //     pub price1_cumulative_last: Uint128,
 // }
-
-/// ## Description
-/// This structure describes a migration message.
-/// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct MigrateMsg {}
-
-
-
-// ----------------x----------------x----------------x----------------x----------------x----------------
-// ----------------x----------------x     Response Types       x----------------x----------------x------
-// ----------------x----------------x----------------x----------------x----------------x----------------
-
