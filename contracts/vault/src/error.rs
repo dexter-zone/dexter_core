@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{OverflowError, StdError, Uint128};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -8,6 +8,12 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized {},
+
+    #[error("LP Token address not found")]
+    LpTokenNotFound {},
+
+    #[error("Insufficient number of {denom} tokens sent. Tokens sent = {sent}. Tokens needed = {needed}")]
+    InsufficientNativeTokensSent { denom: String, sent: Uint128, needed: Uint128 },
 
     #[error("Cannot burn more LP tokens than what's been sent by the users")]
     InsufficientLpTokensToExit {},

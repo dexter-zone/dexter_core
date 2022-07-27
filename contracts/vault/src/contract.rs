@@ -529,7 +529,7 @@ pub fn execute_join_pool(
     }
 
     // Number of Assets should match
-    if after_join_res.return_assets.len() != pool_info.assets.len()
+    if after_join_res.provided_assets.len() != pool_info.assets.len()
     {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
@@ -543,7 +543,7 @@ pub fn execute_join_pool(
     let mut index = 0;
     for stored_asset in pool_info.assets.iter_mut() {
         // the returned list of assets needs to be sorted in the same order as the stored list of assets
-        if stored_asset.info != after_join_res.return_assets[index].info {
+        if stored_asset.info != after_join_res.provided_assets[index].info {
             return Err(ContractError::InvalidSequenceOfAssets {});
         }
         // Number of tokens to be transferred to the Vault
@@ -569,7 +569,7 @@ pub fn execute_join_pool(
                 )?);
             } else {
                 // Get number of native tokens that were sent
-                let tokens_sent = find_sent_native_token_balance(&info, stored_asset.info.as_string());
+                let tokens_sent = find_sent_native_token_balance(&info, &stored_asset.info.as_string());
                 // Return the extra native tokens sent by the user to the Vault
                 if tokens_sent > after_join_res.provided_assets[index].amount { 
                     execute_msgs.push(build_send_native_asset_msg(
@@ -580,9 +580,7 @@ pub fn execute_join_pool(
                 }
                 // Return error if insufficient number of tokens were sent
                 else if tokens_sent < after_join_res.provided_assets[index].amount {
-                    return  StdError::generic_err(
-                        format!("Insufficient number of {} tokens sent. Tokens sent = {}. Tokens needed = {}",after_join_res.provided_assets[index].info.to_string(), tokens_sent, after_join_res.provided_assets[index].amount),
-                    ));
+                    return Err(ContractError::InsufficientNativeTokensSent {denom: after_join_res.provided_assets[index].info.to_string(), sent: tokens_sent, needed: after_join_res.provided_assets[index].amount});
                 }
             }
         }
