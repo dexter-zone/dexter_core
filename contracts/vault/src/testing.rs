@@ -65,7 +65,7 @@ fn proper_initialization() {
     )]);
 
     let msg = InstantiateMsg {
-        factory_addr: String::from("vault"),
+        vault_addr: String::from("vault"),
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -132,7 +132,7 @@ fn provide_liquidity() {
             },
         ],
         token_code_id: 10u64,
-        factory_addr: String::from("factory"),
+        vault_addr: String::from("vault"),
         init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
     };
 
@@ -491,7 +491,7 @@ fn provide_liquidity() {
                 },
             ],
             token_code_id: 10u64,
-            factory_addr: String::from("factory"),
+            vault_addr: String::from("vault"),
             init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
         };
     
