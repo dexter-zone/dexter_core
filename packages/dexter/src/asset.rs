@@ -391,3 +391,4 @@ pub fn native_asset_info(denom: String) -> AssetInfo {
 pub fn token_asset_info(contract_addr: Addr) -> AssetInfo {
     AssetInfo::Token { contract_addr }
 }
+

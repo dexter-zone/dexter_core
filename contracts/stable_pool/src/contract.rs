@@ -131,7 +131,7 @@ pub fn instantiate(
                 decimals: 6,
                 initial_balances: vec![],
                 mint: Some(MinterResponse {
-                    minter: env.contract.address.to_string(),
+                    minter: msg.vault_addr.to_string(),
                     cap: None,
                 }),
                 marketing: None,

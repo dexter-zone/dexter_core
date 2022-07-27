@@ -207,7 +207,7 @@ pub struct CumulativePricesResponse {
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AfterJoinResponse {
-    pub return_assets: Vec<Asset>,
+    pub provided_assets: Vec<Asset>,
     pub new_shares: Uint128,
     pub response: ResponseType,
 }

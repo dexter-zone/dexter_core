@@ -11,7 +11,7 @@ use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, POOLS, POOL_CONFIGS, TMP_POOL_INF
 use crate::response::MsgInstantiateContractResponse;
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
-use dexter::helper::build_transfer_cw20_from_user_msg;
+use dexter::helper::{build_transfer_cw20_from_user_msg, find_sent_native_token_balance};
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
     PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest, FeeInfo,
@@ -428,6 +428,7 @@ pub fn execute_create_pool(
         ]))
 }
 
+
 /// # Description
 /// The entry point to the contract for processing the reply from the submessage
 /// # Params
@@ -453,7 +454,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                                                 msg: to_binary(&dexter::pool::QueryMsg::Config {})?,
                                             }))?;
     // Error if the LP token address is not found
-    pool_res.lp_token_addr.is_none() {
+    if pool_res.lp_token_addr.is_none() {
         return Err(ContractError::LpTokenNotFound {});
     }
 
@@ -487,7 +488,16 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
 //--------x---------------x--------------x-----x-----
 
 
-
+/// ## Description - Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and either the number of assets to be provided or the LP tokens to be minted to the user.
+///                  The exact number of assets or LP tokens to be minted to the user is decided by the pool contract's math computations. Vault contract
+///                  is responsible for the the transfer of assets and minting of LP tokens to the user.
+/// 
+/// ## Params
+/// * **pool_id** is the id of the pool to be joined.
+/// * **op_recepient** Optional parameter. If provided, the Vault will transfer the LP tokens to the provided address.
+/// * **assets_in** Optional parameter. It is the list of assets the user is willing to provide to join the pool
+/// * **lp_to_mint** Optional parameter. The number of LP tokens the user wants to get against the provided assets.
+/// * **auto_stakes** Optional parameter. If provided, the Vault will automatically stake the provided assets with the generator contract.
 pub fn execute_join_pool(
     deps: DepsMut,
     env: Env,
@@ -498,47 +508,28 @@ pub fn execute_join_pool(
     lp_to_mint: Option<Uint128>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
+    // Load the pool info from the storage
     let mut pool_info = POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
-    let mut missing_assets: Vec<Asset> = vec![];
-
-    // If some assets are omitted then add them explicitly with 0 deposit
-    pool_info.assets.iter().for_each(|asset| {
-        if !assets_in.iter().any(|asset_in| asset_in.info.eq(&asset.info)) {
-            missing_assets.push(
-                Asset {
-                    amount: Uint128::zero(),
-                    info: asset_info.clone(),
-                }                
-            );
-        }
-    });    
-    assets_in.extend(missing_assets);
-
-
-    // assert slippage tolerance
-    // assert_slippage_tolerance(slippage_tolerance, &deposits, &pools)?;
-
-    // Query Pool Instance for Math Operations --> Returns response type (success or failure), number of LP shares to be minted and the list of Assets which are to be returned
+    // Query Pool Instance for Math Operations --> Returns response type (success or failure), number of LP shares to be minted and a `sorted` list of Assets which are to be transferred to the Vault by the user
     let after_join_res: dexter::pool::AfterJoinResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
-                assets_in: Some(assets_in.clone()),
+                assets_in: assets_in.clone(),
                 mint_amount: lp_to_mint,
             })?,
         }))?;
 
     // If the response is failure
-    if !after_join_res.response.is_success() {
+    if !after_join_res.response.is_success() || after_join_res.new_shares.is_zero()  {
         return Err(ContractError::PoolQueryFailed {});
     }
 
     // Number of Assets should match
-    if pool_info.assets.len() != assets_in.len()
-        || after_join_res.return_assets.len() != pool_info.assets.len()
+    if after_join_res.return_assets.len() != pool_info.assets.len()
     {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
@@ -546,39 +537,28 @@ pub fn execute_join_pool(
     // Number of LP tokens to be minted
     let new_shares = after_join_res.new_shares;
 
-    // Sort the assets
-    assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
-
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
 
     // Update asset balances
     let mut index = 0;
-    for stored_asset in pool_info.assets.iter() {
-        if stored_asset.info != assets_in[index].info
-            || stored_asset.info != after_join_res.return_assets[index].info
-        {
+    for stored_asset in pool_info.assets.iter_mut() {
+        // the returned list of assets needs to be sorted in the same order as the stored list of assets
+        if stored_asset.info != after_join_res.return_assets[index].info {
             return Err(ContractError::InvalidSequenceOfAssets {});
         }
         // Number of tokens to be transferred to the Vault
-        let to_transfer = assets_in[index]
-            .amount
-            .checked_sub(after_join_res.return_assets[index].amount)?;
+        let to_transfer = after_join_res.provided_assets[index].amount;
 
         // If number of tokens to transfer > 0, then
         // - Update stored pool's asset balances in `PoolInfo` Struct
         // - Transfer net calculated CW20 tokens from user to the Vault
         // - Return native tokens to the user (which are to be returned)
         if !to_transfer.is_zero() {
-            // PoolInfo State update -
+            // PoolInfo State update - Add number of tokens to be transferred to the stored pool state
             stored_asset.amount = stored_asset.amount.checked_add(to_transfer)?;
             // Token Transfers
             if !stored_asset.info.is_native_token() {
-                // Transfer Number of CW tokens = User wants to provide - Pool Math instructs to return
+                // Transfer Number of CW tokens = Pool Math instructs that the user needs to provide this number of tokens to the Vault
                 execute_msgs.push(build_transfer_cw20_from_user_msg(
                     stored_asset.info.as_string(),
                     op_recepient
@@ -588,15 +568,21 @@ pub fn execute_join_pool(
                     to_transfer,
                 )?);
             } else {
-                // Check if correct number of native tokens were sent
-                assets_in[index].assert_sent_native_token_balance(&info)?;
-                // If native tokens to return > 0, send native tokens back to sender
-                if !after_join_res.return_assets[index].amount.is_zero() {
+                // Get number of native tokens that were sent
+                let tokens_sent = find_sent_native_token_balance(&info, stored_asset.info.as_string());
+                // Return the extra native tokens sent by the user to the Vault
+                if tokens_sent > after_join_res.provided_assets[index].amount { 
                     execute_msgs.push(build_send_native_asset_msg(
                         info.sender.clone(),
-                        &assets_in[index].info.as_string(),
-                        after_join_res.return_assets[index].amount,
+                        &after_join_res.provided_assets[index].info.as_string(),
+                        tokens_sent.checked_sub(after_join_res.provided_assets[index].amount)? ,
                     )?);
+                }
+                // Return error if insufficient number of tokens were sent
+                else if tokens_sent < after_join_res.provided_assets[index].amount {
+                    return  StdError::generic_err(
+                        format!("Insufficient number of {} tokens sent. Tokens sent = {}. Tokens needed = {}",after_join_res.provided_assets[index].info.to_string(), tokens_sent, after_join_res.provided_assets[index].amount),
+                    ));
                 }
             }
         }
@@ -620,6 +606,12 @@ pub fn execute_join_pool(
         )?;
     }
 
+    // Pool State Update Execution :: Send Updated pool state to the Pool Contract so it can do its internal computes
+    execute_msgs.push(build_update_pool_state_msg(
+        pool_info.pool_addr.clone().unwrap().to_string(),
+        pool_info.assets.clone(),
+    )?);
+
     // Mint LP Tokens
     let mint_msgs = build_mint_lp_token_msg(
         deps.as_ref(),
@@ -634,11 +626,7 @@ pub fn execute_join_pool(
         execute_msgs.push(msg);
     }
 
-    // Pool State Update Execution :: Send Updated pool state to the Pool Contract so it can do its internal computes
-    execute_msgs.push(build_update_pool_state_msg(
-        pool_info.pool_addr.clone().unwrap().to_string(),
-        pool_info.assets.clone(),
-    )?);
+    // Save the updated pool state to the storage
     POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
     // Emit Event
@@ -653,6 +641,20 @@ pub fn execute_join_pool(
         .add_event(event))
 }
 
+
+
+
+
+
+/// ## Description - Entry point for a user to Exit a pool supported by the Vault. User can exit by providing the pool id and either the number of assets to be returned or the LP tokens to be burnt.
+///                  The exact number of assets to be returned or LP tokens to be burnt are decided by the pool contract's math computations. Vault contract
+///                  is responsible for the the transfer of assets and burning of LP tokens only
+/// 
+/// ## Params
+/// * **pool_id** is the id of the pool to be joined.
+/// * **op_recepient** Optional parameter. If provided, the Vault will transfer the assets to the provided address.
+/// * **assets_out** Optional parameter. It is the list of assets the user wants to get back when exiting the pool
+/// * **burn_amount** Optional parameter. The number of LP tokens the user wants to burn for the underlying assets.
 pub fn execute_exit_pool(
     deps: DepsMut,
     _env: Env,

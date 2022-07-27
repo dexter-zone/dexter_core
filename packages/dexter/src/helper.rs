@@ -319,3 +319,15 @@ pub fn is_valid_symbol(symbol: &str) -> bool {
     }
     true
 }
+
+
+    /// Retusn the number of native tokens sent by the user
+    /// ## Params
+    /// * **message_info** is an object of type [`MessageInfo`]
+    pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom : &str) -> Uint128 {
+        let empty_coin = Coin::new(0u128, denom);
+        let coin = message_info.funds.iter().find(|x| x.clone().denom == denom).unwrap_or_else(||  {
+            &empty_coin });
+        coin.amount
+        
+    }
