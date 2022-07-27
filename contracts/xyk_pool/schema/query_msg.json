@@ -1,31 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QueryMsg",
+  "description": "This structure describes the query messages of the contract.",
   "oneOf": [
-    {
-      "type": "object",
-      "required": [
-        "pair"
-      ],
-      "properties": {
-        "pair": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "pool"
-      ],
-      "properties": {
-        "pool": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
     {
       "type": "object",
       "required": [
@@ -41,17 +18,119 @@
     {
       "type": "object",
       "required": [
-        "share"
+        "fee_params"
       ],
       "properties": {
-        "share": {
+        "fee_params": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "pool_id"
+      ],
+      "properties": {
+        "pool_id": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "on_join_pool"
+      ],
+      "properties": {
+        "on_join_pool": {
+          "type": "object",
+          "properties": {
+            "assets_in": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/definitions/Asset"
+              }
+            },
+            "mint_amount": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "on_exit_pool"
+      ],
+      "properties": {
+        "on_exit_pool": {
+          "type": "object",
+          "properties": {
+            "assets_out": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/definitions/Asset"
+              }
+            },
+            "burn_amount": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "on_swap"
+      ],
+      "properties": {
+        "on_swap": {
           "type": "object",
           "required": [
-            "amount"
+            "amount",
+            "ask_asset",
+            "offer_asset",
+            "swap_type"
           ],
           "properties": {
             "amount": {
               "$ref": "#/definitions/Uint128"
+            },
+            "ask_asset": {
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "offer_asset": {
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "swap_type": {
+              "$ref": "#/definitions/SwapType"
             }
           }
         }
@@ -61,37 +140,21 @@
     {
       "type": "object",
       "required": [
-        "simulation"
+        "cumulative_price"
       ],
       "properties": {
-        "simulation": {
+        "cumulative_price": {
           "type": "object",
           "required": [
+            "ask_asset",
             "offer_asset"
           ],
           "properties": {
-            "offer_asset": {
-              "$ref": "#/definitions/Asset"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "reverse_simulation"
-      ],
-      "properties": {
-        "reverse_simulation": {
-          "type": "object",
-          "required": [
-            "ask_asset"
-          ],
-          "properties": {
             "ask_asset": {
-              "$ref": "#/definitions/Asset"
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "offer_asset": {
+              "$ref": "#/definitions/AssetInfo"
             }
           }
         }
@@ -117,6 +180,7 @@
       "type": "string"
     },
     "Asset": {
+      "title": "Description - This enum describes a asset (native or CW20).",
       "type": "object",
       "required": [
         "amount",
@@ -124,16 +188,28 @@
       ],
       "properties": {
         "amount": {
-          "$ref": "#/definitions/Uint128"
+          "description": "A token amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
         },
         "info": {
-          "$ref": "#/definitions/AssetInfo"
+          "description": "Information about an asset stored in a [`AssetInfo`] struct",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetInfo"
+            }
+          ]
         }
       }
     },
     "AssetInfo": {
+      "description": "This enum describes available Token types.",
       "oneOf": [
         {
+          "description": "Non-native Token",
           "type": "object",
           "required": [
             "token"
@@ -154,6 +230,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Native token",
           "type": "object",
           "required": [
             "native_token"
@@ -169,6 +246,48 @@
                   "type": "string"
                 }
               }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SwapType": {
+      "description": "This enum describes available Swap types. ## Available swap types ``` GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request ```",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "give_in"
+          ],
+          "properties": {
+            "give_in": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "give_out"
+          ],
+          "properties": {
+            "give_out": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Custom swap type",
+          "type": "object",
+          "required": [
+            "custom"
+          ],
+          "properties": {
+            "custom": {
+              "type": "string"
             }
           },
           "additionalProperties": false

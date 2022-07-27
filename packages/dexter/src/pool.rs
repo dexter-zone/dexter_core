@@ -179,15 +179,43 @@ pub type ConfigResponse = Config;
 
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AfterJoinResponse {
+    pub provided_assets: Vec<Asset>,
+    pub new_shares: Uint128,
+    pub response: ResponseType,
+}
+
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AfterExitResponse {
+    /// Assets which will be transferred to the recipient against tokens being burnt
+    pub assets_out: Vec<Asset>,
+    /// Number of LP tokens to burn
+    pub burn_shares: Uint128,
+    /// Operation will be a `Success` or `Failure`
+    pub response: ResponseType,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
     pub total_fee_bps: Decimal,
-    /// The amount of fees (in bps) collected by the Protocol from this pool type
-    pub protocol_fee_percent: Decimal,
-    /// The amount of fees (in bps) collected by the devs from this pool type
-    pub dev_fee_percent: Decimal,
+    /// The % of fees collected by the Protocol
+    pub protocol_fee_percent: u16,
+    /// The % of fees collected by the devs
+    pub dev_fee_percent: u16,
     /// The address to which the collected developer fee is transferred
     pub dev_fee_collector: Option<Addr>,
+}
+
+/// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SwapResponse {
+    pub trade_params: Trade,
+    /// Operation will be a `Success` or `Failure`
+    pub response: ResponseType,
 }
 
 /// ## Description
@@ -203,42 +231,3 @@ pub struct CumulativePricesResponse {
     pub exchange_infos: Vec<AssetExchangeRate>,
     pub total_share: Uint128,
 }
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AfterJoinResponse {
-    pub provided_assets: Vec<Asset>,
-    pub new_shares: Uint128,
-    pub response: ResponseType,
-}
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AfterExitResponse {
-    /// Assets which will be transferred to the recipient against tokens being burnt
-    pub assets_out: Vec<Asset>,
-    /// Number of LP tokens to burn
-    pub burn_shares: Uint128,
-    /// Operation will be a `Success` or `Failure`
-    pub response: ResponseType,
-}
-
-/// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct SwapResponse {
-    pub trade_params: Trade,
-    /// Operation will be a `Success` or `Failure`
-    pub response: ResponseType,
-}
-
-
-
-// /// ## Description
-// /// This structure describes the custom struct for each query response.
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct CumulativePricesResponse {
-//     pub assets: [Asset; 2],
-//     pub total_share: Uint128,
-//     pub price0_cumulative_last: Uint128,
-//     pub price1_cumulative_last: Uint128,
-// }

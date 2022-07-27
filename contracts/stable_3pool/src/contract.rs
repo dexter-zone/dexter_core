@@ -27,7 +27,7 @@ use crate::math::{
 };
 
 use dexter::querier::{ query_supply, query_token_precision};
-use dexter::helpers::{select_pools, check_swap_parameters};
+use dexter::helper::{select_pools, check_swap_parameters};
 use dexter::{token::InstantiateMsg as TokenInstantiateMsg, U256};
 use protobuf::Message;
 use std::str::FromStr;

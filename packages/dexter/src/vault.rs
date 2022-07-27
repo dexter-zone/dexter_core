@@ -1,13 +1,12 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_std::{Addr, Decimal, Uint128, Binary};
+use cosmwasm_std::{Addr,Decimal, Uint128, Binary};
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
-use crate::decimal_checked_ops::DecimalCheckedOps;
 
 // TWAP PRECISION is 9 decimal places
-pub const TWAP_PRECISION: Decimal =Decimal::new(Uint128::new(9));
+pub const TWAP_PRECISION: u16 = 9u16;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{PoolType}} enum Type    x----------------x----------------
@@ -110,9 +109,12 @@ impl FeeInfo {
 
     // Returns the number of tokens charged as total fee, protocol fee and dev fee 
     pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
-        let total_fee = self.total_fee_bps.checked_mul_uint128(amount).unwrap();
-        let protocol_fee = total_fee.checked_mul(Uint128::from(self.protocol_fee_percent as u128)).unwrap();
-        let dev_fee = total_fee.checked_mul(Uint128::from(self.dev_fee_percent as u128)).unwrap();
+        // let commission_rate = decimal2decimal256(self.total_fee_bps)?;
+
+        let total_fee: Uint128 = amount * self.total_fee_bps;
+        let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
+        let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
+
         (total_fee, protocol_fee, dev_fee)
     }
 }

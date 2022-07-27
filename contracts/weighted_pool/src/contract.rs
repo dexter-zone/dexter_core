@@ -11,9 +11,9 @@ use cosmwasm_std::{
 use crate::response::MsgInstantiateContractResponse;
 use cw2::set_contract_version;
 use cw20::MinterResponse;
-use dexter::helpers::{select_pools, check_swap_parameters};
+use dexter::helper::{select_pools, check_swap_parameters};
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helpers::decimal2decimal256;
+use dexter::helper::decimal2decimal256;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,

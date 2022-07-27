@@ -1,116 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ExecuteMsg",
+  "description": "This structure describes the execute messages of the contract.",
   "oneOf": [
     {
-      "type": "object",
-      "required": [
-        "receive"
-      ],
-      "properties": {
-        "receive": {
-          "$ref": "#/definitions/Cw20ReceiveMsg"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "ProvideLiquidity a user provides pool liquidity",
-      "type": "object",
-      "required": [
-        "provide_liquidity"
-      ],
-      "properties": {
-        "provide_liquidity": {
-          "type": "object",
-          "required": [
-            "assets"
-          ],
-          "properties": {
-            "assets": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/Asset"
-              },
-              "maxItems": 2,
-              "minItems": 2
-            },
-            "auto_stake": {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
-            "receiver": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "slippage_tolerance": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Decimal"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Swap an offer asset to the other",
-      "type": "object",
-      "required": [
-        "swap"
-      ],
-      "properties": {
-        "swap": {
-          "type": "object",
-          "required": [
-            "offer_asset"
-          ],
-          "properties": {
-            "belief_price": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Decimal"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "max_spread": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Decimal"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "offer_asset": {
-              "$ref": "#/definitions/Asset"
-            },
-            "to": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Update pair config if required",
+      "title": "Description",
       "type": "object",
       "required": [
         "update_config"
@@ -129,6 +23,29 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_liquidity"
+      ],
+      "properties": {
+        "update_liquidity": {
+          "type": "object",
+          "required": [
+            "assets"
+          ],
+          "properties": {
+            "assets": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Asset"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     }
   ],
   "definitions": {
@@ -137,6 +54,7 @@
       "type": "string"
     },
     "Asset": {
+      "title": "Description - This enum describes a asset (native or CW20).",
       "type": "object",
       "required": [
         "amount",
@@ -144,16 +62,28 @@
       ],
       "properties": {
         "amount": {
-          "$ref": "#/definitions/Uint128"
+          "description": "A token amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
         },
         "info": {
-          "$ref": "#/definitions/AssetInfo"
+          "description": "Information about an asset stored in a [`AssetInfo`] struct",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetInfo"
+            }
+          ]
         }
       }
     },
     "AssetInfo": {
+      "description": "This enum describes available Token types.",
       "oneOf": [
         {
+          "description": "Non-native Token",
           "type": "object",
           "required": [
             "token"
@@ -174,6 +104,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Native token",
           "type": "object",
           "required": [
             "native_token"
@@ -197,30 +128,6 @@
     },
     "Binary": {
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
-      "type": "string"
-    },
-    "Cw20ReceiveMsg": {
-      "description": "Cw20ReceiveMsg should be de/serialized under `Receive()` variant in a ExecuteMsg",
-      "type": "object",
-      "required": [
-        "amount",
-        "msg",
-        "sender"
-      ],
-      "properties": {
-        "amount": {
-          "$ref": "#/definitions/Uint128"
-        },
-        "msg": {
-          "$ref": "#/definitions/Binary"
-        },
-        "sender": {
-          "type": "string"
-        }
-      }
-    },
-    "Decimal": {
-      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
       "type": "string"
     },
     "Uint128": {

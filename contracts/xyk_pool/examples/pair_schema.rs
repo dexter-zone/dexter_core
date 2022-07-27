@@ -1,13 +1,12 @@
 use std::env::current_dir;
 use std::fs::create_dir_all;
 
-use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
+use cosmwasm_schema::{export_schema_with_title, remove_schemas, schema_for};
 
-use dexter::asset::PoolInfo;
-use dexter::pair::{
-    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolResponse,
-    QueryMsg, ReverseSimulationResponse, SimulationResponse,
+use dexter::pool::{
+     InstantiateMsg, MigrateMsg, QueryMsg,ExecuteMsg
 };
+
 
 fn main() {
     let mut out_dir = current_dir().unwrap();
@@ -15,14 +14,8 @@ fn main() {
     create_dir_all(&out_dir).unwrap();
     remove_schemas(&out_dir).unwrap();
 
-    export_schema(&schema_for!(InstantiateMsg), &out_dir);
-    export_schema(&schema_for!(ExecuteMsg), &out_dir);
-    export_schema(&schema_for!(Cw20HookMsg), &out_dir);
-    export_schema(&schema_for!(QueryMsg), &out_dir);
-    export_schema(&schema_for!(PoolInfo), &out_dir);
-    export_schema(&schema_for!(PoolResponse), &out_dir);
-    export_schema(&schema_for!(ReverseSimulationResponse), &out_dir);
-    export_schema(&schema_for!(SimulationResponse), &out_dir);
-    export_schema(&schema_for!(MigrateMsg), &out_dir);
-    export_schema(&schema_for!(CumulativePricesResponse), &out_dir);
+    export_schema_with_title(&schema_for!(InstantiateMsg), &out_dir, "InstantiateMsg");
+    export_schema_with_title(&schema_for!(MigrateMsg), &out_dir, "MigrateMsg");
+    export_schema_with_title(&schema_for!(ExecuteMsg), &out_dir, "ExecuteMsg");
+    export_schema_with_title(&schema_for!(QueryMsg), &out_dir, "QueryMsg");
 }

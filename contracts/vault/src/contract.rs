@@ -36,6 +36,13 @@ const INSTANTIATE_POOL_REPLY_ID: u64 = 1;
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
+
+/// ## Description
+/// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
+/// Returns the [`Response`] with the specified attributes if the operation was successful, or a [`ContractError`] if the contract was not created
+/// 
+/// ## Params
+/// * **msg** is a message of type [`InstantiateMsg`] which contains the basic settings for creating a contract
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
@@ -76,6 +83,7 @@ pub fn instantiate(
 
     Ok(Response::new())
 }
+
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
 // ----------------x----------------x  Execute function :: Entry Point  x----------------x----------------
