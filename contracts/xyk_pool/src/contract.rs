@@ -98,6 +98,7 @@ pub fn instantiate(
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         msg: WasmMsg::Instantiate {
+            admin: None,
             code_id: msg.lp_token_code_id,
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
@@ -111,7 +112,7 @@ pub fn instantiate(
                 marketing: None,
             })?,
             funds: vec![],
-            admin: None,
+            
             label: String::from("Dexter LP token"),
         }
         .into(),
@@ -289,7 +290,7 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     Ok(FeeResponse {
         total_fee_bps: config.fee_info.total_fee_bps,
         protocol_fee_percent: config.fee_info.protocol_fee_percent,
-        dev_fee_percent: config.fee_info.dev_fee_percent,
+        dev_fee_bps: config.fee_info.dev_fee_bps,
         dev_fee_collector: config.fee_info.developer_addr,
     })
 }
@@ -478,7 +479,7 @@ pub fn query_on_swap(
     }
 
     let protocol_fee = commission_amount * config.fee_info.protocol_fee_percent;
-    let dev_fee = commission_amount * config.fee_info.dev_fee_percent;
+    let dev_fee = commission_amount * config.fee_info.dev_fee_bps;
 
     Ok(SwapResponse {
         trade_params: Trade {

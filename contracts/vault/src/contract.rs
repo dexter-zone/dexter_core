@@ -282,7 +282,7 @@ pub fn execute_update_pool_config(
     new_fee_info: Option<FeeInfo>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?;
+    let mut pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string()).map_err(|_| ContractError::PoolConfigNotFound {})?;
 
     // permission check :: Only owner or the Pool's developer address can execute it
     if pool_config.fee_info.developer_addr.is_some() {
@@ -343,7 +343,7 @@ pub fn execute_create_pool(
     lp_token_symbol: Option<String>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
-    
+
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
         a.to_string()
@@ -354,7 +354,7 @@ pub fn execute_create_pool(
     let mut assets: Vec<Asset> = vec![];
 
     // Check asset definations and make sure no asset is repeated
-    let mut previous_asset: String;
+    let mut previous_asset: String = "".to_string();;
     for asset in asset_infos.iter() {
         asset.check(deps.api)?; // Asset naming should be lower case
         if previous_asset == asset.as_string() {
@@ -380,6 +380,7 @@ pub fn execute_create_pool(
         return Err(ContractError::PoolConfigDisabled {});
     }
 
+    // Pool Id for the new pool instance
     let pool_id = config.next_pool_id;
 
     let tmp_pool_info = PoolInfo {
@@ -391,8 +392,10 @@ pub fn execute_create_pool(
         developer_addr: pool_config.fee_info.clone().developer_addr
     };
 
+    // Store the temporary Pool Info
     TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
 
+    // Sub Msg to initialize the pool instance
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         id: INSTANTIATE_POOL_REPLY_ID,
         msg: WasmMsg::Instantiate {
@@ -431,21 +434,41 @@ pub fn execute_create_pool(
 /// * **msg** is the object of type [`Reply`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    // Load stored temporary pool info
     let tmp_pool_info = TMP_POOL_INFO.load(deps.storage)?;
 
+    // Parse the reply from the submessage
     let data = msg.result.unwrap().data.unwrap();
     let res: MsgInstantiateContractResponse =
         Message::parse_from_bytes(data.as_slice()).map_err(|_| {
             StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
         })?;
-
+    
+    // Retrieve the pool address from the submessage
     let pool_contract = addr_validate_to_lower(deps.api, res.get_contract_address())?;
+
+    // Query the pool contract for the Lp Token address
+    let pool_res: dexter::pool::ConfigResponse = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+                                                contract_addr: String::from(pool_contract),
+                                                msg: to_binary(&dexter::pool::QueryMsg::Config {})?,
+                                            }))?;
+    // Error if the LP token address is not found
+    pool_res.lp_token_addr.is_none() {
+        return Err(ContractError::LpTokenNotFound {});
+    }
+
+    // Set the pool address and LP token address in the temporary pool info
+    tmp_pool_info.pool_addr = Some(pool_contract);
+    tmp_pool_info.lp_token_addr = Some(pool_res.lp_token_addr.unwrap());
+
+    // Save the temporary pool info as permanent pool info mapped with the Pool Id
     POOLS.save(
         deps.storage,
         &tmp_pool_info.pool_id.to_string().as_bytes(),
         &tmp_pool_info,
     )?;
 
+    // Update the next pool id in the config and save it
     let mut config = CONFIG.load(deps.storage)?;
     config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
     CONFIG.save(deps.storage, &config)?;
@@ -453,8 +476,17 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     Ok(Response::new().add_attributes(vec![
         attr("action", "register"),
         attr("pool_contract_addr", pool_contract),
+        attr("lp_token_addr", pool_res.lp_token_addr.unwrap()),
     ]))
 }
+
+
+
+//--------x---------------x--------------x-----x-----
+//--------x    Execute :: Join / Exit Pool     x-----
+//--------x---------------x--------------x-----x-----
+
+
 
 pub fn execute_join_pool(
     deps: DepsMut,
@@ -1051,7 +1083,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 }
 
 pub fn query_pool_config(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?;
+    let pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?
     Ok(pool_config)
 }
 

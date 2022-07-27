@@ -54,7 +54,7 @@ pub enum ContractError {
     #[error("Pool config not found")]
     PoolConfigNotFound {},
 
-    #[error("Pool config disabled")]
+    #[error("Pool is currently disabled. No new pool instances can be created")]
     PoolConfigDisabled {},
 
     #[error("Doubling assets in asset infos")]
