@@ -45,12 +45,6 @@ pub enum ContractError {
     #[error("Swap limit exceeded")]
     SwapLimit {},
 
-    #[error("Pool was already created")]
-    PoolAlreadyExists {},
-
-    #[error("Pool was already registered")]
-    PoolWasRegistered {},
-
     #[error("Duplicate of pair configs")]
     PoolConfigDuplicate {},
 
@@ -66,8 +60,6 @@ pub enum ContractError {
     #[error("Doubling assets in asset infos")]
     RepeatedAssets {},
 
-    #[error("Contract can't be migrated!")]
-    MigrationError {},
 }
 
 impl From<OverflowError> for ContractError {

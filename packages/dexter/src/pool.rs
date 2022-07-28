@@ -231,3 +231,31 @@ pub struct CumulativePricesResponse {
     pub exchange_infos: Vec<AssetExchangeRate>,
     pub total_share: Uint128,
 }
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x     Helper response functions       x----------------x------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+
+pub fn return_join_failure() -> AfterJoinResponse {
+    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure { } }
+}
+
+pub fn return_exit_failure() -> AfterExitResponse {
+    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure { } }
+}
+
+
+pub fn return_swap_failure() -> SwapResponse {
+    SwapResponse {
+        trade_params: Trade {
+            amount_in: Uint128::zero(),
+            amount_out: Uint128::zero(),
+            spread: Uint128::zero(),
+            total_fee: Uint128::zero(),
+            protocol_fee: Uint128::zero(),
+            dev_fee: Uint128::zero(),
+        },
+        response: ResponseType::Failure {},
+    }
+}
