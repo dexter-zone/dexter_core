@@ -2,7 +2,7 @@
 members = [
     "contracts/vault", 
     "contracts/xyk_pool", 
-    # "contracts/stable_pool", 
+    # "contracts/stable_3pool", 
     "packages/*"
 ]
 

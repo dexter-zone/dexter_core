@@ -3,7 +3,7 @@ use cosmwasm_std::{
     Env, Event, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, Uint256, WasmMsg,
 };
-use crate::error::ContractError;
+use dexter::error::ContractError;
 use crate::state::{Twap, CONFIG, TWAPINFO};
 use crate::response::MsgInstantiateContractResponse;
 use std::convert::TryInto;

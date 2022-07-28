@@ -544,8 +544,8 @@ pub fn query_on_swap(
                 amount_out: Uint128::zero(),
                 spread: Uint128::zero(),
                 total_fee: Uint128::zero(),
-                protocol_fee: Uint128::zero(),,
-                dev_fee: Uint128::zero(),,
+                protocol_fee: Uint128::zero(),
+                dev_fee: Uint128::zero(),
             },
             response: ResponseType::Failure {},
         })

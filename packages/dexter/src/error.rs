@@ -16,6 +16,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Operation non supported")]
+    NonSupported {},    
+
     #[error("Doubling assets in asset infos")]
     DoublingAssets {},
 
