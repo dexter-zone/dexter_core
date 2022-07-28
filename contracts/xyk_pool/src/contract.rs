@@ -14,10 +14,10 @@ use cw20::MinterResponse;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
 };
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helper::decimal2decimal256;
+use dexter::helper::{decimal2decimal256,get_share_in_assets, get_lp_token_name,get_lp_token_symbol};
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
@@ -89,18 +89,11 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     // LP Token Name
-    let mut token_name = msg.pool_id.to_string() + "-Dexter-LP".to_string().as_str();
-    if !msg.lp_token_name.is_none() {
-        token_name = msg.pool_id.to_string()
-            + "-DEX-LP-".to_string().as_str()
-            + msg.lp_token_name.unwrap().as_str();
-    }
+    let mut token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let mut token_symbol = "LP-".to_string() + msg.pool_id.to_string().as_str();
-    if !msg.lp_token_symbol.is_none() {
-        token_symbol = msg.lp_token_symbol.unwrap();
-    }
+    let mut token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -245,7 +238,7 @@ pub fn execute_update_pool_liquidity(
 
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: VAULT::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 
@@ -426,14 +419,14 @@ pub fn query_on_join_pool(
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,
-    env: Env,
-    assets_out: Option<Vec<Asset>>,
+    _env: Env,
+    _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure { } });
+        return Ok(return_exit_failure())
     }    
 
     // Load the config from the storage
@@ -443,7 +436,7 @@ pub fn query_on_exit_pool(
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
 
     // Number of tokens that will be transferred against the LP tokens burnt
-    let assets_out = get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
+    let assets_out = dexter::helper::get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
 
     Ok(AfterExitResponse {
         assets_out,
@@ -468,7 +461,7 @@ pub fn query_on_exit_pool(
 /// T.B.A
 pub fn query_on_swap(
     deps: Deps,
-    env: Env,
+    _env: Env,
     swap_type: SwapType,
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
@@ -516,7 +509,7 @@ pub fn query_on_swap(
             };
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
-                amount: calc_amount,
+                amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
             };
         }
         SwapType::GiveOut {} => {
@@ -760,30 +753,30 @@ fn compute_offer_amount(
 }
 
 
-/// ## Description
-/// Returns the share of assets.
-/// ## Params
-/// * **pools** are an array of [`Asset`] type items.
-/// * **burn_amount** denotes the number of LP tokens to be burnt and is the object of type [`Uint128`].
-/// * **total_share** is total supply of LP token and is the object of type [`Uint128`].
-pub fn get_share_in_assets(
-    pools: Vec<Asset>,
-    burn_amount: Uint128,
-    total_share: Uint128,
-) -> Vec<Asset> {
-    let mut share_ratio = Decimal::zero();
-    // % share of LP tokens to be burnt in total Pool
-    if !total_share.is_zero() {
-        share_ratio = Decimal::from_ratio(burn_amount, total_share);
-    }
-    pools
-        .iter()
-        .map(|a| Asset {
-            info: a.info.clone(),
-            amount: a.amount * share_ratio,
-        })
-        .collect()
-}
+// /// ## Description
+// /// Returns the share of assets.
+// /// ## Params
+// /// * **pools** are an array of [`Asset`] type items.
+// /// * **burn_amount** denotes the number of LP tokens to be burnt and is the object of type [`Uint128`].
+// /// * **total_share** is total supply of LP token and is the object of type [`Uint128`].
+// pub fn get_share_in_assets(
+//     pools: Vec<Asset>,
+//     burn_amount: Uint128,
+//     total_share: Uint128,
+// ) -> Vec<Asset> {
+//     let mut share_ratio = Decimal::zero();
+//     // % share of LP tokens to be burnt in total Pool
+//     if !total_share.is_zero() {
+//         share_ratio = Decimal::from_ratio(burn_amount, total_share);
+//     }
+//     pools
+//         .iter()
+//         .map(|a| Asset {
+//             info: a.info.clone(),
+//             amount: a.amount * share_ratio,
+//         })
+//         .collect()
+// }
 
 
 /// ## Description
@@ -829,22 +822,3 @@ pub fn accumulate_prices(
 }
 
 
-
-fn return_join_failure() -> AfterJoinResponse {
-    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure { } }
-}
-
-
-fn return_swap_failure() -> SwapResponse {
-    SwapResponse {
-        trade_params: Trade {
-            amount_in: Uint128::zero(),
-            amount_out: Uint128::zero(),
-            spread: Uint128::zero(),
-            total_fee: Uint128::zero(),
-            protocol_fee: Uint128::zero(),
-            dev_fee: Uint128::zero(),
-        },
-        response: ResponseType::Failure {},
-    }
-}

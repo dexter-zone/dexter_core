@@ -40,3 +40,20 @@ pub struct Twap {
     pub price1_cumulative_last: Uint128,
     pub block_time_last: u64,
 }
+
+
+/// This structure holds stableswap pool parameters.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct StablePoolParams {
+    /// The current stableswap pool amplification
+    pub amp: u64,
+}
+
+/// This enum stores the options available to start and stop changing a stableswap pool's amplification.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StablePoolUpdateParams {
+    StartChangingAmp { next_amp: u64, next_amp_time: u64 },
+    StopChangingAmp {},
+}

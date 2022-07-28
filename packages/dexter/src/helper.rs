@@ -1,4 +1,4 @@
-use crate::asset::{addr_validate_to_lower,DecimalAsset, AssetInfo};
+use crate::asset::{addr_validate_to_lower,DecimalAsset, Asset, AssetInfo};
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg
@@ -284,6 +284,29 @@ pub fn check_swap_parameters(
     Ok(())
 }
 
+/// ## Description
+/// Returns the share of assets.
+/// ## Params
+/// * **pools** are an array of [`Asset`] type items.
+/// * **amount** is the object of type [`Uint128`].
+/// * **total_share** is the object of type [`Uint128`].
+pub fn get_share_in_assets(
+    pools: Vec<Asset>,
+    amount: Uint128,
+    total_share: Uint128,
+) -> Vec<Asset> {
+    let mut share_ratio = Decimal::zero();
+    if !total_share.is_zero() {
+        share_ratio = Decimal::from_ratio(amount, total_share);
+    }
+    pools
+        .iter()
+        .map(|a| Asset {
+            info: a.info.clone(),
+            amount: a.amount * share_ratio,
+        })
+        .collect()
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x        Generic Math :: Helper functions          x----------------
@@ -308,7 +331,7 @@ pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
 /// * **value** is an object of type [`Uint128`]. This is the value that will have its precision adjusted.
 /// * **current_precision** is an object of type [`u8`]. This is the `value`'s current precision
 /// * **new_precision** is an object of type [`u8`]. This is the new precision to use when returning the `value`.
-fn adjust_precision(
+pub fn adjust_precision(
     value: Uint128,
     current_precision: u8,
     new_precision: u8,
@@ -322,6 +345,37 @@ fn adjust_precision(
             10_u128.pow((current_precision - new_precision) as u32),
         ))?,
     })
+}
+
+
+/// Returns LP token name to be set for a new LP token being initialized
+/// 
+/// ## Params
+/// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
+/// * **lp_token_name** is an object of type Option[`String`], provided as an input by the user creating the pool
+pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> String {
+    let mut token_name = pool_id.to_string() + "-Dexter-LP".to_string().as_str();
+    if !lp_token_name.is_none() {
+        token_name = pool_id.to_string()
+            + "-DEX-LP-".to_string().as_str()
+            + lp_token_name.unwrap().as_str();
+    }
+    return token_name;
+
+}
+
+/// Returns LP token symbol to be set for a new LP token being initialized
+/// 
+/// ## Params
+/// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
+/// * **lp_token_symbol** is an object of type Option[`String`], provided as an input by the user creating the pool
+pub fn get_lp_token_symbol(pool_id: Uint128, lp_token_symbol: Option<String>) -> String {
+    let mut token_symbol = "LP-".to_string() + pool_id.to_string().as_str();
+    if !lp_token_symbol.is_none() {
+        token_symbol = "LP-".to_string()  +  lp_token_symbol.unwrap().as_str();
+    }
+    return token_symbol;
+
 }
 
 

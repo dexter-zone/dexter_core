@@ -28,7 +28,7 @@ use crate::math::{
 
 use dexter::querier::{ query_supply, query_token_precision};
 use dexter::helper::{select_pools, check_swap_parameters};
-use dexter::{token::InstantiateMsg as TokenInstantiateMsg, U256};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg, U256};
 use protobuf::Message;
 use std::str::FromStr;
 use std::vec;
@@ -283,7 +283,7 @@ pub fn update_config(
     params: Binary,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let factory_config = query_factory_config(&deps.querier, config.factory_addr.clone())?;
+    let factory_config = query_vault_config(&deps.querier, config.factory_addr.clone())?;
 
     if info.sender != factory_config.owner {
         return Err(ContractError::Unauthorized {});

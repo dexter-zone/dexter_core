@@ -1,4 +1,4 @@
-use crate::asset::{AssetInfo};
+use crate::{asset::{AssetInfo}, vault};
 use cosmwasm_std::{
     to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper,
     QueryRequest, StdResult, Uint128, WasmQuery,
@@ -83,4 +83,17 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: AssetInfo) ->
             res.decimals
         }
     })
+}
+
+
+/// Returns the configuration for the Vault contract.
+/// ## Params
+/// * **querier** is an object of type [`QuerierWrapper`].
+///
+/// * **factory_contract** is an object of type [`impl Into<String>`] which is the Dexter Vault contract address.
+pub fn query_vault_config(
+    querier: &QuerierWrapper,
+    vault_contract: String,
+) -> StdResult<vault::ConfigResponse> {
+    querier.query_wasm_smart(vault_contract, &vault::QueryMsg::Config {})
 }
