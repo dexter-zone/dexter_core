@@ -2,18 +2,24 @@ use std::cmp::Ordering;
 
 use cosmwasm_std::{
     to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Deps, Env, QuerierWrapper, StdResult,
-    Storage, Uint128, Uint64,
+    Storage, Uint128, Uint64, Decimal256 
 };
 use cw20::Cw20ExecuteMsg;
 use itertools::Itertools;
 
-use dexter::asset::{Asset, AssetInfo, AssetInfoExt};
+use dexter::asset::{Asset, AssetInfo, DecimalAsset};
 use dexter::pool::TWAP_PRECISION;
+
 use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;
 use crate::math::calc_y;
-use crate::state::{get_precision, Config};
+use crate::state::{get_precision, Twap};
+
+use dexter::helper::select_pools;
+use dexter::pool::Config;
+
+
 
 /// ## Description
 /// Helper function to check if the given asset infos are valid.
@@ -112,33 +118,6 @@ pub(crate) fn adjust_precision(
     })
 }
 
-/// ## Description
-/// Return the amount of tokens that a specific amount of LP tokens would withdraw.
-/// ## Params
-/// * **pools** is an array of [`Asset`] type items. These are the assets available in the pool.
-///
-/// * **amount** is an object of type [`Uint128`]. This is the amount of LP tokens to calculate underlying amounts for.
-///
-/// * **total_share** is an object of type [`Uint128`]. This is the total amount of LP tokens currently issued by the pool.
-pub(crate) fn get_share_in_assets(
-    pools: &[Asset],
-    amount: Uint128,
-    total_share: Uint128,
-) -> Vec<Asset> {
-    let mut share_ratio = Decimal::zero();
-    if !total_share.is_zero() {
-        share_ratio = Decimal::from_ratio(amount, total_share);
-    }
-
-    pools
-        .iter()
-        .map(|pool| Asset {
-            info: pool.info.clone(),
-            amount: pool.amount * share_ratio,
-        })
-        .collect()
-}
-
 /// Structure for internal use which represents swap result.
 pub(crate) struct SwapResult {
     pub return_amount: Uint128,
@@ -199,33 +178,31 @@ pub(crate) fn compute_swap(
 
 /// ## Description
 /// Accumulate token prices for the assets in the pool.
+/// 
 /// ## Params
-/// * **deps** is an object of type [`Deps`].
-/// * **env** is an object of type [`Env`].
 /// * **config** is an object of type [`Config`].
-/// * **pools** is an array of [`Asset`] type items. These are the assets available in the pool.
+/// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub fn accumulate_prices(
     deps: Deps,
     env: Env,
     config: &mut Config,
-    pools: &[Asset],
+    twap: &mut Twap,
+    pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
+    // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
     if block_time <= config.block_time_last {
         return Ok(());
     }
-
-    let greater_precision = config.greatest_precision.max(TWAP_PRECISION);
-
     let time_elapsed = Uint128::from(block_time - config.block_time_last);
 
+    // Iterate over all asset pairs in the pool and accumulate prices.
     let immut_config = config.clone();
-    for (from, to, value) in config.cumulative_prices.iter_mut() {
-        let offer_asset = from.with_balance(adjust_precision(
-            Uint128::from(1u8),
-            0u8,
-            greater_precision,
-        )?);
+    for (from, to, value) in twap.cumulative_prices.iter_mut() {
+        let offer_asset = DecimalAsset {
+            info: from.clone(),
+            amount: Decimal256::one(),
+        };
 
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools)?;
         let SwapResult { return_amount, .. } = compute_swap(
@@ -240,8 +217,7 @@ pub fn accumulate_prices(
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
-
+    // Update last block time.
     config.block_time_last = block_time;
-
     Ok(())
 }

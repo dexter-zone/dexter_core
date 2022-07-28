@@ -1,42 +1,38 @@
-use crate::error::ContractError;
-use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, PRECISIONS, MathConfig, Twap };
-use std::convert::TryInto;
-
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Decimal256,
-    Deps, DepsMut, Env, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult,
-    SubMsg, Uint128, Uint256, WasmMsg,
+    entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
+    Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    Uint128, Uint256, WasmMsg, from_binary
 };
-
-use crate::response::MsgInstantiateContractResponse;
 use cw2::set_contract_version;
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
-use dexter::asset::{addr_validate_to_lower, check_name_format, Asset, AssetInfo, AssetExchangeRate, PoolInfo};
-use dexter::vault::PoolType;
-use dexter::helper::{adjust_precision};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use protobuf::Message;
+use std::str::FromStr;
+use std::vec;
+use std::convert::TryInto;
+use std::collections::HashMap;
+
+use crate::response::MsgInstantiateContractResponse;
+use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, PRECISIONS, MathConfig, Twap , StablePoolParams, StablePoolUpdateParams, store_precisions, get_precision};
+use crate::error::ContractError;
+
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
 };
-
 use crate::math::{
     calc_ask_amount, calc_offer_amount, compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
     MIN_AMP_CHANGING_TIME, N_COINS,
 };
+use crate::utils::{accumulate_prices};
 
-use dexter::querier::{ query_supply, query_token_precision};
-use dexter::helper::{select_pools, check_swap_parameters};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg, U256};
-use protobuf::Message;
-use std::str::FromStr;
-use std::vec;
-use crate::utils::{
-    accumulate_prices, check_asset_infos, check_assets, check_cw20_in_pool,
-    compute_current_amp, compute_swap, get_share_in_assets, mint_liquidity_token_message,
-    SwapResult,
-};
+use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo, AssetExchangeRate};
+use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::helper::{adjust_precision, get_share_in_assets, get_lp_token_name,get_lp_token_symbol };
+use dexter::querier::{ query_supply, query_vault_config, query_token_precision};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::U256;
+
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::stable3swap_pool";
@@ -45,17 +41,17 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_TOKEN_REPLY_ID: u64 = 1;
 
-// --------x--------x--------x--------x--------x--------x------x---
-// --------x--------x INSTANTIATE  x--------x--------x------x------
-// --------x--------x--------x--------x--------x--------x------x---
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x      Instantiate Contract : Execute function     x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
 
 /// ## Description
 /// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
 /// Returns the [`Response`] with the specified attributes if the operation was successful, or a [`ContractError`] if the contract was not created
+/// 
 /// ## Params
-/// * **deps** is the object of type [`DepsMut`].
-/// * **env** is the object of type [`Env`].
-/// * **_info** is the object of type [`MessageInfo`].
 /// * **msg** is a message of type [`InstantiateMsg`] which contains the basic settings for creating a contract
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -67,9 +63,20 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // check valid token info
-    msg.validate()?;
+    msg.validate()?;    
 
+    // Validate number of assets
+    if msg.asset_infos.len() > 5 || msg.asset_infos.len() < 2 {
+        return Err(ContractError::InvalidNumberOfAssets {});
+    }
+
+    // Stable3swap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
+    if params.amp == 0 || params.amp > MAX_AMP {
+        return Err(ContractError::IncorrectAmp {});
+    }
+
+    // store precisions for assets in storage
     let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
 
     // Initializing cumulative prices
@@ -80,10 +87,6 @@ pub fn instantiate(
                 cumulative_prices.push((from_pool.clone(), to_pool.clone(), Uint128::zero()))
             }
         }
-    }
-
-    if params.amp == 0 || params.amp > MAX_AMP {
-        return Err(ContractError::IncorrectAmp {});
     }
 
     // Create [`Asset`] from [`AssetInfo`]
@@ -117,26 +120,18 @@ pub fn instantiate(
         next_amp:  params.amp * AMP_PRECISION,
         next_amp_time: env.block.time.seconds(),
         greatest_precision
-    }
+    };
 
+    // Store config, MathConfig and twap in storage
     CONFIG.save(deps.storage, &config)?;
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-
     // LP Token Name
-    let mut token_name = msg.pool_id.to_string() + "-Dexter-LP".to_string().as_str();
-    if !msg.lp_token_name.is_none() {
-        token_name = msg.pool_id.to_string()
-            + "-DEX-LP-".to_string().as_str()
-            + msg.lp_token_name.unwrap().as_str();
-    }
+    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let mut token_symbol = "LP-".to_string() + msg.pool_id.to_string().as_str();
-    if !msg.lp_token_symbol.is_none() {
-        token_symbol = msg.lp_token_symbol.unwrap();
-    }
+    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -168,24 +163,25 @@ pub fn instantiate(
 
 /// # Description
 /// The entry point to the contract for processing the reply from the submessage
+/// 
 /// # Params
-/// * **deps** is the object of type [`DepsMut`].
-/// * **_env** is the object of type [`Env`].
 /// * **msg** is the object of type [`Reply`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
-    let mut config: Config = CONFIG.load(deps.storage)?;
+    // Get config
+    let mut config : Config = CONFIG.load(deps.storage)?;
 
+    // Validation check
     if config.lp_token_addr.is_some() {
         return Err(ContractError::Unauthorized {});
     }
 
+    // get lp token address from reply
     let data = msg.result.unwrap().data.unwrap();
     let res: MsgInstantiateContractResponse =
         Message::parse_from_bytes(data.as_slice()).map_err(|_| {
             StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
         })?;
-
     config.lp_token_addr = Some(addr_validate_to_lower(
         deps.api,
         res.get_contract_address(),
@@ -196,13 +192,14 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
 }
 
 
+// ----------------x----------------x----------------x------------------x----------------x----------------
+// ----------------x----------------x  Execute function :: Entry Point  x----------------x----------------
+// ----------------x----------------x----------------x------------------x----------------x----------------
 
-// --------x--------x--------x--------x--------x--------x------
-// --------x--------x EXECUTE  x--------x--------x------x------
-// --------x--------x--------x--------x--------x--------x------
 
 /// ## Description
 /// Available the execute messages of the contract.
+/// 
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 /// * **env** is the object of type [`Env`].
@@ -224,12 +221,10 @@ pub fn execute(
 }
 
 
-
 /// ## Description
-/// Admin Access by Vault :: Callable only by Dexter::Vault --> Updates locally stored asset balances state
-/// Operation --> Updates locally stored [`Asset`] state
-/// Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified
-/// attributes if the operation was successful.
+/// Admin Access by Vault :: Callable only by Dexter::Vault --> Updates locally stored asset balances state. Operation --> Updates locally stored [`Asset`] state
+///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
+/// 
 /// ## Params
 /// * **assets** is a field of type [`Vec<Asset>`]. It is a sorted list of `Asset` which contain the token type details and new updates balances of tokens as accounted by the pool
 pub fn execute_update_pool_liquidity(
@@ -238,6 +233,7 @@ pub fn execute_update_pool_liquidity(
     info: MessageInfo,
     assets: Vec<Asset>,
 ) -> Result<Response, ContractError> {
+    // Get config and twap info
     let mut config: Config = CONFIG.load(deps.storage)?;
     let mut twap: Twap = TWAPINFO.load(deps.storage)?;
 
@@ -249,18 +245,16 @@ pub fn execute_update_pool_liquidity(
     // Update state
     config.assets = assets;
     config.block_time_last = env.block.time.seconds();
-
-    if !accumulate_prices(deps.as_ref(), env, &mut twap, &pools).is_ok() {
-        return Err(ContractError::InvalidState {
-            msg: "Failed to accumulate prices".to_string(),
-        });
-    }
-
     CONFIG.save(deps.storage, &config)?;
+
+    // Accumulate prices for the assets in the pool
+    if !accumulate_prices(deps.as_ref(), env, &mut config, &mut twap, &config.assets.clone()).is_ok() {
+        return Err(ContractError::PricesUpdateFailed  {});
+    }
     TWAPINFO.save(deps.storage, &twap)?;
 
     let event = Event::new("dexter-pool::update-liquidity")
-        .add_attribute("pool_id", config.pool_id.to_string())
+        .add_attribute("pool_id", config.pool_id.to_string());
  
     Ok(Response::new().add_event(event))
 }
@@ -268,9 +262,10 @@ pub fn execute_update_pool_liquidity(
 
 
 /// ## Description
-/// Updates the pool configuration with the specified parameters in the `params` variable.
+/// Updates the pool's math configuration with the specified parameters in the `params` variable.
 /// Returns a [`ContractError`] as a failure, otherwise returns a [`Response`] with the specified
 /// attributes if the operation was successful
+/// 
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 /// * **env** is an object of type [`Env`].
@@ -282,10 +277,13 @@ pub fn update_config(
     info: MessageInfo,
     params: Binary,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    let factory_config = query_vault_config(&deps.querier, config.factory_addr.clone())?;
 
-    if info.sender != factory_config.owner {
+    let config = CONFIG.load(deps.storage)?;
+    let math_config = MATHCONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -293,22 +291,22 @@ pub fn update_config(
         StablePoolUpdateParams::StartChangingAmp {
             next_amp,
             next_amp_time,
-        } => start_changing_amp(config, deps, env, next_amp, next_amp_time)?,
-        StablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(config, deps, env)?,
+        } => start_changing_amp(math_config, deps, env, next_amp, next_amp_time)?,
+        StablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(math_config, deps, env)?,
     }
 
     Ok(Response::default())
 }
 
 
-// --------x--------x--------x--------x--------x--------x------
-// --------x--------x QUERIES  x--------x--------x------x------
-// --------x--------x--------x--------x--------x--------x------
-
+// ----------------x----------------x---------------------x-----------------------x----------------x----------------
+// ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 
 /// ## Description
 /// Available the query messages of the contract.
+/// 
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 /// * **_env** is the object of type [`Env`].
@@ -320,7 +318,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
         QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
-        QueryMsg::OnJoinPool { assets_in } => to_binary(&query_on_join_pool(deps, env, assets_in)?),
+        QueryMsg::OnJoinPool { assets_in, mint_amount } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount)?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -390,6 +388,11 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 }
 
 
+//--------x------------------x--------------x-----x-----
+//--------x    Query :: OnJoin, OnExit, OnSwap    x-----
+//--------x------------------x--------------x-----x-----
+
+
 
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
@@ -397,18 +400,32 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// 
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// * **deps** is the object of type [`Deps`].
-/// XYK POOL -::- MATH LOGIC
+/// STABLESWAP POOL -::- MATH LOGIC
+/// -- Implementation - For Stableswap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
     env: Env,
-    assets_in: Vec<Asset>,
+    assets_in: Option<Vec<Asset>>,
+    _mint_amount: Option<Uint128>,
 ) -> StdResult<AfterJoinResponse> {
+
+    // If the user has not provided any assets to be provided, then return a `Failure` response
+    if assets_in.is_none() {
+        return Ok(return_join_failure());
+    }
+    
+    // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
-    assets_in.sort_by(|a, b| {
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+
+    // Sort the assets in the order of the assets in the config
+    let mut act_assets_in = assets_in.unwrap();
+    act_assets_in.sort_by(|a, b| {
         a.info
             .to_string()
             .to_lowercase()
@@ -417,7 +434,7 @@ pub fn query_on_join_pool(
 
     // Get Asset  stored in state for each asset in a HashMap
     let token_pools: HashMap<_, _> = config
-        .asset_infos
+        .assets
         .into_iter()
         .map(|pool| (pool.info, pool.amount))
         .collect();
@@ -757,9 +774,9 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 // --------x--------x AMP UPDATE Helpers  x--------x--------x--
 // --------x--------x--------x--------x--------x--------x------
 
-
 /// ## Description
 /// Start changing the AMP value. Returns a [`ContractError`] on failure, otherwise returns [`Ok`].
+/// 
 /// ## Params
 /// * **mut math_config** is an object of type [`Config`]. This is a mutable reference to the pool's custom math configuration.
 /// * **next_amp** is an object of type [`u64`]. This is the new value for AMP.
@@ -771,37 +788,43 @@ fn start_changing_amp(
     next_amp: u64,
     next_amp_time: u64,
 ) -> Result<(), ContractError> {
+    // Validation checks
     if next_amp == 0 || next_amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
     }
 
+    // Current and next AMP values
     let current_amp = compute_current_amp(&math_config, &env)?;
-
     let next_amp_with_precision = next_amp * AMP_PRECISION;
 
+    // Max allowed AMP change checks 
     if next_amp_with_precision * MAX_AMP_CHANGE < current_amp
         || next_amp_with_precision > current_amp * MAX_AMP_CHANGE
     {
         return Err(ContractError::MaxAmpChangeAssertion {});
     }
-
+    
+    // Time gap for AMP change checks
     let block_time = env.block.time.seconds();
-
     if block_time < math_config.init_amp_time + MIN_AMP_CHANGING_TIME
         || next_amp_time < block_time + MIN_AMP_CHANGING_TIME
     {
         return Err(ContractError::MinAmpChangingTimeAssertion {});
     }
 
+    // Update the math config
     math_config.init_amp = current_amp;
     math_config.next_amp = next_amp_with_precision;
     math_config.init_amp_time = block_time;
     math_config.next_amp_time = next_amp_time;
 
+    // Update the storage
     MATHCONFIG.save(deps.storage, &math_config)?;
 
     Ok(())
 }
+
+
 
 /// ## Description
 /// Stop changing the AMP value. Returns [`Ok`].
@@ -945,3 +968,60 @@ fn imbalanced_withdraw(
     Ok(burn_amount)
 }
 
+
+// --------x--------x--------x--------x--------x--------x--------
+// --------x--------x AMP COMPUTE Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x--------
+
+
+/// ## Description
+/// Compute the current pool amplification coefficient (AMP).
+/// 
+/// ## Params
+/// * **math_config** is an object of type [`MathConfig`].
+fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
+    // Get block time
+    let block_time = env.block.time.seconds();
+
+    // If we are in the period of AMP change, we calculate the latest new AMP
+    if block_time < math_config.next_amp_time {
+        // initial and final AMPs
+        let init_amp = Uint128::from(math_config.init_amp);
+        let next_amp = Uint128::from(math_config.next_amp);
+
+        // time elapsed since AMP change init and the total time range of AMP change
+        let elapsed_time =
+            Uint128::from(block_time).checked_sub(Uint128::from(math_config.init_amp_time))?;
+        let time_range =
+            Uint128::from(math_config.next_amp_time).checked_sub(Uint128::from(math_config.init_amp_time))?;
+
+        // Calculate AMP based on if AMP is being increased or decreased
+        if math_config.next_amp > math_config.init_amp {
+            let amp_range = next_amp - init_amp;
+            let res = init_amp + (amp_range * elapsed_time).checked_div(time_range)?;
+            Ok(res.u128() as u64)
+        } else {
+            let amp_range = init_amp - next_amp;
+            let res = init_amp - (amp_range * elapsed_time).checked_div(time_range)?;
+            Ok(res.u128() as u64)
+        }
+    } else {
+        Ok(math_config.next_amp)
+    }
+}
+
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Migrate Function   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+/// ## Description
+/// Used for migration of contract. Returns the default object of type [`Response`].
+/// ## Params
+/// * **_deps** is the object of type [`DepsMut`].
+/// * **_env** is the object of type [`Env`].
+/// * **_msg** is the object of type [`MigrateMsg`].
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    Ok(Response::default())
+}

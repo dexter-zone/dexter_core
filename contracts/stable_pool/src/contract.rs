@@ -1,19 +1,17 @@
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Decimal256,
-    Deps, DepsMut, Env, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult,
+    Deps, DepsMut, Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult,
     SubMsg, Uint128, Uint256, WasmMsg, Event
 };
 
 use crate::math::{
-    calc_ask_amount, calc_offer_amount, compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
-    MIN_AMP_CHANGING_TIME, N_COINS,
+    calc_ask_amount, calc_offer_amount, compute_d, MAX_AMP, MAX_AMP_CHANGE,
+    MIN_AMP_CHANGING_TIME, AMP_PRECISION, N_COINS
 };
 use crate::error::ContractError;
 use crate::state::{CONFIG, TWAPINFO, MATHCONFIG,Twap,  MathConfig, StablePoolParams, StablePoolUpdateParams };
 use crate::response::MsgInstantiateContractResponse;
 
-
-use std::convert::TryInto;
 use cw2::set_contract_version;
 use cw20::MinterResponse;
 
@@ -23,14 +21,13 @@ use dexter::pool::{
     ResponseType, SwapResponse, Trade ,return_join_failure, return_swap_failure, return_exit_failure
 };
 use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo, AssetExchangeRate};
-use dexter::vault::{PoolType,SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType, TWAP_PRECISION};
 use dexter::helper::{adjust_precision, get_share_in_assets, get_lp_token_name,get_lp_token_symbol };
 use dexter::querier::{ query_supply, query_vault_config, query_token_precision};
 use dexter::lp_token::{InstantiateMsg as TokenInstantiateMsg};
 use dexter::U256;
 
 use protobuf::Message;
-use std::str::FromStr;
 use std::vec;
 
 /// Contract name that is used for migration.
@@ -115,10 +112,10 @@ pub fn instantiate(
 
 
     // LP Token Name
-    let mut token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
+    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let mut token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -405,7 +402,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// * **deps** is the object of type [`Deps`].
 /// STABLESWAP POOL -::- MATH LOGIC
-/// -- Implementation - For Stableswap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply caculate the number of LP shares to be minted and return it to the user.
+/// -- Implementation - For Stableswap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
@@ -524,8 +521,8 @@ pub fn query_on_join_pool(
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,
-    env: Env,
-    assets_out: Option<Vec<Asset>>,
+    _env: Env,
+    _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
 
@@ -541,7 +538,7 @@ pub fn query_on_exit_pool(
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
 
     // Number of tokens that will be transferred against the LP tokens burnt
-    let assets_out = dexter::helper::get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
+    let assets_out = get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
 
     Ok(AfterExitResponse {
         assets_out,
@@ -596,8 +593,8 @@ pub fn query_on_swap(
     let greater_precision = offer_precision.max(ask_precision);    
 
     // Offer asset and Ask asset 
-    let mut offer_asset: Asset;
-    let mut ask_asset: Asset;
+    let offer_asset: Asset;
+    let ask_asset: Asset;
     let (mut calc_amount, mut spread_amount): (Uint128, Uint128);
     let (total_fee, protocol_fee, dev_fee): (Uint128, Uint128, Uint128);    
 

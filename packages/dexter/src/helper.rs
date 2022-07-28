@@ -215,7 +215,7 @@ pub fn build_transfer_token_to_user_msg(
 /// * **offer_asset_info** - asset info of the offer asset.
 /// * **ask_asset_info** - asset info of the ask asset.
 /// * **pools** - list of pools.
-pub(crate) fn select_pools(
+pub fn select_pools(
     offer_asset_info: Option<&AssetInfo>,
     ask_asset_info: Option<&AssetInfo>,
     pools: &[DecimalAsset],

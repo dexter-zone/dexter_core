@@ -48,11 +48,6 @@ pub enum ContractError {
 
     #[error("Source and target assets are the same")]
     SameAssets {},
-
-    #[error(
-        "Invalid number of assets. The Astroport supports at least 2 and at most 5 assets within a stable pool"
-    )]
-    InvalidNumberOfAssets {},
 }
 
 impl From<OverflowError> for ContractError {

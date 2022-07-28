@@ -1,5 +1,8 @@
 use cosmwasm_std::{OverflowError, StdError};
 use thiserror::Error;
+use crate::math::{
+    MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME
+};
 
 /// ## Description
 /// This enum describes pair contract errors!
@@ -10,6 +13,14 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized {},
+
+    #[error(
+        "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
+    )]
+    InvalidNumberOfAssets {},
+
+    #[error("Prices update for twap failed")]
+    PricesUpdateFailed {},
 
     #[error("Operation non supported")]
     NonSupported {},
@@ -35,8 +46,24 @@ pub enum ContractError {
     #[error("Pair type mismatch. Check factory pair configs")]
     PoolTypeMismatch {},
 
-    #[error("GeneratorAddress is not set in factory. Cannot autostake")]
-    AutoStakeError {},
+    #[error(
+        "Amp coefficient must be greater than 0 and less than or equal to {}",
+        MAX_AMP
+    )]
+    IncorrectAmp {},
+
+    #[error(
+        "The difference between the old and new amp value must not exceed {} times",
+        MAX_AMP_CHANGE
+    )]
+    MaxAmpChangeAssertion {},
+
+    #[error(
+        "Amp coefficient cannot be changed more often than once per {} seconds",
+        MIN_AMP_CHANGING_TIME
+    )]
+    MinAmpChangingTimeAssertion {},    
+
 }
 
 impl From<OverflowError> for ContractError {

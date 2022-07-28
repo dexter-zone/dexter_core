@@ -1,15 +1,16 @@
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
-    Env, Event, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
+    Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, Uint256, WasmMsg,
 };
-use dexter::error::ContractError;
-use crate::state::{Twap, CONFIG, TWAPINFO};
-use crate::response::MsgInstantiateContractResponse;
 use std::convert::TryInto;
-
 use cw2::set_contract_version;
 use cw20::MinterResponse;
+use protobuf::Message;
+use std::vec;
+
+use crate::state::{Twap, CONFIG, TWAPINFO};
+use crate::response::MsgInstantiateContractResponse;
 
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
@@ -21,9 +22,8 @@ use dexter::helper::{decimal2decimal256,get_share_in_assets, get_lp_token_name,g
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::error::ContractError;
 
-use protobuf::Message;
-use std::vec;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::xyk_pool";
@@ -89,10 +89,10 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     // LP Token Name
-    let mut token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
+    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let mut token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
 
 
     // Create LP token
@@ -344,7 +344,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// * **deps** is the object of type [`Deps`].
 /// XYK POOL -::- MATH LOGIC
-/// -- Implementation - For XYK, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply caculate the number of LP shares to be minted and return it to the user.
+/// -- Implementation - For XYK, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
@@ -436,7 +436,7 @@ pub fn query_on_exit_pool(
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
 
     // Number of tokens that will be transferred against the LP tokens burnt
-    let assets_out = dexter::helper::get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
+    let assets_out = get_share_in_assets(config.assets, burn_amount.unwrap(), total_share);
 
     Ok(AfterExitResponse {
         assets_out,
@@ -751,32 +751,6 @@ fn compute_offer_amount(
 
     Ok((offer_amount, spread_amount, before_commission_deduction.try_into()?))
 }
-
-
-// /// ## Description
-// /// Returns the share of assets.
-// /// ## Params
-// /// * **pools** are an array of [`Asset`] type items.
-// /// * **burn_amount** denotes the number of LP tokens to be burnt and is the object of type [`Uint128`].
-// /// * **total_share** is total supply of LP token and is the object of type [`Uint128`].
-// pub fn get_share_in_assets(
-//     pools: Vec<Asset>,
-//     burn_amount: Uint128,
-//     total_share: Uint128,
-// ) -> Vec<Asset> {
-//     let mut share_ratio = Decimal::zero();
-//     // % share of LP tokens to be burnt in total Pool
-//     if !total_share.is_zero() {
-//         share_ratio = Decimal::from_ratio(burn_amount, total_share);
-//     }
-//     pools
-//         .iter()
-//         .map(|a| Asset {
-//             info: a.info.clone(),
-//             amount: a.amount * share_ratio,
-//         })
-//         .collect()
-// }
 
 
 /// ## Description
