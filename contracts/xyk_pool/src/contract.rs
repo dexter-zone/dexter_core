@@ -720,7 +720,7 @@ pub fn compute_swap(
 /// * **ask_pool** is the object of type [`Uint128`]. Sets the ask pool.
 /// * **offer_amount** is the object of type [`Uint128`]. Sets the ask amount.
 /// * **commission_rate** is the object of type [`Decimal`]. Sets the commission rate.
-fn compute_offer_amount(
+pub fn compute_offer_amount(
     offer_pool: Uint128,
     ask_pool: Uint128,
     ask_amount: Uint128,
