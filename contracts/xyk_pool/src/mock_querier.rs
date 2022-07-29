@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use cw20::{BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 use dexter::vault::FeeInfoResponse;
-use dexter::vault::QueryMsg::FeeInfo;
+use dexter::vault::FeeInfo;
 
 /// mock_dependencies is a drop-in replacement for cosmwasm_std::testing::mock_dependencies
 /// this uses our CustomQuerier.
