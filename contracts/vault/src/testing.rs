@@ -11,7 +11,7 @@ use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
 use dexter::asset::{Asset, AssetInfo, PairInfo};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, PairConfig, PairType, PairsResponse, QueryMsg,
+    Config::Response, ExecuteMsg, InstantiateMsg, PairConfig, PairType, PairsResponse, QueryMsg,
 };
 
 use dexter::pool::{
