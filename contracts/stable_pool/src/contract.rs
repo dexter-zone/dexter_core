@@ -609,7 +609,7 @@ pub fn query_on_swap(
                 query_token_precision(&deps.querier, ask_asset_info.clone())?,
                 amount,
                 compute_current_amp(&math_config, &env)?,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Re-adjust for their token precisions
             calc_amount = adjust_precision(calc_amount, greater_precision, ask_precision)?;
             spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
@@ -635,7 +635,7 @@ pub fn query_on_swap(
                 amount,
                 config.fee_info.total_fee_bps,
                 compute_current_amp(&math_config, &env)?,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
             // Calculate the protocol and dev fee
             (protocol_fee, dev_fee) = config.fee_info.calculate_total_fee_breakup(total_fee);            
             offer_asset = Asset {

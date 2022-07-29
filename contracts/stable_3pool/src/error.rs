@@ -64,10 +64,18 @@ pub enum ContractError {
     )]
     MinAmpChangingTimeAssertion {},    
 
+    #[error("The asset {0} does not belong to the pair")]
+    InvalidAsset(String),  
 }
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
+        StdError::from(o).into()
+    }
+}
+
+impl From<ConversionOverflowError> for ContractError {
+    fn from(o: ConversionOverflowError) -> Self {
         StdError::from(o).into()
     }
 }

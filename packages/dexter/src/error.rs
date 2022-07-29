@@ -40,9 +40,6 @@ pub enum ContractError {
     #[error("Generator address is not set in factory. Cannot autostake")]
     AutoStakeError {},
 
-    #[error("The asset {0} does not belong to the pair")]
-    InvalidAsset(String),
-
     #[error("Ask or offer asset is missed")]
     VariableAssetMissed {},
 

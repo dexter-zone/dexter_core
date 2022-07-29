@@ -679,6 +679,11 @@ pub fn execute_exit_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
+    // Check if the LP token sent is valid
+    if info.sender != pool_info.pool_addr.clone().unwrap() {
+        return Err(ContractError::Unauthorized {});
+    }
+
     // Query Pool Instance for Math Operations --> Returns response type (success or failure), number of LP shares to be burned and the `sorted` list of Assets which are to be transfred to the user
     let after_burn_res: dexter::pool::AfterExitResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {

@@ -56,7 +56,7 @@ pub enum ContractError {
         "Amp coefficient cannot be changed more often than once per {} seconds",
         MIN_AMP_CHANGING_TIME
     )]
-    MinAmpChangingTimeAssertion {},    
+    MinAmpChangingTimeAssertion {},      
 }
 
 impl From<OverflowError> for ContractError {

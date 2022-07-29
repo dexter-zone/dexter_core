@@ -500,7 +500,7 @@ pub fn query_on_swap(
                 cur_offer_asset_bal,
                 cur_ask_asset_bal,
                 amount,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
             offer_asset = Asset {
@@ -520,7 +520,7 @@ pub fn query_on_swap(
                 cur_ask_asset_bal,
                 amount,
                 config.fee_info.total_fee_bps,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(before_commission_deduction);                        
             offer_asset = Asset {
