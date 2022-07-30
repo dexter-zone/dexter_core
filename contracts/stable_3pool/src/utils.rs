@@ -23,7 +23,7 @@ use dexter::pool::Config;
 
 
 /// ## Description
-/// Returns the result of a swap in form of a [`SwapResult`] object. In case of error, returns [`ContractError`].
+///  Returns the result of a swap, if erros then returns [`ContractError`].
 /// 
 /// ## Params
 /// * **config** is an object of type [`Config`].
@@ -224,7 +224,7 @@ pub fn accumulate_prices(
     math_config: MathConfig,
     twap: &mut Twap,
     pools: &[DecimalAsset],
-    block_time_last:
+    block_time_last: u64
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
@@ -241,7 +241,7 @@ pub fn accumulate_prices(
         };
 
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools)?;
-        let SwapResult { return_amount, .. } = compute_swap(
+        let (return_amount, _)= compute_swap(
             deps.storage,
             &env,
             &math_config,
