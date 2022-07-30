@@ -9,9 +9,9 @@ use crate::mock_querier::mock_dependencies;
 
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
-use dexter::asset::{Asset, AssetInfo, PairInfo};
+use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, PairConfig, PairType, PairsResponse, QueryMsg,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, PairsResponse, QueryMsg, PoolInfo
 };
 
 use dexter::pool::{
@@ -107,7 +107,7 @@ fn proper_initialization() {
     store_liquidity_token(deps.as_mut(), 1, "liquidity0000".to_string());
 
     // It worked, let's query the state
-    let pair_info: PairInfo = query_pair_info(deps.as_ref()).unwrap();
+    let pair_info: PoolInfo = query_pair_info(deps.as_ref()).unwrap();
     assert_eq!(Addr::unchecked("liquidity0000"), pair_info.liquidity_token);
     assert_eq!(
         pair_info.asset_infos,
@@ -681,7 +681,7 @@ fn test_accumulate_prices() {
         let config = accumulate_prices(
             env.clone(),
             &Config {
-                pair_info: PairInfo {
+                pair_info: PoolInfo {
                     asset_infos: [
                         AssetInfo::NativeToken {
                             denom: "uusd".to_string(),
@@ -692,7 +692,7 @@ fn test_accumulate_prices() {
                     ],
                     contract_addr: Addr::unchecked("pair"),
                     liquidity_token: Addr::unchecked("lp_token"),
-                    pair_type: PairType::Stable {},
+                    pair_type: PoolType::Stable {},
                 },
                 vault_addr: Addr::unchecked("vault"),
                 block_time_last: case.block_time_last,
@@ -736,7 +736,7 @@ fn mock_env_with_block_time(time: u64) -> Env {
     env
 }
 
-use astroport::factory::PairType;
+use astroport::factory::PoolType;
 use proptest::prelude::*;
 use sim::StableSwapModel;
 

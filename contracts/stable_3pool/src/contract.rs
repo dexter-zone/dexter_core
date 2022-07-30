@@ -780,6 +780,12 @@ pub fn query_cumulative_price(
     accumulate_prices(deps, env, &mut config, &decimal_assets)
         .map_err(|err| StdError::generic_err(format!("{err}")))?;
 
+    
+        let (offer_ind, offer_pool) = pools
+        .iter()
+        .find_position(|pool| pool.info.eq(offer_asset_info))
+        .ok_or(ContractError::AssetMismatch {})?;
+
 
     let resp = CumulativePriceResponse {
         exchange_info: twap.cumulative_prices,

@@ -34,6 +34,7 @@ thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
 
 [dev-dependencies]
+xyk-pool = { path = "../xyk_pool"}
 cosmwasm-schema = "1.0.0"
 cw-multi-test = "0.13.2"
 cw20 = "0.13.2"

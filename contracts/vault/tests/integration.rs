@@ -2,7 +2,8 @@ use cosmwasm_std::{attr, Addr};
 
 use dexter::asset:: AssetInfo;
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,
+    Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg,
+    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest, FeeInfo,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cw20::MinterResponse;
@@ -13,8 +14,8 @@ fn mock_app() -> TerraApp {
     BasicApp::default()
 }
 
-fn store_factory_code(app: &mut TerraApp) -> u64 {
-    let factory_contract = Box::new(
+fn store_vault_code(app: &mut TerraApp) -> u64 {
+    let vault_contract = Box::new(
         ContractWrapper::new_with_empty(
             dexter_vault::contract::execute,
             dexter_vault::contract::instantiate,
@@ -23,7 +24,7 @@ fn store_factory_code(app: &mut TerraApp) -> u64 {
         .with_reply_empty(dexter_vault::contract::reply),
     );
 
-    app.store_code(factory_contract)
+    app.store_code(vault_contract)
 }
 
 fn store_pair_code(app: &mut TerraApp) -> u64 {
@@ -33,7 +34,7 @@ fn store_pair_code(app: &mut TerraApp) -> u64 {
             dexter_vault::contract::instantiate,
             dexter_vault::contract::query,
         )
-        .with_reply_empty(dexter_pool::contract::reply),
+        .with_reply_empty(dexter::pool::contract::reply),
     );
 
     app.store_code(pair_contract)
@@ -55,7 +56,7 @@ fn proper_initialization() {
 
     let owner = Addr::unchecked("owner");
 
-    let factory_code_id = store_factory_code(&mut app);
+    let vault_code_id = store_vault_code(&mut app);
 
     let pool_configs = vec![PoolConfig {
         code_id: 321,
@@ -75,13 +76,13 @@ fn proper_initialization() {
         //whitelist_code_id: 234u64,
     };
 
-    let factory_instance = app
+    let vault_instance = app
         .instantiate_contract(
-            factory_code_id,
+            vault_code_id,
             Addr::unchecked(owner.clone()),
             &msg,
             &[],
-            "factory",
+            "vault",
             None,
         )
         .unwrap();
@@ -89,7 +90,7 @@ fn proper_initialization() {
     let msg = QueryMsg::Config {};
     let config_res: ConfigResponse = app
         .wrap()
-        .query_wasm_smart(&factory_instance, &msg)
+        .query_wasm_smart(&vault_instance, &msg)
         .unwrap();
 
     assert_eq!(123, config_res.token_code_id);
@@ -163,7 +164,7 @@ fn update_config() {
 
 fn instantiate_contract(app: &mut TerraApp, owner: &Addr, lp_token_code_id: u64) -> Addr {
     let pair_code_id = store_pair_code(app);
-    let vault_code_id = store_factory_code(app);
+    let vault_code_id = store_vault_code(app);
 
     let pool_configs = vec![PoolConfig {
         code_id: pool_code_id,
@@ -188,11 +189,13 @@ fn instantiate_contract(app: &mut TerraApp, owner: &Addr, lp_token_code_id: u64)
         owner.to_owned(),
         &msg,
         &[],
-        "factory",
+        "vault",
         None,
     )
     .unwrap()
 }
+
+
 
 #[test]
 fn create_pool() {
@@ -273,7 +276,7 @@ fn create_pool() {
     };
 
     let res = app
-        .execute_contract(Addr::unchecked(owner), factory_instance.clone(), &msg, &[])
+        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
     assert_eq!(res.events[1].attributes[1], attr("action", "create_pair"));
@@ -285,7 +288,7 @@ fn create_pool() {
     let res: PoolInfo = app
         .wrap()
         .query_wasm_smart(
-            factory_instance.clone(),
+            vault_instance.clone(),
             &QueryMsg::Pool {
                 asset_infos: asset_infos.clone(),
             },
@@ -293,170 +296,175 @@ fn create_pool() {
         .unwrap();
 
     // in multitest, contract names are named in the order in which contracts are created.
-    assert_eq!("contract0", factory_instance.to_string());
+    assert_eq!("contract0", vault_instance.to_string());
     assert_eq!("contract3", res.contract_addr.to_string());
     assert_eq!("contract4", res.liquidity_token.to_string());
 }
-fn test_provide_and_withdraw_liquidity() {
-    let owner = Addr::unchecked("owner");
-    let alice_address = Addr::unchecked("alice");
-    let mut router = TerraApp::new(|router, _, storage| {
-        // initialization moved to App construction
-        router
-            .bank
-            .init_balance(
-                storage,
-                &alice_address,
-                vec![
-                    Coin {
-                        denom: "uusd".to_string(),
-                        amount: Uint128::new(233u128),
-                    },
-                    Coin {
-                        denom: "uluna".to_string(),
-                        amount: Uint128::new(200u128),
-                    },
-                ],
-            )
-            .unwrap();
-        router
-            .bank
-            .init_balance(
-                storage,
-                &owner,
-                vec![
-                    Coin {
-                        denom: "uusd".to_string(),
-                        amount: Uint128::new(100_000000u128),
-                    },
-                    Coin {
-                        denom: "uluna".to_string(),
-                        amount: Uint128::new(100_000000u128),
-                    },
-                ],
-            )
-            .unwrap()
-    });
 
-    // Init pair
-    let pool_instance = instantiate_pool(&mut router, &owner);
 
-    let res: Result<PoolInfo, _> = router.wrap().query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: pair_instance.to_string(),
-        msg: to_binary(&QueryMsg::Pool {}).unwrap(),
-    }));
-    let res = res.unwrap();
 
-    assert_eq!(
-        res.asset_infos,
-        [
-            AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            AssetInfo::NativeToken {
-                denom: "uluna".to_string(),
-            },
-        ],
-    );
 
-    // When dealing with native tokens transfer should happen before contract call, which cw-multitest doesn't support
-    router
-        .send_tokens(
-            owner.clone(),
-            pair_instance.clone(),
-            &[coin(100, "uusd"), coin(100, "uluna")],
-        )
-        .unwrap();
 
-    // Provide liquidity
-    let (msg, coins) = provide_liquidity_msg(Uint128::new(100), Uint128::new(100), None);
-    let res = router
-        .execute_contract(alice_address.clone(), pool_instance.clone(), &msg, &coins)
-        .unwrap();
+// fn test_provide_and_withdraw_liquidity() {
+//     let owner = Addr::unchecked("owner");
+//     let alice_address = Addr::unchecked("alice");
+//     let mut router = TerraApp::new(|router, _, storage| {
+//         // initialization moved to App construction
+//         router
+//             .bank
+//             .init_balance(
+//                 storage,
+//                 &alice_address,
+//                 vec![
+//                     Coin {
+//                         denom: "uusd".to_string(),
+//                         amount: Uint128::new(233u128),
+//                     },
+//                     Coin {
+//                         denom: "uluna".to_string(),
+//                         amount: Uint128::new(200u128),
+//                     },
+//                 ],
+//             )
+//             .unwrap();
+//         router
+//             .bank
+//             .init_balance(
+//                 storage,
+//                 &owner,
+//                 vec![
+//                     Coin {
+//                         denom: "uusd".to_string(),
+//                         amount: Uint128::new(100_000000u128),
+//                     },
+//                     Coin {
+//                         denom: "uluna".to_string(),
+//                         amount: Uint128::new(100_000000u128),
+//                     },
+//                 ],
+//             )
+//             .unwrap()
+//     });
 
-    assert_eq!(
-        res.events[1].attributes[1],
-        attr("action", "provide_liquidity")
-    );
-    assert_eq!(res.events[1].attributes[3], attr("receiver", "alice"),);
-    assert_eq!(
-        res.events[1].attributes[4],
-        attr("assets", "100uusd, 100uluna")
-    );
-    assert_eq!(
-        res.events[1].attributes[5],
-        attr("share", 100u128.to_string())
-    );
-    assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
-    assert_eq!(res.events[3].attributes[2], attr("to", "alice"));
-    assert_eq!(
-        res.events[3].attributes[3],
-        attr("amount", 100u128.to_string())
-    );
+//     // Init pair
+//     let pool_instance = instantiate_pool(&mut router, &owner);
 
-    // Provide liquidity for receiver
-    let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(100),
-        Uint128::new(100),
-        Some("bob".to_string()),
-    );
-    let res = router
-        .execute_contract(alice_address.clone(), pair_instance.clone(), &msg, &coins)
-        .unwrap();
+//     let res: Result<PoolInfo, _> = router.wrap().query(&QueryRequest::Wasm(WasmQuery::Smart {
+//         contract_addr: pair_instance.to_string(),
+//         msg: to_binary(&QueryMsg::Pool {}).unwrap(),
+//     }));
+//     let res = res.unwrap();
 
-    assert_eq!(
-        res.events[1].attributes[1],
-        attr("action", "provide_liquidity")
-    );
-    assert_eq!(res.events[1].attributes[3], attr("receiver", "bob"),);
-    assert_eq!(
-        res.events[1].attributes[4],
-        attr("assets", "100uusd, 100uluna")
-    );
-    assert_eq!(
-        res.events[1].attributes[5],
-        attr("share", 50u128.to_string())
-    );
-    assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
-    assert_eq!(res.events[3].attributes[2], attr("to", "bob"));
-    assert_eq!(res.events[3].attributes[3], attr("amount", 50.to_string()));
-}
+//     assert_eq!(
+//         res.asset_infos,
+//         [
+//             AssetInfo::NativeToken {
+//                 denom: "uusd".to_string(),
+//             },
+//             AssetInfo::NativeToken {
+//                 denom: "uluna".to_string(),
+//             },
+//         ],
+//     );
 
-fn provide_liquidity_msg(
-    uusd_amount: Uint128,
-    uluna_amount: Uint128,
-    receiver: Option<String>,
-) -> (ExecuteMsg, [Coin; 2]) {
-    let msg = ExecuteMsg::ProvideLiquidity {
-        assets: [
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "uusd".to_string(),
-                },
-                amount: uusd_amount.clone(),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "uluna".to_string(),
-                },
-                amount: uluna_amount.clone(),
-            },
-        ],
-        slippage_tolerance: None,
-        auto_stake: None,
-        receiver,
-    };
+//     // When dealing with native tokens transfer should happen before contract call, which cw-multitest doesn't support
+//     router
+//         .send_tokens(
+//             owner.clone(),
+//             pair_instance.clone(),
+//             &[coin(100, "uusd"), coin(100, "uluna")],
+//         )
+//         .unwrap();
 
-    let coins = [
-        Coin {
-            denom: "uluna".to_string(),
-            amount: uluna_amount.clone(),
-        },
-        Coin {
-            denom: "uusd".to_string(),
-            amount: uusd_amount.clone(),
-        },
-    ];
+//     // Provide liquidity
+//     let (msg, coins) = provide_liquidity_msg(Uint128::new(100), Uint128::new(100), None);
+//     let res = router
+//         .execute_contract(alice_address.clone(), pool_instance.clone(), &msg, &coins)
+//         .unwrap();
 
-    (msg, coins)
-}
+//     assert_eq!(
+//         res.events[1].attributes[1],
+//         attr("action", "provide_liquidity")
+//     );
+//     assert_eq!(res.events[1].attributes[3], attr("receiver", "alice"),);
+//     assert_eq!(
+//         res.events[1].attributes[4],
+//         attr("assets", "100uusd, 100uluna")
+//     );
+//     assert_eq!(
+//         res.events[1].attributes[5],
+//         attr("share", 100u128.to_string())
+//     );
+//     assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
+//     assert_eq!(res.events[3].attributes[2], attr("to", "alice"));
+//     assert_eq!(
+//         res.events[3].attributes[3],
+//         attr("amount", 100u128.to_string())
+//     );
+
+//     // Provide liquidity for receiver
+//     let (msg, coins) = provide_liquidity_msg(
+//         Uint128::new(100),
+//         Uint128::new(100),
+//         Some("bob".to_string()),
+//     );
+//     let res = router
+//         .execute_contract(alice_address.clone(), pair_instance.clone(), &msg, &coins)
+//         .unwrap();
+
+//     assert_eq!(
+//         res.events[1].attributes[1],
+//         attr("action", "provide_liquidity")
+//     );
+//     assert_eq!(res.events[1].attributes[3], attr("receiver", "bob"),);
+//     assert_eq!(
+//         res.events[1].attributes[4],
+//         attr("assets", "100uusd, 100uluna")
+//     );
+//     assert_eq!(
+//         res.events[1].attributes[5],
+//         attr("share", 50u128.to_string())
+//     );
+//     assert_eq!(res.events[3].attributes[1], attr("action", "mint"));
+//     assert_eq!(res.events[3].attributes[2], attr("to", "bob"));
+//     assert_eq!(res.events[3].attributes[3], attr("amount", 50.to_string()));
+// }
+
+// fn provide_liquidity_msg(
+//     uusd_amount: Uint128,
+//     uluna_amount: Uint128,
+//     receiver: Option<String>,
+// ) -> (ExecuteMsg, [Coin; 2]) {
+//     let msg = ExecuteMsg::ProvideLiquidity {
+//         assets: [
+//             Asset {
+//                 info: AssetInfo::NativeToken {
+//                     denom: "uusd".to_string(),
+//                 },
+//                 amount: uusd_amount.clone(),
+//             },
+//             Asset {
+//                 info: AssetInfo::NativeToken {
+//                     denom: "uluna".to_string(),
+//                 },
+//                 amount: uluna_amount.clone(),
+//             },
+//         ],
+//         slippage_tolerance: None,
+//         auto_stake: None,
+//         receiver,
+//     };
+
+//     let coins = [
+//         Coin {
+//             denom: "uluna".to_string(),
+//             amount: uluna_amount.clone(),
+//         },
+//         Coin {
+//             denom: "uusd".to_string(),
+//             amount: uusd_amount.clone(),
+//         },
+//     ];
+
+//     (msg, coins)
+// }
