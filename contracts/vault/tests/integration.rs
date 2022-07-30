@@ -2,11 +2,12 @@ use cosmwasm_std::{attr, Addr};
 
 use dexter::asset:: AssetInfo;
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,FeeInfo
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cw20::MinterResponse;
 use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
+use cosmwasm_std::{Coin,Uint128};
 
 type TerraApp = App;
 fn mock_app() -> TerraApp {
@@ -26,8 +27,8 @@ fn store_factory_code(app: &mut TerraApp) -> u64 {
     app.store_code(factory_contract)
 }
 
-fn store_pair_code(app: &mut TerraApp) -> u64 {
-    let pair_contract = Box::new(
+fn store_pool_code(app: &mut TerraApp) -> u64 {
+    let pool_contract = Box::new(
         ContractWrapper::new_with_empty(
             dexter_vault::contract::execute,
             dexter_vault::contract::instantiate,
@@ -36,7 +37,7 @@ fn store_pair_code(app: &mut TerraApp) -> u64 {
         .with_reply_empty(dexter_pool::contract::reply),
     );
 
-    app.store_code(pair_contract)
+    app.store_code(pool_contract)
 }
 
 fn store_token_code(app: &mut TerraApp) -> u64 {
@@ -48,7 +49,6 @@ fn store_token_code(app: &mut TerraApp) -> u64 {
 
     app.store_code(token_contract)
 }
-
 #[test]
 fn proper_initialization() {
     let mut app = mock_app();
@@ -61,7 +61,6 @@ fn proper_initialization() {
         code_id: 321,
         pool_type: PoolType::Xyk {},
         total_fee_bps: 100,
-        maker_fee_bps: 10,
         is_disabled: false,
         is_generator_disabled: false,
     }];
@@ -75,7 +74,7 @@ fn proper_initialization() {
         //whitelist_code_id: 234u64,
     };
 
-    let factory_instance = app
+    let vault_instance = app
         .instantiate_contract(
             factory_code_id,
             Addr::unchecked(owner.clone()),
@@ -89,10 +88,10 @@ fn proper_initialization() {
     let msg = QueryMsg::Config {};
     let config_res: ConfigResponse = app
         .wrap()
-        .query_wasm_smart(&factory_instance, &msg)
+        .query_wasm_smart(&vault_instance, &msg)
         .unwrap();
 
-    assert_eq!(123, config_res.token_code_id);
+    assert_eq!(123, config_res.lp_token_code_id);
     assert_eq!(pool_configs, config_res.pool_configs);
     assert_eq!(owner, config_res.owner);
 }
@@ -132,7 +131,7 @@ fn update_config() {
         .query_wasm_smart(&vault_instance, &msg)
         .unwrap();
 
-    assert_eq!(200u64, config_res.token_code_id);
+    assert_eq!(200u64, config_res.lp_token_code_id);
     assert_eq!(
         fee_address.unwrap(),
         config_res.fee_address.unwrap().to_string()
@@ -162,14 +161,13 @@ fn update_config() {
 }
 
 fn instantiate_contract(app: &mut TerraApp, owner: &Addr, lp_token_code_id: u64) -> Addr {
-    let pair_code_id = store_pair_code(app);
+    let pool_code_id = store_pool_code(app);
     let vault_code_id = store_factory_code(app);
 
     let pool_configs = vec![PoolConfig {
         code_id: pool_code_id,
         pool_type: PoolType::Xyk {},
         total_fee_bps: 100,
-        maker_fee_bps: 10,
         is_disabled: false,
         is_generator_disabled: false,
     }];
@@ -203,15 +201,15 @@ fn create_pool() {
     let lp_token_code_id = store_token_code(&mut app);
 
     let vault_instance =
-        instantiate_contract(&mut app, &Addr::unchecked(owner.clone()), token_code_id);
+        instantiate_contract(&mut app, &Addr::unchecked(owner.clone()), lp_token_code_id);
 
     let owner_addr = Addr::unchecked(owner.clone());
 
     let lp_token_name = "tokenX";
 
     let init_msg = TokenInstantiateMsg {
-        name: token_name.to_string(),
-        symbol: token_name.to_string(),
+        name: lp_token_name.to_string(),
+        symbol: lp_token_name.to_string(),
         decimals: 18,
         initial_balances: vec![],
         mint: Some(MinterResponse {
@@ -223,20 +221,20 @@ fn create_pool() {
 
     let token_instance0 = app
         .instantiate_contract(
-            token_code_id,
+            lp_token_code_id,
             owner_addr.clone(),
             &init_msg,
             &[],
-            token_name,
+            lp_token_name,
             None,
         )
         .unwrap();
 
-    let token_name = "tokenY";
+    let lp_token_name = "tokenY";
 
     let init_msg = TokenInstantiateMsg {
-        name: token_name.to_string(),
-        symbol: token_name.to_string(),
+        name: lp_token_name.to_string(),
+        symbol: lp_token_name.to_string(),
         decimals: 18,
         initial_balances: vec![],
         mint: Some(MinterResponse {
@@ -248,11 +246,11 @@ fn create_pool() {
 
     let token_instance1 = app
         .instantiate_contract(
-            token_code_id,
+            lp_token_code_id,
             owner_addr.clone(),
             &init_msg,
             &[],
-            token_name,
+            lp_token_name,
             None,
         )
         .unwrap();
@@ -266,26 +264,26 @@ fn create_pool() {
         },
     ];
 
-    let msg = ExecuteMsg::CreatePair {
+    let msg = ExecuteMsg::CreatePool {
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.clone(),
         init_params: None,
     };
 
     let res = app
-        .execute_contract(Addr::unchecked(owner), factory_instance.clone(), &msg, &[])
+        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[1], attr("action", "create_pair"));
+    assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
     assert_eq!(
         res.events[1].attributes[2],
-        attr("pair", "contract1-contract2")
+        attr("pool", "contract1-contract2")
     );
 
     let res: PoolInfo = app
         .wrap()
         .query_wasm_smart(
-            factory_instance.clone(),
+            vault_instance.clone(),
             &QueryMsg::Pool {
                 asset_infos: asset_infos.clone(),
             },
@@ -293,9 +291,9 @@ fn create_pool() {
         .unwrap();
 
     // in multitest, contract names are named in the order in which contracts are created.
-    assert_eq!("contract0", factory_instance.to_string());
-    assert_eq!("contract3", res.contract_addr.to_string());
-    assert_eq!("contract4", res.liquidity_token.to_string());
+    assert_eq!("contract0", vault_instance.to_string());
+    assert_eq!("contract3", res.pool_addr.to_string());
+    assert_eq!("contract4", res.lp_token_addr.to_string());
 }
 fn test_provide_and_withdraw_liquidity() {
     let owner = Addr::unchecked("owner");
@@ -338,11 +336,11 @@ fn test_provide_and_withdraw_liquidity() {
             .unwrap()
     });
 
-    // Init pair
+    // Init pool
     let pool_instance = instantiate_pool(&mut router, &owner);
 
     let res: Result<PoolInfo, _> = router.wrap().query(&QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: pair_instance.to_string(),
+        contract_addr: pool_instance.to_string(),
         msg: to_binary(&QueryMsg::Pool {}).unwrap(),
     }));
     let res = res.unwrap();
@@ -363,7 +361,7 @@ fn test_provide_and_withdraw_liquidity() {
     router
         .send_tokens(
             owner.clone(),
-            pair_instance.clone(),
+            pool_instance.clone(),
             &[coin(100, "uusd"), coin(100, "uluna")],
         )
         .unwrap();
@@ -401,7 +399,7 @@ fn test_provide_and_withdraw_liquidity() {
         Some("bob".to_string()),
     );
     let res = router
-        .execute_contract(alice_address.clone(), pair_instance.clone(), &msg, &coins)
+        .execute_contract(alice_address.clone(), pool_instance.clone(), &msg, &coins)
         .unwrap();
 
     assert_eq!(
