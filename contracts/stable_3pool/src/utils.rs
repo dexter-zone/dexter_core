@@ -221,8 +221,10 @@ pub fn accumulate_prices(
     deps: Deps,
     env: Env,
     config: &mut Config,
+    math_config: MathConfig,
     twap: &mut Twap,
     pools: &[DecimalAsset],
+    block_time_last:
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
@@ -232,7 +234,6 @@ pub fn accumulate_prices(
     let time_elapsed = Uint128::from(block_time - config.block_time_last);
 
     // Iterate over all asset pairs in the pool and accumulate prices.
-    let immut_config = config.clone();
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         let offer_asset = DecimalAsset {
             info: from.clone(),
@@ -243,7 +244,7 @@ pub fn accumulate_prices(
         let SwapResult { return_amount, .. } = compute_swap(
             deps.storage,
             &env,
-            &immut_config,
+            &math_config,
             &offer_asset,
             &offer_pool,
             &ask_pool,

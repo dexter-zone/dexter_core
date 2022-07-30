@@ -325,7 +325,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
-        } => to_binary(&query_on_exit_pool(deps, env, assets_out, burn_amount)?),
+        } => to_binary(&query_on_exit_pool(deps , env, assets_out, burn_amount)?),
         QueryMsg::OnSwap {
             swap_type,
             offer_asset,
@@ -582,10 +582,10 @@ pub fn query_on_join_pool(
 /// STABLE-3-SWAP POOL -::- MATH LOGIC
 /// T.B.A
 pub fn query_on_exit_pool(
-    deps: DepsMut,
+    deps: Deps,
     env: Env,
     assets_out: Option<Vec<Asset>>,
-    burn_amount: Uint128,
+    burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
 
@@ -602,7 +602,7 @@ pub fn query_on_exit_pool(
         refund_assets = get_share_in_assets(pools.clone(), burn_amount, total_share);
     } else {
         // Imbalanced withdraw
-        act_burn_amount = imbalanced_withdraw(deps.as_ref(), &env, &config, burn_amount, &assets_out.unwrap()).unwrap_or_else(|_| 0u128.into());
+        act_burn_amount = imbalanced_withdraw(deps.as_ref(), &env, &config, math_config,  burn_amount, &assets_out.unwrap()).unwrap_or_else(|_| 0u128.into());
         refund_assets = assets_out.unwrap();
     }
 
@@ -750,25 +750,26 @@ pub fn query_on_swap(
 
 
 
-// / ## Description
-// / Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
-// / ## Params
-// / * **deps** is the object of type [`Deps`].
-// / * **env** is the object of type [`Env`].
-// / * **offer_asset** is the object of type [`AssetInfo`].
-// / * **ask_asset** is the object of type [`AssetInfo`].
+/// ## Description
+/// Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
+/// ## Params
+/// * **deps** is the object of type [`Deps`].
+/// * **env** is the object of type [`Env`].
+/// * **offer_asset** is the object of type [`AssetInfo`].
+/// * **ask_asset** is the object of type [`AssetInfo`].
 pub fn query_cumulative_price(
     deps: Deps,
     env: Env,
-    offer_asset: AssetInfo,
-    ask_asset: AssetInfo,
+    offer_asset_info: AssetInfo,
+    ask_asset_info: AssetInfo,
 ) -> StdResult<CumulativePriceResponse> {
-    // / Load the config  and twap from the storage
+    // Load the config  and twap from the storage
     let twap: Twap = TWAPINFO.load(deps.storage)?;
     let config: Config = CONFIG.load(deps.storage)?;
 
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
 
+    // Convert Asset to DecimalAsset types
     let decimal_assets = config.assets.iter()
                                                 .cloned()
                                                 .map(|asset| {
@@ -776,19 +777,23 @@ pub fn query_cumulative_price(
                                                     asset.to_decimal_asset(precision)
                                                 })
                                                 .collect::<StdResult<Vec<DecimalAsset>>>()?;
-
-    accumulate_prices(deps, env, &mut config, &decimal_assets)
+    
+    // Accumulate prices of all assets in the config
+    accumulate_prices(deps, env, &mut config, math_config, &decimal_assets)
         .map_err(|err| StdError::generic_err(format!("{err}")))?;
 
-    
-        let (offer_ind, offer_pool) = pools
-        .iter()
-        .find_position(|pool| pool.info.eq(offer_asset_info))
-        .ok_or(ContractError::AssetMismatch {})?;
+    // Find the `cumulative_price` for the provided offer and ask asset in the stored TWAP. Error if not found
+    let (offer_asset_, ask_asset_, rate) = twap.cumulative_prices.iter()
+                                                .find_position(|cumulative_price| cumulative_price[0].eq(offer_asset_) && cumulative_price[1].eq(ask_asset_))
+                                                .ok_or(ContractError::AssetMismatch {})?;
 
-
+    // Return the cumulative price response
     let resp = CumulativePriceResponse {
-        exchange_info: twap.cumulative_prices,
+        exchange_info: AssetExchangeRate {
+            offer_info: offer_asset_,
+            ask_info: ask_asset_,
+            rate,
+        },
         total_share,
     };
 
@@ -899,10 +904,6 @@ fn stop_changing_amp(mut math_config: MathConfig, deps: DepsMut, env: Env) -> St
 // --------x--------x--------x--------x--------x--------
 
 
-
-
-
-
 /// ## Description
 /// Imbalanced withdraw liquidity from the pool. Returns a [`ContractError`] on failure,
 /// otherwise returns the number of LP tokens to burn.
@@ -916,6 +917,7 @@ fn imbalanced_withdraw(
     deps: Deps,
     env: &Env,
     config: &Config,
+    math_config: &MathConfig,
     provided_amount: Uint128,
     assets: &[Asset],
 ) -> Result<Uint128, ContractError> {
@@ -978,7 +980,7 @@ fn imbalanced_withdraw(
         .iter()
         .map(|(withdraw, pool)| Ok(pool.checked_sub(withdraw.amount)?))
         .collect::<StdResult<Vec<_>>>()?;
-    let withdraw_d = compute_d(amp, &new_balances)?;
+    let withdraw_d = compute_d(amp, &new_balances, math_config.greatest_precision)?;
 
     // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
     let fee = config.fee_info
@@ -995,7 +997,7 @@ fn imbalanced_withdraw(
         new_balances[i] = new_balances[i].checked_sub(fee.checked_mul_uint128(difference)?)?;
     }
 
-    let after_fee_d = compute_d(amp, &new_balances)?;
+    let after_fee_d = compute_d(amp, &new_balances, math_config.greatest_precision)?;
 
     let total_share = query_supply(&deps.querier, &config.lp_token_addr.unwrap())?;
     // How many tokens do we need to burn to withdraw asked assets?
