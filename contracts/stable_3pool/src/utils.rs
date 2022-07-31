@@ -1,25 +1,23 @@
-use std::cmp::Ordering;
-
 use cosmwasm_std::{
-    to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Deps, Env, QuerierWrapper, StdResult,
-    Storage, Uint128, Uint64, Decimal256 , Fraction
+    Decimal, Deps, Env, StdResult,
+    Storage, Uint128, Decimal256 , Fraction
 };
-use cw20::Cw20ExecuteMsg;
-use itertools::Itertools;
 
-use dexter::asset::{Asset, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::vault::TWAP_PRECISION;
-use crate::state::MathConfig;
-
+use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
 use dexter::DecimalCheckedOps;
+use dexter::helper::{select_pools, adjust_precision};
+use dexter::pool::Config;
 
+use crate::state::MathConfig;
 use crate::error::ContractError;
 use crate::math::calc_y;
 use crate::state::{get_precision, Twap};
 
-use dexter::helper::{select_pools, adjust_precision};
-use dexter::pool::Config;
 
+
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
+// --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
 
 
 /// ## Description
@@ -168,47 +166,9 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 
 
 
-// /// ## Description
-// /// Helper function to check if the given asset infos are valid.
-// pub(crate) fn check_asset_infos(
-//     api: &dyn Api,
-//     asset_infos: &[AssetInfo],
-// ) -> Result<(), ContractError> {
-//     if !asset_infos.iter().all_unique() {
-//         return Err(ContractError::DoublingAssets {});
-//     }
-
-//     asset_infos
-//         .iter()
-//         .try_for_each(|asset_info| asset_info.check(api))
-//         .map_err(Into::into)
-// }
-
-// /// ## Description
-// /// Helper function to check that the assets in a given array are valid.
-// pub(crate) fn check_assets(api: &dyn Api, assets: &[Asset]) -> Result<(), ContractError> {
-//     let asset_infos = assets.iter().map(|asset| asset.info.clone()).collect_vec();
-//     check_asset_infos(api, &asset_infos)
-// }
-
-// /// ## Description
-// /// Checks that cw20 token is part of the pool. Returns [`Ok(())`] in case of success,
-// /// otherwise [`ContractError`].
-// /// ## Params
-// /// * **config** is an object of type [`Config`].
-// ///
-// /// * **cw20_sender** is cw20 token address which is being checked.
-// pub(crate) fn check_cw20_in_pool(config: &Config, cw20_sender: &Addr) -> Result<(), ContractError> {
-//     for asset_info in &config.assets.info {
-//         match asset_info {
-//             AssetInfo::Token { contract_addr } if contract_addr == cw20_sender => return Ok(()),
-//             _ => {}
-//         }
-//     }
-
-//     Err(ContractError::Unauthorized {})
-// }
-
+// --------x--------x--------x--------x--------x--------x--------
+// --------x--------x TWAP Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x--------
 
 
 /// ## Description

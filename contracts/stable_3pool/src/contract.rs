@@ -6,14 +6,12 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{ MinterResponse};
 use protobuf::Message;
-use std::str::FromStr;
 use std::vec;
-use std::convert::TryInto;
 use std::collections::HashMap;
 use itertools::Itertools;
 
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, PRECISIONS, MathConfig, Twap , StablePoolParams, StablePoolUpdateParams, store_precisions, get_precision};
+use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, MathConfig, Twap , StablePoolParams, StablePoolUpdateParams, store_precisions, get_precision};
 use crate::error::ContractError;
 
 use dexter::pool::{
@@ -28,12 +26,10 @@ use crate::math::{
 use crate::utils::{accumulate_prices, compute_swap, compute_offer_amount};
 
 use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo,Decimal256Ext, DecimalAsset, AssetExchangeRate};
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType};
 use dexter::helper::{adjust_precision, get_share_in_assets, get_lp_token_name,get_lp_token_symbol, select_pools };
 use dexter::querier::{ query_supply, query_vault_config, query_token_precision};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::U256;
-use dexter::DecimalCheckedOps;
 
 
 /// Contract name that is used for migration.

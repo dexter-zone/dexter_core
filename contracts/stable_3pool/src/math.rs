@@ -11,6 +11,12 @@ pub const MIN_AMP_CHANGING_TIME: u64 = 86400;
 pub const AMP_PRECISION: u64 = 100;
 
 
+// ----------------x----------------x----------------
+// ----------------x   STABLE-3-Pool Math     x------
+// ----------------x----------------x----------------
+
+
+
 /// ## Description
 /// Computes the stableswap invariant (D).
 ///
