@@ -21,7 +21,7 @@ pub enum ContractError {
         "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
     )]
     InvalidNumberOfAssets {},
-
+ 
     #[error("Prices update for twap failed")]
     PricesUpdateFailed {},
 

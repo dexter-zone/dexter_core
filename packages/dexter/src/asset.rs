@@ -18,7 +18,7 @@ pub const NATIVE_TOKEN_PRECISION: u8 = 6;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Token types.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash , JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetInfo {
     /// Non-native Token

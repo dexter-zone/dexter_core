@@ -30,8 +30,7 @@ pub struct MathConfig {
     // This is the timestamp when the current pool amplification should be `next_amp`
     pub next_amp_time: u64,
     /// The greatest precision of assets in the pool
-    pub greatest_precision: u8,    
-    
+    pub greatest_precision: u8,        
 }
 
 /// ## Description

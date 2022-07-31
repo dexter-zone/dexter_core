@@ -172,10 +172,12 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 
 
 /// ## Description
-/// Accumulate token prices for the assets in the pool.
+/// Accumulate token prices for the asset pairs in the pool.
 /// 
 /// ## Params
 /// * **config** is an object of type [`Config`].
+/// * **math_config** is an object of type [`MathConfig`]
+/// * **twap** is of [`Twap`] type. It consists of cumulative_prices of type [`Vec<(AssetInfo, AssetInfo, Uint128)>`] and block_time_last of type [`u64`] which is the latest timestamp when TWAP prices of asset pairs were last updated.
 /// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub fn accumulate_prices(
     deps: Deps,
@@ -212,6 +214,7 @@ pub fn accumulate_prices(
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
+    
     // Update last block time.
     config.block_time_last = block_time;
     Ok(())

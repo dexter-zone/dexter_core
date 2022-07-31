@@ -1,9 +1,9 @@
 [package]
-name = "xyk-pool"
+name = "weighted-pool"
 version = "1.0.0"
 authors = ["AstroTechLabs"]
 edition = "2021"
-description = "A Dexter DEX pool implementing the standard constant product (XYK) AMM type"
+description = "A Dexter DEX pool implementing the generalized constant product AMM type as introduced by Balancer"
 license = "MIT"
 
 exclude = [
