@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use cosmwasm_std::{
     to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Deps, Env, QuerierWrapper, StdResult,
-    Storage, Uint128, Uint64, Decimal256 
+    Storage, Uint128, Uint64, Decimal256 , Fraction
 };
 use cw20::Cw20ExecuteMsg;
 use itertools::Itertools;
@@ -77,7 +77,7 @@ pub(crate) fn compute_offer_amount(
     storage: &dyn Storage,
     env: &Env,
     math_config: &MathConfig,
-    ask_asset: &DecimalAsset,
+    ask_asset: &Asset,
     offer_pool: &DecimalAsset,
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
@@ -223,8 +223,7 @@ pub fn accumulate_prices(
     config: &mut Config,
     math_config: MathConfig,
     twap: &mut Twap,
-    pools: &[DecimalAsset],
-    block_time_last: u64
+    pools: &[DecimalAsset]
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
@@ -240,7 +239,7 @@ pub fn accumulate_prices(
             amount: Decimal256::one(),
         };
 
-        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools)?;
+        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
         let (return_amount, _)= compute_swap(
             deps.storage,
             &env,

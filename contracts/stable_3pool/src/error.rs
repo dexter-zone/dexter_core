@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{OverflowError, CheckedMultiplyRatioError, ConversionOverflowError, StdError};
 use thiserror::Error;
 use crate::math::{
     MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME
@@ -11,6 +11,9 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
+    #[error("{0}")]
+    CheckedMultiplyRatioError(#[from] CheckedMultiplyRatioError),
+        
     #[error("Unauthorized")]
     Unauthorized {},
 
