@@ -1,7 +1,7 @@
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolType,
-    QueryMsg as VaultQueryMsg, PoolInfo
+    QueryMsg as VaultQueryMsg, PoolInfo, FeeInfo
 };
 use dexter::pool::{
     ConfigResponse, CumulativePricesResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
@@ -15,20 +15,20 @@ const OWNER: &str = "owner";
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
-        // initialization moved to App construction
+        // initialization  moved to App construction
         router.bank.init_balance(storage, &owner, coins).unwrap()
     })
 }
 
-// fn store_token_code(app: &mut App) -> u64 {
-//     let astro_token_contract = Box::new(ContractWrapper::new_with_empty(
-//         dexter_vault::contract::execute,
-//         dexter_vault::contract::instantiate,
-//         dexter_vault::contract::query,
-//     ));
+fn store_token_code(app: &mut App) -> u64 {
+     let token_contract = Box::new(ContractWrapper::new_with_empty(
+         dexter_vault::contract::execute,
+         dexter_vault::contract::instantiate,
+         dexter_vault::contract::query,
+             ));
 
-//     app.store_code(token_contract)
-// }
+     app.store_code(token_contract)
+ }
 
 fn store_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(
@@ -50,7 +50,7 @@ fn store_vault_code(app: &mut App) -> u64 {
             dexter_vault::contract::instantiate,
             dexter_vault::contract::query,
         )
-        .with_reply_empty(dexter::reply::contract::reply),
+        .with_reply_empty(xyk_pool::contract::reply),
     );
 
     app.store_code(vault_contract)
@@ -60,7 +60,8 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
     let token_contract_code_id = store_token_code(&mut router);
 
     let pool_contract_code_id = store_pool_code(&mut router);
-
+    let token_name = "Xtoken";
+    
     let msg = InstantiateMsg {
         asset_infos: [
             AssetInfo::NativeToken {
@@ -69,249 +70,253 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
             AssetInfo::NativeToken {
                 denom: "uluna".to_string(),
             },
-        ],
-        token_code_id: token_contract_code_id,
-        vault_addr: String::from("vault"),
+        ].to_vec(),
+        pool_id:Uint128::from(pool_contract_code_id),
+        pool_type:PoolType::Xyk {},
+        fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:2, dev_fee_percent:5, developer_addr:Some(Addr::unchecked("developer_addr"))}, 
+        lp_token_code_id:token_contract_code_id,
+        lp_token_name:Some(token_name.to_string()),
+        lp_token_symbol:Some(token_name.to_string()),
+        vault_addr:Addr::unchecked("vault"),
         init_params: None,
     };
 
-    let pair = router
+    let pool = router
         .instantiate_contract(
             pool_contract_code_id,
             owner.clone(),
             &msg,
             &[],
-            String::from("PAIR"),
-            None,
-        )
-        .unwrap();
+            token_name.to_string(),
+            Some(String::from("Dexter LP token"))
+            )
+           .unwrap();
 
     let res: PoolInfo = router
         .wrap()
-        .query_wasm_smart(pair.clone(), &QueryMsg::Pair {})
+        .query_wasm_smart(pool.clone(), &QueryMsg::Config {})
         .unwrap();
-    assert_eq!("contract0", res.contract_addr);
-    assert_eq!("contract1", res.liquidity_token);
+ 
 
-    pair
+    pool
 }
 
-// #[test]
-// fn test_compatibility_of_tokens_with_different_precision() {
-//     let owner = Addr::unchecked(OWNER);
+ #[test]
+ fn test_compatibility_of_tokens_with_different_precision() {
+     let owner = Addr::unchecked(OWNER);
 
-//     let mut app = mock_app(
-//         owner.clone(),
-//         vec![
-//             Coin {
-//                 denom: "uusd".to_string(),
-//                 amount: Uint128::new(100_000_000_000000u128),
-//             },
-//             Coin {
-//                 denom: "uluna".to_string(),
-//                 amount: Uint128::new(100_000_000_000000u128),
-//             },
-//         ],
-//     );
+     let mut app = mock_app(
+         owner.clone(),
+         vec![
+             Coin {
+                 denom: "uusd".to_string(),
+                 amount: Uint128::new(100_000_000_000000u128),
+             },
+             Coin {
+                 denom: "uluna".to_string(),
+                 amount: Uint128::new(100_000_000_000000u128),
+             },
+         ],
+     );
 
-//     let token_code_id = store_token_code(&mut app);
+     let token_code_id = store_token_code(&mut app);
 
-//     let x_amount = Uint128::new(1000000_00000);
-//     let y_amount = Uint128::new(1000000_0000000);
-//     let x_offer = Uint128::new(1_00000);
-//     let y_expected_return = Uint128::new(1_0000000);
+     let x_amount = Uint128::new(1000000_00000);
+     let y_amount = Uint128::new(1000000_0000000);
+     let x_offer = Uint128::new(1_00000);
+     let y_expected_return = Uint128::new(1_0000000);
 
-//     let token_name = "Xtoken";
+     let token_name = "Xtoken";
 
-//     let init_msg = TokenInstantiateMsg {
-//         name: token_name.to_string(),
-//         symbol: token_name.to_string(),
-//         decimals: 5,
-//         initial_balances: vec![Cw20Coin {
-//             address: OWNER.to_string(),
-//             amount: x_amount + x_offer,
-//         }],
-//         mint: Some(MinterResponse {
-//             minter: String::from(OWNER),
-//             cap: None,
-//         }),
-//         marketing: None,
-//     };
+     let init_msg = TokenInstantiateMsg {
+         name: token_name.to_string(),
+         symbol: token_name.to_string(),
+         decimals: 5,
+         initial_balances: vec![Cw20Coin {
+             address: OWNER.to_string(),
+             amount: x_amount + x_offer,
+         }],
+       mint: Some(MinterResponse {
+                 minter: String::from(OWNER),
+             cap: None,
+         }),
+         marketing: None,
+     };
 
-//     let token_x_instance = app
-//         .instantiate_contract(
-//             token_code_id,
-//             owner.clone(),
-//             &init_msg,
-//             &[],
-//             token_name,
-//             None,
-//         )
-//         .unwrap();
+     let token_x_instance = app
+         .instantiate_contract(
+             token_code_id,
+             owner.clone(),
+             &init_msg,
+             &[],
+             token_name,
+             None,
+         )
+         .unwrap();
 
-//     let token_name = "Ytoken";
+     let token_name = "Ytoken";
 
-//     let init_msg = TokenInstantiateMsg {
-//         name: token_name.to_string(),
-//         symbol: token_name.to_string(),
-//         decimals: 7,
-//         initial_balances: vec![Cw20Coin {
-//             address: OWNER.to_string(),
-//             amount: y_amount,
-//         }],
-//         mint: Some(MinterResponse {
-//             minter: String::from(OWNER),
-//             cap: None,
-//         }),
-//         marketing: None,
-//     };
+    let init_msg = TokenInstantiateMsg {
+         name: token_name.to_string(),
+         symbol: token_name.to_string(),
+         decimals: 7,
+         initial_balances: vec![Cw20Coin {
+             address: OWNER.to_string(),
+             amount: y_amount,
+         }],
+         mint: Some(MinterResponse {
+             minter: String::from(OWNER),
+             cap: None,
+         }),
+         marketing: None,
+     };
 
-//     let token_y_instance = app
-//         .instantiate_contract(
-//             token_code_id,
-//             owner.clone(),
-//             &init_msg,
-//             &[],
-//             token_name,
-//             None,
-//         )
-//         .unwrap();
+     let token_y_instance = app
+         .instantiate_contract(
+             token_code_id,
+            owner.clone(),
+             &init_msg,
+            &[],
+             token_name,
+             None,
+         )
+         .unwrap();
 
-//     let pool_code_id = store_pool_code(&mut app);
-//     let factory_code_id = store_vault_code(&mut app);
+     let pool_code_id = store_pool_code(&mut app);
+     let vault_code_id = store_vault_code(&mut app);
 
-//     let init_msg = VaultInstantiateMsg {
-//         fee_address: None,
-//         pool_configs: vec![PoolConfig {
-//             code_id: pool_code_id,
-//             maker_fee_bps: 0,
-//             pool_type: PoolType::Xyk {},
-//             total_fee_bps: 0,
-//             is_disabled: false,
-//             is_generator_disabled: false,
-//         }],
-//         token_code_id,
-//         generator_address: Some(String::from("generator")),
-//         owner: owner.to_string(),
-//         whitelist_code_id: 234u64,
-//     };
+     let init_msg = VaultInstantiateMsg {
+        pool_configs: vec![PoolConfig {
+             code_id: pool_code_id,
+             pool_type: PoolType::Xyk {},
+             fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:2, dev_fee_percent:5, developer_addr:Some(Addr::unchecked("developer_addr"))},
+             is_disabled: false,
+             is_generator_disabled: false,
+         }],
+         lp_token_code_id:vault_code_id,
+         fee_collector:Some(String::from("Fee Collector")),
+         generator_address: Some(String::from("generator")),
+         owner: owner.to_string(),
+     };
 
-//     let vault_instance = app
-//         .instantiate_contract(
-//             vault_code_id,
-//             owner.clone(),
-//             &init_msg,
-//             &[],
-//             "VAULT",
-//             None,
-//         )
-//         .unwrap();
+     let vault_instance = app
+         .instantiate_contract(
+             vault_code_id,
+             owner.clone(),
+            &init_msg,
+             &[],
+             "VAULT",
+             None,
+         )
+         .unwrap();
 
-//     let msg = VaultExecuteMsg::CreatePair {
-//         asset_infos: [
-//             AssetInfo::Token {
-//                 contract_addr: token_x_instance.clone(),
-//             },
-//             AssetInfo::Token {
-//                 contract_addr: token_y_instance.clone(),
-//             },
-//         ],
-//         pool_type: PoolType::Xyk {},
-//         init_params: None,
-//     };
+     let msg = VaultExecuteMsg::CreatePool {
+         asset_infos: [
+             AssetInfo::Token {
+                 contract_addr: token_x_instance.clone(),
+             },
+             AssetInfo::Token {
+                 contract_addr: token_y_instance.clone(),
+             },
+         ].to_vec(),
+         pool_type: PoolType::Xyk {},
+         lp_token_name:Some(token_name.to_string()),
+         lp_token_symbol:Some(token_name.to_string()),
+         init_params: None,
+     };
 
-//     app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
-//         .unwrap();
+     app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+         .unwrap();
 
-//     let msg = VaultQueryMsg::Pair {
-//         asset_infos: [
-//             AssetInfo::Token {
-//                 contract_addr: token_x_instance.clone(),
-//             },
-//             AssetInfo::Token {
-//                 contract_addr: token_y_instance.clone(),
-//             },
-//         ],
-//     };
+     let msg = VaultQueryMsg::Pool {
+         asset_infos: [
+             AssetInfo::Token {
+                 contract_addr: token_x_instance.clone(),
+             },
+             AssetInfo::Token {
+                 contract_addr: token_y_instance.clone(),
+             },
+         ].to_vec(),
+     };
 
-//     let res: PoolInfo = app
-//         .wrap()
-//         .query_wasm_smart(&vault_instance, &msg)
-//         .unwrap();
+     let res: PoolInfo = app
+         .wrap()
+         .query_wasm_smart(&vault_instance, &msg)
+         .unwrap();
 
-//     let pool_instance = res.contract_addr;
+     let pool_instance = res.contract_addr;
 
-//     let msg = Cw20ExecuteMsg::IncreaseAllowance {
-//         spender: pool_instance.to_string(),
-//         expires: None,
-//         amount: x_amount + x_offer,
-//     };
+    let msg = Cw20ExecuteMsg::IncreaseAllowance {
+         spender: pool_instance.to_string(),
+         expires: None,
+         amount: x_amount + x_offer,
+     };
 
-//     app.execute_contract(owner.clone(), token_x_instance.clone(), &msg, &[])
-//         .unwrap();
+     app.execute_contract(owner.clone(), token_x_instance.clone(), &msg, &[])
+         .unwrap();
 
-//     let msg = Cw20ExecuteMsg::IncreaseAllowance {
-//         spender: pool_instance.to_string(),
-//         expires: None,
-//         amount: y_amount,
-//     };
+     let msg = Cw20ExecuteMsg::IncreaseAllowance {
+         spender: pool_instance.to_string(),
+         expires: None,
+         amount: y_amount,
+     };
 
-//     app.execute_contract(owner.clone(), token_y_instance.clone(), &msg, &[])
-//         .unwrap();
+     app.execute_contract(owner.clone(), token_y_instance.clone(), &msg, &[])
+         .unwrap();
 
-//     let msg = ExecuteMsg::ProvideLiquidity {
-//         assets: [
-//             Asset {
-//                 info: AssetInfo::Token {
-//                     contract_addr: token_x_instance.clone(),
-//                 },
-//                 amount: x_amount,
-//             },
-//             Asset {
-//                 info: AssetInfo::Token {
-//                     contract_addr: token_y_instance.clone(),
-//                 },
-//                 amount: y_amount,
-//             },
-//         ],
-//         slippage_tolerance: None,
-//         auto_stake: None,
-//         receiver: None,
-//     };
+     let msg = ExecuteMsg::ProvideLiquidity {
+         assets: [
+             Asset {
+                 info: AssetInfo::Token {
+                     contract_addr: token_x_instance.clone(),
+                 },
+                 amount: x_amount,
+             },
+             Asset {
+                 info: AssetInfo::Token {
+                     contract_addr: token_y_instance.clone(),
+                 },
+                 amount: y_amount,
+             },
+         ],
+         slippage_tolerance: None,
+         auto_stake: None,
+         receiver: None,
+    };
 
-//     app.execute_contract(owner.clone(), pool_instance.clone(), &msg, &[])
-//         .unwrap();
+     app.execute_contract(owner.clone(), pool_instance.clone(), &msg, &[])
+         .unwrap();
 
-//     let user = Addr::unchecked("user");
+     let user = Addr::unchecked("user");
 
-//     // let swap_msg = Cw20ExecuteMsg::Send {
-//     //     contract: pool_instance.to_string(),
-//     //     msg: to_binary(&Cw20HookMsg::Swap {
-//     //         belief_price: None,
-//     //         max_spread: None,
-//     //         to: Some(user.to_string()),
-//     //     })
-//     //     .unwrap(),
-//     //     amount: x_offer,
-//     // };
+    // let swap_msg = Cw20ExecuteMsg::Send {
+     //     contract: pool_instance.to_string(),
+     //     msg: to_binary(&Cw20HookMsg::Swap {
+     //         belief_price: None,
+     //         max_spread: None,
+     //         to: Some(user.to_string()),
+     //     })
+     //     .unwrap(),
+     //     amount: x_offer,
+     //  };
 
-//     // try to swap after provide liquidity
-//     app.execute_contract(owner.clone(), token_x_instance.clone(), &swap_msg, &[])
-//         .unwrap();
+     // try to swap after provide liquidity
+     app.execute_contract(owner.clone(), token_x_instance.clone(), &swap_msg, &[])
+         .unwrap();
 
-//     let msg = Cw20QueryMsg::Balance {
-//         address: user.to_string(),
-//     };
+     let msg = Cw20QueryMsg::Balance {
+         address: user.to_string(),
+     };
 
-//     let res: BalanceResponse = app
-//         .wrap()
-//         .query_wasm_smart(&token_y_instance, &msg)
-//         .unwrap();
+     let res: BalanceResponse = app
+         .wrap()
+         .query_wasm_smart(&token_y_instance, &msg)
+         .unwrap();
 
-//     let acceptable_spread_amount = Uint128::new(10);
+     let acceptable_spread_amount = Uint128::new(10);
 
-//     assert_eq!(res.balance, y_expected_return - acceptable_spread_amount);
-// }
+     assert_eq!(res.balance, y_expected_return - acceptable_spread_amount);
+ }
 
 // #[test]
 // fn test_if_twap_is_calculated_correctly_when_pool_idles() {
