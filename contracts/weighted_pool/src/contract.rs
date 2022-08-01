@@ -593,82 +593,106 @@ pub fn query_on_swap(
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    // let pools = config.assets.into_iter().map(|pool| {
-    //     let token_precision = get_precision(deps.storage, &pool.info)?;
-    //     Ok(Asset {
-    //         amount: adjust_precision(pool.amount, token_precision, math_config.greatest_precision)?,
-    //         ..pool
-    //     })
-    // }).collect::<StdResult<Vec<_>>>()?;
+    // Convert Asset to DecimalAsset types
+    let pools = config
+        .assets
+        .into_iter()
+        .map(|mut pool| {
+            let token_precision = get_precision(deps.storage, &pool.info)?;
+            Ok(DecimalAsset {
+                info: pool.info,
+                amount: Decimal256::with_precision(pool.amount, token_precision)?,
+            })
+        })
+        .collect::<StdResult<Vec<_>>>()?;
 
-    // let (offer_pool, ask_pool) = select_pools(Some(&offer_asset_info), ask_asset_info.as_ref(), &pools)?;
+   // Get the current balances of the Offer and ask assets from the supported assets list
+   let (offer_pool, ask_pool) = select_pools( Some(&offer_asset_info.clone()), Some(&ask_asset_info), &pools)
+                                .unwrap_or_else(|_| (DecimalAsset {
+                                    info: pools[0].info.clone(),
+                                    amount: Decimal256::zero()
+                                }, DecimalAsset {
+                                    info: pools[1].info.clone(),
+                                    amount: Decimal256::zero()
+                                }));
 
-    // if check_swap_parameters(offer_pool.amount, ask_pool.amount, offer_asset.amount).is_err() {
-    //     // return Ok(SimulationResponse {
-    //     //     return_amount: Uint128::zero(),
-    //     //     spread_amount: Uint128::zero(),
-    //     //     commission_amount: Uint128::zero(),
-    //     // });
-    // }
+    // if there's 0 assets balance return failure response
+    if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
+        return Ok( return_swap_failure() ) 
+    }
 
-    // // Get normalized weights of the pools
-    // let offer_p_weight = WEIGHTS.load(deps.storage)?.get(&offer_pool.info.to_string()).unwrap();
-    // let ask_p_weight = WEIGHTS.load(deps.storage)?.get(&ask_pool.info.to_string()).unwrap();
+    // Offer and ask asset precisions
+    let offer_precision = get_precision(deps.storage, &offer_pool.info)?;
+    let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
 
-    // let mut offer_asset: Asset;
-    // let mut ask_asset: Asset;
-    // let (spread_amount, commission_amount): (Uint128, Uint128);
-    // let mut calc_amount = Uint128::zero();
+    let offer_asset: Asset;
+    let ask_asset: Asset;
+    let ( calc_amount, spread_amount): (Uint128, Uint128);
+    let (total_fee, protocol_fee, dev_fee): (Uint128, Uint128, Uint128);    
 
-    // // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
-    // match swap_type {
-    //     SwapType::GiveIn {} => {
-    //         // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
-    //         (calc_amount, spread_amount, commission_amount) = calc_offer_amount(
-    //             offer_pool.amount,
-    //             offer_p_weight,
-    //             ask_pool.amount,
-    //             ask_p_weight,
-    //             amount
-    //         );            
-    //         offer_asset = Asset {
-    //             info: offer_asset_info.clone(),
-    //             amount,
-    //         };
-    //         ask_asset = Asset {
-    //             info: ask_asset_info.clone(),
-    //             amount: calc_amount,
-    //         };
-    //     }
-    //     SwapType::GiveOut {} => {
-    //         // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
-    //         (calc_amount, spread_amount, commission_amount) =  calc_ask_amount(
-    //             offer_pool.amount,
-    //             offer_p_weight,
-    //             ask_pool.amount,
-    //             ask_p_weight,
-    //             amount
-    //         );
-    //         offer_asset = Asset {
-    //             info: offer_asset_info.clone(),
-    //             amount: calc_amount,
-    //         };
-    //         ask_asset = Asset {
-    //             info: ask_asset_info.clone(),
-    //             amount,
-    //         };
-    //     }
-    // }
 
-    // let protocol_fee = commission_amount * config.fee_info.protocol_fee_percent;
-    // let dev_fee = commission_amount * config.fee_info.dev_fee_percent;
+    // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
+    match swap_type {
+        
+        SwapType::GiveIn {} => {
+            offer_asset = Asset {
+                info: offer_asset_info.clone(),
+                amount,
+            };            
+            // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
+            (calc_amount, spread_amount)  = compute_swap(
+                deps.storage,
+                &env,
+                &math_config,
+                &offer_asset.to_decimal_asset(offer_precision)?,
+                &offer_pool,
+                &ask_pool,
+                &pools,
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            // Calculate the commission fees 
+            (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
+
+            ask_asset = Asset {
+                info: ask_asset_info.clone(),
+                amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
+            };
+        }
+        SwapType::GiveOut {} => {            
+            ask_asset = Asset {
+                info: ask_asset_info.clone(),
+                amount,
+            };
+            // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
+            (calc_amount, spread_amount, total_fee) = compute_offer_amount(
+                deps.storage,
+                &env,
+                &math_config,
+                &ask_asset,
+                &offer_pool,
+                &ask_pool,
+                &pools,
+                config.fee_info.total_fee_bps,
+                math_config.greatest_precision
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+                
+            // Calculate the protocol and dev fee
+            (protocol_fee, dev_fee) = config.fee_info.calculate_total_fee_breakup(total_fee);            
+            offer_asset = Asset {
+                info: offer_asset_info.clone(),
+                amount: calc_amount,
+            };
+        }
+        SwapType::Custom(_) => {
+            return Ok( return_swap_failure() ) 
+        }        
+    }
 
     Ok(SwapResponse {
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
             spread: spread_amount,
-            total_fee: commission_amount,
+            total_fee: total_fee,
             protocol_fee,
             dev_fee,
         },
@@ -676,54 +700,89 @@ pub fn query_on_swap(
     })
 }
 
-// / ## Description
-// / Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
-// / ## Params
-// / * **deps** is the object of type [`Deps`].
-// / * **env** is the object of type [`Env`].
-// / * **offer_asset** is the object of type [`AssetInfo`].
-// / * **ask_asset** is the object of type [`AssetInfo`].
+
+/// ## Description
+/// Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
+/// ## Params
+/// * **deps** is the object of type [`Deps`].
+/// * **env** is the object of type [`Env`].
+/// * **offer_asset** is the object of type [`AssetInfo`].
+/// * **ask_asset** is the object of type [`AssetInfo`].
 pub fn query_cumulative_price(
     deps: Deps,
     env: Env,
-    offer_asset: AssetInfo,
-    ask_asset: AssetInfo,
+    offer_asset_info: AssetInfo,
+    ask_asset_info: AssetInfo,
 ) -> StdResult<CumulativePriceResponse> {
-    let twap: Twap = TWAPINFO.load(deps.storage)?;
-    let config: Config = CONFIG.load(deps.storage)?;
+    // Load the config, mathconfig  and twap from the storage
+    let mut twap: Twap = TWAPINFO.load(deps.storage)?;
+    let mut config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    // let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
-    // accumulate_prices(deps, env, &mut config, &assets)
-    // .map_err(|err| StdError::generic_err(format!("{err}")))?;
+    // Convert Vec<Asset> to Vec<DecimalAsset> type
+    let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
 
+    // Accumulate prices of all assets in the config
+    accumulate_prices(deps, env, &mut config, math_config, &mut twap, &decimal_assets)
+        .map_err(|err| StdError::generic_err(format!("{err}")))?;
+
+    // Find the `cumulative_price` for the provided offer and ask asset in the stored TWAP. Error if not found
+    let res_exchange_rate = twap.cumulative_prices.into_iter()
+                                                .find_position(|(offer_asset, ask_asset, rate)| offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)).unwrap();
+
+    // Return the cumulative price response
     let resp = CumulativePriceResponse {
-        exchange_info: _,
+        exchange_info: AssetExchangeRate {
+            offer_info: res_exchange_rate.1.0.clone(),
+            ask_info: res_exchange_rate.1.1.clone(),
+            rate:  res_exchange_rate.1.2.clone(),
+        },
         total_share,
     };
 
     Ok(resp)
 }
 
-// /// ## Description
-// /// Returns information about the cumulative prices in a [`CumulativePricesResponse`] object.
-// /// ## Params
-// /// * **deps** is the object of type [`Deps`].
-// /// * **env** is the object of type [`Env`].
-pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePriceResponse> {
-    let twap: Twap = TWAPINFO.load(deps.storage)?;
-    let config: Config = CONFIG.load(deps.storage)?;
 
-    // let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+/// ## Description
+/// Returns information about the cumulative prices in a [`CumulativePricesResponse`] object.
+/// ## Params
+/// * **deps** is the object of type [`Deps`].
+/// * **env** is the object of type [`Env`].
+pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePricesResponse> {
+    let mut twap: Twap = TWAPINFO.load(deps.storage)?;
+    let mut config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    // accumulate_prices(deps, env, &mut config, &assets)
-    // .map_err(|err| StdError::generic_err(format!("{err}")))?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
+
+    // Convert Vec<Asset> to Vec<DecimalAsset> type
+    let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
+
+    // Accumulate prices of all assets in the config
+    accumulate_prices(deps, env, &mut config, math_config, &mut twap, &decimal_assets)
+        .map_err(|err| StdError::generic_err(format!("{err}")))?;
+
+    // Prepare the cumulative prices response    
+    let mut asset_exchange_rates : Vec<AssetExchangeRate> = Vec::new();        
+    for (offer_asset, ask_asset, rate) in twap.cumulative_prices.clone() {
+        asset_exchange_rates.push(AssetExchangeRate {
+            offer_info: offer_asset.clone(),
+            ask_info: ask_asset.clone(),
+            rate: rate.clone(),
+        });
+    }
+
 
     Ok(CumulativePricesResponse {
-        exchange_infos: twap.cumulative_prices,
+        exchange_infos: asset_exchange_rates,
         total_share,
     })
 }
+
+
 
 // --------x--------x--------x--------x--------x--------x---
 // --------x--------x Migrate Function   x--------x---------
@@ -739,4 +798,23 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::default())
+}
+
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+
+/// ## Description
+/// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
+pub fn transform_to_decimal_asset(deps: Deps, assets: Vec<Asset>) -> Vec<DecimalAsset> {
+    let decimal_assets = assets.iter()
+                                                .cloned()
+                                                .map(|asset| {
+                                                    let precision = get_precision(deps.storage, &asset.info)?;
+                                                    asset.to_decimal_asset(precision)
+                                                })
+                                                .collect::<StdResult<Vec<DecimalAsset>>>().unwrap();
+    decimal_assets
 }

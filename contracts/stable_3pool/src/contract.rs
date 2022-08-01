@@ -800,10 +800,6 @@ pub fn query_cumulative_price(
 
     // Find the `cumulative_price` for the provided offer and ask asset in the stored TWAP. Error if not found
     let res_exchange_rate = twap.cumulative_prices.into_iter()
-                                                                // .find(|(offer_asset, ask_asset, _)| {
-                                                                //     offer_asset.to_owned() == offer_asset_info && ask_asset.to_owned() == ask_asset_info
-                                                                // })
-                                                                // .ok_or_else(|| StdError::generic_err("Cumulative price not found"))?;
                                                 .find_position(|(offer_asset, ask_asset, rate)| offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)).unwrap();
 
     // Return the cumulative price response
