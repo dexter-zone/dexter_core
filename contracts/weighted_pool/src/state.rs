@@ -19,6 +19,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 /// This structure describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
+    pub 
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,        
 }
@@ -82,4 +83,13 @@ pub(crate) fn store_weights(deps: DepsMut, asset_weights: Vec<(AssetInfo, Decima
 /// Loads precision of the given asset info.
 pub(crate) fn get_weight(storage: &dyn Storage, asset_info: &AssetInfo) -> StdResult<Decimal> {
     WEIGHTS.load(storage, asset_info.to_string())
+}
+
+/// ## Description - This enum describes a asset (native or CW20).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct WeightedAsset {
+    /// Information about an asset stored in a [`Asset`] struct
+    pub asset: Asset,
+    /// The weight of the asset
+    pub weight: Decimal,
 }

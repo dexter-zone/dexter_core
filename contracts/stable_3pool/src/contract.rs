@@ -400,14 +400,14 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
-/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount of info of tokens which are to be subtracted from
+/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
 /// 
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
-/// * **deps** is the object of type [`Deps`].
+/// _mint_amount - Of type [`Option<Uint128>`], optional parameter which tells the number of LP tokens to be minted 
 /// STABLE-3-SWAP POOL -::- MATH LOGIC
 /// -- Implementation - For Stable-3-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A

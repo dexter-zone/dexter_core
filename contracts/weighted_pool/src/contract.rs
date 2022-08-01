@@ -25,7 +25,7 @@ use crate::utils::{
     accumulate_prices,calc_ask_amount, calc_offer_amount};
 use crate::math::{get_normalized_weight};
 use crate::error::ContractError;
-use crate::state::{Twap, CONFIG, MathConfig, MATHCONFIG, TWAPINFO, store_weights, get_weight, get_precision, store_precisions};
+use crate::state::{Twap, CONFIG, MathConfig, MATHCONFIG, TWAPINFO, WeightedAsset, store_weights, get_weight, get_precision, store_precisions};
 
 
 use protobuf::Message;
@@ -358,53 +358,154 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 //--------x    Query :: OnJoin, OnExit, OnSwap    x-----
 //--------x------------------x--------------x-----x-----
 
-
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
-/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount of info of tokens which are to be subtracted from
+/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// 
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
-/// * **deps** is the object of type [`Deps`].
+/// _mint_amount - Of type [`Option<Uint128>`], optional parameter which tells the number of LP tokens to be minted 
 /// WEIGHTED POOL -::- MATH LOGIC
-/// T.B.A
+/// T.B.A -- User needs to provide the assets that he wants to use to Join the pool
 pub fn query_on_join_pool(
     deps: Deps,
     env: Env,
     assets_in: Option<Vec<Asset>>,
     mint_amount: Option<Vec<Asset>>,
 ) -> StdResult<AfterJoinResponse> {
+
+    // If the user has not provided any assets to be provided, then return a `Failure` response
+    if assets_in.is_none() {
+        return Ok(return_join_failure());
+    }
+
+    // Sort the assets in the order of the assets in the config
+    let mut act_assets_in = assets_in.unwrap();
+    act_assets_in.sort_by(|a, b| {
+        a.info
+            .to_string()
+            .to_lowercase()
+            .cmp(&b.info.to_string().to_lowercase())
+    });
+
+	// 1) Get pool current liquidity + and token weights
+	// 2) If single token provided, do single asset join and exit.
+	// 3) If multi-asset join, first do as much of a join as we can with no swaps.
+	// 4) Update pool shares / liquidity / remaining tokens to join accordingly
+	// 5) For every remaining token to LP, do a single asset join, and update pool shares / liquidity.
+	//
+	// Note that all single asset joins do incur swap fee.
+	//    
+	// Since CalcJoinPoolShares is non-mutative, the steps for updating pool shares / liquidity are
+	// more complex / don't just alter the state.
+    
+	// We should simplify this logic further in the future, using balancer multi-join equations.
+
+	// 1) get all 'pool assets' (aka current pool liquidity + balancer weight)    
+    
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    // Total share of LP tokens minted by the pool
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
 
-    // // Total share of LP tokens minted by the pool
-    // let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    //  1) Get pool current liquidity + and token weights : Convert assets to WeightedAssets
+    let mut pool_assets_weighted: Vec<WeightedAsset> = config.assets.into_iter()
+        .map(|asset| {
+            let weight = get_weight(deps.storage, &asset.info.to_string())?;
+            Ok(WeightedAsset {
+                asset,
+                weight,
+            })
+        })
+        .collect::<StdResult<Vec<WeightedAsset>>>()?;
 
-    // let normalized_weights : Vec<u128>;
+    // 2) If single token provided, do single asset join and exit.
+    if act_assets_in.len() == 1 {
+        let num_shares: Uint128 = calc_single_asset_join(act_assets_in, config.fee_info.total_fee_bps, pool_assets_weighted, total_share)?;
+        // Add assets which are omitted with 0 deposit
+        pool_assets_weighted.iter().for_each(|pool_asset| {
+            if !act_assets_in.iter().any(|asset| asset.info.eq(pool_asset.asset.info)) {
+                act_assets_in.push(Asset {
+                    info: pool_asset.asset.info.clone(),
+                    amount: Uint128::new(0),
+                });
+            }
+        });
+        // Return the response
+        if !num_shares.is_zero() {
+            return AfterJoinResponse {
+                provided_assets: act_assets_in,
+                new_shares: num_shares,
+                response: dexter::pool::ResponseType::Success {},
+            };
+        }
+    }
 
-    // normalized_weights = config.assets.iter().map(|a| {
-    //     let weight = WEIGHTS.load(deps.storage, a.info.to_string() )?;
-    //     weight.u128()
-    // }).collect();
 
-    // let assets_in = calc_tokens_in_given_exact_lp_minted(config.assets, normalized_weights, total_share, mint_amount, config.fee_info.total_fee_bps)?;
+	// 3) JoinPoolNoSwap with as many tokens as we can. (What is in perfect ratio)
+	// * numShares is how many shares are perfectly matched.
+	// * remainingTokensIn is how many coins we have left to join, that have not already been used.
+	// if remaining coins is empty, logic is done (we joined all tokensIn)
+    let (num_shares, remaining_tokens_in, err) : (Uint128, Vec<Asset>, ResponseType) = maximal_exact_ratio_join(act_assets_in, config.fee_info.total_fee_bps, pool_assets_weighted, total_share)?;
+    if err == ResponseType::Failure {
+        return Ok(return_join_failure());
+    }
+    if remaining_tokens_in.is_none() {
+        return Ok(AfterJoinResponse {
+            provided_assets: act_assets_in,
+            new_shares: num_shares,
+            response: dexter::pool::ResponseType::Success {},
+        });
+    }
 
-    // let res = AfterJoinResponse {
-    //     return_assets,
-    //     new_shares: mint_amount,
-    //     response: dexter::pool::ResponseType::Success {},
-    // };
 
+	// 4) Still more coins to join, so we update the effective pool state here to account for
+	// join that just happened.
+	// * We add the joined coins to our "current pool liquidity" object (poolAssetsByDenom)
+	// * We increment a variable for our "newTotalShares" to add in the shares that've been added.
+    let mut tokens_joined : Vec<Asset> = vec![];
+    for (act_asset_in, remaining_token_in) in act_assets_in.iter().zip(remaining_tokens_in.iter()) { 
+        tokens_joined.push(Asset {
+            info: act_asset_in.info.clone(),
+            amount: act_asset_in.amount.clone().checked_sub(remaining_token_in.amount.clone()),
+        });
+    }
+    update_pool_state_for_joins(deps.storage, &tokens_joined, pool_assets_weighted)?;
+    let new_total_shares = total_share.checked_add(num_shares);
+
+
+    // 5) Now single asset join each remaining coin.
+    let new_num_shares_from_remaining: Uint128 = calc_single_asset_join( remaining_tokens_in.clone(), config.fee_info.total_fee_bps, pool_assets_weighted, new_total_shares)?;
+    num_shares = num_shares.checked_add(new_num_shares_from_remaining);
+
+    // Calculate the final tokens that have joined the pool.
+    let mut final_tokens_joined : Vec<Asset> = vec![];
+    for (token_joined, remaining_token_in) in tokens_joined.iter().zip(remaining_tokens_in.iter()) { 
+        final_tokens_joined.push(Asset {
+            info: token_joined.info.clone(),
+            amount: token_joined.amount.clone().checked_add(remaining_token_in.amount.clone()),
+        });
+    }
+
+    let res = AfterJoinResponse {
+        provided_assets: final_tokens_joined,
+        new_shares: num_shares,
+        response: dexter::pool::ResponseType::Success {},
+    };
     Ok(res)
 }
+
 
 /// ## Description
 /// Returns [`AfterExitResponse`] type which contains -  
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and tranfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// 
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
 /// * **deps** is the object of type [`Deps`].
@@ -416,31 +517,69 @@ pub fn query_on_exit_pool(
     assets_out: Option<Vec<Asset>>,
     burn_amount: Uint128,
 ) -> StdResult<AfterExitResponse> {
+    
+    // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
+    if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
+        return Ok(return_exit_failure())
+    }   
+
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    
+    // Total share of LP tokens minted by the pool
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    let act_burn_shares = burn_amount.unwrap();
 
-    // // Total share of LP tokens minted by the pool
-    // let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+	// refundedShares = act_burn_shares * (1 - exit fee)
+	// with 0 exit fee optimization
 
-    // let normalized_weights : Vec<u128>;
+    // Caculate number of LP tokens to be refunded to the user 
+    // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 3%
+    let mut refunded_shares = act_burn_shares;
+    if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
+        let one_sub_exit_fee = Decinak::from(1u128).checked_sub(math_config.exit_fee.unwrap());
+        refunded_shares = act_burn_shares.checked_mul(one_sub_exit_fee));
+    }
 
-    // normalized_weights = config.assets.iter().map(|a| {
-    //     let weight = WEIGHTS.load(deps.storage, a.info.to_string() )?;
-    //     weight.u128()
-    // }).collect();
+    // % of share to be burnt from the pool
+    let share_out_ratio = Decimal::from_ratio(refunded_shares, total_share);
 
-
-
-    // // Number of tokens that will be transferred against the LP tokens burnt
-    // let assets_out = calc_tokens_out_given_exact_lp_burnt(config.assets, normalized_weights, total_share, burn_amount, config.fee_info.total_fee_bps)?;
-
+    // Vector of assets to be transferred to the user from the Vault contract
+    let refund_assets: Vec<Asset> = vec![];
+    for asset in config.assets.iter() {
+        let asset_out = asset.amount.checked_multiply(share_out_ratio);
+        // Return a `Failure` response if the calculation of the amount of tokens to be burnt from the pool is not valid
+        if asset_out.is_gt(asset.amount) {
+            return Ok(return_exit_failure());
+        }
+        // Add the asset to the vector of assets to be transferred to the user from the Vault contract
+        refund_assets.push(Asset {
+            info: asset.info.clone(),
+            amount: asset_out,
+        });
+    }
+    
     Ok(AfterExitResponse {
-        assets_out,
-        burn_shares: burn_amount,
+        assets_out: refund_assets,
+        burn_shares: act_burn_shares,
         response: dexter::pool::ResponseType::Success {},
     })
 }
 
-// Returns number of LP shares that will be minted
+
+
+/// ## Description
+/// Returns [`SwapResponse`] type which contains -  
+/// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
+/// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// 
+/// ## Params
+///  swap_type - Is of type [`SwapType`] which is either `GiveIn`, `GiveOut` or `Custom`
+///  offer_asset_info - Of type [`AssetInfo`] which is the asset info of the asset to be traded in the offer side of the trade
+/// ask_asset_info - Of type [`AssetInfo`] which is the asset info of the asset to be traded in the ask side of the trade
+/// amount - Of type [`Uint128`] which is the amount of assets to be traded on ask or offer side, based on the swap type
+/// WEIGHTED POOL -::- MATH LOGIC
+/// T.B.A
 pub fn query_on_swap(
     deps: Deps,
     env: Env,
@@ -449,7 +588,10 @@ pub fn query_on_swap(
     ask_asset_info: AssetInfo,
     amount: Uint128,
 ) -> StdResult<SwapResponse> {
+
+    // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // let pools = config.assets.into_iter().map(|pool| {
     //     let token_precision = get_precision(deps.storage, &pool.info)?;
