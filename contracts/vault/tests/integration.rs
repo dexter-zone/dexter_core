@@ -1,20 +1,25 @@
-use cosmwasm_std::{attr, Addr};
-
-use dexter::asset:: AssetInfo;
+use dexter::asset:: {AssetInfo,Asset};
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,FeeInfo
 };
+use dexter::pool::{
+    Config, CumulativePricesResponse, Cw20HookMsg, InstantiateMsg, QueryMsg,
+    StablePoolConfig, StablePoolParams, StablePoolUpdateParams, TWAP_PRECISION,
+};
+
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cw20::MinterResponse;
 use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
-use cosmwasm_std::{Coin,Uint128,Decimal};
+use cosmwasm_std::{
+    attr, coin, from_binary, to_binary, Addr, Coin, Decimal, QueryRequest, Uint128, WasmQuery,
+};
 
 type TerraApp = App;
 fn mock_app() -> TerraApp {
     BasicApp::default()
 }
 
-fn store_factory_code(app: &mut TerraApp) -> u64 {
+fn store_vault_code(app: &mut TerraApp) -> u64 {
     let factory_contract = Box::new(
         ContractWrapper::new_with_empty(
             dexter_vault::contract::execute,
@@ -55,7 +60,7 @@ fn proper_initialization() {
 
     let owner = Addr::unchecked("owner");
 
-    let factory_code_id = store_factory_code(&mut app);
+    let vault_code_id = store_pool_code(&mut app);
 
     let pool_configs = vec![PoolConfig {
         code_id: 321,
@@ -71,12 +76,11 @@ fn proper_initialization() {
         fee_collector: None,
         owner: owner.to_string(),
         generator_address: Some(String::from("generator")),
-        //whitelist_code_id: 234u64,
     };
 
     let vault_instance = app
         .instantiate_contract(
-            factory_code_id,
+            vault_code_id,
             Addr::unchecked(owner.clone()),
             &msg,
             &[],
@@ -162,7 +166,7 @@ fn update_config() {
 
 fn instantiate_contract(app: &mut TerraApp, owner: &Addr, lp_token_code_id: u64) -> Addr {
     let pool_code_id = store_pool_code(app);
-    let vault_code_id = store_factory_code(app);
+    let vault_code_id = store_vault_code(app);
 
     let pool_configs = vec![PoolConfig {
         code_id: pool_code_id,
@@ -191,7 +195,78 @@ fn instantiate_contract(app: &mut TerraApp, owner: &Addr, lp_token_code_id: u64)
     )
     .unwrap()
 }
-/*
+
+fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
+    let token_contract_code_id = store_token_code(&mut router);
+
+    let pool_contract_code_id = store_pool_code(&mut router);
+    let token_name = "Xtoken";
+
+    let msg = InstantiateMsg {
+        asset_infos: [
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::NativeToken {
+                denom: "uluna".to_string(),
+            },
+        ].to_vec(),
+        lp_token_code_id: token_contract_code_id,
+        generator_address: Some(String::from("vault")),
+        init_params: None,
+    };
+
+    let resp = router
+        .instantiate_contract(
+            pool_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(
+        "You need to provide init params",
+        resp.root_cause().to_string()
+    );
+
+    let msg = InstantiateMsg {
+        asset_infos: [
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::NativeToken {
+                denom: "uluna".to_string(),
+            },
+        ].to_vec(),
+        token_code_id: token_contract_code_id,
+        generator_address: Some(String::from("factory")),
+        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+    };
+
+    let pair = router
+        .instantiate_contract(
+            pool_contract_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("PAIR"),
+            None,
+        )
+        .unwrap();
+
+    let res: PoolInfo = router
+        .wrap()
+        .query_wasm_smart(pair.clone(), &QueryMsg::Pool {})
+        .unwrap();
+    assert_eq!("contract0", res.pool_addr.as_str());
+    assert_eq!("contract1", res.lp_token_addr.as_str());
+
+    pair
+}
+
+
 #[test]
 fn create_pool() {
     let mut app = mock_app();
@@ -268,6 +343,8 @@ fn create_pool() {
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.clone(),
         init_params: None,
+        lp_token_name: "Ztoken",
+        lp_token_symbol: "xy",
     };
 
     let res = app
@@ -339,7 +416,7 @@ fn test_provide_and_withdraw_liquidity() {
     });
 
     // Init pool
-    let pool_instance = instantiate_pool(&mut router, &owner);
+    let pool_instance:Addr = instantiate_pool(&mut router, &owner);
 
     let res: Result<PoolInfo, _> = router.wrap().query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: pool_instance.to_string(),
@@ -428,7 +505,7 @@ fn provide_liquidity_msg(
     receiver: Option<String>,
 ) -> (ExecuteMsg, [Coin; 2]) {
     let msg = ExecuteMsg::ProvideLiquidity {
-        assets: [
+        asset: [
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "uusd".to_string(),
@@ -460,4 +537,3 @@ fn provide_liquidity_msg(
 
     (msg, coins)
 }
-*/
