@@ -4,18 +4,16 @@ use std::cmp::Ordering;
 
 use cosmwasm_std::{
     to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Deps, Env, QuerierWrapper, StdResult,
-    Storage, Uint128, Uint64,
+    Storage, Uint128, Uint64, Decimal256
 };
-use cw20::Cw20ExecuteMsg;
-use itertools::Itertools;
-
-use dexter::asset::{Asset, AssetInfo, AssetInfoExt};
-use dexter::pool::TWAP_PRECISION;
+use dexter::asset::{Asset, DecimalAsset, AssetInfo};
 use dexter::DecimalCheckedOps;
+use dexter::pool::Config;
+use dexter::helper::{select_pools, adjust_precision};
 
 use crate::error::ContractError;
-use crate::state::{get_precision, Config};
-
+use crate::state::{MathConfig, Twap, get_precision};
+use crate::math::{solveConstantFunctionInvariant};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -41,7 +39,7 @@ pub(crate) fn compute_swap(
     ask_weight: Decimal
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
-    let token_precision = get_precision(storage, &ask_pool.info)?;
+    let token_precision = get_precision(&storage, &ask_pool.info)?;
 
     let pool_post_swap_in_balance = offer_pool.amount.checked_add( offer_asset.amount )?;
 
@@ -78,7 +76,7 @@ pub(crate) fn compute_offer_amount(
     ask_weight: Decimal
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
-    let token_precision = get_precision(storage, &ask_pool.info)?;
+    let token_precision = get_precision(&storage, &ask_pool.info)?;
 
     let pool_post_swap_out_balance = ask_pool.amount.checked_sub( ask_asset.amount )?;
 
@@ -94,18 +92,6 @@ pub(crate) fn compute_offer_amount(
     let spread_amount = Uint128::zero();
     Ok((in_amount, spread_amount))
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

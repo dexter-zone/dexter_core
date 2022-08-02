@@ -1,9 +1,11 @@
-use cosmwasm_std::{Addr, Uint128};
-use cw_storage_plus::Item;
-use cosmwasm_std::{Addr, Uint128};
-use dexter::pool::Config;
+use cosmwasm_std::{Addr, DepsMut, Storage, StdResult, Decimal, Uint128};
+use cw_storage_plus::{Item, Map};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use dexter::asset::{Asset, AssetInfo};
+use dexter::pool::Config;
+
 
 /// ## Description
 /// Stores config at the given key
@@ -19,7 +21,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 /// This structure describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
-    pub 
+    // pub 
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,        
 }

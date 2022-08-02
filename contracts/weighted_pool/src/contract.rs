@@ -16,13 +16,13 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
 };
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 
 use crate::utils::{
-    accumulate_prices,calc_ask_amount, calc_offer_amount};
+    accumulate_prices};
 use crate::math::{get_normalized_weight};
 use crate::error::ContractError;
 use crate::state::{Twap, CONFIG, MathConfig, MATHCONFIG, TWAPINFO, WeightedAsset, store_weights, get_weight, get_precision, store_precisions};
@@ -68,18 +68,19 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    let weights: Vec<u128> = from_binary(&msg.init_params.unwrap())?;    
+    // Weights assigned to assets
+    let weights: Vec<(AssetInfo, u128)> = from_binary(&msg.init_params.unwrap())?;    
 
     // Error if number of assets and weights provided do not match
-    if msg.asset_infos.len()  != weights.len() < 2 {
+    if msg.asset_infos.len()  != weights.len()  {
         return Err(ContractError::NumberOfAssetsAndWeightsMismatch {});
     }
 
     // Calculate total weight and the weight share of each asset in the pool and store it in the storage
-    let total_weight = weights.iter().sum();
+    let total_weight = weights.iter().map(|(_, weight)| *weight).sum::<u128>();
     let mut asset_weights: Vec<(AssetInfo, Decimal)> = vec![];
-    for (asset_info, weight) in msg.asset_infos.iter().zip(weights.iter()) {
-        let normalized_weight = get_normalized_weight(weight, total_weight);
+    for (asset_info, asset_weight) in weights.iter() {
+        let normalized_weight = get_normalized_weight(asset_weight, total_weight);
         asset_weights.push((asset_info.clone(), normalized_weight));
     }
     store_weights(deps.branch(), &asset_weights)?;
@@ -106,8 +107,9 @@ pub fn instantiate(
             amount: Uint128::zero(),
         })
         .collect();
-    
-        let config = Config {
+        
+
+    let config = Config {
             pool_id: msg.pool_id.clone(),
             lp_token_addr: None,
             vault_addr: msg.vault_addr.clone(),
@@ -115,16 +117,16 @@ pub fn instantiate(
             pool_type: msg.pool_type.clone(),
             fee_info: msg.fee_info.clone(),
             block_time_last: env.block.time.seconds(),
-        };
+    };
     
-        let twap = Twap {
+    let twap = Twap {
             cumulative_prices: cumulative_prices,
             block_time_last: 0,
-        };
+    };
 
-        let math_config = MathConfig {
-            greatest_precision
-        };
+    let math_config = MathConfig {
+        greatest_precision
+    };
 
     // Store config, MathConfig and twap in storage
     CONFIG.save(deps.storage, &config)?;
@@ -415,7 +417,7 @@ pub fn query_on_join_pool(
     //  1) Get pool current liquidity + and token weights : Convert assets to WeightedAssets
     let mut pool_assets_weighted: Vec<WeightedAsset> = config.assets.into_iter()
         .map(|asset| {
-            let weight = get_weight(deps.storage, &asset.info.to_string())?;
+            let weight = get_weight(&deps.storage, &asset.info.to_string())?;
             Ok(WeightedAsset {
                 asset,
                 weight,
@@ -537,8 +539,8 @@ pub fn query_on_exit_pool(
     // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 3%
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
-        let one_sub_exit_fee = Decinak::from(1u128).checked_sub(math_config.exit_fee.unwrap());
-        refunded_shares = act_burn_shares.checked_mul(one_sub_exit_fee));
+        let one_sub_exit_fee = Decimal::from(1u128).checked_sub(math_config.exit_fee.unwrap());
+        refunded_shares = act_burn_shares.checked_mul(one_sub_exit_fee);
     }
 
     // % of share to be burnt from the pool
