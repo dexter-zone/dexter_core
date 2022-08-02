@@ -22,8 +22,8 @@ use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 
 use crate::utils::{
-    accumulate_prices};
-use crate::math::{get_normalized_weight};
+    accumulate_prices, maximal_exact_ratio_join};
+use crate::math::{get_normalized_weight, calculate_invariant};
 use crate::error::ContractError;
 use crate::state::{Twap, CONFIG, MathConfig, MATHCONFIG, TWAPINFO, WeightedAsset, store_weights, get_weight, get_precision, store_precisions};
 
@@ -417,15 +417,15 @@ pub fn query_on_join_pool(
     //  1) Get pool current liquidity + and token weights : Convert assets to WeightedAssets
     let mut pool_assets_weighted: Vec<WeightedAsset> = config.assets.into_iter()
         .map(|asset| {
-            let weight = get_weight(&deps.storage, &asset.info.to_string())?;
+            let weight = get_weight(deps.storage, &asset.info)?;
             Ok(WeightedAsset {
                 asset,
                 weight,
             })
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
-
-    // 2) If single token provided, do single asset join and exit.
+        
+        // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
         let num_shares: Uint128 = calc_single_asset_join(act_assets_in, config.fee_info.total_fee_bps, pool_assets_weighted, total_share)?;
         // Add assets which are omitted with 0 deposit
@@ -446,17 +446,31 @@ pub fn query_on_join_pool(
             });
         }
     }
-
-
+    
+    // If more than one asset, all should be provided.
+    if act_assets_in.len() != pool_assets_weighted.len() {
+        return Ok(return_join_failure())
+    }
+    
+    
 	// 3) JoinPoolNoSwap with as many tokens as we can. (What is in perfect ratio)
 	// * numShares is how many shares are perfectly matched.
 	// * remainingTokensIn is how many coins we have left to join, that have not already been used.
 	// if remaining coins is empty, logic is done (we joined all tokensIn)
-    let (num_shares, remaining_tokens_in, err) : (Uint128, Vec<Asset>, ResponseType) = maximal_exact_ratio_join(act_assets_in, config.fee_info.total_fee_bps, pool_assets_weighted, total_share)?;
-    if err == ResponseType::Failure {
+    
+    let (num_shares, remaining_tokens_in, err) : (Uint128, Vec<Asset>, ResponseType) = if total_share.is_zero() {
+        let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
+        let invariance = calculate_invariant(pool_assets_weighted, decimal_assets)?;
+        // mint sqrt(invariance) lp tokens
+        (invariance.checked_shr(1u32)?, vec![], ResponseType::Success {  })
+    } else {
+        maximal_exact_ratio_join(act_assets_in, pool_assets_weighted, total_share)?;
+    }
+    // Ensure token precision in accounted for
+    if err == (ResponseType::Failure{}) {
         return Ok(return_join_failure());
     }
-    if remaining_tokens_in.is_none() {
+    if remaining_tokens_in.is_empty() {
         return Ok(AfterJoinResponse {
             provided_assets: act_assets_in,
             new_shares: num_shares,
@@ -464,7 +478,7 @@ pub fn query_on_join_pool(
         });
     }
 
-
+    
 	// 4) Still more coins to join, so we update the effective pool state here to account for
 	// join that just happened.
 	// * We add the joined coins to our "current pool liquidity" object (poolAssetsByDenom)
@@ -473,10 +487,10 @@ pub fn query_on_join_pool(
     for (act_asset_in, remaining_token_in) in act_assets_in.iter().zip(remaining_tokens_in.iter()) { 
         tokens_joined.push(Asset {
             info: act_asset_in.info.clone(),
-            amount: act_asset_in.amount.clone().checked_sub(remaining_token_in.amount.clone()),
+            amount: act_asset_in.amount.clone().checked_sub(remaining_token_in.amount.clone())?,
         });
     }
-    update_pool_state_for_joins(deps.storage, &tokens_joined, pool_assets_weighted)?;
+    update_pool_state_for_joins(&tokens_joined,&mut pool_assets_weighted);
     let new_total_shares = total_share.checked_add(num_shares);
 
 
@@ -499,6 +513,16 @@ pub fn query_on_join_pool(
         response: dexter::pool::ResponseType::Success {},
     };
     Ok(res)
+}
+
+fn update_pool_state_for_joins(tokens_joined: &[Asset], pool_assets_weighted:&mut Vec<WeightedAsset>) {
+    for asset in tokens_joined {
+        for pool_asset in pool_assets_weighted {
+            if asset.info.equal(&pool_asset.asset.info) {
+                pool_asset.asset.amount += asset.amount;
+            }
+        }
+    }
 }
 
 

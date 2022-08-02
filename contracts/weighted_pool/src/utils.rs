@@ -8,12 +8,11 @@ use cosmwasm_std::{
 };
 use dexter::asset::{Asset, DecimalAsset, AssetInfo};
 use dexter::DecimalCheckedOps;
-use dexter::pool::Config;
+use dexter::pool::{Config, ResponseType};
 use dexter::helper::{select_pools, adjust_precision};
 
 use crate::error::ContractError;
-use crate::state::{MathConfig, Twap, get_precision};
-use crate::math::{solveConstantFunctionInvariant};
+use crate::state::{MathConfig, Twap, get_precision, WeightedAsset};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -150,4 +149,46 @@ pub fn accumulate_prices(
     // Update last block time.
     config.block_time_last = block_time;
     Ok(())
+}
+
+/// Calculate the max price-matching asset basket and the left-over assets along with the amount of LP tokens that should be minted.
+pub fn maximal_exact_ratio_join(act_assets_in: Vec<Asset>, pool_assets_weighted: Vec<WeightedAsset>, total_share: Uint128) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
+    // Max price-matching asset basket is defined by the smallest share of some asset X. 
+    
+
+    
+    } else {
+        let mut min_share = Decimal::one();
+        let mut max_share = Decimal::zero();
+        let mut asset_shares = vec![]; 
+        for asset in &act_assets_in {
+            for weighted_asset in &pool_assets_weighted {
+                // Would have been better with HashMap type. 
+                if weighted_asset.asset.info.equal(&asset.info) {
+                    let share_ratio = Decimal::from_ratio(asset.amount,weighted_asset.asset.amount);
+                    min_share = min_share.min(share_ratio);
+                    max_share = max_share.max(share_ratio);
+                    asset_shares.push(share_ratio);
+                }
+            }
+        }
+        min_share * total_share
+    };
+
+    let mut rem_assets = vec![];
+
+    if min_share.ne(&max_share) {
+        // assets aren't balanced 
+        for (i ,asset) in act_assets_in.iter().enumerate() {
+            if asset_shares[i].eq(&min_share) {
+                continue;
+            }
+            // account for unused amounts
+            let used_amount = act_assets_in[i].amount - min_share * act_assets_in[i].amount;
+            let new_amount = act_assets_in[i].amount - used_amount;
+            if new_amount.is_zero() {continue;}
+            rem_assets.push(Asset{info: act_assets_in[i].info, amount: new_amount});
+        }
+    }
+    Ok((new_shares, rem_assets, ResponseType::Success {  }))
 }
