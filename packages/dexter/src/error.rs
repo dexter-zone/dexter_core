@@ -16,6 +16,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Operation non supported")]
+    NonSupported {},    
+
     #[error("Doubling assets in asset infos")]
     DoublingAssets {},
 
@@ -37,19 +40,11 @@ pub enum ContractError {
     #[error("Generator address is not set in factory. Cannot autostake")]
     AutoStakeError {},
 
-    #[error("The asset {0} does not belong to the pair")]
-    InvalidAsset(String),
-
     #[error("Ask or offer asset is missed")]
     VariableAssetMissed {},
 
     #[error("Source and target assets are the same")]
     SameAssets {},
-
-    #[error(
-        "Invalid number of assets. The Astroport supports at least 2 and at most 5 assets within a stable pool"
-    )]
-    InvalidNumberOfAssets {},
 }
 
 impl From<OverflowError> for ContractError {

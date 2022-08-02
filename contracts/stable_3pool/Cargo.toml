@@ -1,9 +1,9 @@
 [package]
-name = "xyk-pool"
+name = "stable3pool"
 version = "1.0.0"
 authors = ["AstroTechLabs"]
 edition = "2021"
-description = "A Dexter DEX pool implementing the standard constant product (XYK) AMM type"
+description = "A Dexter DEX pool implementing the stable 3-pool AMM type"
 license = "MIT"
 
 exclude = [
@@ -33,10 +33,12 @@ schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
+itertools = "0.10"
 
 [dev-dependencies]
+anyhow = "1.0"
 cosmwasm-schema = "1.0.0"
-dexter-token = {path = "../token"}
+# dexter-token = {path = "../token"}
 cw-multi-test = "0.13.2"
 dexter-vault = {path = "../vault"}
 proptest = "0.10.1"

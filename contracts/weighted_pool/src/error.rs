@@ -11,6 +11,19 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error(
+        "Number of assets and weights provided do not match"
+    )]
+    NumberOfAssetsAndWeightsMismatch {},
+ 
+    #[error(
+        "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
+    )]
+    InvalidNumberOfAssets {},
+        
+    #[error("Prices update for twap failed")]
+    PricesUpdateFailed {},
+
     #[error("Operation non supported")]
     NonSupported {},
 

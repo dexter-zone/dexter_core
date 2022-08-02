@@ -9,9 +9,9 @@ use crate::mock_querier::mock_dependencies;
 
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::Config;
-use dexter::asset::{Asset, AssetInfo, PairInfo};
+use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
-    Config::Response, ExecuteMsg, InstantiateMsg, PairConfig, PairType, PairsResponse, QueryMsg,
+    Config::Response, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, PairsResponse, QueryMsg, PoolInfo
 };
 
 use dexter::pool::{
@@ -51,8 +51,8 @@ fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
 
 #[test]
 fn pair_type_to_string() {
-    assert_eq!(PairType::Xyk {}.to_string(), "xyk");
-    assert_eq!(PairType::Stable {}.to_string(), "stable");
+    assert_eq!(PoolType::Xyk {}.to_string(), "xyk");
+    assert_eq!(PoolType::Stable {}.to_string(), "stable");
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn proper_initialization() {
     store_liquidity_token(deps.as_mut(), 1, "liquidity0000".to_string());
 
     // It worked, let's query the state
-    let pair_info: PairInfo = query_pair_info(deps.as_ref()).unwrap();
+    let pair_info: PoolInfo = query_pair_info(deps.as_ref()).unwrap();
     assert_eq!(Addr::unchecked("liquidity0000"), pair_info.liquidity_token);
     assert_eq!(
         pair_info.asset_infos,

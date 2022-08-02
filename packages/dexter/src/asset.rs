@@ -7,14 +7,18 @@ use cosmwasm_std::{
     to_binary, Addr, Api, BankMsg, Coin, CosmosMsg, MessageInfo, QuerierWrapper, StdError,ConversionOverflowError,
     StdResult, Uint128, WasmMsg,Decimal256, Uint256, Fraction
 };
+use itertools::Itertools;
+
 use cw20::{Cw20ExecuteMsg};
+
+pub const NATIVE_TOKEN_PRECISION: u8 = 6;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{AssetInfo}} struct Type    x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Token types.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetInfo {
     /// Non-native Token
@@ -123,6 +127,25 @@ impl AssetInfo {
             return Uint128::zero();
         }
     }
+
+    /// Returns the number of decimals that a token has.
+    /// ## Params
+    /// * **querier** is an object of type [`QuerierWrapper`].
+    pub fn decimals(&self, querier: &QuerierWrapper) -> StdResult<u8> {
+        let decimals = match &self {
+            AssetInfo::NativeToken { .. } => NATIVE_TOKEN_PRECISION,
+            AssetInfo::Token { contract_addr } => {
+                let res: cw20::TokenInfoResponse =
+                    querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;
+
+                res.decimals
+            }
+        };
+
+        Ok(decimals)
+    }
+
+
 }
 
 

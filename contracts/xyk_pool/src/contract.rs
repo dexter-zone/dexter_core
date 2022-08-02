@@ -1,29 +1,29 @@
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
-    Env, Event, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
+    Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, Uint256, WasmMsg,
 };
-use crate::error::ContractError;
-use crate::state::{Twap, CONFIG, TWAPINFO};
-use crate::response::MsgInstantiateContractResponse;
 use std::convert::TryInto;
-
 use cw2::set_contract_version;
 use cw20::MinterResponse;
+use protobuf::Message;
+use std::vec;
+
+use crate::state::{Twap, CONFIG, TWAPINFO};
+use crate::response::MsgInstantiateContractResponse;
 
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
 };
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helper::decimal2decimal256;
+use dexter::helper::{decimal2decimal256,get_share_in_assets, get_lp_token_name,get_lp_token_symbol};
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::error::ContractError;
 
-use protobuf::Message;
-use std::vec;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::xyk_pool";
@@ -89,18 +89,11 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     // LP Token Name
-    let mut token_name = msg.pool_id.to_string() + "-Dexter-LP".to_string().as_str();
-    if !msg.lp_token_name.is_none() {
-        token_name = msg.pool_id.to_string()
-            + "-DEX-LP-".to_string().as_str()
-            + msg.lp_token_name.unwrap().as_str();
-    }
+    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let mut token_symbol = "LP-".to_string() + msg.pool_id.to_string().as_str();
-    if !msg.lp_token_symbol.is_none() {
-        token_symbol = msg.lp_token_symbol.unwrap();
-    }
+    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -245,7 +238,7 @@ pub fn execute_update_pool_liquidity(
 
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: VAULT::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 
@@ -351,7 +344,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// * **deps** is the object of type [`Deps`].
 /// XYK POOL -::- MATH LOGIC
-/// -- Implementation - For XYK, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply caculate the number of LP shares to be minted and return it to the user.
+/// -- Implementation - For XYK, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
@@ -426,14 +419,14 @@ pub fn query_on_join_pool(
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,
-    env: Env,
-    assets_out: Option<Vec<Asset>>,
+    _env: Env,
+    _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure { } });
+        return Ok(return_exit_failure())
     }    
 
     // Load the config from the storage
@@ -468,7 +461,7 @@ pub fn query_on_exit_pool(
 /// T.B.A
 pub fn query_on_swap(
     deps: Deps,
-    env: Env,
+    _env: Env,
     swap_type: SwapType,
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
@@ -507,7 +500,7 @@ pub fn query_on_swap(
                 cur_offer_asset_bal,
                 cur_ask_asset_bal,
                 amount,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
             offer_asset = Asset {
@@ -516,7 +509,7 @@ pub fn query_on_swap(
             };
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
-                amount: calc_amount,
+                amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
             };
         }
         SwapType::GiveOut {} => {
@@ -527,7 +520,7 @@ pub fn query_on_swap(
                 cur_ask_asset_bal,
                 amount,
                 config.fee_info.total_fee_bps,
-            )?;
+            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(before_commission_deduction);                        
             offer_asset = Asset {
@@ -727,7 +720,7 @@ pub fn compute_swap(
 /// * **ask_pool** is the object of type [`Uint128`]. Sets the ask pool.
 /// * **offer_amount** is the object of type [`Uint128`]. Sets the ask amount.
 /// * **commission_rate** is the object of type [`Decimal`]. Sets the commission rate.
-fn compute_offer_amount(
+pub fn compute_offer_amount(
     offer_pool: Uint128,
     ask_pool: Uint128,
     ask_amount: Uint128,
@@ -739,50 +732,26 @@ fn compute_offer_amount(
     let one_minus_commission = Decimal256::one() - decimal2decimal256(commission_rate)?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
+    let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
+
     let offer_amount: Uint128 = cp
         .multiply_ratio(
             Uint256::from(1u8),
             Uint256::from(
                 ask_pool.checked_sub(
-                    (Uint256::from(ask_amount) * inv_one_minus_commission).try_into()?,
+                    (Uint256::from(before_commission_deduction)).try_into()?,
                 )?,
             ),
         )
         .checked_sub(offer_pool.into())?
         .try_into()?;
 
-    let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
+    
     let spread_amount = (offer_amount * Decimal::from_ratio(ask_pool, offer_pool))
         .checked_sub(before_commission_deduction.try_into()?)
         .unwrap_or_else(|_| Uint128::zero());
 
     Ok((offer_amount, spread_amount, before_commission_deduction.try_into()?))
-}
-
-
-/// ## Description
-/// Returns the share of assets.
-/// ## Params
-/// * **pools** are an array of [`Asset`] type items.
-/// * **burn_amount** denotes the number of LP tokens to be burnt and is the object of type [`Uint128`].
-/// * **total_share** is total supply of LP token and is the object of type [`Uint128`].
-pub fn get_share_in_assets(
-    pools: Vec<Asset>,
-    burn_amount: Uint128,
-    total_share: Uint128,
-) -> Vec<Asset> {
-    let mut share_ratio = Decimal::zero();
-    // % share of LP tokens to be burnt in total Pool
-    if !total_share.is_zero() {
-        share_ratio = Decimal::from_ratio(burn_amount, total_share);
-    }
-    pools
-        .iter()
-        .map(|a| Asset {
-            info: a.info.clone(),
-            amount: a.amount * share_ratio,
-        })
-        .collect()
 }
 
 
@@ -829,22 +798,3 @@ pub fn accumulate_prices(
 }
 
 
-
-fn return_join_failure() -> AfterJoinResponse {
-    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure { } }
-}
-
-
-fn return_swap_failure() -> SwapResponse {
-    SwapResponse {
-        trade_params: Trade {
-            amount_in: Uint128::zero(),
-            amount_out: Uint128::zero(),
-            spread: Uint128::zero(),
-            total_fee: Uint128::zero(),
-            protocol_fee: Uint128::zero(),
-            dev_fee: Uint128::zero(),
-        },
-        response: ResponseType::Failure {},
-    }
-}
