@@ -21,6 +21,8 @@ pub enum ContractError {
     )]
     InvalidNumberOfAssets {},
         
+    #[error("Prices update for twap failed")]
+    PricesUpdateFailed {},
 
     #[error("Operation non supported")]
     NonSupported {},

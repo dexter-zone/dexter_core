@@ -9,9 +9,9 @@ use cosmwasm_std::{
 use crate::response::MsgInstantiateContractResponse;
 use cw2::set_contract_version;
 use cw20::MinterResponse;
-use dexter::helper::{select_pools, check_swap_parameters};
-use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helper::decimal2decimal256;
+use dexter::helper::{adjust_precision, get_share_in_assets, get_lp_token_name,get_lp_token_symbol, select_pools};
+use dexter::asset::{addr_validate_to_lower, Asset, DecimalAsset, AssetExchangeRate, AssetInfo};
+// use dexter::helper::decimal2decimal256;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
@@ -80,10 +80,10 @@ pub fn instantiate(
     let total_weight = weights.iter().map(|(_, weight)| *weight).sum::<u128>();
     let mut asset_weights: Vec<(AssetInfo, Decimal)> = vec![];
     for (asset_info, asset_weight) in weights.iter() {
-        let normalized_weight = get_normalized_weight(asset_weight, total_weight);
+        let normalized_weight = get_normalized_weight(*asset_weight, total_weight);
         asset_weights.push((asset_info.clone(), normalized_weight));
     }
-    store_weights(deps.branch(), &asset_weights)?;
+    store_weights(deps.branch(), asset_weights)?;
 
     // Store token precisions in the storage
     let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
@@ -517,7 +517,7 @@ pub fn query_on_exit_pool(
     deps: Deps,
     env: Env,
     assets_out: Option<Vec<Asset>>,
-    burn_amount: Uint128,
+    burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
     
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
@@ -539,8 +539,8 @@ pub fn query_on_exit_pool(
     // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 3%
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
-        let one_sub_exit_fee = Decimal::from(1u128).checked_sub(math_config.exit_fee.unwrap());
-        refunded_shares = act_burn_shares.checked_mul(one_sub_exit_fee);
+        let one_sub_exit_fee = Decimal::from_ratio(1u128, 1u128) - math_config.exit_fee.unwrap();
+        refunded_shares = act_burn_shares.checked_mul( Uint128::from(one_sub_exit_fee as u64) )?;
     }
 
     // % of share to be burnt from the pool

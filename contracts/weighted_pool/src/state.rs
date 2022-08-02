@@ -21,7 +21,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 /// This structure describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
-    // pub 
+    pub exit_fee: Option<Decimal>,
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,        
 }
