@@ -1,23 +1,23 @@
 use std::{convert::TryFrom, str::FromStr};
-use cosmwasm_std::{Addr, DepsMut,Uint256, Storage, StdResult, Decimal, Uint128};
+use cosmwasm_std::{Addr, DepsMut,Uint256, Storage, StdResult, Decimal, Uint128, Decimal256};
 
-use dexter::{U256, approx_pow::pow_approx};
+use dexter::{U256, approx_pow::pow_approx, asset::DecimalAsset};
 
 // https://github.com/officialnico/balancerv2cad/blob/main/src/balancerv2cad/WeightedMath.py
 
-// fn calculate_invariant(normalized_weights: Vec<u128>, balances: Vec<Uint128>) -> Uint256 {
-//     //  /**********************************************************************************************
-//     // invariant               _____                                                             //
-//     // wi = weight index i      | |      wi                                                      //
-//     // bi = balance index i     | |  bi ^   = i                                                  //
-//     // i = invariant                                                                             //
-//     // **********************************************************************************************/
-//     let mut invariant = Uint256::one();
-//     for (wi, bi) in normalized_weights.iter().zip(balances.iter()) {
-//         invariant = invariant * (wi.pow(bi.as_u64()));
-//     }
-//     invariant
-// }
+pub fn calculate_invariant(normalized_weights: Vec<Decimal>, balances: Vec<DecimalAsset>) -> StdResult<Uint256> {
+    //  /**********************************************************************************************
+    // invariant               _____                                                             //
+    // wi = weight index i      | |      wi                                                      //
+    // bi = balance index i     | |  bi ^   = i                                                  //
+    // i = invariant                                                                             //
+    // **********************************************************************************************/
+    let mut invariant: Uint256 = Uint256::from(1u128);
+    for (wi, bi) in normalized_weights.into_iter().zip(balances.into_iter()) {
+        invariant = invariant * Decimal256::from_str(&pow_approx(Decimal::from_str(&bi.amount.to_string())?, wi, None)?.to_string())?;
+    }
+    Ok(invariant)
+}
 
 
 // Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
