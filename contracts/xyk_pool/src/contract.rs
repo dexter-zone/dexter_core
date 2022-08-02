@@ -732,19 +732,21 @@ pub fn compute_offer_amount(
     let one_minus_commission = Decimal256::one() - decimal2decimal256(commission_rate)?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
+    let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
+
     let offer_amount: Uint128 = cp
         .multiply_ratio(
             Uint256::from(1u8),
             Uint256::from(
                 ask_pool.checked_sub(
-                    (Uint256::from(ask_amount) * inv_one_minus_commission).try_into()?,
+                    (Uint256::from(before_commission_deduction)).try_into()?,
                 )?,
             ),
         )
         .checked_sub(offer_pool.into())?
         .try_into()?;
 
-    let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
+    
     let spread_amount = (offer_amount * Decimal::from_ratio(ask_pool, offer_pool))
         .checked_sub(before_commission_deduction.try_into()?)
         .unwrap_or_else(|_| Uint128::zero());

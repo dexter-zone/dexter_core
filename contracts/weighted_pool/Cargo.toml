@@ -36,7 +36,7 @@ protobuf = { version = "2", features = ["with-bytes"] }
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"
-dexter-token = {path = "../token"}
+# dexter-token = {path = "../token"}
 cw-multi-test = "0.13.2"
 dexter-vault = {path = "../vault"}
 proptest = "0.10.1"

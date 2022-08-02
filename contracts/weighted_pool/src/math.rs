@@ -19,6 +19,50 @@ fn calculate_invariant(normalized_weights: Vec<u128>, balances: Vec<Uint128>) ->
 }
 
 
+// Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
+// solveConstantFunctionInvariant solves the constant function of an AMM
+// that determines the relationship between the differences of two sides
+// of assets inside the pool.
+// For fixed balanceXBefore, balanceXAfter, weightX, balanceY, weightY,
+// we could deduce the balanceYDelta, calculated by:
+// balanceYDelta = balanceY * (1 - (balanceXBefore/balanceXAfter)^(weightX/weightY))
+// balanceYDelta is positive when the balance liquidity decreases.
+// balanceYDelta is negative when the balance liquidity increases.
+pub (crate) fn solveConstantFunctionInvariant(
+	token_balance_fixed_before: Uint128,
+	token_balance_fixed_after: Uint128,
+	token_weight_fixed: Decimal,
+	token_balance_unknown_before: Uint128,
+	token_weight_unknown: Decimal,
+) -> Uint128 {
+
+    // weight_ratio = (weightX/weightY)
+	let weight_ratio = token_weight_fixed.Quo(token_weight_unknown);
+
+	// y = balanceXBefore/balanceXAfter
+	y = token_balance_fixed_before.Quo(token_balance_fixed_after);
+
+	// amount_y = balanceY * (1 - (y ^ weight_ratio))
+	let y_to_weight_ratio = osmomath.Pow(y, weight_ratio);
+	let paranthetical = Decimal::from(1u128).checked_sub(y_to_weight_ratio);;
+	let amount_y := token_balance_unknown_before.checked_mul(paranthetical);
+
+    return amount_y;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /// ## Description
 /// Calculates the ask amount (the amount of tokens swapped to).
 /// ## Params

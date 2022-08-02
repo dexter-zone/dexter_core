@@ -14,8 +14,98 @@ use dexter::pool::TWAP_PRECISION;
 use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;
-use crate::math::calc_y;
 use crate::state::{get_precision, Config};
+
+
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
+// --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
+
+
+/// ## Description
+///  Returns the result of a swap, if erros then returns [`ContractError`].
+/// 
+/// ## Params
+/// * **config** is an object of type [`Config`].
+/// * **offer_asset** is an object of type [`Asset`]. This is the asset that is being offered.
+/// * **offer_pool** is an object of type [`DecimalAsset`]. This is the pool of offered asset.
+/// * **ask_pool** is an object of type [`DecimalAsset`]. This is the asked asset.
+/// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
+pub(crate) fn compute_swap(
+    storage: &dyn Storage,
+    env: &Env,
+    offer_asset: &DecimalAsset,
+    offer_pool: &DecimalAsset,
+    offer_weight: Decimal,
+    ask_pool: &DecimalAsset,
+    ask_weight: Decimal
+) -> StdResult<(Uint128, Uint128)> {
+    // get ask asset precisison
+    let token_precision = get_precision(storage, &ask_pool.info)?;
+
+    let pool_post_swap_in_balance = offer_pool.amount.checked_add( offer_asset.amount )?;
+
+	// deduct swapfee on the tokensIn
+	// delta balanceOut is positive(tokens inside the pool decreases)
+   let return_amount = solveConstantFunctionInvariant(   offer_pool.amount,
+                                                            pool_post_swap_in_balance,
+                                                            offer_weight,
+                                                            ask_pool.amount,
+                                                            ask_weight,
+                                                            )?;
+    // TO-DO : Implement the spread calculation.
+    let spread_amount = Uint128::zero();
+    Ok((return_amount, spread_amount))
+}
+
+
+/// ## Description
+///  Returns the result of a swap, if erros then returns [`ContractError`].
+/// 
+/// ## Params
+/// * **config** is an object of type [`Config`].
+/// * **offer_asset** is an object of type [`Asset`]. This is the asset that is being offered.
+/// * **offer_pool** is an object of type [`DecimalAsset`]. This is the pool of offered asset.
+/// * **ask_pool** is an object of type [`DecimalAsset`]. This is the asked asset.
+/// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
+pub(crate) fn compute_offer_amount(
+    storage: &dyn Storage,
+    env: &Env,
+    offer_pool: &DecimalAsset,
+    offer_weight: Decimal,
+    ask_asset: &DecimalAsset,
+    ask_pool: &DecimalAsset,
+    ask_weight: Decimal
+) -> StdResult<(Uint128, Uint128)> {
+    // get ask asset precisison
+    let token_precision = get_precision(storage, &ask_pool.info)?;
+
+    let pool_post_swap_out_balance = ask_pool.amount.checked_sub( ask_asset.amount )?;
+
+	// deduct swapfee on the tokensIn
+	// delta balanceOut is positive(tokens inside the pool decreases)
+   let in_amount = solveConstantFunctionInvariant(   ask_pool.amount,
+                                                            pool_post_swap_out_balance,
+                                                            ask_weight,
+                                                            offer_pool.amount,
+                                                            offer_weight,
+                                                            )?;
+    // TO-DO : Implement the spread calculation.
+    let spread_amount = Uint128::zero();
+    Ok((in_amount, spread_amount))
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

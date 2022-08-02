@@ -437,11 +437,11 @@ pub fn query_on_join_pool(
         });
         // Return the response
         if !num_shares.is_zero() {
-            return AfterJoinResponse {
+            return Ok(AfterJoinResponse {
                 provided_assets: act_assets_in,
                 new_shares: num_shares,
                 response: dexter::pool::ResponseType::Success {},
-            };
+            });
         }
     }
 
@@ -625,6 +625,10 @@ pub fn query_on_swap(
     let offer_precision = get_precision(deps.storage, &offer_pool.info)?;
     let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
 
+    // Get the weights of offer and ask assets
+    let offer_weight =  get_weight(deps.storage, &offer_pool.info)?,
+    let ask_weight =  get_weight(deps.storage, &ask_pool.info)?,
+
     let offer_asset: Asset;
     let ask_asset: Asset;
     let ( calc_amount, spread_amount): (Uint128, Uint128);
@@ -646,8 +650,9 @@ pub fn query_on_swap(
                 &math_config,
                 &offer_asset.to_decimal_asset(offer_precision)?,
                 &offer_pool,
+                offer_weight,
                 &ask_pool,
-                &pools,
+                ask_weight,
             ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
@@ -663,20 +668,21 @@ pub fn query_on_swap(
                 amount,
             };
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, spread_amount, total_fee) = compute_offer_amount(
+            (calc_amount, spread_amount) = compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
                 &ask_asset,
-                &offer_pool,
                 &ask_pool,
-                &pools,
+                ask_weight,
+                &offer_pool,
+                offer_weight,
                 config.fee_info.total_fee_bps,
                 math_config.greatest_precision
             ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
                 
-            // Calculate the protocol and dev fee
-            (protocol_fee, dev_fee) = config.fee_info.calculate_total_fee_breakup(total_fee);            
+           // Calculate the commission fees 
+           (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);          
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
