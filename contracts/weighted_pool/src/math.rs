@@ -1,7 +1,7 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom, str::FromStr};
 use cosmwasm_std::{Addr, DepsMut,Uint256, Storage, StdResult, Decimal, Uint128};
 
-use dexter::U256;
+use dexter::{U256, approx_pow::pow_approx};
 
 // https://github.com/officialnico/balancerv2cad/blob/main/src/balancerv2cad/WeightedMath.py
 
@@ -29,39 +29,26 @@ use dexter::U256;
 // balanceYDelta = balanceY * (1 - (balanceXBefore/balanceXAfter)^(weightX/weightY))
 // balanceYDelta is positive when the balance liquidity decreases.
 // balanceYDelta is negative when the balance liquidity increases.
-pub fn solveConstantFunctionInvariant(
+pub fn solve_constant_function_invariant(
 	token_balance_fixed_before: Uint128,
 	token_balance_fixed_after: Uint128,
 	token_weight_fixed: Decimal,
 	token_balance_unknown_before: Uint128,
 	token_weight_unknown: Decimal,
-) -> Uint128 {
+) -> StdResult<Uint128> {
 
     // weight_ratio = (weightX/weightY)
-	let weight_ratio = token_weight_fixed.Quo(token_weight_unknown);
+	let weight_ratio = token_weight_fixed / token_weight_unknown;
 
 	// y = balanceXBefore/balanceXAfter
-	let y = token_balance_fixed_before.Quo(token_balance_fixed_after);
-
+	let y = Decimal::from_ratio(token_balance_fixed_before , token_balance_fixed_after);
 	// amount_y = balanceY * (1 - (y ^ weight_ratio))
-	let y_to_weight_ratio = osmomath.Pow(y, weight_ratio);
-	let paranthetical = Decimal::from(1u128).checked_sub(y_to_weight_ratio);
-	let amount_y= token_balance_unknown_before.checked_mul(paranthetical)?;
+	let y_to_weight_ratio = pow_approx(y,weight_ratio, None)?;
+	let paranthetical = Decimal::one() - y_to_weight_ratio;
+	let amount_y= token_balance_unknown_before * paranthetical;
 
-    return amount_y;
+    return Ok(amount_y);
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // /// ## Description
