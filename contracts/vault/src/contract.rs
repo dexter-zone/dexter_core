@@ -1044,6 +1044,7 @@ pub fn execute_swap(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
+        QueryMsg::PoolInfo {} => to_binary(&query_config(deps)?),
         QueryMsg::PoolConfig { pool_type } => to_binary(&query_pool_config(deps, pool_type)?),
         // TO-DO
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),

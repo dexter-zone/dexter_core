@@ -3,9 +3,9 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,FeeInfo
 };
 use dexter::pool::{
-    Config, CumulativePricesResponse, Cw20HookMsg, InstantiateMsg, QueryMsg,
-    StablePoolConfig, StablePoolParams, StablePoolUpdateParams, TWAP_PRECISION,
+    Config, CumulativePricesResponse, self
 };
+use dexter::pool::InstantiateMsg as poolInstantiateMsg;
 
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cw20::MinterResponse;
@@ -18,6 +18,7 @@ type TerraApp = App;
 fn mock_app() -> TerraApp {
     BasicApp::default()
 }
+
 
 fn store_vault_code(app: &mut TerraApp) -> u64 {
     let factory_contract = Box::new(
@@ -202,7 +203,7 @@ fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
     let pool_contract_code_id = store_pool_code(&mut router);
     let token_name = "Xtoken";
 
-    let msg = InstantiateMsg {
+    let msg = poolInstantiateMsg {
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -211,8 +212,13 @@ fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
                 denom: "uluna".to_string(),
             },
         ].to_vec(),
+        pool_id:Uint128::from(pool_contract_code_id),
+        pool_type:PoolType::Xyk {  },
+        lp_token_name:Some(String::from("Ytoken")),
+        lp_token_symbol:Some(String::from("Y")),
+        fee_info:FeeInfo {total_fee_bps:Decimal::new(Uint128::new(100)),protocol_fee_percent: 1,dev_fee_percent: 1,developer_addr:Some(Addr::unchecked("developer"))},
         lp_token_code_id: token_contract_code_id,
-        generator_address: Some(String::from("vault")),
+        vault_addr:Addr::unchecked("vault1"),
         init_params: None,
     };
 
@@ -231,7 +237,7 @@ fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
         resp.root_cause().to_string()
     );
 
-    let msg = InstantiateMsg {
+    let msg = poolInstantiateMsg {
         asset_infos: [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -240,30 +246,35 @@ fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
                 denom: "uluna".to_string(),
             },
         ].to_vec(),
-        token_code_id: token_contract_code_id,
-        generator_address: Some(String::from("factory")),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100 }).unwrap()),
+        pool_id:Uint128::from(pool_contract_code_id),
+        pool_type:PoolType::Xyk {  },
+        lp_token_name:Some(String::from("Xtoken")),
+        lp_token_symbol:Some(String::from("X")),
+        fee_info:FeeInfo {total_fee_bps:Decimal::new(Uint128::new(100)),protocol_fee_percent: 1,dev_fee_percent: 1,developer_addr:Some(Addr::unchecked("developer"))},
+        lp_token_code_id: token_contract_code_id,
+        vault_addr: Addr::unchecked("vault2"),
+        init_params: None,
     };
 
-    let pair = router
+    let pool = router
         .instantiate_contract(
             pool_contract_code_id,
             owner.clone(),
             &msg,
             &[],
-            String::from("PAIR"),
+            String::from("POOL"),
             None,
         )
         .unwrap();
 
     let res: PoolInfo = router
         .wrap()
-        .query_wasm_smart(pair.clone(), &QueryMsg::Pool {})
+        .query_wasm_smart(pool.clone(), &QueryMsg::PoolInfo {})
         .unwrap();
     assert_eq!("contract0", res.pool_addr.as_str());
     assert_eq!("contract1", res.lp_token_addr.as_str());
 
-    pair
+    pool
 }
 
 
@@ -361,7 +372,7 @@ fn create_pool() {
         .wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::Pool {
+            &QueryMsg::PoolInfo {
                 asset_infos: asset_infos.clone(),
             },
         )
