@@ -1,17 +1,18 @@
 use std::cmp::Ordering;
+use std::str::FromStr;
 
 use cosmwasm_std::{
     to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Decimal256, Deps, Env, QuerierWrapper,
     StdResult, Storage, Uint128, Uint64,
 };
-use dexter::asset::{Asset, AssetInfo, DecimalAsset};
+use dexter::asset::{Asset, AssetInfo, DecimalAsset, Decimal256Ext};
 use dexter::helper::{adjust_precision, select_pools};
 use dexter::pool::{Config, ResponseType};
 use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;
-use crate::math::calc_minted_shares_given_single_asset_in;
-use crate::state::{get_precision, MathConfig, Twap, WeightedAsset};
+use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
+use crate::state::{get_precision, MathConfig, Twap, WeightedAsset, get_weight};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -36,17 +37,17 @@ pub(crate) fn compute_swap(
     ask_weight: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
-    let token_precision = get_precision(&storage, &ask_pool.info)?;
+    let token_precision = get_precision(storage, &ask_pool.info)?;
 
-    let pool_post_swap_in_balance = offer_pool.amount.checked_add(offer_asset.amount)?;
+    let pool_post_swap_in_balance = offer_pool.amount +offer_asset.amount;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
-    let return_amount = solveConstantFunctionInvariant(
-        offer_pool.amount,
-        pool_post_swap_in_balance,
+    let return_amount = solve_constant_function_invariant(
+        Uint128::from_str(&offer_pool.amount.to_uint256().to_string())?,
+        Uint128::from_str(&pool_post_swap_in_balance.to_uint256().to_string())?,
         offer_weight,
-        ask_pool.amount,
+        Uint128::from_str(&ask_pool.amount.to_uint256().to_string())?,
         ask_weight,
     )?;
     // TO-DO : Implement the spread calculation.
@@ -73,17 +74,17 @@ pub(crate) fn compute_offer_amount(
     ask_weight: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
-    let token_precision = get_precision(&storage, &ask_pool.info)?;
+    let token_precision = get_precision(storage, &ask_pool.info)?;
 
-    let pool_post_swap_out_balance = ask_pool.amount.checked_sub(ask_asset.amount)?;
+    let pool_post_swap_out_balance = ask_pool.amount -ask_asset.amount;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
-    let in_amount = solveConstantFunctionInvariant(
-        ask_pool.amount,
-        pool_post_swap_out_balance,
+    let in_amount = solve_constant_function_invariant(
+        Uint128::from_str(&ask_pool.amount.to_uint256().to_string())?,
+        Uint128::from_str(&pool_post_swap_out_balance.to_uint256().to_string())?,
         ask_weight,
-        offer_pool.amount,
+        Uint128::from_str(&offer_pool.amount.to_uint256().to_string())?,
         offer_weight,
     )?;
     // TO-DO : Implement the spread calculation.
@@ -125,17 +126,19 @@ pub fn accumulate_prices(
             info: from.clone(),
             amount: Decimal256::one(),
         };
+        let from_wheight = get_weight(deps.storage, from)?;
+        let to_wheight = get_weight(deps.storage, to)?;
         // retrive the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
         // Compute the current price of ask asset in base asset
         let (return_amount, _) = compute_swap(
             deps.storage,
             &env,
-            &math_config,
             &offer_asset,
             &offer_pool,
+            from_wheight,
             &ask_pool,
-            pools,
+            to_wheight,
         )?;
         // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);

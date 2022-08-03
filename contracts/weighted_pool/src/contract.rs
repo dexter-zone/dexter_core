@@ -10,7 +10,7 @@ use cosmwasm_std::{
 use crate::response::MsgInstantiateContractResponse;
 use cw2::set_contract_version;
 use cw20::MinterResponse;
-use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo, DecimalAsset};
+use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo, DecimalAsset, Decimal256Ext};
 use dexter::helper::{
     adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, select_pools,
 };
@@ -31,7 +31,7 @@ use crate::state::{
     get_precision, get_weight, store_precisions, store_weights, MathConfig, Twap, WeightedAsset,
     CONFIG, MATHCONFIG, TWAPINFO,
 };
-use crate::utils::{accumulate_prices, calc_single_asset_join, maximal_exact_ratio_join};
+use crate::utils::{accumulate_prices, calc_single_asset_join, maximal_exact_ratio_join, compute_offer_amount, compute_swap};
 
 use protobuf::Message;
 use std::vec;
@@ -127,7 +127,8 @@ pub fn instantiate(
         block_time_last: 0,
     };
 
-    let math_config = MathConfig { greatest_precision };
+    let math_config = MathConfig { greatest_precision ,
+    exit_fee: None};
 
     // Store config, MathConfig and twap in storage
     CONFIG.save(deps.storage, &config)?;
@@ -606,7 +607,7 @@ pub fn query_on_exit_pool(
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
         let one_sub_exit_fee = Decimal::from_ratio(1u128, 1u128) - math_config.exit_fee.unwrap();
-        refunded_shares = act_burn_shares.checked_mul(Uint128::from(one_sub_exit_fee as u64))?;
+        refunded_shares = act_burn_shares * one_sub_exit_fee;
     }
 
     // % of share to be burnt from the pool
@@ -615,9 +616,9 @@ pub fn query_on_exit_pool(
     // Vector of assets to be transferred to the user from the Vault contract
     let refund_assets: Vec<Asset> = vec![];
     for asset in config.assets.iter() {
-        let asset_out = asset.amount.checked_multiply(share_out_ratio);
+        let asset_out = asset.amount *share_out_ratio;
         // Return a `Failure` response if the calculation of the amount of tokens to be burnt from the pool is not valid
-        if asset_out.is_gt(asset.amount) {
+        if asset_out > asset.amount {
             return Ok(return_exit_failure());
         }
         // Add the asset to the vector of assets to be transferred to the user from the Vault contract
@@ -818,7 +819,7 @@ pub fn query_cumulative_price(
     let res_exchange_rate = twap
         .cumulative_prices
         .into_iter()
-        .find_position(|(offer_asset, ask_asset, rate)| {
+        .find(|(offer_asset, ask_asset, rate)| {
             offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)
         })
         .unwrap();
@@ -826,9 +827,9 @@ pub fn query_cumulative_price(
     // Return the cumulative price response
     let resp = CumulativePriceResponse {
         exchange_info: AssetExchangeRate {
-            offer_info: res_exchange_rate.1 .0.clone(),
-            ask_info: res_exchange_rate.1 .1.clone(),
-            rate: res_exchange_rate.1 .2.clone(),
+            offer_info: res_exchange_rate.0.clone(),
+            ask_info: res_exchange_rate.1.clone(),
+            rate: res_exchange_rate.2.clone(),
         },
         total_share,
     };
