@@ -1,18 +1,17 @@
 use cosmwasm_std::{
     entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
     Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
-    Uint128, Uint256, WasmMsg, from_binary
+    Uint128, Uint256, WasmMsg, from_binary, Uint64
 };
 use cw2::set_contract_version;
-use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
+use cw20::{ MinterResponse};
 use protobuf::Message;
-use std::str::FromStr;
 use std::vec;
-use std::convert::TryInto;
 use std::collections::HashMap;
+use itertools::Itertools;
 
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, PRECISIONS, MathConfig, Twap , StablePoolParams, StablePoolUpdateParams, store_precisions, get_precision};
+use crate::state::{TWAPINFO, CONFIG, MATHCONFIG, MathConfig, Twap , StablePoolParams, StablePoolUpdateParams, store_precisions, get_precision};
 use crate::error::ContractError;
 
 use dexter::pool::{
@@ -27,12 +26,10 @@ use crate::math::{
 use crate::utils::{accumulate_prices, compute_swap, compute_offer_amount};
 
 use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo,Decimal256Ext, DecimalAsset, AssetExchangeRate};
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType};
 use dexter::helper::{adjust_precision, get_share_in_assets, get_lp_token_name,get_lp_token_symbol, select_pools };
 use dexter::querier::{ query_supply, query_vault_config, query_token_precision};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::U256;
-use dexter::DecimalCheckedOps;
 
 
 /// Contract name that is used for migration.
@@ -58,7 +55,7 @@ const LP_TOKEN_PRECISION: u8 = 6;
 /// * **msg** is a message of type [`InstantiateMsg`] which contains the basic settings for creating a contract
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
@@ -103,12 +100,12 @@ pub fn instantiate(
         .collect();
 
     let config = Config {
-        pool_id: msg.pool_id,
+        pool_id: msg.pool_id.clone(),
         lp_token_addr: None,
-        vault_addr: msg.vault_addr,
+        vault_addr: msg.vault_addr.clone(),
         assets,
-        pool_type: msg.pool_type,
-        fee_info: msg.fee_info,
+        pool_type: msg.pool_type.clone(),
+        fee_info: msg.fee_info.clone(),
         block_time_last: env.block.time.seconds(),
     };
 
@@ -131,22 +128,22 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     // LP Token Name
-    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
+    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name.clone() );
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol.clone() );
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         msg: WasmMsg::Instantiate {
-            code_id: msg.lp_token_code_id,
+            code_id: msg.lp_token_code_id.clone(),
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,
                 decimals: 6,
                 initial_balances: vec![],
                 mint: Some(MinterResponse {
-                    minter: msg.vault_addr.to_string(),
+                    minter: msg.vault_addr.clone().to_string(),
                     cap: None,
                 }),
                 marketing: None,
@@ -238,6 +235,7 @@ pub fn execute_update_pool_liquidity(
 ) -> Result<Response, ContractError> {
     // Get config and twap info
     let mut config: Config = CONFIG.load(deps.storage)?;
+    let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let mut twap: Twap = TWAPINFO.load(deps.storage)?;
 
     // Acess Check :: Only Vault can execute this function
@@ -250,8 +248,11 @@ pub fn execute_update_pool_liquidity(
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
 
+    // Convert Vec<Asset> to Vec<DecimalAsset> type
+    let mut decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
+
     // Accumulate prices for the assets in the pool
-    if !accumulate_prices(deps.as_ref(), env, &mut config, &mut twap, &config.assets.clone()).is_ok() {
+    if !accumulate_prices(deps.as_ref(), env, &mut config, math_config, &mut twap, &decimal_assets).is_ok() {
         return Err(ContractError::PricesUpdateFailed  {});
     }
     TWAPINFO.save(deps.storage, &twap)?;
@@ -399,14 +400,14 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
-/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount of info of tokens which are to be subtracted from
+/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
 /// 
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
-/// * **deps** is the object of type [`Deps`].
+/// _mint_amount - Of type [`Option<Uint128>`], optional parameter which tells the number of LP tokens to be minted 
 /// STABLE-3-SWAP POOL -::- MATH LOGIC
 /// -- Implementation - For Stable-3-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
@@ -437,7 +438,7 @@ pub fn query_on_join_pool(
 
     // Get Asset  stored in state for each asset in a HashMap
     let token_pools: HashMap<_, _> = config
-        .assets
+        .assets.clone()
         .into_iter()
         .map(|pool| (pool.info, pool.amount))
         .collect();
@@ -456,11 +457,11 @@ pub fn query_on_join_pool(
             let token_pool = token_pools
                 .get(&asset.info)
                 .copied()
-                .ok_or_else(|| return Ok(return_join_failure()))?;
+                .unwrap();
 
             Ok((asset, token_pool))
         })
-        .collect::<Result<Vec<_>, ContractError>>()?;
+        .collect::<Result<Vec<_>, ContractError>>().unwrap();
 
     // If some assets are omitted then add them explicitly with 0 deposit
     token_pools.iter().for_each(|(pool_info, pool_amount)| {
@@ -502,6 +503,20 @@ pub fn query_on_join_pool(
     if amp == 0u64 {
         return Ok(return_join_failure());
     }
+    
+    // Convert to Decimal types
+    let assets_collection = assets_collection
+        .iter()
+        .cloned()
+        .map(|(asset, pool)| {
+            let coin_precision = get_precision(deps.storage, &asset.info)?;
+            Ok((
+                asset.to_decimal_asset(coin_precision)?,
+                Decimal256::with_precision(pool, coin_precision)?,
+            ))
+        })
+        .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
+
 
     // Initial invariant (D)
     let old_balances = assets_collection
@@ -513,7 +528,7 @@ pub fn query_on_join_pool(
     // Invariant (D) after deposit added
     let mut new_balances = assets_collection
         .iter()
-        .map(|(deposit, pool)| Ok(pool.checked_add(deposit.amount)?))
+        .map(|(deposit, pool)| Ok(pool + deposit.amount))
         .collect::<StdResult<Vec<_>>>()?;
     let deposit_d = compute_d(amp.into(), &new_balances, math_config.greatest_precision)?;
 
@@ -545,7 +560,7 @@ pub fn query_on_join_pool(
             new_balances[i] -= fee.checked_mul(difference)?;
         }
 
-        let after_fee_d = compute_d(amp, &new_balances, math_config.greatest_precision)?;
+        let after_fee_d = compute_d( Uint64::from( amp), &new_balances, math_config.greatest_precision)?;
 
         Decimal256::with_precision(total_share, math_config.greatest_precision)?
             .checked_multiply_ratio(after_fee_d.saturating_sub(init_d), init_d)?
@@ -587,25 +602,31 @@ pub fn query_on_exit_pool(
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
+
+    // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
+    if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
+        return Ok(return_exit_failure())
+    }   
+
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // Total share of LP tokens minted by the pool
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
     let act_burn_amount;
     let refund_assets;
 
-    let pools = config.assets;
+    let pools = config.assets.clone();
     // If no assets are provided, we just burn the LP tokens and return the underlying assets based on their share in the pool
-    if assets_out.is_none() {
-        act_burn_amount = burn_amount;
-        refund_assets = get_share_in_assets(pools.clone(), burn_amount, total_share);
+    if assets_out.clone().is_none() {
+        act_burn_amount = burn_amount.unwrap();
+        refund_assets = get_share_in_assets(pools.clone(), burn_amount.unwrap(), total_share);
     } else {
         // Imbalanced withdraw
-        act_burn_amount = imbalanced_withdraw(deps.as_ref(), &env, &config, math_config,  burn_amount, &assets_out.unwrap()).unwrap_or_else(|_| 0u128.into());
+        act_burn_amount = imbalanced_withdraw(deps, &env, &config, &math_config,  burn_amount.unwrap(), &assets_out.clone().unwrap()).unwrap_or_else(|_| 0u128.into());
         refund_assets = assets_out.unwrap();
     }
-
 
     Ok(AfterExitResponse {
         assets_out: refund_assets,
@@ -674,15 +695,19 @@ pub fn query_on_swap(
     let offer_precision = get_precision(deps.storage, &offer_pool.info)?;
     let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
 
-    let mut offer_asset: Asset;
-    let mut ask_asset: Asset;
-    let (mut calc_amount, mut spread_amount): (Uint128, Uint128);
+    let offer_asset: Asset;
+    let ask_asset: Asset;
+    let ( calc_amount, spread_amount): (Uint128, Uint128);
     let (total_fee, protocol_fee, dev_fee): (Uint128, Uint128, Uint128);    
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
         
         SwapType::GiveIn {} => {
+            offer_asset = Asset {
+                info: offer_asset_info.clone(),
+                amount,
+            };            
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount)  = compute_swap(
                 deps.storage,
@@ -696,22 +721,22 @@ pub fn query_on_swap(
             // Calculate the commission fees 
             (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
 
-            offer_asset = Asset {
-                info: offer_asset_info.clone(),
-                amount,
-            };            
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
                 amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
             };
         }
         SwapType::GiveOut {} => {            
+            ask_asset = Asset {
+                info: ask_asset_info.clone(),
+                amount,
+            };
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
             (calc_amount, spread_amount, total_fee) = compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
-                &ask_asset.to_decimal_asset(ask_precision)?,
+                &ask_asset,
                 &offer_pool,
                 &ask_pool,
                 &pools,
@@ -724,10 +749,6 @@ pub fn query_on_swap(
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
-            };
-            ask_asset = Asset {
-                info: ask_asset_info.clone(),
-                amount,
             };
         }
         SwapType::Custom(_) => {
@@ -763,36 +784,30 @@ pub fn query_cumulative_price(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
 ) -> StdResult<CumulativePriceResponse> {
-    // Load the config  and twap from the storage
-    let twap: Twap = TWAPINFO.load(deps.storage)?;
-    let config: Config = CONFIG.load(deps.storage)?;
+    // Load the config, mathconfig  and twap from the storage
+    let mut twap: Twap = TWAPINFO.load(deps.storage)?;
+    let mut config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
-    // Convert Asset to DecimalAsset types
-    let decimal_assets = config.assets.iter()
-                                                .cloned()
-                                                .map(|asset| {
-                                                    let precision = get_precision(deps.storage, &asset.info)?;
-                                                    asset.to_decimal_asset(precision)
-                                                })
-                                                .collect::<StdResult<Vec<DecimalAsset>>>()?;
-    
+    // Convert Vec<Asset> to Vec<DecimalAsset> type
+    let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
+
     // Accumulate prices of all assets in the config
-    accumulate_prices(deps, env, &mut config, math_config, &decimal_assets)
+    accumulate_prices(deps, env, &mut config, math_config, &mut twap, &decimal_assets)
         .map_err(|err| StdError::generic_err(format!("{err}")))?;
 
     // Find the `cumulative_price` for the provided offer and ask asset in the stored TWAP. Error if not found
-    let (offer_asset_, ask_asset_, rate) = twap.cumulative_prices.iter()
-                                                .find_position(|cumulative_price| cumulative_price[0].eq(offer_asset_) && cumulative_price[1].eq(ask_asset_))
-                                                .ok_or(ContractError::AssetMismatch {})?;
+    let res_exchange_rate = twap.cumulative_prices.into_iter()
+                                                .find_position(|(offer_asset, ask_asset, rate)| offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)).unwrap();
 
     // Return the cumulative price response
     let resp = CumulativePriceResponse {
         exchange_info: AssetExchangeRate {
-            offer_info: offer_asset_,
-            ask_info: ask_asset_,
-            rate,
+            offer_info: res_exchange_rate.1.0.clone(),
+            ask_info: res_exchange_rate.1.1.clone(),
+            rate:  res_exchange_rate.1.2.clone(),
         },
         total_share,
     };
@@ -806,17 +821,33 @@ pub fn query_cumulative_price(
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 /// * **env** is the object of type [`Env`].
-pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePriceResponse> {
-    let twap: Twap = TWAPINFO.load(deps.storage)?;
-    let config: Config = CONFIG.load(deps.storage)?;
+pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePricesResponse> {
+    let mut twap: Twap = TWAPINFO.load(deps.storage)?;
+    let mut config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
 
-    accumulate_prices(deps, env, &mut config, &assets)
-    .map_err(|err| StdError::generic_err(format!("{err}")))?;
+    // Convert Vec<Asset> to Vec<DecimalAsset> type
+    let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
+
+    // Accumulate prices of all assets in the config
+    accumulate_prices(deps, env, &mut config, math_config, &mut twap, &decimal_assets)
+        .map_err(|err| StdError::generic_err(format!("{err}")))?;
+
+    // Prepare the cumulative prices response    
+    let mut asset_exchange_rates : Vec<AssetExchangeRate> = Vec::new();        
+    for (offer_asset, ask_asset, rate) in twap.cumulative_prices.clone() {
+        asset_exchange_rates.push(AssetExchangeRate {
+            offer_info: offer_asset.clone(),
+            ask_info: ask_asset.clone(),
+            rate: rate.clone(),
+        });
+    }
+
 
     Ok(CumulativePricesResponse {
-        exchange_infos: twap.cumulative_prices,
+        exchange_infos: asset_exchange_rates,
         total_share,
     })
 }
@@ -921,71 +952,87 @@ fn imbalanced_withdraw(
     provided_amount: Uint128,
     assets: &[Asset],
 ) -> Result<Uint128, ContractError> {
-    check_assets(deps.api, assets)?;
+
+    // List of AssetInfo's from provided assets
+    let asset_infos = assets.iter().map(|asset| asset.info.clone()).collect_vec();
+
+    // Check if all assets are indeed unique
+    if !asset_infos.iter().all_unique() {
+        return Err(ContractError::DoublingAssets {});
+    }
 
     if assets.len() > config.assets.len() {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
     let pools: HashMap<_, _> = config
-        .assets
+        .assets.clone()
         .into_iter()
         .map(|pool| (pool.info, pool.amount))
         .collect();
+
 
     let mut assets_collection = assets
         .iter()
         .cloned()
         .map(|asset| {
+            let precision = get_precision(deps.storage, &asset.info)?;
             // Get appropriate pool
-            let mut pool = pools
+            let pool = pools
                 .get(&asset.info)
                 .copied()
                 .ok_or_else(|| ContractError::InvalidAsset(asset.info.to_string()))?;
 
-            // Adjusting to the greatest precision
-            let coin_precision = get_precision(deps.storage, &asset.info)?;
-            pool = adjust_precision(pool, coin_precision, math_config.greatest_precision)?;
-
-            Ok((asset, pool))
+            Ok((
+                asset.to_decimal_asset(precision)?,
+                Decimal256::with_precision(pool, precision)?,
+            ))
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
 
     // If some assets are omitted then add them explicitly with 0 withdraw amount
-    pools.into_iter().for_each(|(pool_info, pool_amount)| {
-        if !assets.iter().any(|asset| asset.info == pool_info) {
-            assets_collection.push((
-                Asset {
-                    amount: Uint128::zero(),
-                    info: pool_info,
-                },
-                pool_amount,
-            ));
-        }
-    });
+    pools
+        .into_iter()
+        .try_for_each(|(pool_info, pool_amount)| -> StdResult<()> {
+            if !assets.iter().any(|asset| asset.info == pool_info) {
+                let precision = get_precision(deps.storage, &pool_info)?;
 
-    let n_coins = config.assets.asset_infos.len() as u8;
+                assets_collection.push((
+                    DecimalAsset {
+                        amount: Decimal256::zero(),
+                        info: pool_info,
+                    },
+                    Decimal256::with_precision(pool_amount, precision)?,
+                ));
+            }
+            Ok(())
+        })?;
 
-    let amp = compute_current_amp(config, env)?.checked_mul(n_coins.into())?;
+    let n_coins = config.assets.len() as u8;
+
+    let amp = compute_current_amp(math_config, env)?.checked_mul(n_coins.into()).unwrap();
 
     // Initial invariant (D)
     let old_balances = assets_collection
         .iter()
         .map(|(_, pool)| *pool)
         .collect_vec();
-    let init_d = compute_d(amp, &old_balances)?;
+
+    let init_d = compute_d(Uint64::from(amp), &old_balances, math_config.greatest_precision)?;
 
     // Invariant (D) after assets withdrawn
     let mut new_balances = assets_collection
         .iter()
-        .map(|(withdraw, pool)| Ok(pool.checked_sub(withdraw.amount)?))
+        .map(|(withdraw, pool)| Ok(pool - withdraw.amount))
         .collect::<StdResult<Vec<_>>>()?;
-    let withdraw_d = compute_d(amp, &new_balances, math_config.greatest_precision)?;
+    let withdraw_d = compute_d(Uint64::from(amp), &new_balances, math_config.greatest_precision)?;
 
     // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
     let fee = config.fee_info
         .total_fee_bps
         .checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
+
+    let fee = Decimal256::new(fee.atomics().into());        
 
     for i in 0..n_coins as usize {
         let ideal_balance = withdraw_d.checked_multiply_ratio(old_balances[i], init_d)?;
@@ -994,15 +1041,21 @@ fn imbalanced_withdraw(
         } else {
             new_balances[i] - ideal_balance
         };
-        new_balances[i] = new_balances[i].checked_sub(fee.checked_mul_uint128(difference)?)?;
+        new_balances[i] -= fee.checked_mul(difference)?;
     }
 
-    let after_fee_d = compute_d(amp, &new_balances, math_config.greatest_precision)?;
+    let after_fee_d = compute_d(Uint64::from(amp), &new_balances, math_config.greatest_precision)?;
 
-    let total_share = query_supply(&deps.querier, &config.lp_token_addr.unwrap())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
+
     // How many tokens do we need to burn to withdraw asked assets?
     let burn_amount = total_share
-        .checked_multiply_ratio(init_d - after_fee_d, init_d)?
+        .checked_multiply_ratio(
+            init_d
+                .to_uint128_with_precision(18u8)?
+                .checked_sub(after_fee_d.to_uint128_with_precision(18u8)?)?,
+            init_d.to_uint128_with_precision(18u8)?,
+        )?
         .checked_add(Uint128::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
 
     let burn_amount = adjust_precision(burn_amount, math_config.greatest_precision, LP_TOKEN_PRECISION)?;
@@ -1074,4 +1127,24 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::default())
+}
+
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+
+
+/// ## Description
+/// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
+pub fn transform_to_decimal_asset(deps: Deps, assets: Vec<Asset>) -> Vec<DecimalAsset> {
+    let decimal_assets = assets.iter()
+                                                .cloned()
+                                                .map(|asset| {
+                                                    let precision = get_precision(deps.storage, &asset.info)?;
+                                                    asset.to_decimal_asset(precision)
+                                                })
+                                                .collect::<StdResult<Vec<DecimalAsset>>>().unwrap();
+    decimal_assets
 }

@@ -1,29 +1,27 @@
-use std::cmp::Ordering;
-
 use cosmwasm_std::{
-    to_binary, wasm_execute, Addr, Api, CosmosMsg, Decimal, Deps, Env, QuerierWrapper, StdResult,
-    Storage, Uint128, Uint64, Decimal256 
+    Decimal, Deps, Env, StdResult,
+    Storage, Uint128, Decimal256 , Fraction
 };
-use cw20::Cw20ExecuteMsg;
-use itertools::Itertools;
 
-use dexter::asset::{Asset, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::vault::TWAP_PRECISION;
-use crate::state::MathConfig;
-
+use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
 use dexter::DecimalCheckedOps;
+use dexter::helper::{select_pools, adjust_precision};
+use dexter::pool::Config;
 
+use crate::state::MathConfig;
 use crate::error::ContractError;
 use crate::math::calc_y;
 use crate::state::{get_precision, Twap};
 
-use dexter::helper::{select_pools, adjust_precision};
-use dexter::pool::Config;
 
+
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
+// --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
+// --------x--------x--------x--------x--------x--------x--------x--------x---------
 
 
 /// ## Description
-/// Returns the result of a swap in form of a [`SwapResult`] object. In case of error, returns [`ContractError`].
+///  Returns the result of a swap, if erros then returns [`ContractError`].
 /// 
 /// ## Params
 /// * **config** is an object of type [`Config`].
@@ -77,7 +75,7 @@ pub(crate) fn compute_offer_amount(
     storage: &dyn Storage,
     env: &Env,
     math_config: &MathConfig,
-    ask_asset: &DecimalAsset,
+    ask_asset: &Asset,
     offer_pool: &DecimalAsset,
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
@@ -168,54 +166,18 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 
 
 
-// /// ## Description
-// /// Helper function to check if the given asset infos are valid.
-// pub(crate) fn check_asset_infos(
-//     api: &dyn Api,
-//     asset_infos: &[AssetInfo],
-// ) -> Result<(), ContractError> {
-//     if !asset_infos.iter().all_unique() {
-//         return Err(ContractError::DoublingAssets {});
-//     }
-
-//     asset_infos
-//         .iter()
-//         .try_for_each(|asset_info| asset_info.check(api))
-//         .map_err(Into::into)
-// }
-
-// /// ## Description
-// /// Helper function to check that the assets in a given array are valid.
-// pub(crate) fn check_assets(api: &dyn Api, assets: &[Asset]) -> Result<(), ContractError> {
-//     let asset_infos = assets.iter().map(|asset| asset.info.clone()).collect_vec();
-//     check_asset_infos(api, &asset_infos)
-// }
-
-// /// ## Description
-// /// Checks that cw20 token is part of the pool. Returns [`Ok(())`] in case of success,
-// /// otherwise [`ContractError`].
-// /// ## Params
-// /// * **config** is an object of type [`Config`].
-// ///
-// /// * **cw20_sender** is cw20 token address which is being checked.
-// pub(crate) fn check_cw20_in_pool(config: &Config, cw20_sender: &Addr) -> Result<(), ContractError> {
-//     for asset_info in &config.assets.info {
-//         match asset_info {
-//             AssetInfo::Token { contract_addr } if contract_addr == cw20_sender => return Ok(()),
-//             _ => {}
-//         }
-//     }
-
-//     Err(ContractError::Unauthorized {})
-// }
-
+// --------x--------x--------x--------x--------x--------x--------
+// --------x--------x TWAP Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x--------
 
 
 /// ## Description
-/// Accumulate token prices for the assets in the pool.
+/// Accumulate token prices for the asset pairs in the pool.
 /// 
 /// ## Params
 /// * **config** is an object of type [`Config`].
+/// * **math_config** is an object of type [`MathConfig`]
+/// * **twap** is of [`Twap`] type. It consists of cumulative_prices of type [`Vec<(AssetInfo, AssetInfo, Uint128)>`] and block_time_last of type [`u64`] which is the latest timestamp when TWAP prices of asset pairs were last updated.
 /// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub fn accumulate_prices(
     deps: Deps,
@@ -223,8 +185,7 @@ pub fn accumulate_prices(
     config: &mut Config,
     math_config: MathConfig,
     twap: &mut Twap,
-    pools: &[DecimalAsset],
-    block_time_last:
+    pools: &[DecimalAsset]
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
@@ -240,8 +201,8 @@ pub fn accumulate_prices(
             amount: Decimal256::one(),
         };
 
-        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools)?;
-        let SwapResult { return_amount, .. } = compute_swap(
+        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
+        let (return_amount, _)= compute_swap(
             deps.storage,
             &env,
             &math_config,
@@ -253,6 +214,7 @@ pub fn accumulate_prices(
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
+    
     // Update last block time.
     config.block_time_last = block_time;
     Ok(())

@@ -7,6 +7,8 @@ use cosmwasm_std::{
     to_binary, Addr, Api, BankMsg, Coin, CosmosMsg, MessageInfo, QuerierWrapper, StdError,ConversionOverflowError,
     StdResult, Uint128, WasmMsg,Decimal256, Uint256, Fraction
 };
+use itertools::Itertools;
+
 use cw20::{Cw20ExecuteMsg};
 
 pub const NATIVE_TOKEN_PRECISION: u8 = 6;
@@ -16,7 +18,7 @@ pub const NATIVE_TOKEN_PRECISION: u8 = 6;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Token types.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetInfo {
     /// Non-native Token
