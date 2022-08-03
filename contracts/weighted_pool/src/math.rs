@@ -41,17 +41,17 @@ pub fn calculate_invariant(
 // balanceYDelta is positive when the balance liquidity decreases.
 // balanceYDelta is negative when the balance liquidity increases.
 pub fn solve_constant_function_invariant(
-    token_balance_fixed_before: Uint128,
-    token_balance_fixed_after: Uint128,
+    token_balance_fixed_before: Decimal,
+    token_balance_fixed_after: Decimal,
     token_weight_fixed: Decimal,
-    token_balance_unknown_before: Uint128,
+    token_balance_unknown_before: Decimal,
     token_weight_unknown: Decimal,
-) -> StdResult<Uint128> {
+) -> StdResult<Decimal> {
     // weight_ratio = (weightX/weightY)
     let weight_ratio = token_weight_fixed / token_weight_unknown;
 
     // y = balanceXBefore/balanceXAfter
-    let y = Decimal::from_ratio(token_balance_fixed_before, token_balance_fixed_after);
+    let y = token_balance_fixed_before/ token_balance_fixed_after;
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = pow_approx(y, weight_ratio, None)?;
     let paranthetical = Decimal::one() - y_to_weight_ratio;
