@@ -12,6 +12,7 @@ use dexter::pool::{Config, ResponseType};
 use dexter::helper::{select_pools, adjust_precision};
 
 use crate::error::ContractError;
+use crate::math::calc_minted_shares_given_single_asset_in;
 use crate::state::{MathConfig, Twap, get_precision, WeightedAsset};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -154,26 +155,22 @@ pub fn accumulate_prices(
 /// Calculate the max price-matching asset basket and the left-over assets along with the amount of LP tokens that should be minted.
 pub fn maximal_exact_ratio_join(act_assets_in: Vec<Asset>, pool_assets_weighted: Vec<WeightedAsset>, total_share: Uint128) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
     // Max price-matching asset basket is defined by the smallest share of some asset X. 
-    
-
-    
-    } else {
-        let mut min_share = Decimal::one();
-        let mut max_share = Decimal::zero();
-        let mut asset_shares = vec![]; 
-        for asset in &act_assets_in {
-            for weighted_asset in &pool_assets_weighted {
-                // Would have been better with HashMap type. 
-                if weighted_asset.asset.info.equal(&asset.info) {
-                    let share_ratio = Decimal::from_ratio(asset.amount,weighted_asset.asset.amount);
-                    min_share = min_share.min(share_ratio);
-                    max_share = max_share.max(share_ratio);
-                    asset_shares.push(share_ratio);
-                }
+    let mut min_share = Decimal::one();
+    let mut max_share = Decimal::zero();
+    let mut asset_shares = vec![]; 
+    for asset in &act_assets_in {
+        for weighted_asset in &pool_assets_weighted {
+            // Would have been better with HashMap type. 
+            if weighted_asset.asset.info.equal(&asset.info) {
+                // denom will never be 0 as long as total_share > 0
+                let share_ratio = Decimal::from_ratio(asset.amount,weighted_asset.asset.amount);
+                min_share = min_share.min(share_ratio);
+                max_share = max_share.max(share_ratio);
+                asset_shares.push(share_ratio);
             }
         }
-        min_share * total_share
-    };
+    }
+    let new_shares = min_share * total_share;
 
     let mut rem_assets = vec![];
 
@@ -190,5 +187,11 @@ pub fn maximal_exact_ratio_join(act_assets_in: Vec<Asset>, pool_assets_weighted:
             rem_assets.push(Asset{info: act_assets_in[i].info, amount: new_amount});
         }
     }
-    Ok((new_shares, rem_assets, ResponseType::Success {  }))
+    Ok((new_shares, rem_assets, ResponseType::Success{}))
 }
+
+pub fn calc_single_asset_join(asset_in: Asset, total_fee_bps: Decimal, pool_asset_weighted: &WeightedAsset, total_shares: Uint128) -> StdResult<Uint128> {
+    // Asset weights already normalized
+    calc_minted_shares_given_single_asset_in(asset_in.amount, pool_asset_weighted,total_shares, total_fee_bps)
+}
+

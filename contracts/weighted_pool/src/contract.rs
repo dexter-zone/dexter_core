@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::str::FromStr;
 
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
@@ -22,7 +23,7 @@ use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
 
 use crate::utils::{
-    accumulate_prices, maximal_exact_ratio_join};
+    accumulate_prices, maximal_exact_ratio_join, calc_single_asset_join};
 use crate::math::{get_normalized_weight, calculate_invariant};
 use crate::error::ContractError;
 use crate::state::{Twap, CONFIG, MathConfig, MATHCONFIG, TWAPINFO, WeightedAsset, store_weights, get_weight, get_precision, store_precisions};
@@ -376,7 +377,7 @@ pub fn query_on_join_pool(
     deps: Deps,
     env: Env,
     assets_in: Option<Vec<Asset>>,
-    mint_amount: Option<Vec<Asset>>,
+    mint_amount: Option<Uint128>,
 ) -> StdResult<AfterJoinResponse> {
 
     // If the user has not provided any assets to be provided, then return a `Failure` response
@@ -427,10 +428,12 @@ pub fn query_on_join_pool(
         
         // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
-        let num_shares: Uint128 = calc_single_asset_join(act_assets_in, config.fee_info.total_fee_bps, pool_assets_weighted, total_share)?;
+        let in_asset = act_assets_in[0];
+        let weighted_in_asset = pool_assets_weighted.iter().find(|asset| asset.asset.info.equal(&in_asset.info)).unwrap();
+        let num_shares: Uint128 = calc_single_asset_join(in_asset, config.fee_info.total_fee_bps, weighted_in_asset, total_share)?;
         // Add assets which are omitted with 0 deposit
         pool_assets_weighted.iter().for_each(|pool_asset| {
-            if !act_assets_in.iter().any(|asset| asset.info.eq(pool_asset.asset.info)) {
+            if !act_assets_in.iter().any(|asset| asset.info.eq(&pool_asset.asset.info)) {
                 act_assets_in.push(Asset {
                     info: pool_asset.asset.info.clone(),
                     amount: Uint128::new(0),
@@ -458,15 +461,15 @@ pub fn query_on_join_pool(
 	// * remainingTokensIn is how many coins we have left to join, that have not already been used.
 	// if remaining coins is empty, logic is done (we joined all tokensIn)
     
-    let (num_shares, remaining_tokens_in, err) : (Uint128, Vec<Asset>, ResponseType) = if total_share.is_zero() {
+    let ( mut num_shares, remaining_tokens_in, err) : (Uint128, Vec<Asset>, ResponseType) = if total_share.is_zero() {
         let decimal_assets : Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
         let invariance = calculate_invariant(pool_assets_weighted, decimal_assets)?;
-        // mint sqrt(invariance) lp tokens
-        (invariance.checked_shr(1u32)?, vec![], ResponseType::Success {  })
+        // mint sqrt(invariance) lp tokens, no other tokens left
+        (Uint128::from_str(&invariance.checked_shr(1u32)?.to_string())?, vec![], ResponseType::Success {  })
     } else {
-        maximal_exact_ratio_join(act_assets_in, pool_assets_weighted, total_share)?;
-    }
-    // Ensure token precision in accounted for
+        maximal_exact_ratio_join(act_assets_in, pool_assets_weighted, total_share)?
+    };
+
     if err == (ResponseType::Failure{}) {
         return Ok(return_join_failure());
     }
@@ -491,19 +494,25 @@ pub fn query_on_join_pool(
         });
     }
     update_pool_state_for_joins(&tokens_joined,&mut pool_assets_weighted);
-    let new_total_shares = total_share.checked_add(num_shares);
+    let new_total_shares = total_share.checked_add(num_shares)?;
 
 
     // 5) Now single asset join each remaining coin.
-    let new_num_shares_from_remaining: Uint128 = calc_single_asset_join( remaining_tokens_in.clone(), config.fee_info.total_fee_bps, pool_assets_weighted, new_total_shares)?;
-    num_shares = num_shares.checked_add(new_num_shares_from_remaining);
+    for single_asset in remaining_tokens_in {
+        let weighted_in_asset = pool_assets_weighted.iter().find(|asset| asset.asset.info.equal(&single_asset.info)).unwrap();
+        let new_num_shares_from_single: Uint128 = calc_single_asset_join(single_asset, config.fee_info.total_fee_bps, weighted_in_asset, new_total_shares)?;
+        // update total shares
+        new_total_shares = new_total_shares.checked_add(new_num_shares_from_single)?;
+        // add to lp-tokens to mint
+        num_shares += new_num_shares_from_single;
+    }
 
     // Calculate the final tokens that have joined the pool.
     let mut final_tokens_joined : Vec<Asset> = vec![];
     for (token_joined, remaining_token_in) in tokens_joined.iter().zip(remaining_tokens_in.iter()) { 
         final_tokens_joined.push(Asset {
             info: token_joined.info.clone(),
-            amount: token_joined.amount.clone().checked_add(remaining_token_in.amount.clone()),
+            amount: token_joined.amount.clone().checked_add(remaining_token_in.amount.clone())?,
         });
     }
 

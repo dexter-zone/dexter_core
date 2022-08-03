@@ -1,7 +1,9 @@
 use std::{convert::TryFrom, str::FromStr};
 use cosmwasm_std::{Addr, DepsMut,Uint256, Storage, StdResult, Decimal, Uint128, Decimal256};
 
-use dexter::{U256, approx_pow::pow_approx, asset::DecimalAsset};
+use dexter::{U256, approx_pow::pow_approx, asset::{DecimalAsset, Asset}};
+
+use crate::state::WeightedAsset;
 
 // https://github.com/officialnico/balancerv2cad/blob/main/src/balancerv2cad/WeightedMath.py
 
@@ -139,22 +141,36 @@ pub fn solve_constant_function_invariant(
 //     }
 
 
-// def calc_tokens_in_given_exact_lp_minted(assets:Vec<Asset>, normalized_weights:Vec<u128>) {
-//     // lp_total_supply: Uint128,lp_minted : Uint128, swap_fee: Decimal) -> Option<Vec<Asset>> { 
+pub fn calc_minted_shares_given_single_asset_in(token_amount_in: Uint128, asset_weight_and_balance: &WeightedAsset, total_shares: Uint128, swap_fee: Decimal) -> StdResult<Uint128>{
+    // deduct swapfee on the in asset.
+	// We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
+	// So effective_swapfee = swapfee * (1 - normalized_token_weight)
+	let token_amount_in_after_fee = token_amount_in * (fee_ratio(asset_weight_and_balance.weight, swap_fee));
+	// To figure out the number of shares we add, first notice that in balancer we can treat
+	// the number of shares as linearly related to the `k` value function. This is due to the normalization.
+	// e.g.
+	// if x^.5 y^.5 = k, then we `n` x the liquidity to `(nx)^.5 (ny)^.5 = nk = k'`
+	// We generalize this linear relation to do the liquidity add for the not-all-asset case.
+	// Suppose we increase the supply of x by x', so we want to solve for `k'/k`.
+	// This is `(x + x')^{weight} * old_terms / (x^{weight} * old_terms) = (x + x')^{weight} / (x^{weight})`
+	// The number of new shares we need to make is then `old_shares * ((k'/k) - 1)`
+	// Whats very cool, is that this turns out to be the exact same `solveConstantFunctionInvariant` code
+	// with the answer's sign reversed.
+	let pool_amount_out = solve_constant_function_invariant(
+		asset_weight_and_balance.asset.amount + token_amount_in_after_fee,
+		asset_weight_and_balance.asset.amount,
+		asset_weight_and_balance.weight,
+		total_shares,
+        Decimal::one()
+    );
+	return pool_amount_out
+    }
 
-//     //     let mut tokens_in : Vec<Asset> = vec![];
-
-//     //     for asset in assets.iter() {
-//     //         let fraction = lp_total_supply.checked_add(lp_minted),checked_div(lp_total_supply).checked_sub(Uint128::one())?;            
-//     //         let tokens_in.push(Asset {
-//     //             amount: asset.amount.checked_mul(fraction)?,
-//     //             info: asset.info.clone()
-//     //         });
-//         // }
-//        Some(tokens_in)
-//     }
-
-
+// feeRatio returns the fee ratio that is defined as follows:
+// 1 - ((1 - normalizedTokenWeightOut) * swapFee)
+fn fee_ratio(normalized_weight: Decimal, swap_fee: Decimal) -> Decimal {
+	return Decimal::one() - ((Decimal::one() - normalized_weight) *swap_fee)
+}
 
 /// ## Description
 /// Calculates the weight of an asset as % of the total weight share. Returns a decimal.
