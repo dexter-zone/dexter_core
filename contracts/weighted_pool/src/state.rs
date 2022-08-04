@@ -1,11 +1,10 @@
-use cosmwasm_std::{Addr, DepsMut, Storage, StdResult, Decimal, Uint128};
+use cosmwasm_std::{Addr, Decimal, DepsMut, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::Config;
-
 
 /// ## Description
 /// Stores config at the given key
@@ -23,7 +22,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 pub struct MathConfig {
     pub exit_fee: Option<Decimal>,
     /// The greatest precision of assets in the pool
-    pub greatest_precision: u8,        
+    pub greatest_precision: u8,
 }
 
 /// ## Description
@@ -34,7 +33,6 @@ pub struct Twap {
     pub cumulative_prices: Vec<(AssetInfo, AssetInfo, Uint128)>,
     pub block_time_last: u64,
 }
-
 
 // ----------------x----------------x----------------x----------------
 // ----------------x      PRESISION : Store and getter fns     x------
@@ -72,9 +70,11 @@ pub const WEIGHTS: Map<String, Decimal> = Map::new("weights");
 
 /// ## Description
 /// Store all token weights
-pub(crate) fn store_weights(deps: DepsMut, asset_weights: Vec<(AssetInfo, Decimal)>) -> StdResult<()> {
-
-    for (asset_info, weight) in asset_weights.iter()  {
+pub(crate) fn store_weights(
+    deps: DepsMut,
+    asset_weights: Vec<(AssetInfo, Decimal)>,
+) -> StdResult<()> {
+    for (asset_info, weight) in asset_weights.iter() {
         WEIGHTS.save(deps.storage, asset_info.to_string(), weight)?;
     }
 

@@ -370,9 +370,10 @@ pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> Str
 /// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
 /// * **lp_token_symbol** is an object of type Option[`String`], provided as an input by the user creating the pool
 pub fn get_lp_token_symbol(pool_id: Uint128, lp_token_symbol: Option<String>) -> String {
-    let mut token_symbol = "LP-".to_string() + pool_id.to_string().as_str();
+    // numbers in symbol not supported
+    let mut token_symbol = "DEXTER-LP".to_string();
     if !lp_token_symbol.is_none() {
-        token_symbol = "LP-".to_string()  +  lp_token_symbol.unwrap().as_str();
+        token_symbol = "LP_".to_string()  +  lp_token_symbol.unwrap().as_str();
     }
     return token_symbol;
 

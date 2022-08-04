@@ -3,10 +3,10 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
-use dexter::asset::PoolInfo;
-use dexter::pair::{
-    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolResponse,
-    QueryMsg, ReverseSimulationResponse, SimulationResponse,
+// use dexter::asset::PoolInfo;
+use dexter::{
+    pool::{CumulativePricesResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg},
+    vault::PoolInfo,
 };
 
 fn main() {
@@ -17,12 +17,8 @@ fn main() {
 
     export_schema(&schema_for!(InstantiateMsg), &out_dir);
     export_schema(&schema_for!(ExecuteMsg), &out_dir);
-    export_schema(&schema_for!(Cw20HookMsg), &out_dir);
     export_schema(&schema_for!(QueryMsg), &out_dir);
     export_schema(&schema_for!(PoolInfo), &out_dir);
-    export_schema(&schema_for!(PoolResponse), &out_dir);
-    export_schema(&schema_for!(ReverseSimulationResponse), &out_dir);
-    export_schema(&schema_for!(SimulationResponse), &out_dir);
     export_schema(&schema_for!(MigrateMsg), &out_dir);
     export_schema(&schema_for!(CumulativePricesResponse), &out_dir);
 }

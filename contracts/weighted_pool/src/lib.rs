@@ -1,15 +1,14 @@
 pub mod contract;
+mod math;
 pub mod state;
 mod utils;
-mod math;
-
 
 mod error;
 
 mod response;
 
-// #[cfg(test)]
-// mod testing;
-
 #[cfg(test)]
-mod mock_querier;
+mod tests;
+
+// #[cfg(test)]
+// mod mock_querier;
