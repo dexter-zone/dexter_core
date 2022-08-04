@@ -259,3 +259,13 @@ pub fn return_swap_failure() -> SwapResponse {
         response: ResponseType::Failure {},
     }
 }
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x     Custom Init Params       x----------------x------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct WeightedParams{
+    pub weights: Vec<(AssetInfo, u128)>,
+    pub exit_fee: Option<Decimal>,
+}
