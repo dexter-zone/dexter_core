@@ -269,10 +269,9 @@ fn instantiate_pool(mut router: &mut TerraApp, owner: &Addr) -> Addr {
 
     let res: PoolInfo = router
         .wrap()
-        .query_wasm_smart(pool.clone(), &QueryMsg::PoolInfo {})
+        .query_wasm_smart(pool.clone(), &QueryMsg::Config {})
         .unwrap();
-    assert_eq!("contract0", res.pool_addr.as_str());
-    assert_eq!("contract1", res.lp_token_addr.as_str());
+    
 
     pool
 }
@@ -352,10 +351,10 @@ fn create_pool() {
 
     let msg = ExecuteMsg::CreatePool {
         pool_type: PoolType::Xyk {},
-        asset_infos: asset_infos.clone(),
+        asset_infos: asset_infos.to_vec(),
         init_params: None,
-        lp_token_name: "Ztoken",
-        lp_token_symbol: "xy",
+        lp_token_name:Some(String::from("Ztoken")),
+        lp_token_symbol:Some(String::from("Z")),
     };
 
     let res = app
@@ -431,12 +430,13 @@ fn test_provide_and_withdraw_liquidity() {
 
     let res: Result<PoolInfo, _> = router.wrap().query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: pool_instance.to_string(),
-        msg: to_binary(&QueryMsg::Pool {}).unwrap(),
+        msg: to_binary(&QueryMsg::Config {}).unwrap(),
     }));
     let res = res.unwrap();
+    
 
     assert_eq!(
-        res.asset_infos,
+        res.assets,
         [
             AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -515,25 +515,29 @@ fn provide_liquidity_msg(
     uluna_amount: Uint128,
     receiver: Option<String>,
 ) -> (ExecuteMsg, [Coin; 2]) {
-    let msg = ExecuteMsg::ProvideLiquidity {
-        asset: [
+    let msg=VaultExecuteMsg::JoinPool 
+       { 
+        pool_id:Uint128::from(pool_code_id), 
+        recipient: Some(String::from("recipient")), 
+        assets:[
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "uusd".to_string(),
+                info: AssetInfo::Token {
+                    contract_addr: token_x_instance.clone(),
                 },
-                amount: uusd_amount.clone(),
+                amount: x_amount,
             },
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "uluna".to_string(),
+                info: AssetInfo::Token {
+                    contract_addr: token_y_instance.clone(),
                 },
-                amount: uluna_amount.clone(),
+                amount: y_amount,
             },
         ],
-        slippage_tolerance: None,
-        auto_stake: None,
-        receiver,
+        lp_to_mint:Some(cosmwasm_std::Uint128::new(1000)), 
+        auto_stake:Some(false), 
     };
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+    .unwrap();
 
     let coins = [
         Coin {
