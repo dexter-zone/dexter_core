@@ -1,17 +1,13 @@
-use std::cmp::Ordering;
 use std::str::FromStr;
 
-use cosmwasm_std::{
-    Decimal, Decimal256, Deps, Env,
-    StdResult, Storage, Uint128,
-};
-use dexter::asset::{Asset, DecimalAsset, Decimal256Ext};
-use dexter::helper::{select_pools};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128};
+use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
+use dexter::helper::{adjust_precision, select_pools};
 use dexter::pool::{Config, ResponseType};
 
 use crate::error::ContractError;
 use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
-use crate::state::{get_precision, MathConfig, Twap, WeightedAsset, get_weight};
+use crate::state::{get_precision, get_weight, MathConfig, Twap, WeightedAsset};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -36,8 +32,9 @@ pub(crate) fn compute_swap(
     ask_weight: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
+    let token_precision = get_precision(storage, &ask_pool.info)?;
 
-    let pool_post_swap_in_balance = offer_pool.amount +offer_asset.amount;
+    let pool_post_swap_in_balance = offer_pool.amount + offer_asset.amount;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
@@ -48,8 +45,16 @@ pub(crate) fn compute_swap(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         ask_weight,
     )?;
-    // TO-DO : Implement the spread calculation.
-    let spread_amount = Uint128::zero();
+    // adjust return amount to correct precision
+    let return_amount = adjust_precision(
+        return_amount.atomics(),
+        return_amount.decimal_places() as u8,
+        token_precision,
+    )?;
+    let ideal_return = (offer_asset.amount * (ask_pool.amount / offer_pool.amount))
+        .to_uint128_with_precision(token_precision)?;
+    let spread_amount = ideal_return - return_amount;
+    // difference in return amount compared to "ideal" swap.
     Ok((return_amount, spread_amount))
 }
 
@@ -72,22 +77,30 @@ pub(crate) fn compute_offer_amount(
     offer_weight: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precisison
-    let token_precision = get_precision(storage, &ask_pool.info)?;
+    let token_precision = get_precision(storage, &offer_pool.info)?;
 
-    let pool_post_swap_out_balance = ask_pool.amount -ask_asset.amount;
+    let pool_post_swap_out_balance = ask_pool.amount - ask_asset.amount;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
-    let in_amount = solve_constant_function_invariant(
-        Uint128::from_str(&ask_pool.amount.to_uint256().to_string())?,
-        Uint128::from_str(&pool_post_swap_out_balance.to_uint256().to_string())?,
+    let real_offer = solve_constant_function_invariant(
+        Decimal::from_str(&ask_pool.amount.to_string())?,
+        Decimal::from_str(&pool_post_swap_out_balance.to_string())?,
         ask_weight,
-        Uint128::from_str(&offer_pool.amount.to_uint256().to_string())?,
+        Decimal::from_str(&offer_pool.amount.to_string())?,
         offer_weight,
     )?;
-    // Spread is return_at_before_swap_price - real_return
-    let spread_amount = ask_asset.amount * (ask_pool.amount / offer_pool.amount);
-    Ok((in_amount, spread_amount.to_uint128_with_precision(token_precision)?))
+    // Spread is real_offer - offer_if_ideal
+    // adjust return amount to correct precision
+    let real_offer = adjust_precision(
+        real_offer.atomics(),
+        real_offer.decimal_places() as u8,
+        token_precision,
+    )?;
+    let ideal_offer = (ask_asset.amount * (offer_pool.amount / ask_pool.amount))
+        .to_uint128_with_precision(token_precision)?;
+    let spread_amount = real_offer - ideal_offer;
+    Ok((real_offer, spread_amount))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -195,14 +208,17 @@ pub fn maximal_exact_ratio_join(
 }
 
 pub fn calc_single_asset_join(
+    deps: Deps,
     asset_in: &Asset,
     total_fee_bps: Decimal,
     pool_asset_weighted: &WeightedAsset,
     total_shares: Uint128,
 ) -> StdResult<Uint128> {
+    let in_precision = get_precision(deps.storage, &asset_in.info)?;
     // Asset weights already normalized
     calc_minted_shares_given_single_asset_in(
         asset_in.amount,
+        in_precision.into(),
         pool_asset_weighted,
         total_shares,
         total_fee_bps,

@@ -4,6 +4,7 @@ use std::{convert::TryFrom, str::FromStr};
 use dexter::{
     approx_pow::pow_approx,
     asset::{Asset, DecimalAsset},
+    helper::adjust_precision,
     U256,
 };
 
@@ -51,12 +52,17 @@ pub fn solve_constant_function_invariant(
     let weight_ratio = token_weight_fixed / token_weight_unknown;
 
     // y = balanceXBefore/balanceXAfter
-    let y = token_balance_fixed_before/ token_balance_fixed_after;
+    let y = token_balance_fixed_before / token_balance_fixed_after;
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = pow_approx(y, weight_ratio, None)?;
-    let paranthetical = Decimal::one() - y_to_weight_ratio;
-    let amount_y = token_balance_unknown_before * paranthetical;
 
+    // Decimal is an unsigned so always return abs value
+    let paranthetical = if y_to_weight_ratio <= Decimal::one() {
+        Decimal::one() - y_to_weight_ratio
+    } else {
+        y_to_weight_ratio - Decimal::one()
+    };
+    let amount_y = token_balance_unknown_before * paranthetical;
     return Ok(amount_y);
 }
 
@@ -146,6 +152,7 @@ pub fn solve_constant_function_invariant(
 
 pub fn calc_minted_shares_given_single_asset_in(
     token_amount_in: Uint128,
+    in_precision: u32,
     asset_weight_and_balance: &WeightedAsset,
     total_shares: Uint128,
     swap_fee: Decimal,
@@ -155,6 +162,9 @@ pub fn calc_minted_shares_given_single_asset_in(
     // So effective_swapfee = swapfee * (1 - normalized_token_weight)
     let token_amount_in_after_fee =
         token_amount_in * (fee_ratio(asset_weight_and_balance.weight, swap_fee));
+    let in_decimal = Decimal::from_atomics(token_amount_in, in_precision).unwrap();
+    let balance_decimal =
+        Decimal::from_atomics(asset_weight_and_balance.asset.amount, in_precision).unwrap();
     // To figure out the number of shares we add, first notice that in balancer we can treat
     // the number of shares as linearly related to the `k` value function. This is due to the normalization.
     // e.g.
@@ -166,13 +176,17 @@ pub fn calc_minted_shares_given_single_asset_in(
     // Whats very cool, is that this turns out to be the exact same `solveConstantFunctionInvariant` code
     // with the answer's sign reversed.
     let pool_amount_out = solve_constant_function_invariant(
-        asset_weight_and_balance.asset.amount + token_amount_in_after_fee,
-        asset_weight_and_balance.asset.amount,
+        balance_decimal + in_decimal,
+        balance_decimal,
         asset_weight_and_balance.weight,
-        total_shares,
+        Decimal::from_atomics(total_shares, 6).unwrap(),
         Decimal::one(),
+    )?;
+    return adjust_precision(
+        pool_amount_out.atomics(),
+        pool_amount_out.decimal_places() as u8,
+        6.into(),
     );
-    return pool_amount_out;
 }
 
 // feeRatio returns the fee ratio that is defined as follows:
