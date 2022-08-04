@@ -147,7 +147,6 @@ pub fn instantiate(
 
     // LP Token Symbol
     let token_symbol = get_lp_token_symbol(msg.pool_id.clone(), msg.lp_token_symbol.clone());
-
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         msg: WasmMsg::Instantiate {
@@ -390,7 +389,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// T.B.A -- User needs to provide the assets that he wants to use to Join the pool
 pub fn query_on_join_pool(
     deps: Deps,
-    env: Env,
+    _env: Env,
     assets_in: Option<Vec<Asset>>,
     mint_amount: Option<Uint128>,
 ) -> StdResult<AfterJoinResponse> {
@@ -500,7 +499,7 @@ pub fn query_on_join_pool(
             )?;
             // mint sqrt(invariance) lp tokens, no other tokens left
             (
-                Uint128::from_str(&invariance.checked_shr(1u32)?.to_string())?,
+                invariance.sqrt().to_uint128_with_precision(6u8)?,
                 vec![],
                 ResponseType::Success {},
             )
@@ -592,7 +591,7 @@ fn update_pool_state_for_joins(
 /// Returns [`AfterExitResponse`] type which contains -  
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and tranfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
-/// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// response - A [`ResponseType`] which is either `Success` or `Failure`, determining if the tx is accepted by the Pool's math computations or not
 ///
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
@@ -620,11 +619,11 @@ pub fn query_on_exit_pool(
     // refundedShares = act_burn_shares * (1 - exit fee)
     // with 0 exit fee optimization
 
-    // Caculate number of LP tokens to be refunded to the user
+    // Calculate number of LP tokens to be refunded to the user
     // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 3%
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
-        let one_sub_exit_fee = Decimal::from_ratio(1u128, 1u128) - math_config.exit_fee.unwrap();
+        let one_sub_exit_fee = Decimal::one() - math_config.exit_fee.unwrap();
         refunded_shares = act_burn_shares * one_sub_exit_fee;
     }
 
@@ -759,7 +758,7 @@ pub fn query_on_swap(
                 info: ask_asset_info.clone(),
                 amount,
             };
-            // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
+            // Calculate the number of offer_asset tokens to be transferred from the trader to the Vault contract
             (calc_amount, spread_amount) = compute_offer_amount(
                 deps.storage,
                 &env,

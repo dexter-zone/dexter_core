@@ -137,8 +137,8 @@ pub fn accumulate_prices(
             info: from.clone(),
             amount: Decimal256::one(),
         };
-        let from_wheight = get_weight(deps.storage, from)?;
-        let to_wheight = get_weight(deps.storage, to)?;
+        let from_weight = get_weight(deps.storage, from)?;
+        let to_weight = get_weight(deps.storage, to)?;
         // retrive the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
         // Compute the current price of ask asset in base asset
@@ -147,9 +147,9 @@ pub fn accumulate_prices(
             &env,
             &offer_asset,
             &offer_pool,
-            from_wheight,
+            from_weight,
             &ask_pool,
-            to_wheight,
+            to_weight,
         )?;
         // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);

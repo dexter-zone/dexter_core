@@ -4,7 +4,7 @@ use std::{convert::TryFrom, str::FromStr};
 use dexter::{
     approx_pow::pow_approx,
     asset::{Asset, DecimalAsset},
-    helper::adjust_precision,
+    helper::{adjust_precision, decimal2decimal256},
     U256,
 };
 
@@ -15,19 +15,21 @@ use crate::state::WeightedAsset;
 pub fn calculate_invariant(
     normalized_weights: Vec<Decimal>,
     balances: Vec<DecimalAsset>,
-) -> StdResult<Uint256> {
+) -> StdResult<Decimal256> {
     //  /**********************************************************************************************
     // invariant               _____                                                             //
     // wi = weight index i      | |      wi                                                      //
     // bi = balance index i     | |  bi ^   = i                                                  //
     // i = invariant                                                                             //
     // **********************************************************************************************/
-    let mut invariant: Uint256 = Uint256::from(1u128);
+    let mut invariant: Decimal256 = Decimal256::one();
     for (wi, bi) in normalized_weights.into_iter().zip(balances.into_iter()) {
         invariant = invariant
-            * Decimal256::from_str(
-                &pow_approx(Decimal::from_str(&bi.amount.to_string())?, wi, None)?.to_string(),
-            )?;
+            * decimal2decimal256(pow_approx(
+                Decimal::from_str(&bi.amount.to_string())?,
+                wi,
+                None,
+            )?)?;
     }
     Ok(invariant)
 }
@@ -162,7 +164,7 @@ pub fn calc_minted_shares_given_single_asset_in(
     // So effective_swapfee = swapfee * (1 - normalized_token_weight)
     let token_amount_in_after_fee =
         token_amount_in * (fee_ratio(asset_weight_and_balance.weight, swap_fee));
-    let in_decimal = Decimal::from_atomics(token_amount_in, in_precision).unwrap();
+    let in_decimal = Decimal::from_atomics(token_amount_in_after_fee, in_precision).unwrap();
     let balance_decimal =
         Decimal::from_atomics(asset_weight_and_balance.asset.amount, in_precision).unwrap();
     // To figure out the number of shares we add, first notice that in balancer we can treat

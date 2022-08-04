@@ -83,7 +83,8 @@ impl Display for SwapType {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 // Maximum total commission in bps that can be charged on any supported pool by Dexter
-const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(10_000));
+// Decimal has 18 fractional digits. Curretly set to 0.1% or 10 bps.
+const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(1_000_000_000_000_000));
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
 const MAX_PROTOCOL_FEE_PERCENT: u16 = 50;
 // Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
