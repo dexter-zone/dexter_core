@@ -1049,7 +1049,7 @@ pub fn execute_swap(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::PoolConfig { pool_type, asset_infos } => to_binary(&query_pool_config(deps, pool_type,asset_infos)?),
+        QueryMsg::PoolConfig { pool_type } => to_binary(&query_pool_config(deps, pool_type)?),
         // TO-DO
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
         // TO-DO
@@ -1083,7 +1083,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// 
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
-pub fn query_pool_config(deps: Deps, pool_type: PoolType,asset_infos: Vec<AssetInfo>) -> StdResult<PoolConfigResponse> {
+pub fn query_pool_config(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
     let pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?;
     Ok(pool_config)
 }

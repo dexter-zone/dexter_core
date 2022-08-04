@@ -297,7 +297,6 @@ pub enum QueryMsg {
     Config {},
     PoolConfig {
         pool_type: PoolType,
-        asset_infos: Vec<AssetInfo>,
     },
     GetPoolById {
         pool_id: Uint128,

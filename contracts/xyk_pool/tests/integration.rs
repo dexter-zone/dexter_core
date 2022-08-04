@@ -1,7 +1,7 @@
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolType,
-    QueryMsg as VaultQueryMsg, PoolInfo, FeeInfo,Cw20HookMsg
+    QueryMsg as VaultQueryMsg, PoolInfo, FeeInfo,Cw20HookMsg,
 };
 use xyk_pool::contract::query_on_swap;
 use dexter::pool::{
@@ -147,7 +147,7 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      let token_x_instance = app
          .instantiate_contract(
              token_code_id,
-             owner.clone(),
+             Addr::unchecked(owner.clone()),
              &init_msg,
              &[],
              token_name,
@@ -175,7 +175,7 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      let token_y_instance = app
          .instantiate_contract(
              token_code_id,
-            owner.clone(),
+             Addr::unchecked(owner.clone()),
              &init_msg,
             &[],
              token_name,
@@ -190,12 +190,12 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
         pool_configs: vec![PoolConfig {
              code_id: pool_code_id,
              pool_type: PoolType::Xyk {},
-             fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:2, dev_fee_percent:5, developer_addr:Some(Addr::unchecked("developer_addr"))},
+             fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:1, dev_fee_percent:1, developer_addr:Some(Addr::unchecked("developer_addr"))},
              is_disabled: false,
              is_generator_disabled: false,
          }],
-         lp_token_code_id:vault_code_id,
-         fee_collector:Some(String::from("Fee_Collector")),
+         lp_token_code_id:123,
+         fee_collector:None,
          generator_address: Some(String::from("generator")),
          owner: owner.to_string(),
      };
@@ -228,22 +228,39 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
 
      app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
          .unwrap();
+      /* 
+      let msg=VaultExecuteMsg::JoinPool 
+       { 
+        pool_id:Uint128::from(pool_code_id), 
+        recipient: Some(String::from("recipient")), 
+        assets:Some(assets: [
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_x_instance.clone(),
+                },
+                amount: x_amount,
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_y_instance.clone(),
+                },
+                amount: y_amount,
+            },
+        ].to_vec()),
+        lp_to_mint:Some(cosmwasm_std::Uint128::new(1000)), 
+        auto_stake:Some(false), 
+    };
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+    .unwrap();
+   */ 
+      let pool_instance=instantiate_pool(&mut app, &owner);
 
      let msg = VaultQueryMsg::PoolConfig {
-         asset_infos: [
-             AssetInfo::Token {
-                 contract_addr: token_x_instance.clone(),
-             },
-             AssetInfo::Token {
-                 contract_addr: token_y_instance.clone(),
-             },
-         ].to_vec(),
-          pool_type:PoolType::Xyk {},
-            
+          pool_type:PoolType::Xyk {},    
         };
      let res: PoolInfo = app
          .wrap()
-         .query_wasm_smart(&vault_instance, &msg)
+         .query_wasm_smart(&pool_instance, &msg)
          .unwrap();
 
      let pool_instance=instantiate_pool(&mut app, &owner);
@@ -301,7 +318,7 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
           .unwrap(),
           amount: x_offer,
        };
-
+         
      // try to swap after provide liquidity
      app.execute_contract(owner.clone(), token_x_instance.clone(), &swap_msg, &[])
          .unwrap();
@@ -320,6 +337,7 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      assert_eq!(res.balance, y_expected_return - acceptable_spread_amount);
  }
 
+/* 
  #[test]
  fn test_if_twap_is_calculated_correctly_when_pool_idles() {
      let owner = Addr::unchecked("owner");
@@ -360,12 +378,9 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      let pool_instance = instantiate_pool(&mut app, &user1);
 
      // Provide liquidity, accumulators are empty
-     let (msg, Coins) =OnJoinPool(
-         Uint128::new(1000000_000000),
-         Uint128::new(1000000_000000),
-         None,
-         Option::from(Decimal::one()),
-     );
+     let (msg,coins)=QueryMsg::OnJoinPool{
+            Some{Uint128::new(1000000_000000)},
+     };
      app.execute_contract(user1.clone(), pool_instance.clone(), &msg, &coins)
          .unwrap();
 
@@ -404,7 +419,7 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      let cpr_new: CumulativePricesResponse =
          app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
 
-     let twap0 = cpr_new.price0_cumulative_last - cpr_old.price0_cumulative_last;
+     let twap0 = cpr_new.price0_cumulative_new - cpr_old.price0_cumulative_last;
      let twap1 = cpr_new.price1_cumulative_last - cpr_old.price1_cumulative_last;
 
      // Prices weren't changed for the last day, uusd amount in pool = 3000000_000000, uluna = 2000000_000000
@@ -414,9 +429,10 @@ fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
      assert_eq!(twap1 / price_precision, Uint128::new(129600)); //   1.5 * ELAPSED_SECONDS
  }
 
-
+*/ 
+ 
 //No use of this function
- /* 
+/* 
 #[test]
  fn create_pool_with_same_assets() {
      let owner = Addr::unchecked("owner");
