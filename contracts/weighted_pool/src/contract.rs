@@ -22,7 +22,7 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade,
+    Trade, WeightedParams,
 };
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
@@ -78,7 +78,7 @@ pub fn instantiate(
     }
 
     // Weights assigned to assets
-    let weights: Vec<(AssetInfo, u128)> = from_binary(&msg.init_params.unwrap())?;
+    let WeightedParams { weights, exit_fee } = from_binary(&msg.init_params.unwrap())?;
 
     // Error if number of assets and weights provided do not match
     if msg.asset_infos.len() != weights.len() {
@@ -134,7 +134,7 @@ pub fn instantiate(
 
     let math_config = MathConfig {
         greatest_precision,
-        exit_fee: None,
+        exit_fee,
     };
 
     // Store config, MathConfig and twap in storage
@@ -397,7 +397,6 @@ pub fn query_on_join_pool(
     if assets_in.is_none() {
         return Ok(return_join_failure());
     }
-
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
     act_assets_in.sort_by(|a, b| {
@@ -489,7 +488,7 @@ pub fn query_on_join_pool(
     let (mut num_shares, remaining_tokens_in, err): (Uint128, Vec<Asset>, ResponseType) =
         if total_share.is_zero() {
             let decimal_assets: Vec<DecimalAsset> =
-                transform_to_decimal_asset(deps, &config.assets);
+                transform_to_decimal_asset(deps, &act_assets_in);
             let invariance = calculate_invariant(
                 pool_assets_weighted
                     .iter()
