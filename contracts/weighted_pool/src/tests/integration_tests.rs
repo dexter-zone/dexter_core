@@ -5,14 +5,14 @@ use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
 use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Uint128};
 
 use cw_multi_test::{App, AppBuilder, BankKeeper, ContractWrapper, Executor};
-use dexter::asset::AssetInfo;
-use dexter::pool::InstantiateMsg;
+use dexter::asset::{Asset, AssetInfo};
+use dexter::pool::QueryMsg as PoolQuery;
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg as VaultInitMsg, PoolConfig, PoolType,
-    QueryMsg, PoolInfoResponse,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg as VaultInitMsg, PoolConfig,
+    PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
 };
 
-pub const TEST_CREATOR: &str = "creator";
+pub const TEST_CREATOR: &str = "owner";
 pub const RANDOM_USER: &str = "random_user";
 
 pub fn mock_app() -> App {
@@ -27,7 +27,7 @@ pub fn mock_app() -> App {
 
     let funds = vec![
         Coin::new(1_000_000_000, "uusd"),
-        Coin::new(1_000_000_000, "luna"),
+        Coin::new(1_000_000_000, "uluna"),
         Coin::new(1_000_000_000, "ubtc"),
     ];
 
@@ -101,9 +101,9 @@ fn proper_initialization() {
         is_disabled: false,
         is_generator_disabled: false,
         fee_info: FeeInfo {
-            total_fee_bps: Decimal::from_str("0.0002").unwrap(),
+            total_fee_bps: Decimal::from_str("0.001").unwrap(),
             dev_fee_percent: 20,
-            developer_addr: Some(developer),
+            developer_addr: Some(developer.clone()),
             protocol_fee_percent: 10,
         },
     }];
@@ -117,14 +117,7 @@ fn proper_initialization() {
     };
 
     let vault_instance = app
-        .instantiate_contract(
-            vault_code_id,
-            Addr::unchecked(owner.clone()),
-            &msg,
-            &[],
-            "vault",
-            None,
-        )
+        .instantiate_contract(vault_code_id, owner.clone(), &msg, &[], "vault", None)
         .unwrap();
 
     let msg = ExecuteMsg::CreatePool {
@@ -158,7 +151,8 @@ fn proper_initialization() {
         ),
     };
 
-    app.execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(),& msg, &[]).unwrap();
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+        .unwrap();
 
     let msg = QueryMsg::Config {};
     let config_res: ConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
@@ -167,12 +161,110 @@ fn proper_initialization() {
     assert_eq!(pool_configs, config_res.pool_configs);
     assert_eq!(owner, config_res.owner);
 
-    let msg = QueryMsg::GetPoolById { pool_id: Uint128::from(1u128) };
+    let msg = QueryMsg::GetPoolById {
+        pool_id: Uint128::from(1u128),
+    };
     let config_res: PoolInfoResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
-    let weighted_instance = config_res.pool_addr.unwrap();
+    let pool_instance = config_res.pool_addr.unwrap();
 
-    let config_res: PoolInfoResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
-    
+    let _config_res: PoolInfoResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
+    let msg = ExecuteMsg::JoinPool {
+        pool_id: 1u128.into(),
+        recipient: None,
+        assets: Some(
+            [
+                Asset {
+                    info: AssetInfo::NativeToken {
+                        denom: "uusd".into(),
+                    },
+                    amount: 100_000u128.into(),
+                },
+                Asset {
+                    info: AssetInfo::NativeToken {
+                        denom: "uluna".into(),
+                    },
+                    amount: 100_000u128.into(),
+                },
+            ]
+            .to_vec(),
+        ),
+        lp_to_mint: None,
+        auto_stake: None,
+    };
 
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[
+            Coin::new(100_000u128, "uusd"),
+            Coin::new(100_000u128, "uluna"),
+        ],
+    )
+    .unwrap();
+
+    let msg = PoolQuery::Config {};
+    let config_res: PoolInfoResponse = app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
+    assert_eq!(
+        config_res.assets,
+        vec![
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "uluna".into()
+                },
+                amount: 100_000u128.into()
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "uusd".into()
+                },
+                amount: 100_000u128.into()
+            }
+        ]
+    );
+    let liquidity_token = config_res.lp_token_addr.unwrap();
+    let msg = cw20::Cw20QueryMsg::Balance {
+        address: owner.to_string(),
+    };
+    let config_res: cw20::BalanceResponse =
+        app.wrap().query_wasm_smart(&liquidity_token, &msg).unwrap();
+    // init_lp = sqrt(a1^w1 * a2^w2)
+    // = sqrt(100_000) because current setting is symmetrical (50/50) pool
+    assert_eq!(config_res.balance.u128(), 316_227u128);
+
+    // swap
+    let swap_req = SingleSwapRequest {
+        pool_id: 1u128.into(),
+        amount: 100000u128.into(),
+        asset_in: AssetInfo::NativeToken {
+            denom: "uluna".into(),
+        },
+        asset_out: AssetInfo::NativeToken {
+            denom: "uusd".into(),
+        },
+        swap_type: dexter::vault::SwapType::GiveIn {},
+    };
+    let msg = ExecuteMsg::Swap {
+        swap_request: swap_req,
+        limit: None,
+        deadline: None,
+        recipient: None,
+    };
+
+    //no funds
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+        .unwrap_err();
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin::new(100000u128, "uluna")],
+    )
+    .unwrap();
+
+    let balance = app.wrap().query_balance(owner, "uusd").unwrap();
+    assert_eq!(balance.amount.u128(), 999949950);
+    let balance = app.wrap().query_balance(developer, "uusd").unwrap();
+    assert_eq!(balance.amount.u128(), 10);
 }
