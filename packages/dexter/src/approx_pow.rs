@@ -12,7 +12,7 @@ fn abs_difference_with_sign(a: Decimal, b: Decimal) -> (Decimal, bool) {
 
 pub fn pow_approx(base: Decimal, exp: Decimal, precision: Option<Decimal>)-> StdResult<Decimal> {
 	let precision = precision.unwrap_or_else(|| Decimal::from_str("0.00000001").unwrap());
-	if exp.is_zero() {return Ok(base)};
+	if exp.is_zero()|| base.is_zero() {return Ok(base)};
 	let base = base.clone();
 	let (x, xneg) = abs_difference_with_sign(base, Decimal::one());
 	let mut term = Decimal::one();
