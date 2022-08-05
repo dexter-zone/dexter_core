@@ -295,6 +295,7 @@ pub enum Cw20HookMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// Config returns controls settings that specified in custom [`ConfigResponse`] structure
+    
     Config {},
     PoolConfig {
         pool_type: PoolType,
