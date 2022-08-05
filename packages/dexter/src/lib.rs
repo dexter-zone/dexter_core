@@ -7,6 +7,10 @@ pub mod vault;
 pub mod error;
 pub mod helper;
 pub mod approx_pow;
+pub mod generator;
+pub mod generator_proxy;
+
+
 #[allow(clippy::all)]
 mod uints {
     use uint::construct_uint;

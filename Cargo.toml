@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "contracts/vault", 
+    "contracts/vesting", 
     "contracts/xyk_pool", 
     "contracts/stable_pool", 
     "contracts/stable_3pool", 
