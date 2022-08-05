@@ -72,15 +72,20 @@ pub enum ExecuteMsg {
         /// the LP token contract address
         lp_tokens: Vec<String>,
     },
-    /// Withdraw LP tokens from the Generator
+    /// Unbond LP tokens from the Generator
     Withdraw {
         /// The address of the LP token to withdraw
         lp_token: String,
         /// The amount to withdraw
         amount: Uint128,
     },
-    /// Withdraw LP tokens from the Generator without withdrawing outstanding rewards
+    /// Unbond LP tokens from the Generator without withdrawing outstanding rewards. 
     EmergencyWithdraw {
+        /// The address of the LP token to withdraw
+        lp_token: String,
+    },
+    /// Unlock LP tokens from the Generator
+    Unlock {
         /// The address of the LP token to withdraw
         lp_token: String,
     },
@@ -231,7 +236,7 @@ pub struct UserInfo {
     /// Vector of pools (reward_proxy, reward debited).
     pub reward_debt_proxy: RestrictedVector<Uint128>,
     /// Vector containing unbonding information for each unbonding period.
-    pub unbonding_periods: RestrictedVector<UnbondingInfo>,
+    pub unbonding_periods: Vec<UnbondingInfo>,
 }
 
 
@@ -240,11 +245,10 @@ pub struct UserInfo {
 /// compatibility with the old version.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 pub struct UnbondingInfo {
-    pub lp_token: String,
     /// The amount of LP tokens being unbonded
     pub amount: Uint128,
     /// Timestamp at which the unbonding period will end adn the tokens become claimable by the user
-    pub unlock_timstamp: Uint64,
+    pub unlock_timstamp: u64,
 }
 
 

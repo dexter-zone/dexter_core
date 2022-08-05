@@ -3,7 +3,7 @@ use cosmwasm_std::{
     to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper,
     QueryRequest, StdResult, Uint128, WasmQuery,
 };
-
+use crate::pool;
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 
 const NATIVE_TOKEN_PRECISION: u8 = 6;
@@ -96,4 +96,17 @@ pub fn query_vault_config(
     vault_contract: String,
 ) -> StdResult<vault::ConfigResponse> {
     querier.query_wasm_smart(vault_contract, &vault::QueryMsg::Config {})
+}
+
+
+/// Returns the configuration for the Pool contract.
+/// ## Params
+/// * **querier** is an object of type [`QuerierWrapper`].
+/// * **pool_contract** is an object of type [`String`] which is the Dexter Vault contract address.
+pub fn config_info_by_pool(
+    querier: &QuerierWrapper,
+    pool_contract: String,
+) -> StdResult<pool::ConfigResponse> {
+    let config : pool::ConfigResponse =  querier.query_wasm_smart(pool_contract, &pool::QueryMsg::Config {})?;
+    Ok(config)
 }

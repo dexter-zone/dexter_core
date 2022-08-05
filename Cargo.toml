@@ -7,6 +7,7 @@ members = [
     "contracts/stable_3pool", 
     "contracts/weighted_pool", 
     "contracts/lp_token", 
+    "contracts/generator", 
     "packages/*"
 ]
 

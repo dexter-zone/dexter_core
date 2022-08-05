@@ -9,6 +9,7 @@ pub mod helper;
 pub mod approx_pow;
 pub mod generator;
 pub mod generator_proxy;
+pub mod vesting;
 
 
 #[allow(clippy::all)]
