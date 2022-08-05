@@ -1056,6 +1056,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
         }
+        
     }
 }
 

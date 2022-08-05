@@ -1,8 +1,9 @@
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolType,
-    QueryMsg as VaultQueryMsg, PoolInfo, FeeInfo
+    QueryMsg as VaultQueryMsg, PoolInfo, FeeInfo,Cw20HookMsg,
 };
+use xyk_pool::contract::query_on_swap;
 use dexter::pool::{
     ConfigResponse, CumulativePricesResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
 };
@@ -56,7 +57,7 @@ fn store_vault_code(app: &mut App) -> u64 {
     app.store_code(vault_contract)
 }
 
-fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
+fn instantiate_pool(mut router: &mut App, owner: &Addr) -> Addr {
     let token_contract_code_id = store_token_code(&mut router);
 
     let pool_contract_code_id = store_pool_code(&mut router);
@@ -146,7 +147,7 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
      let token_x_instance = app
          .instantiate_contract(
              token_code_id,
-             owner.clone(),
+             Addr::unchecked(owner.clone()),
              &init_msg,
              &[],
              token_name,
@@ -174,7 +175,7 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
      let token_y_instance = app
          .instantiate_contract(
              token_code_id,
-            owner.clone(),
+             Addr::unchecked(owner.clone()),
              &init_msg,
             &[],
              token_name,
@@ -189,12 +190,12 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
         pool_configs: vec![PoolConfig {
              code_id: pool_code_id,
              pool_type: PoolType::Xyk {},
-             fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:2, dev_fee_percent:5, developer_addr:Some(Addr::unchecked("developer_addr"))},
+             fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:1, dev_fee_percent:1, developer_addr:Some(Addr::unchecked("developer_addr"))},
              is_disabled: false,
              is_generator_disabled: false,
          }],
-         lp_token_code_id:vault_code_id,
-         fee_collector:Some(String::from("Fee Collector")),
+         lp_token_code_id:123,
+         fee_collector:None,
          generator_address: Some(String::from("generator")),
          owner: owner.to_string(),
      };
@@ -227,27 +228,46 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
 
      app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
          .unwrap();
+      /* 
+      let msg=VaultExecuteMsg::JoinPool 
+       { 
+        pool_id:Uint128::from(pool_code_id), 
+        recipient: Some(String::from("recipient")), 
+        assets:Some(assets: [
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_x_instance.clone(),
+                },
+                amount: x_amount,
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_y_instance.clone(),
+                },
+                amount: y_amount,
+            },
+        ].to_vec()),
+        lp_to_mint:Some(cosmwasm_std::Uint128::new(1000)), 
+        auto_stake:Some(false), 
+    };
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[])
+    .unwrap();
+   */ 
+      let pool_instance=instantiate_pool(&mut app, &owner);
 
-     let msg = VaultQueryMsg::Pool {
-         asset_infos: [
-             AssetInfo::Token {
-                 contract_addr: token_x_instance.clone(),
-             },
-             AssetInfo::Token {
-                 contract_addr: token_y_instance.clone(),
-             },
-         ].to_vec(),
-     };
-
+     let msg = VaultQueryMsg::PoolConfig {
+          pool_type:PoolType::Xyk {},    
+        };
      let res: PoolInfo = app
          .wrap()
-         .query_wasm_smart(&vault_instance, &msg)
+         .query_wasm_smart(&pool_instance, &msg)
          .unwrap();
 
-     let pool_instance = res.contract_addr;
+     let pool_instance=instantiate_pool(&mut app, &owner);
+
 
     let msg = Cw20ExecuteMsg::IncreaseAllowance {
-         spender: pool_instance.to_string(),
+         spender:pool_instance.to_string(),
          expires: None,
          amount: x_amount + x_offer,
      };
@@ -264,7 +284,7 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
      app.execute_contract(owner.clone(), token_y_instance.clone(), &msg, &[])
          .unwrap();
 
-     let msg = ExecuteMsg::ProvideLiquidity {
+     let msg = ExecuteMsg::UpdateLiquidity{
          assets: [
              Asset {
                  info: AssetInfo::Token {
@@ -278,10 +298,7 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
                  },
                  amount: y_amount,
              },
-         ],
-         slippage_tolerance: None,
-         auto_stake: None,
-         receiver: None,
+         ].to_vec(),
     };
 
      app.execute_contract(owner.clone(), pool_instance.clone(), &msg, &[])
@@ -289,17 +306,19 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
 
      let user = Addr::unchecked("user");
 
-    // let swap_msg = Cw20ExecuteMsg::Send {
-     //     contract: pool_instance.to_string(),
-     //     msg: to_binary(&Cw20HookMsg::Swap {
-     //         belief_price: None,
-     //         max_spread: None,
-     //         to: Some(user.to_string()),
-     //     })
-     //     .unwrap(),
-     //     amount: x_offer,
-     //  };
-
+     let swap_msg = Cw20ExecuteMsg::Send {
+         contract: pool_instance.to_string(),
+          msg: to_binary(&QueryMsg::OnSwap 
+            { 
+              swap_type: dexter::vault::SwapType::GiveIn {  }, 
+              offer_asset: AssetInfo::Token { contract_addr: token_x_instance.clone() }, 
+              ask_asset: AssetInfo::Token { contract_addr:token_y_instance.clone() },
+              amount:x_offer,  
+          })
+          .unwrap(),
+          amount: x_offer,
+       };
+         
      // try to swap after provide liquidity
      app.execute_contract(owner.clone(), token_x_instance.clone(), &swap_msg, &[])
          .unwrap();
@@ -318,147 +337,154 @@ fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
      assert_eq!(res.balance, y_expected_return - acceptable_spread_amount);
  }
 
-// #[test]
-// fn test_if_twap_is_calculated_correctly_when_pool_idles() {
-//     let owner = Addr::unchecked("owner");
-//     let user1 = Addr::unchecked("user1");
+/* 
+ #[test]
+ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
+     let owner = Addr::unchecked("owner");
+     let user1 = Addr::unchecked("user1");
 
-//     let mut app = mock_app(
-//         owner.clone(),
-//         vec![
-//             Coin {
-//                 denom: "uusd".to_string(),
-//                 amount: Uint128::new(100_000_000_000000u128),
-//             },
-//             Coin {
-//                 denom: "uluna".to_string(),
-//                 amount: Uint128::new(100_000_000_000000u128),
-//             },
-//         ],
-//     );
+     let mut app = mock_app(
+         owner.clone(),
+         vec![
+             Coin {
+                 denom: "uusd".to_string(),
+                 amount: Uint128::new(100_000_000_000000u128),
+             },
+             Coin {
+                 denom: "uluna".to_string(),
+                 amount: Uint128::new(100_000_000_000000u128),
+             },
+         ],
+     );
 
-//     // Set Alice's balances
-//     app.send_tokens(
-//         owner.clone(),
-//         user1.clone(),
-//         &[
-//             Coin {
-//                 denom: "uusd".to_string(),
-//                 amount: Uint128::new(4000000_000000),
-//             },
-//             Coin {
-//                 denom: "uluna".to_string(),
-//                 amount: Uint128::new(2000000_000000),
-//             },
-//         ],
-//     )
-//     .unwrap();
+     // Set Alice's balances
+     app.send_tokens(
+         owner.clone(),
+         user1.clone(),
+         &[
+             Coin {
+                 denom: "uusd".to_string(),
+                 amount: Uint128::new(4000000_000000),
+             },
+             Coin {
+                 denom: "uluna".to_string(),
+                 amount: Uint128::new(2000000_000000),
+             },
+         ],
+     )
+     .unwrap();
 
-//     // Instantiate pair
-//     let pool_instance = instantiate_pair(&mut app, &user1);
+     // Instantiate pool
+     let pool_instance = instantiate_pool(&mut app, &user1);
 
-//     // Provide liquidity, accumulators are empty
-//     let (msg, coins) = provide_liquidity_msg(
-//         Uint128::new(1000000_000000),
-//         Uint128::new(1000000_000000),
-//         None,
-//         Option::from(Decimal::one()),
-//     );
-//     app.execute_contract(user1.clone(), pool_instance.clone(), &msg, &coins)
-//         .unwrap();
+     // Provide liquidity, accumulators are empty
+     let (msg,coins)=QueryMsg::OnJoinPool{
+            Some{Uint128::new(1000000_000000)},
+     };
+     app.execute_contract(user1.clone(), pool_instance.clone(), &msg, &coins)
+         .unwrap();
 
-//     const BLOCKS_PER_DAY: u64 = 17280;
-//     const ELAPSED_SECONDS: u64 = BLOCKS_PER_DAY * 5;
+     const BLOCKS_PER_DAY: u64 = 17280;
+     const ELAPSED_SECONDS: u64 = BLOCKS_PER_DAY * 5;
 
-//     // A day later
-//     app.update_block(|b| {
-//         b.height += BLOCKS_PER_DAY;
-//         b.time = b.time.plus_seconds(ELAPSED_SECONDS);
-//     });
+     // A day later
+     app.update_block(|b| {
+         b.height += BLOCKS_PER_DAY;
+         b.time = b.time.plus_seconds(ELAPSED_SECONDS);
+     });
 
-//     // Provide liquidity, accumulators firstly filled with the same prices
-//     let (msg, coins) = provide_liquidity_msg(
-//         Uint128::new(2000000_000000),
-//         Uint128::new(1000000_000000),
-//         None,
-//         Some(Decimal::percent(50)),
-//     );
-//     app.execute_contract(user1.clone(), pool_instance.clone(), &msg, &coins)
-//         .unwrap();
+     // Provide liquidity, accumulators firstly filled with the same prices
+     let (msg, coins) = provide_liquidity_msg(
+         Uint128::new(2000000_000000),
+         Uint128::new(1000000_000000),
+         None,
+         Some(Decimal::percent(50)),
+     );
+     app.execute_contract(user1.clone(), pool_instance.clone(), &msg, &coins)
+         .unwrap();
 
-//     // Get current twap accumulator values
-//     let msg = QueryMsg::CumulativePrices {};
-//     let cpr_old: CumulativePricesResponse =
-//         app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
+     // Get current twap accumulator values
+     let msg = QueryMsg::CumulativePrices {};
+     let cpr_old: CumulativePricesResponse =
+         app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
 
-//     // A day later
-//     app.update_block(|b| {
-//         b.height += BLOCKS_PER_DAY;
-//         b.time = b.time.plus_seconds(ELAPSED_SECONDS);
-//     });
+     // A day later
+     app.update_block(|b| {
+         b.height += BLOCKS_PER_DAY;
+         b.time = b.time.plus_seconds(ELAPSED_SECONDS);
+     });
 
-//     // Get current cumulative price values; they should have been updated by the query method with new 2/1 ratio
-//     let msg = QueryMsg::CumulativePrices {};
-//     let cpr_new: CumulativePricesResponse =
-//         app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
+     // Get current cumulative price values; they should have been updated by the query method with new 2/1 ratio
+     let msg = QueryMsg::CumulativePrices {};
+     let cpr_new: CumulativePricesResponse =
+         app.wrap().query_wasm_smart(&pool_instance, &msg).unwrap();
 
-//     let twap0 = cpr_new.price0_cumulative_last - cpr_old.price0_cumulative_last;
-//     let twap1 = cpr_new.price1_cumulative_last - cpr_old.price1_cumulative_last;
+     let twap0 = cpr_new.price0_cumulative_new - cpr_old.price0_cumulative_last;
+     let twap1 = cpr_new.price1_cumulative_last - cpr_old.price1_cumulative_last;
 
-//     // Prices weren't changed for the last day, uusd amount in pool = 3000000_000000, uluna = 2000000_000000
-//     // In accumulators we don't have any precision so we rely on elapsed time so we don't need to consider it
-//     let price_precision = Uint128::from(10u128.pow(TWAP_PRECISION.into()));
-//     assert_eq!(twap0 / price_precision, Uint128::new(57600)); // 0.666666 * ELAPSED_SECONDS (86400)
-//     assert_eq!(twap1 / price_precision, Uint128::new(129600)); //   1.5 * ELAPSED_SECONDS
-// }
+     // Prices weren't changed for the last day, uusd amount in pool = 3000000_000000, uluna = 2000000_000000
+     // In accumulators we don't have any precision so we rely on elapsed time so we don't need to consider it
+     let price_precision = Uint128::from(10u128.pow(TWAP_PRECISION.into()));
+     assert_eq!(twap0 / price_precision, Uint128::new(57600)); // 0.666666 * ELAPSED_SECONDS (86400)
+     assert_eq!(twap1 / price_precision, Uint128::new(129600)); //   1.5 * ELAPSED_SECONDS
+ }
 
-// #[test]
-// fn create_pool_with_same_assets() {
-//     let owner = Addr::unchecked("owner");
-//     let mut router = mock_app(
-//         owner.clone(),
-//         vec![
-//             Coin {
-//                 denom: "uusd".to_string(),
-//                 amount: Uint128::new(100_000_000_000u128),
-//             },
-//             Coin {
-//                 denom: "uluna".to_string(),
-//                 amount: Uint128::new(100_000_000_000u128),
-//             },
-//         ],
-//     );
+*/ 
+ 
+//No use of this function
+/* 
+#[test]
+ fn create_pool_with_same_assets() {
+     let owner = Addr::unchecked("owner");
+     let mut router = mock_app(
+         owner.clone(),
+         vec![
+             Coin {
+                 denom: "uusd".to_string(),
+                 amount: Uint128::new(100_000_000_000u128),
+             },
+             Coin {
+                 denom: "uluna".to_string(),
+                 amount: Uint128::new(100_000_000_000u128),
+             },
+         ],
+     );
 
-//     let token_contract_code_id = store_token_code(&mut router);
-//     let pool_contract_code_id = store_pool_code(&mut router);
+     let token_contract_code_id = store_token_code(&mut router);
+     let pool_contract_code_id = store_pool_code(&mut router);
+     let token_name="XToken";
+     let msg = InstantiateMsg {
+         asset_infos: [
+             AssetInfo::NativeToken {
+                 denom: "uusd".to_string(),
+             },
+             AssetInfo::NativeToken {
+                 denom: "uusd".to_string(),
+             },
+         ].to_vec(),
+         pool_id:Uint128::from(pool_contract_code_id),
+        pool_type:PoolType::Xyk {},
+        fee_info:FeeInfo { total_fee_bps:Decimal::new(Uint128::new(100)), protocol_fee_percent:2, dev_fee_percent:5, developer_addr:Some(Addr::unchecked("developer_addr"))}, 
+        lp_token_code_id:token_contract_code_id,
+        lp_token_name:Some(token_name.to_string()),
+        lp_token_symbol:Some(token_name.to_string()),
+        vault_addr:Addr::unchecked("vault"),
+        init_params:None,
+     };
 
-//     let msg = InstantiateMsg {
-//         asset_infos: [
-//             AssetInfo::NativeToken {
-//                 denom: "uusd".to_string(),
-//             },
-//             AssetInfo::NativeToken {
-//                 denom: "uusd".to_string(),
-//             },
-//         ],
-//         token_code_id: token_contract_code_id,
-//         factory_addr: String::from("factory"),
-//         init_params: None,
-//     };
+     let resp = router
+         .instantiate_contract(
+             pool_contract_code_id,
+             owner.clone(),
+             &msg,
+             &[],
+             String::from("POOL"),
+             None,
+         )
+         .unwrap_err();
 
-//     let resp = router
-//         .instantiate_contract(
-//             pool_contract_code_id,
-//             owner.clone(),
-//             &msg,
-//             &[],
-//             String::from("PAIR"),
-//             None,
-//         )
-//         .unwrap_err();
-
-//     assert_eq!(
-//         resp.root_cause().to_string(),
-//         "Doubling assets in asset infos"
-//     )
-// }
+     assert_eq!(
+         resp.root_cause().to_string(),
+         "Doubling assets in asset infos"
+     )
+ }*/
