@@ -2,16 +2,12 @@ use crate::error::ContractError;
 use crate::state::{Config, CONFIG};
 
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Attribute, Binary, Deps, DepsMut, Env,
-    MessageInfo, Response, StdResult
+    attr, entry_point, to_binary, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult,
 };
-use cw2::{set_contract_version};
-use dexter::asset::{
-    addr_validate_to_lower, Asset, AssetInfo,
-};
-use dexter::keeper::{
-    BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
-};
+use cw2::set_contract_version;
+use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
+use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
 use dexter::querier::query_vault_config;
 
 /// Contract name that is used for migration.
@@ -19,17 +15,15 @@ const CONTRACT_NAME: &str = "dexter-keeper";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// ## Description
 /// Creates a new contract with the specified parameters in [`InstantiateMsg`].
 /// Returns a default object of type [`Response`] if the operation was successful,
 /// or a [`ContractError`] if the contract was not created.
-/// 
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 /// * **_env** is an object of type [`Env`].
@@ -58,7 +52,6 @@ pub fn instantiate(
 // ----------------x----------------x  Execute function :: Entry Point  x----------------x----------------
 // ----------------x----------------x----------------x------------------x----------------x----------------
 
-
 /// ## Description
 /// Exposes execute functions available in the contract.
 /// ## Params
@@ -84,20 +77,14 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             dex_token_contract,
             staking_contract,
-        } => update_config(
-            deps,
-            info,
-            dex_token_contract,
-            staking_contract,
-        ),
+        } => update_config(deps, info, dex_token_contract, staking_contract),
     }
 }
-
 
 /// ## Description
 /// Updates general contarct parameters. Returns a [`ContractError`] on failure or the [`Config`]
 /// data will be updated if the transaction is successful.
-/// 
+///
 /// ## Params
 /// * **dex_token_contract** is an [`Option`] field of type [`String`]. This is the address of the DEX token contract.
 /// * **staking_contract** is an [`Option`] field of type [`String`]. This is the address of the DEX token staking contract.
@@ -142,15 +129,13 @@ fn update_config(
     Ok(Response::new().add_attributes(attributes))
 }
 
-
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 // ----------------x----------------x  :::: Keeper::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
-
 /// ## Description
 /// Exposes all the queries available in the contract.
-/// 
+///
 /// # Params
 /// * **deps** is an object of type [`DepsMut`].
 /// * **env** is an object of type [`Env`].

@@ -3,7 +3,9 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema_with_title, remove_schemas, schema_for};
 
-use dexter::keeper::{InstantiateMsg, ExecuteMsg, QueryMsg, ConfigResponse, BalancesResponse, MigrateMsg};
+use dexter::keeper::{
+    BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
+};
 
 fn main() {
     let mut out_dir = current_dir().unwrap();
@@ -16,5 +18,5 @@ fn main() {
     export_schema_with_title(&schema_for!(QueryMsg), &out_dir, "QueryMsg");
     export_schema_with_title(&schema_for!(ConfigResponse), &out_dir, "ConfigResponse");
     export_schema_with_title(&schema_for!(BalancesResponse), &out_dir, "BalancesResponse");
-   export_schema_with_title(&schema_for!(MigrateMsg), &out_dir, "MigrateMsg");
+    export_schema_with_title(&schema_for!(MigrateMsg), &out_dir, "MigrateMsg");
 }

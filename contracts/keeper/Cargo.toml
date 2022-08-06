@@ -32,7 +32,6 @@ thiserror = { version = "1.0.24" }
 
 [dev-dependencies]
 cosmwasm-schema = { version = "1.0.0" }
-# dexter-token = {path = "../token"}
-# dexter-factory = {path = "../factory"}
-# dexter-pair = {path = "../../pair"}
+dexter-vault = {path = "../vault"}
+xyk-pool = {path = "../xyk_pool"}
 cw-multi-test = "0.13.2"
