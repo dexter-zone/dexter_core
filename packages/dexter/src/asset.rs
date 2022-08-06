@@ -1,17 +1,16 @@
+use cosmwasm_std::{
+    to_binary, Addr, Api, BankMsg, Coin, CosmosMsg, MessageInfo, QuerierWrapper, StdError,ConversionOverflowError,
+    StdResult, Uint128, WasmMsg,Decimal256, Uint256, Fraction
+};
+use cw20::{Cw20ExecuteMsg};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::querier::{query_balance, query_token_balance};
-use cosmwasm_std::{
-    to_binary, Addr, Api, BankMsg, Coin, CosmosMsg, MessageInfo, QuerierWrapper, StdError,ConversionOverflowError,
-    StdResult, Uint128, WasmMsg,Decimal256, Uint256, Fraction
-};
-use itertools::Itertools;
-
-use cw20::{Cw20ExecuteMsg};
 
 pub const NATIVE_TOKEN_PRECISION: u8 = 6;
+
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{AssetInfo}} struct Type    x----------------x----------------

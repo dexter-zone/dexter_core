@@ -1,11 +1,13 @@
-use crate::asset::{Asset, AssetInfo};
-use crate::vault::PoolType;
-use crate::DecimalCheckedOps;
 use cosmwasm_std::{Addr, Decimal, StdError, StdResult, Uint128, Uint64};
+
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+
+use crate::asset::{Asset, AssetInfo};
+use crate::DecimalCheckedOps;
+
 
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

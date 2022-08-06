@@ -371,7 +371,7 @@ pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> Str
 /// * **lp_token_symbol** is an object of type Option[`String`], provided as an input by the user creating the pool
 pub fn get_lp_token_symbol(pool_id: Uint128, lp_token_symbol: Option<String>) -> String {
     // numbers in symbol not supported
-    let mut token_symbol = "DEXTER-LP".to_string();
+    let mut token_symbol = "DEX-LP".to_string() + pool_id.to_string().as_str();
     if !lp_token_symbol.is_none() {
         token_symbol = "LP_".to_string()  +  lp_token_symbol.unwrap().as_str();
     }

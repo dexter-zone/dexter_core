@@ -11,4 +11,3 @@ Cargo.lock
 
 /contracts/generator/*
 /contracts/vesting/*
-/contracts/keeper/*

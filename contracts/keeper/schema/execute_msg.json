@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExecuteMsg",
+  "description": "This structure describes the functions that can be executed in this contract.",
+  "oneOf": [
+    {
+      "description": "Updates general settings",
+      "type": "object",
+      "required": [
+        "update_config"
+      ],
+      "properties": {
+        "update_config": {
+          "type": "object",
+          "properties": {
+            "dex_token_contract": {
+              "description": "The DEX token contract address",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "staking_contract": {
+              "description": "The DEX token staking contract address",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
