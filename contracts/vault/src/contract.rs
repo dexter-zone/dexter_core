@@ -362,7 +362,7 @@ pub fn execute_create_pool(
     let mut assets: Vec<Asset> = vec![];
 
     // Check asset definations and make sure no asset is repeated
-    let mut previous_asset: String = "".to_string();;
+    let mut previous_asset: String = "".to_string();
     for asset in asset_infos.iter() {
         asset.check(deps.api)?; // Asset naming should be lower case
         if previous_asset == asset.as_string() {
@@ -497,8 +497,8 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
 
 
 /// ## Description - Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and either the number of assets to be provided or the LP tokens to be minted to the user.
-///                  The exact number of assets or LP tokens to be minted to the user is decided by the pool contract's math computations. Vault contract
-///                  is responsible for the the transfer of assets and minting of LP tokens to the user.
+/// The  number of assets or LP tokens to be minted to the user is decided by the pool contract 's math computations. Vault contract
+/// is responsible for the the transfer of assets and minting of LP tokens to the user.
 /// 
 /// ## Params
 /// * **pool_id** is the id of the pool to be joined.
@@ -657,8 +657,8 @@ pub fn execute_join_pool(
 
 
 /// ## Description - Entry point for a user to Exit a pool supported by the Vault. User can exit by providing the pool id and either the number of assets to be returned or the LP tokens to be burnt.
-///                  The exact number of assets to be returned or LP tokens to be burnt are decided by the pool contract's math computations. Vault contract
-///                  is responsible for the the transfer of assets and burning of LP tokens only
+/// The  number of assets to be returned or LP tokens to be burnt are decided by the pool contract 's math computations. Vault contract
+/// is responsible for the the transfer of assets and burning of LP tokens only
 /// 
 /// ## Params
 /// * **pool_id** is the id of the pool to be joined.
@@ -700,7 +700,7 @@ pub fn execute_exit_pool(
     }
 
     // Number of LP shares to be returned to the user
-    let mut lp_to_return : Uint128;
+    let lp_to_return : Uint128;
 
     // Check : Lp token to burn > Lp tokens transferred by the user
     if after_burn_res.burn_shares > burn_amount.unwrap() {
@@ -809,12 +809,12 @@ pub fn execute_exit_pool(
 
 
 /// ## Description - Entry point for a swap tx between offer and ask assets. The swap request details are passed in [`SingleSwapRequest`] Type parameter.
-///                  User needs to provide offer and ask asset info's, the [`SwapType`] ( [`GiveIn`] or [`GiveOut`] ) and the amount of tokens to be swapped (ask )
-///                  The exact number of tokens to be swapped against are decided by the pool contract's math computations. 
+/// User needs to provide offer and ask asset info 's, the SwapType ( GiveIn or GiveOut ) and the amount of tokens to be swapped (ask )
+/// The  number of tokens to be swapped against are decided by the pool contract 's math computations. 
 /// 
 /// ## Params
-/// * **swap_request** of type [`SingleSwapRequest`] which consists of the following fields: pool_id of type [`Uint128`], asset_in of type [`AssetInfo`], asset_out of type [`AssetInfo`], swap_type of type [`SwapType`], amount of type [`Uint128`]
-/// * **limit** Optional parameter. Minimum tokens to receive if swap is of type [`GiverIn`] or maximum tokens to give if swap is of type [`GiverOut`]. If not provided, then the default value is 0.
+/// * **swap_request** of type [`SingleSwapRequest`] which consists of the following fields: pool_id of type [`Uint128`], asset_in of type [`AssetInfo`], asset_out of type [`AssetInfo`], swap_type of type SwapType, amount of type [`Uint128`]
+/// * **limit** Optional parameter. Minimum tokens to receive if swap is of type GiveIn or maximum tokens to give if swap is of type GiveOut. If not provided, then the default value is 0.
 /// * **deadline** Optional parameter. Timestamp after which the swap tx will be cancelled. If not provided, then its ignored.
 /// * **op_recipient** Optional parameter. Recipient address of the swap tx. If not provided, then the default value is the sender address.
 pub fn execute_swap(
@@ -822,7 +822,7 @@ pub fn execute_swap(
     env: Env,
     info: MessageInfo,
     swap_request: SingleSwapRequest,
-    limit: Option<Uint128>,
+    _limit: Option<Uint128>,
     deadline: Option<Uint128>,
     op_recipient: Option<String>,
 ) -> Result<Response, ContractError> {
@@ -1150,7 +1150,7 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 /// * **amount** is the object of type [`Uint128`]. The amount that will be mint to the recipient.
 /// * **auto_stake** is the field of type [`bool`]. Determines whether an autostake will be performed on the generator
 fn build_mint_lp_token_msg(
-    deps: Deps,
+    _deps: Deps,
     env: Env,
     lp_token: Addr,
     recipient: Addr,
@@ -1179,15 +1179,15 @@ fn build_mint_lp_token_msg(
             })?,
             funds: vec![],
         }),
-        // CosmosMsg::Wasm(WasmMsg::Execute {
-        //     contract_addr: lp_token.to_string(),
-        //     msg: to_binary(&Cw20ExecuteMsg::Send {
-        //         contract: generator.unwrap().to_string(),
-        //         amount,
-        //         msg: to_binary(&GeneratorHookMsg::DepositFor(recipient))?,
-        //     })?,
-        //     funds: vec![],
-        // }),
+        CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: lp_token.to_string(),
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: generator.unwrap().to_string(),
+                amount,
+                msg: to_binary(&dexter::generator::Cw20HookMsg::DepositFor(recipient))?,
+            })?,
+            funds: vec![],
+        }),
     ])
 }
 

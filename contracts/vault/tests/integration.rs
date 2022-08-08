@@ -2,16 +2,11 @@ use dexter::asset:: {AssetInfo,Asset};
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, InstantiateMsg, PoolConfig, PoolType, QueryMsg, PoolInfo,FeeInfo
 };
-use dexter::pool::{
-    Config, CumulativePricesResponse, self
-};
-use dexter::pool::InstantiateMsg as poolInstantiateMsg;
-
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use cw20::MinterResponse;
 use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
 use cosmwasm_std::{
-    attr, coin, from_binary, to_binary, Addr, Coin, Decimal, QueryRequest, Uint128, WasmQuery,
+    attr,Addr, Uint128,
 };
 
 fn mock_app() -> App {

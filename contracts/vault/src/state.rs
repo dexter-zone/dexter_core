@@ -16,10 +16,3 @@ pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_pro
 
 // Temporarily stores the PoolInfo of the Pool which is currently being created.
 pub const TMP_POOL_INFO: Item<PoolInfo> = Item::new("tmp_pool_info");
-
-/// settings for pagination : The maximum limit for reading pools
-const MAX_LIMIT: u32 = 15;
-
-/// settings for pagination : The default limit for reading pools
-const DEFAULT_LIMIT: u32 = 10;
-
