@@ -201,7 +201,7 @@ pub struct AfterExitResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
-    pub total_fee_bps: Decimal,
+    pub total_fee_bps: u16,
     /// The % of fees collected by the Protocol
     pub protocol_fee_percent: u16,
     /// The % of fees collected by the devs

@@ -13,7 +13,7 @@ use dexter::asset::addr_validate_to_lower;
 use dexter::lp_token::{InstantiateMsg, MigrateMsg};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-token";
+const CONTRACT_NAME: &str = "lp-token";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

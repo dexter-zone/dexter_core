@@ -92,7 +92,7 @@ pub fn instantiate(
     let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol );
 
 
     // Create LP token
@@ -724,12 +724,12 @@ pub fn compute_offer_amount(
     offer_pool: Uint128,
     ask_pool: Uint128,
     ask_amount: Uint128,
-    commission_rate: Decimal,
+    commission_rate: u16,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
     // ask => offer
     // offer_amount = cp / (ask_pool - ask_amount / (1 - commission_rate)) - offer_pool
     let cp = Uint256::from(offer_pool) * Uint256::from(ask_pool);
-    let one_minus_commission = Decimal256::one() - decimal2decimal256(commission_rate)?;
+    let one_minus_commission = Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;

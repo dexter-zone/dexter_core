@@ -45,10 +45,10 @@ pub enum ContractError {
     #[error("Swap limit exceeded")]
     SwapLimit {},
 
-    #[error("Duplicate of pair configs")]
+    #[error("Duplicate of Pool Configs")]
     PoolConfigDuplicate {},
 
-    #[error("Fee bps in pair config must be smaller than or equal to 10,000")]
+    #[error("Invalid FeeInfo params")]
     InvalidFeeInfo {},
 
     #[error("Pool config not found")]

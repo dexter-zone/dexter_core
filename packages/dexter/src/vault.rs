@@ -9,7 +9,7 @@ use std::fmt::{Display, Formatter, Result};
 pub const TWAP_PRECISION: u16 = 9u16;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
-// ----------------x----------------x    {{PoolType}} enum Type    x----------------x----------------
+// ----------------x----------------x    {{PoolType}} enum Type       x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Pool types.
@@ -83,17 +83,16 @@ impl Display for SwapType {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 // Maximum total commission in bps that can be charged on any supported pool by Dexter
-// Decimal has 18 fractional digits. Curretly set to 0.1% or 10 bps.
-const MAX_TOTAL_FEE_BPS: Decimal =Decimal::new(Uint128::new(1_000_000_000_000_000));
+const MAX_TOTAL_FEE_BPS: u16 = 10_000u16;
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_PROTOCOL_FEE_PERCENT: u16 = 50;
+const MAX_PROTOCOL_FEE_PERCENT: u16 = 50u16;
 // Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_DEV_FEE_PERCENT: u16 = 25;
+const MAX_DEV_FEE_PERCENT: u16 = 25u16;
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
-    pub total_fee_bps: Decimal,
+    pub total_fee_bps: u16,
     pub protocol_fee_percent: u16,
     pub dev_fee_percent: u16,
     pub developer_addr: Option<Addr>,
@@ -112,7 +111,7 @@ impl FeeInfo {
     pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
         // let commission_rate = decimal2decimal256(self.total_fee_bps)?;
 
-        let total_fee: Uint128 = amount * self.total_fee_bps;
+        let total_fee: Uint128 = amount *  Decimal::from_ratio( self.total_fee_bps, 10_000u16);
         let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
         let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
 
@@ -295,7 +294,6 @@ pub enum Cw20HookMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// Config returns controls settings that specified in custom [`ConfigResponse`] structure
-    
     Config {},
     PoolConfig {
         pool_type: PoolType,
