@@ -9,6 +9,12 @@ use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use crate::helper::{is_valid_name, is_valid_symbol};
 
+/// The default slippage (5%)
+pub const DEFAULT_SLIPPAGE: &str = "0.005";
+
+/// The maximum allowed slippage (50%)
+pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Gneneric struct Types      x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -144,6 +150,7 @@ pub enum QueryMsg {
     OnJoinPool {
         assets_in: Option<Vec<Asset>>,
         mint_amount: Option<Uint128>,
+        slippage_tolerance: Option<Decimal>,
     },
     OnExitPool {
         assets_out: Option<Vec<Asset>>,
@@ -154,6 +161,8 @@ pub enum QueryMsg {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
         amount: Uint128,
+        max_spread: Option<Decimal>,
+        belief_price: Option<Decimal>,
     },
     CumulativePrice {
         offer_asset: AssetInfo,

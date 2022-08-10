@@ -8,6 +8,7 @@ use cw2::set_contract_version;
 use cw20::MinterResponse;
 use protobuf::Message;
 use std::vec;
+use std::str::FromStr;
 
 use crate::state::{Twap, CONFIG, TWAPINFO};
 use crate::response::MsgInstantiateContractResponse;
@@ -15,7 +16,8 @@ use crate::response::MsgInstantiateContractResponse;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure, DEFAULT_SLIPPAGE, 
+    MAX_ALLOWED_SLIPPAGE
 };
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
 use dexter::helper::{decimal2decimal256,get_share_in_assets, get_lp_token_name,get_lp_token_symbol};
@@ -257,7 +259,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
         QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
-        QueryMsg::OnJoinPool { assets_in, mint_amount } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount)?),
+        QueryMsg::OnJoinPool { assets_in, mint_amount, slippage_tolerance } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance)?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -267,6 +269,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price
         } => to_binary(&query_on_swap(
             deps,
             env,
@@ -274,6 +278,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -351,6 +357,7 @@ pub fn query_on_join_pool(
     _env: Env,
     assets_in: Option<Vec<Asset>>,
     _mint_amount: Option<Uint128>,
+    slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
         
     // If the user has not provided any assets to be provided, then return a `Failure` response
@@ -384,6 +391,13 @@ pub fn query_on_join_pool(
                 .as_u128(),
         )
     } else {
+        // Assert slippage tolerance
+        let res = assert_slippage_tolerance(slippage_tolerance, &deposits, &[config.assets[0].amount, config.assets[1].amount]);        
+        // return a `Failure` response if the slippage tolerance is not met
+        if !res.is_success() {
+            return Ok(return_join_failure(res.to_string()));
+        }
+
         // min(1, 2)
         // 1. sqrt(deposit_0 * exchange_rate_0_to_1 * deposit_0) * (total_share / sqrt(pool_0 * pool_1))
         // == deposit_0 * total_share / pool_0
@@ -426,7 +440,7 @@ pub fn query_on_exit_pool(
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure( "LP tokens to burn cannot be zero".to_string() ))
+        return Ok(return_exit_failure( "Invalid number of LP tokens to burn amount".to_string() ))
     }    
 
     // Load the config from the storage
@@ -466,6 +480,8 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
+    max_spread: Option<Decimal>,
+    belief_price: Option<Decimal>,    
 ) -> StdResult<SwapResponse> {
 
     // Load the config from the storage
@@ -642,8 +658,8 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
         rate: price0_cumulative_last,
     });
     exchange_infos.push(AssetExchangeRate {
-        offer_info: config.assets[0].info.clone(),
-        ask_info: config.assets[1].info.clone(),
+        offer_info: config.assets[1].info.clone(),
+        ask_info: config.assets[0].info.clone(),
         rate: price1_cumulative_last,
     });
 
@@ -798,3 +814,39 @@ pub fn accumulate_prices(
 }
 
 
+/// ## Description
+/// This is an internal function that enforces slippage tolerance for swaps.
+/// Returns a [`ContractError`] on failure, otherwise returns [`Ok`].
+/// ## Params
+/// * **slippage_tolerance** is an object of type [`Option<Decimal>`]. This is the slippage tolerance to enforce.
+/// * **deposits** are an array of [`Uint128`] type items. These are offer and ask amounts for a swap.
+/// * **pools** are an array of [`Uint128`] type items. These are total amounts of assets in the pool.
+fn assert_slippage_tolerance(
+    slippage_tolerance: Option<Decimal>,
+    deposits: &[Uint128; 2],
+    pools: &[Uint128; 2],
+) -> ResponseType {
+    let default_slippage = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
+    let max_allowed_slippage = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+
+    let slippage_tolerance = slippage_tolerance.unwrap_or(default_slippage);
+    if slippage_tolerance.gt(&max_allowed_slippage) {
+        return ResponseType::Failure( (ContractError::AllowedSpreadAssertion {}).to_string() );
+    }
+
+    let slippage_tolerance: Decimal256 = decimal2decimal256(slippage_tolerance).unwrap();
+    let one_minus_slippage_tolerance = Decimal256::one() - slippage_tolerance;
+    let deposits: [Uint256; 2] = [deposits[0].into(), deposits[1].into()];
+    // let pools: [Uint256; 2] = [pools[0].amount.into(), pools[1].amount.into()];
+
+    // Ensure each price does not change more than what the slippage tolerance allows
+    if Decimal256::from_ratio(deposits[0], deposits[1]) * one_minus_slippage_tolerance
+        > Decimal256::from_ratio(pools[0], pools[1])
+        || Decimal256::from_ratio(deposits[1], deposits[0]) * one_minus_slippage_tolerance
+            > Decimal256::from_ratio(pools[1], pools[0])
+    {
+        return  ResponseType::Failure( (ContractError::MaxSlippageAssertion {} ).to_string() );
+    }
+
+    ResponseType::Success {}
+}

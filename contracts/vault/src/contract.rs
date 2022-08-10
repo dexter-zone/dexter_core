@@ -1,7 +1,7 @@
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, CosmosMsg, Deps, DepsMut, Env, Event,
     MessageInfo, Order, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
-    Uint128, WasmMsg, WasmQuery,
+    Uint128, WasmMsg, WasmQuery, Decimal
 };
 use protobuf::Message;
 use std::collections::HashSet;
@@ -136,16 +136,16 @@ pub fn execute(
             recipient,
             assets,
             lp_to_mint,
+            slippage_tolerance,
             auto_stake,
         } => execute_join_pool(
-            deps, env, info, pool_id, recipient, assets, lp_to_mint, auto_stake,
+            deps, env, info, pool_id, recipient, assets, lp_to_mint, slippage_tolerance, auto_stake,
         ),
         ExecuteMsg::Swap {
             swap_request,
             limit,
-            deadline,
             recipient,
-        } => execute_swap(deps, env, info, swap_request, limit, deadline, recipient),
+        } => execute_swap(deps, env, info, swap_request, limit, recipient),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -194,13 +194,26 @@ pub fn receive_cw20(
     info: MessageInfo,
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
+
+    let sender = cw20_msg.sender;
+    let amount_transferred = cw20_msg.amount;
+
+
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::ExitPool {
             pool_id,
             recipient,
             assets,
             burn_amount,
-        } => execute_exit_pool(deps, env, info, pool_id, recipient, assets, burn_amount),
+        } => {
+            // Check if amount is valid or not
+            if burn_amount.is_some() && burn_amount.unwrap() > amount_transferred {
+                return Err(ContractError::InvalidAmount {});
+            }
+
+            let act_recepient = recipient.unwrap_or(sender.clone());
+
+            execute_exit_pool(deps, env, info, pool_id, act_recepient, assets, burn_amount) }
     }
 }
 
@@ -418,6 +431,7 @@ pub fn execute_create_pool(
         ]))
 }
 
+
 /// # Description
 /// The entry point to the contract for processing the reply from the submessage
 /// # Params
@@ -493,6 +507,7 @@ pub fn execute_join_pool(
     op_recipient: Option<String>,
     assets_in: Option<Vec<Asset>>,
     lp_to_mint: Option<Uint128>,
+    slippage_tolerance: Option<Decimal>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
     // Load the pool info from the storage
@@ -507,6 +522,7 @@ pub fn execute_join_pool(
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
                 assets_in: assets_in.clone(),
                 mint_amount: lp_to_mint,
+                slippage_tolerance: slippage_tolerance.clone(),
             })?,
         }))?;
 
@@ -556,10 +572,8 @@ pub fn execute_join_pool(
                 // Transfer Number of CW tokens = Pool Math instructs that the user needs to provide this number of tokens to the Vault
                 execute_msgs.push(build_transfer_cw20_from_user_msg(
                     stored_asset.info.as_string(),
-                    op_recipient
-                        .clone()
-                        .unwrap_or(info.sender.clone().to_string()),
-                    info.sender.to_string(),
+                    info.sender.clone().to_string(),
+                    env.contract.address.to_string(),
                     to_transfer,
                 )?);
             } else {
@@ -652,7 +666,7 @@ pub fn execute_exit_pool(
     _env: Env,
     info: MessageInfo,
     pool_id: Uint128,
-    op_recipient: Option<String>,
+    recipient: String,
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
@@ -662,7 +676,7 @@ pub fn execute_exit_pool(
         .expect("Invalid Pool Id");
 
     // Check if the LP token sent is valid
-    if info.sender != pool_info.pool_addr.clone().unwrap() {
+    if info.sender != pool_info.lp_token_addr.clone().unwrap() {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -704,13 +718,7 @@ pub fn execute_exit_pool(
         .add_attribute("lp_tokens_burnt", after_burn_res.burn_shares.to_string());
 
     // recipient address
-    let mut recipient = info.sender.clone();
-    if !op_recipient.is_none() {
-        recipient = addr_validate_to_lower(
-            deps.api,
-            op_recipient.unwrap_or(info.sender.to_string()).as_str(),
-        )?;
-    }
+    let recipient_addr = addr_validate_to_lower( deps.api, &recipient )?;
 
     // Update asset balances & transfer tokens WasmMsgs
     let mut index = 0;
@@ -727,21 +735,21 @@ pub fn execute_exit_pool(
         // - Transfer tokens to the recipient
         if !to_transfer.is_zero() {
             // PoolInfo State update -
-            stored_asset.amount = stored_asset.amount.checked_add(to_transfer)?;
+            stored_asset.amount = stored_asset.amount.checked_sub(to_transfer)?;
             // Token Transfers
             if !stored_asset.info.is_native_token() {
                 // Transfer Number of CW tokens the Pool Math instructs to return
                 execute_msgs.push(build_transfer_cw20_token_msg(
-                    recipient.clone(),
+                    recipient_addr.clone(),
                     stored_asset.info.as_string(),
                     to_transfer,
                 )?);
             } else {
                 // Transfer Number of Native tokens the Pool Math instructs to return
                 execute_msgs.push(build_send_native_asset_msg(
-                    recipient.clone(),
+                    recipient_addr.clone(),
                     &after_burn_res.assets_out[index].info.as_string(),
-                    after_burn_res.assets_out[index].amount,
+                    to_transfer,
                 )?);
             }
             // Add attribute to event for indexing support
@@ -755,11 +763,10 @@ pub fn execute_exit_pool(
     }
 
     // Burn LP Tokens
-
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
         msg: to_binary(&Cw20ExecuteMsg::Burn {
-            amount: lp_to_return,
+            amount: after_burn_res.burn_shares,
         })?,
         funds: vec![],
     }));
@@ -797,7 +804,6 @@ pub fn execute_exit_pool(
 /// ## Params
 /// * **swap_request** of type [`SingleSwapRequest`] which consists of the following fields: pool_id of type [`Uint128`], asset_in of type [`AssetInfo`], asset_out of type [`AssetInfo`], swap_type of type SwapType, amount of type [`Uint128`]
 /// * **limit** Optional parameter. Minimum tokens to receive if swap is of type GiveIn or maximum tokens to give if swap is of type GiveOut. If not provided, then the default value is 0.
-/// * **deadline** Optional parameter. Timestamp after which the swap tx will be cancelled. If not provided, then its ignored.
 /// * **op_recipient** Optional parameter. Recipient address of the swap tx. If not provided, then the default value is the sender address.
 pub fn execute_swap(
     deps: DepsMut,
@@ -805,7 +811,6 @@ pub fn execute_swap(
     info: MessageInfo,
     swap_request: SingleSwapRequest,
     _limit: Option<Uint128>,
-    deadline: Option<Uint128>,
     op_recipient: Option<String>,
 ) -> Result<Response, ContractError> {
     // Load Pool Info from Storage
@@ -814,11 +819,6 @@ pub fn execute_swap(
         .expect("Invalid Pool Id");
 
     let config = CONFIG.load(deps.storage)?;
-
-    // Check timeout
-    if deadline.is_some() {
-        return Err(ContractError::DeadlineExpired {});
-    }
 
     // Amount cannot be zero
     if swap_request.amount.is_zero() {
@@ -848,6 +848,8 @@ pub fn execute_swap(
                 offer_asset: swap_request.asset_in.clone(),
                 ask_asset: swap_request.asset_out.clone(),
                 amount: swap_request.amount,
+                max_spread: swap_request.max_spread,
+                belief_price: swap_request.belief_price,
             })?,
         }))?;
 

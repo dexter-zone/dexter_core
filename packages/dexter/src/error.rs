@@ -28,6 +28,9 @@ pub enum ContractError {
     #[error("Provided spread amount exceeds allowed limit")]
     AllowedSpreadAssertion {},
 
+    #[error("Operation exceeds max slippage limit")]
+    MaxSlippageAssertion {},
+
     #[error("Operation exceeds max spread limit")]
     MaxSpreadAssertion {},
 

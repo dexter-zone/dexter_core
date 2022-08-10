@@ -194,6 +194,8 @@ pub struct SingleSwapRequest {
     pub asset_out: AssetInfo,
     pub swap_type: SwapType,
     pub amount: Uint128,
+    pub max_spread: Option<Decimal>,
+    pub belief_price: Option<Decimal>,
 }
 
 // struct BatchSwapStep {
@@ -250,6 +252,7 @@ pub enum ExecuteMsg {
         recipient: Option<String>,
         assets: Option<Vec<Asset>>,
         lp_to_mint: Option<Uint128>,
+        slippage_tolerance: Option<Decimal>,
         auto_stake: Option<bool>,
     },
     Swap {
