@@ -25,8 +25,8 @@ pub enum ContractError {
     #[error("Invalid number of assets")]
     InvalidNumberOfAssets {},
 
-    #[error("Pool's math boundations not satisfied")]
-    PoolQueryFailed {},
+    #[error("Pool logic not satisfied. Reason : {error}")]
+    PoolQueryFailed { error: String},
 
     #[error("Mismatched assets")]
     MismatchedAssets {},

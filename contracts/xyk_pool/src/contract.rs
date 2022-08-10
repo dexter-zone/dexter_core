@@ -355,7 +355,7 @@ pub fn query_on_join_pool(
         
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("No assets provided".to_string()));
     }
 
     // Load the config from the storage
@@ -426,7 +426,7 @@ pub fn query_on_exit_pool(
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure())
+        return Ok(return_exit_failure( "LP tokens to burn cannot be zero".to_string() ))
     }    
 
     // Load the config from the storage
@@ -483,7 +483,7 @@ pub fn query_on_swap(
         cur_offer_asset_bal = config.assets[1].amount;
         cur_ask_asset_bal = config.assets[0].amount;
     } else {
-        return Ok( return_swap_failure() )
+        return Ok( return_swap_failure("assets mismatch".to_string()) )
     }
 
     // Offer asset and Ask asset 
@@ -533,7 +533,7 @@ pub fn query_on_swap(
             };
         },
         SwapType::Custom(_) => {
-            return Ok( return_swap_failure() ) 
+            return Ok( return_swap_failure("SwapType not supported".to_string()) ) 
         }
     }
 

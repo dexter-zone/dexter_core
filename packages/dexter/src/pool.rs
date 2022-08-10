@@ -48,14 +48,14 @@ pub struct Trade {
 #[serde(rename_all = "snake_case")]
 pub enum ResponseType {
     Success {},
-    Failure {},
+    Failure (String),
 }
 
 impl Display for ResponseType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
             ResponseType::Success {} => fmt.write_str("success"),
-            ResponseType::Failure {} => fmt.write_str("fail"),
+            ResponseType::Failure (error) => fmt.write_str(format!("error : {}", error).as_str()),
         }
     }
 }
@@ -67,7 +67,7 @@ impl ResponseType {
     pub fn is_success(&self) -> bool {
         match self {
             ResponseType::Success {} => true,
-            ResponseType::Failure {} => false,
+            ResponseType::Failure (_)  => false,
         }
     }
 }
@@ -237,16 +237,16 @@ pub struct CumulativePricesResponse {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 
-pub fn return_join_failure() -> AfterJoinResponse {
-    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure { } }
+pub fn return_join_failure(error: String) -> AfterJoinResponse {
+    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure (error) }
 }
 
-pub fn return_exit_failure() -> AfterExitResponse {
-    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure { } }
+pub fn return_exit_failure(error: String) -> AfterExitResponse {
+    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure (error) }
 }
 
 
-pub fn return_swap_failure() -> SwapResponse {
+pub fn return_swap_failure(error: String) -> SwapResponse {
     SwapResponse {
         trade_params: Trade {
             amount_in: Uint128::zero(),
@@ -256,7 +256,7 @@ pub fn return_swap_failure() -> SwapResponse {
             protocol_fee: Uint128::zero(),
             dev_fee: Uint128::zero(),
         },
-        response: ResponseType::Failure {},
+        response: ResponseType::Failure (error),
     }
 }
 

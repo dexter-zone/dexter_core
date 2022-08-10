@@ -35,9 +35,8 @@ thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
 
 [dev-dependencies]
-dexter-vault = { path = "../vault"}
-cosmwasm-schema = "1.0.0"
-# dexter-token = {path = ". ./token"}
 cw-multi-test = "0.13.2"
-# dexter-vault = {path = "../vault"}
 proptest = "0.10.1"
+cosmwasm-schema = "1.0.0"
+dexter-vault = { path = "../vault"}
+lp-token = {path = "../lp_token"}

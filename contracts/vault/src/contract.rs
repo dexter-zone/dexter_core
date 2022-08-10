@@ -512,7 +512,7 @@ pub fn execute_join_pool(
 
     // If the response is failure
     if !after_join_res.response.is_success() || after_join_res.new_shares.is_zero() {
-        return Err(ContractError::PoolQueryFailed {});
+        return Err(ContractError::PoolQueryFailed { error: after_join_res.response.to_string() });
     }
 
     // Number of Assets should match
@@ -678,7 +678,7 @@ pub fn execute_exit_pool(
 
     // If the response is failure
     if !after_burn_res.response.is_success() {
-        return Err(ContractError::PoolQueryFailed {});
+        return Err(ContractError::PoolQueryFailed {  error: after_burn_res.response.to_string() });
     }
 
     // Number of LP shares to be returned to the user
@@ -853,7 +853,7 @@ pub fn execute_swap(
 
     // If the response is failure
     if !swap_response.response.is_success() {
-        return Err(ContractError::PoolQueryFailed {});
+        return Err(ContractError::PoolQueryFailed { error: swap_response.response.to_string() });
     }
 
     // Protocol fee = 0 if keeper address is not set
