@@ -8,7 +8,7 @@ pub const CONFIG: Item<Config> = Item::new("config");
 // Stores config data for each PoolTypes supported by the Vault
 pub const POOL_CONFIGS: Map<String, PoolConfig> = Map::new("pool_configs");
 
-// Stores current state of each Pool instance supported by the Vault 
+// Stores current state of each Pool instance supported by the Vault
 pub const POOLS: Map<&[u8], PoolInfo> = Map::new("pool_info");
 
 // Ownership Proposal currently active in the Vault.

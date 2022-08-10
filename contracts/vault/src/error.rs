@@ -13,7 +13,11 @@ pub enum ContractError {
     LpTokenNotFound {},
 
     #[error("Insufficient number of {denom} tokens sent. Tokens sent = {sent}. Tokens needed = {needed}")]
-    InsufficientNativeTokensSent { denom: String, sent: Uint128, needed: Uint128 },
+    InsufficientNativeTokensSent {
+        denom: String,
+        sent: Uint128,
+        needed: Uint128,
+    },
 
     #[error("Cannot burn more LP tokens than what's been sent by the users")]
     InsufficientLpTokensToExit {},
@@ -59,7 +63,6 @@ pub enum ContractError {
 
     #[error("Doubling assets in asset infos")]
     RepeatedAssets {},
-
 }
 
 impl From<OverflowError> for ContractError {

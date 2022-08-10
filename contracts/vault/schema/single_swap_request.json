@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Description - This structure describes the main control config of factory.",
+  "title": "SingleSwapRequest",
   "type": "object",
   "required": [
     "amount",

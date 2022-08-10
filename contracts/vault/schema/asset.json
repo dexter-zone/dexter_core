@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Description - This enum describes a asset (native or CW20).",
+  "title": "Asset",
   "type": "object",
   "required": [
     "amount",

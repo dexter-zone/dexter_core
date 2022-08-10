@@ -258,13 +258,6 @@ pub enum ExecuteMsg {
         deadline: Option<Uint128>,
         recipient: Option<String>,
     },
-    // BatchSwap {
-    //     swap_kind: SwapType,
-    //     batch_swap_steps: Vec<BatchSwapStep>,
-    //     assets: Vec<Asset>,
-    //     limit: Option<Vec<Uint128>>,
-    //     deadline: Option<Uint128>,
-    // },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {
         owner: String,
