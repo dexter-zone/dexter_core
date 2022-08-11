@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{OverflowError, Decimal, StdError};
 use thiserror::Error;
 use crate::math::{
     AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
@@ -22,8 +22,8 @@ pub enum ContractError {
     #[error("Event of zero transfer")]
     InvalidZeroAmount {},
 
-    #[error("Operation exceeds max spread limit")]
-    MaxSpreadAssertion {},
+    #[error("Operation exceeds max spread limit. Current spread = {spread_amount}")]
+    MaxSpreadAssertion { spread_amount: Decimal },
 
     #[error("Provided spread amount exceeds allowed limit")]
     AllowedSpreadAssertion {},

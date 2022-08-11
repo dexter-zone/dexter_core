@@ -1,9 +1,9 @@
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Decimal256,
     Deps, DepsMut, Env, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult,
-    SubMsg, Uint128, Uint256, WasmMsg, Event
+    SubMsg, Uint128, Uint256, WasmMsg, Event, Fraction
 };
-
+use std::str::FromStr;
 use crate::math::{
     calc_ask_amount, calc_offer_amount, compute_d, MAX_AMP, MAX_AMP_CHANGE,
     MIN_AMP_CHANGING_TIME, AMP_PRECISION, N_COINS
@@ -18,7 +18,7 @@ use cw20::MinterResponse;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade ,return_join_failure, return_swap_failure, return_exit_failure
+    ResponseType, SwapResponse, Trade ,return_join_failure, return_swap_failure, return_exit_failure, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo, AssetExchangeRate};
 use dexter::vault::{SwapType, TWAP_PRECISION};
@@ -115,7 +115,7 @@ pub fn instantiate(
     let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol );
+    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol);
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -272,12 +272,13 @@ pub fn update_config(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    params: Binary,
+    params: Option<Binary>,
 ) -> Result<Response, ContractError> {
 
     let config = CONFIG.load(deps.storage)?;
     let math_config = MATHCONFIG.load(deps.storage)?;
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+    let params = params.unwrap();
 
     // Access Check :: Only Vault's Owner can execute this function
     if info.sender != vault_config.owner {
@@ -317,7 +318,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
         QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
-        QueryMsg::OnJoinPool { assets_in, mint_amount } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount)?),
+        QueryMsg::OnJoinPool { assets_in, mint_amount, slippage_tolerance } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance)?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -327,6 +328,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price,
         } => to_binary(&query_on_swap(
             deps,
             env,
@@ -334,6 +337,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price,
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -409,11 +414,12 @@ pub fn query_on_join_pool(
     env: Env,
     assets_in: Option<Vec<Asset>>,
     _mint_amount: Option<Uint128>,
+    slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
 
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("No assets provided".to_string()));
     }
 
     // Load the config and math config from the storage
@@ -443,6 +449,17 @@ pub fn query_on_join_pool(
     // Adjust deposit amounts to the precision of the pool tokens
     let deposit_amount_0 = adjust_precision(deposits[0], token_precision_0, greater_precision)?;
     let deposit_amount_1 = adjust_precision(deposits[1], token_precision_1, greater_precision)?;
+
+    // Assert slippage tolerance
+    let res = assert_slippage_tolerance(
+            &slippage_tolerance,
+            &deposits,
+            &[config.assets[0].amount, config.assets[1].amount],
+        );
+    // return a `Failure` response if the slippage tolerance is not met
+    if !res.is_success() {
+        return Ok(return_join_failure(res.to_string()));
+    }
 
     // Calculate the number of LP shares to be minted
     let new_shares = if total_share.is_zero() {
@@ -528,7 +545,7 @@ pub fn query_on_exit_pool(
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure())
+        return Ok(return_exit_failure("Invalid number of LP tokens to burn amount".to_string(),));
     }       
 
     // Load the config from the storage
@@ -567,6 +584,8 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
+    max_spread: Option<Decimal>,
+    belief_price: Option<Decimal>,    
 ) -> StdResult<SwapResponse> {
 
     // Load the config and math config from the storage
@@ -577,14 +596,14 @@ pub fn query_on_swap(
     let cur_ask_asset_bal: Uint128;
 
     // Get the current pool balance of the offer_asset and ask_asset
-    if offer_asset_info.equal(&config.assets[0].info) {
+    if offer_asset_info.equal(&config.assets[0].info) && ask_asset_info.equal(&config.assets[1].info) {
         cur_offer_asset_bal = config.assets[0].amount;
         cur_ask_asset_bal = config.assets[1].amount;
-    } else if offer_asset_info.equal(&config.assets[1].info) {
+    } else if offer_asset_info.equal(&config.assets[1].info) && ask_asset_info.equal(&config.assets[0].info) {
         cur_offer_asset_bal = config.assets[1].amount;
         cur_ask_asset_bal = config.assets[0].amount;
     }  else {
-        return Ok( return_swap_failure() )
+        return Ok( return_swap_failure("assets mismatch".to_string()));
     }
 
     // decimal precision for both pool tokens and the greatest precision of the two tokens
@@ -629,9 +648,9 @@ pub fn query_on_swap(
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
             (calc_amount, spread_amount, total_fee) = compute_offer_amount(
                 cur_offer_asset_bal,
-                query_token_precision(&deps.querier, offer_asset_info.clone())?,
+                offer_precision,
                 cur_ask_asset_bal,
-                query_token_precision(&deps.querier, ask_asset_info.clone())?,
+                ask_precision,
                 amount,
                 config.fee_info.total_fee_bps,
                 compute_current_amp(&math_config, &env)?,
@@ -648,10 +667,21 @@ pub fn query_on_swap(
             };
         }
         SwapType::Custom(_) => {
-            return Ok( return_swap_failure() ) 
+            return Ok( return_swap_failure("SwapType not supported".to_string()))
         }
     }
 
+    // Check the max spread limit (if it was specified)
+    let spread_check = assert_max_spread(
+        belief_price,
+        max_spread,
+        offer_asset.amount,
+        ask_asset.amount + total_fee,
+        spread_amount,
+    );
+    if !spread_check.is_success() {
+        return Ok(return_swap_failure(spread_check.to_string()));
+    }
 
     Ok(SwapResponse {
         trade_params: Trade {
@@ -908,9 +938,10 @@ fn compute_offer_amount(
     ask_pool: Uint128,
     ask_precision: u8,
     ask_amount: Uint128,
-    commission_rate: Decimal,
+    commission_rate: u16,
     amp: u64,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
+    let commission_rate_decimals = Decimal::from_ratio(commission_rate, 10000u16);
     // ask => offer
 
     // Adjust balances based on their precisions
@@ -919,7 +950,7 @@ fn compute_offer_amount(
     let ask_pool = adjust_precision(ask_pool, ask_precision, greater_precision)?;
     let ask_amount = adjust_precision(ask_amount, ask_precision, greater_precision)?;
 
-    let one_minus_commission = Decimal::one() - commission_rate;
+    let one_minus_commission = Decimal::one() - commission_rate_decimals;
     let inv_one_minus_commission: Decimal = Decimal::one() / one_minus_commission;
     let before_commission_deduction = ask_amount * inv_one_minus_commission;
 
@@ -936,7 +967,7 @@ fn compute_offer_amount(
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
     let spread_amount = offer_amount.saturating_sub(before_commission_deduction);
 
-    let commission_amount = before_commission_deduction * commission_rate;
+    let commission_amount = before_commission_deduction *  commission_rate_decimals;
 
     let offer_amount = adjust_precision(offer_amount, greater_precision, offer_precision)?;
     let spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
@@ -989,6 +1020,74 @@ pub fn accumulate_prices(
 }
 
 
+/// ## Description
+/// This is an internal function that enforces slippage tolerance for swaps.
+/// Returns a [`ContractError`] on failure, otherwise returns [`Ok`].
+/// 
+/// ## Params
+/// * **slippage_tolerance** is an object of type [`Option<Decimal>`]. This is the slippage tolerance to enforce.
+/// * **deposits** are an array of [`Uint128`] type items. These are offer and ask amounts for a swap.
+/// * **pools** are an array of [`Asset`] type items. These are total amounts of assets in the pool.
+fn assert_slippage_tolerance(
+    _slippage_tolerance: &Option<Decimal>,
+    _deposits: &[Uint128; 2],
+    _pools: &[Uint128; 2],
+) -> ResponseType {
+    // There is no slippage in the stable pool
+    ResponseType::Success {  }
+}
+
+
+/// ## Description
+/// Returns a [`ContractError`] on failure.
+/// If `belief_price` and `max_spread` are both specified, we compute a new spread, otherwise we just use the swap spread to check `max_spread`.
+/// 
+/// ## Params
+/// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
+/// * **max_spread** is an object of type [`Option<Decimal>`]. This is the max spread allowed so that the swap can be executed successfuly.
+/// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
+/// * **return_amount** is an object of type [`Uint128`]. This is the amount of assets to receive from the swap.
+/// * **spread_amount** is an object of type [`Uint128`]. This is the spread used in the swap.
+pub fn assert_max_spread(
+    belief_price: Option<Decimal>,
+    max_spread: Option<Decimal>,
+    offer_amount: Uint128,
+    return_amount: Uint128,
+    spread_amount: Uint128,
+) -> ResponseType {
+    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+
+    let max_spread = max_spread.unwrap_or(default_spread);
+    if max_spread.gt(&max_allowed_spread) {
+        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
+    }
+    let calc_spread = Decimal::from_ratio(spread_amount, return_amount + spread_amount);
+
+    // If belief price is provided, we compute a new spread
+    if let Some(belief_price) = belief_price {
+        let expected_return = offer_amount * belief_price.inv().unwrap();
+        let spread_amount = expected_return
+            .checked_sub(return_amount)
+            .unwrap_or_else(|_| Uint128::zero());
+        let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
+        if return_amount < expected_return && calc_spread > max_spread{
+            return ResponseType::Failure(
+                (ContractError::MaxSpreadAssertion {  spread_amount: calc_spread }).to_string(),
+            );
+        }
+    } 
+    else if calc_spread > max_spread {
+        return ResponseType::Failure(
+            (ContractError::MaxSpreadAssertion {
+                spread_amount: calc_spread,
+            })
+            .to_string(),
+        );
+    }
+
+    ResponseType::Success {}
+}
 
 // --------x--------x--------x--------x--------x--------x--------
 // --------x--------x AMP COMPUTE Functions   x--------x---------
