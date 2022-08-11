@@ -10,5 +10,5 @@ mod response;
 // #[cfg(test)]
 // mod testing;
 
-#[cfg(test)]
-mod mock_querier;
+// #[cfg(test)]
+// mod mock_querier;

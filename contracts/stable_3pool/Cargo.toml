@@ -38,7 +38,7 @@ itertools = "0.10"
 [dev-dependencies]
 anyhow = "1.0"
 cosmwasm-schema = "1.0.0"
-# dexter-token = {path = "../token"}
+lp-token = {path = "../lp_token"}
 cw-multi-test = "0.13.2"
 dexter-vault = {path = "../vault"}
 proptest = "0.10.1"

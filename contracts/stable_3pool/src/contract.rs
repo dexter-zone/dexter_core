@@ -1,10 +1,11 @@
 use cosmwasm_std::{
     entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut,
     Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
-    Uint128, Uint256, WasmMsg, from_binary, Uint64
+    Uint128, Uint256, WasmMsg, from_binary, Uint64, Fraction
 };
 use cw2::set_contract_version;
 use cw20::{ MinterResponse};
+use std::str::FromStr;
 use protobuf::Message;
 use std::vec;
 use std::collections::HashMap;
@@ -17,7 +18,7 @@ use crate::error::ContractError;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure
+    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use crate::math::{
     compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
@@ -131,7 +132,7 @@ pub fn instantiate(
     let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name.clone() );
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(),msg.lp_token_symbol.clone() );
+    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol.clone() );
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -279,12 +280,12 @@ pub fn update_config(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    params: Binary,
+    params: Option<Binary>,
 ) -> Result<Response, ContractError> {
-
     let config = CONFIG.load(deps.storage)?;
     let math_config = MATHCONFIG.load(deps.storage)?;
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+    let params = params.unwrap();
 
     // Access Check :: Only Vault's Owner can execute this function
     if info.sender != vault_config.owner {
@@ -319,19 +320,22 @@ pub fn update_config(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_config(deps)?),
+        QueryMsg::Config {} => to_binary(&query_config(deps, env)?),
         QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
         QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
-        QueryMsg::OnJoinPool { assets_in, mint_amount } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount)?),
+        QueryMsg::OnJoinPool { assets_in, mint_amount, slippage_tolerance } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance)?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
+            
         } => to_binary(&query_on_exit_pool(deps , env, assets_out, burn_amount)?),
         QueryMsg::OnSwap {
             swap_type,
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price
         } => to_binary(&query_on_swap(
             deps,
             env,
@@ -339,6 +343,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -353,8 +359,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// Returns information about the controls settings in a [`ConfigResponse`] object.
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
-pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
+pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let cur_amp = compute_current_amp(&math_config, &env)?;    
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -363,7 +371,14 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         pool_type: config.pool_type,
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
-    })
+        math_params: Some(to_binary(&math_config).unwrap()),
+        additional_params: Some(
+            to_binary(&StablePoolParams {
+                amp: cur_amp.checked_div(AMP_PRECISION).unwrap(),
+            })
+            .unwrap(),
+        ),
+    }) 
 }
 
 
@@ -416,11 +431,12 @@ pub fn query_on_join_pool(
     env: Env,
     assets_in: Option<Vec<Asset>>,
     _mint_amount: Option<Uint128>,
+    _slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
 
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("No assets provided".to_string()));
     }
     
     // Load the config and math config from the storage
@@ -478,14 +494,16 @@ pub fn query_on_join_pool(
 
     // If there's no non-zero assets in the list provided by the user, then return a `Failure` response
     if !non_zero_flag {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("No non-zero assets provided".to_string()));
     }
 
     // Adjust for precision
     for (deposit, pool) in assets_collection.iter_mut() {
         // We cannot put a zero amount into an empty pool.
         if deposit.amount.is_zero() && pool.is_zero() {
-            return Ok(return_join_failure());
+            return Ok(return_join_failure(
+                "Cannot deposit zero into an empty pool".to_string()
+            ));
         }
 
         // Adjusting to the greatest precision
@@ -501,7 +519,7 @@ pub fn query_on_join_pool(
 
     // If AMP value is invalid, then return a `Failure` response
     if amp == 0u64 {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("Invalid amp value".to_string()));
     }
     
     // Convert to Decimal types
@@ -543,9 +561,7 @@ pub fn query_on_join_pool(
         let fee_info =  config.fee_info.clone();
 
         // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
-        let fee = fee_info
-            .total_fee_bps
-            .checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
+        let fee = Decimal::from_ratio(fee_info.total_fee_bps, 10000u16).checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
 
         let fee = Decimal256::new(fee.atomics().into());
 
@@ -570,7 +586,7 @@ pub fn query_on_join_pool(
 
     // If the mint amount is zero, then return a `Failure` response
     if mint_amount.is_zero() {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("Mint amount is zero".to_string()));
     }
 
     let res = AfterJoinResponse {
@@ -605,7 +621,7 @@ pub fn query_on_exit_pool(
 
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure())
+        return Ok(return_exit_failure("Burn amount is zero".to_string()));
     }   
 
     let config: Config = CONFIG.load(deps.storage)?;
@@ -657,6 +673,8 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
+    max_spread: Option<Decimal>,
+    belief_price: Option<Decimal>,    
 ) -> StdResult<SwapResponse> {
 
     // Load the config and math config from the storage
@@ -688,7 +706,7 @@ pub fn query_on_swap(
 
     // if there's 0 assets balance return failure response
     if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
-        return Ok( return_swap_failure() ) 
+        return Ok( return_swap_failure("Swap pool balances cannot be zero".to_string()) ) 
     }
 
     // Offer and ask asset precisions
@@ -752,8 +770,27 @@ pub fn query_on_swap(
             };
         }
         SwapType::Custom(_) => {
-            return Ok( return_swap_failure() ) 
+            return Ok( return_swap_failure("SwapType not supported".to_string()))
         }        
+    }
+
+
+    if calc_amount.is_zero() {
+        return Ok(return_swap_failure(
+            "Computation error - calc_amount is zero".to_string(),
+        ));
+    }
+        
+    // Check the max spread limit (if it was specified)
+    let spread_check = assert_max_spread(
+        belief_price,
+        max_spread,
+        offer_asset.amount,
+        ask_asset.amount + total_fee,
+        spread_amount,
+    );
+    if !spread_check.is_success() {
+        return Ok(return_swap_failure(spread_check.to_string()));
     }
 
     Ok(SwapResponse {
@@ -1028,9 +1065,7 @@ fn imbalanced_withdraw(
     let withdraw_d = compute_d(Uint64::from(amp), &new_balances, math_config.greatest_precision)?;
 
     // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
-    let fee = config.fee_info
-        .total_fee_bps
-        .checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
+    let fee = Decimal::from_ratio(config.fee_info.total_fee_bps, 10000u16).checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
 
     let fee = Decimal256::new(fee.atomics().into());        
 
@@ -1071,6 +1106,66 @@ fn imbalanced_withdraw(
     Ok(burn_amount)
 }
 
+
+
+/// ## Description
+/// Returns a [`ContractError`] on failure.
+/// If `belief_price` and `max_spread` are both specified, we compute a new spread, otherwise we just use the swap spread to check `max_spread`.
+/// 
+/// ## Params
+/// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
+/// * **max_spread** is an object of type [`Option<Decimal>`]. This is the max spread allowed so that the swap can be executed successfuly.
+/// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
+/// * **return_amount** is an object of type [`Uint128`]. This is the amount of assets to receive from the swap.
+/// * **spread_amount** is an object of type [`Uint128`]. This is the spread used in the swap.
+pub fn assert_max_spread(
+    belief_price: Option<Decimal>,
+    max_spread: Option<Decimal>,
+    offer_amount: Uint128,
+    return_amount: Uint128,
+    spread_amount: Uint128,
+) -> ResponseType {
+    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+
+    let max_spread = max_spread.unwrap_or(default_spread);
+    if max_spread.gt(&max_allowed_spread) {
+        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
+    }
+    let calc_spread = Decimal::from_ratio(spread_amount, return_amount + spread_amount);
+
+    if let Some(belief_price) = belief_price {
+        let expected_return = offer_amount
+            * belief_price.inv().ok_or_else(|| {
+                ResponseType::Failure((ContractError::Std(StdError::generic_err(
+                    "Invalid belief_price. Check the input values.",
+                ))) .to_string())
+            }).unwrap();
+
+        let spread_amount = expected_return.saturating_sub(return_amount);
+        let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
+
+        if return_amount < expected_return
+            && calc_spread > max_spread
+        {
+            return ResponseType::Failure(
+                (ContractError::MaxSpreadAssertion {
+                    spread_amount: calc_spread,
+                })
+                .to_string(),
+            );
+        }
+    } else if calc_spread > max_spread {
+        return ResponseType::Failure(
+            (ContractError::MaxSpreadAssertion {
+                spread_amount: calc_spread,
+            })
+            .to_string(),
+        );
+    }
+
+    ResponseType::Success {}
+}
 
 // --------x--------x--------x--------x--------x--------x--------
 // --------x--------x AMP COMPUTE Functions   x--------x---------

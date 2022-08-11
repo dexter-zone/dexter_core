@@ -79,16 +79,17 @@ pub(crate) fn compute_offer_amount(
     offer_pool: &DecimalAsset,
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
-    commission_rate: Decimal,
+    commission_rate: u16,
     greatest_precision: u8,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
+    let commission_rate_decimals = Decimal::from_ratio(commission_rate, 10000u16);
 
 
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;
 
     let before_commission = Decimal256::with_precision(
-        (Decimal::one() - commission_rate)
+        (Decimal::one() - commission_rate_decimals)
             .inv()
             .unwrap_or_else(Decimal::one)
             .checked_mul_uint128(ask_asset.amount)?,
@@ -116,7 +117,7 @@ pub(crate) fn compute_offer_amount(
     let spread_amount = offer_amount
     .saturating_sub(before_commission.to_uint128_with_precision(ask_precision)?);
 
-    let commission_amount = commission_rate.checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
+    let commission_amount = commission_rate_decimals.checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
     Ok((offer_amount, spread_amount, commission_amount))
 }
 

@@ -15,8 +15,8 @@ use dexter::vault::{
     SwapType,
 };
 
-use stableswap_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use stableswap_pool::state::{MathConfig, StablePoolParams, StablePoolUpdateParams};
+use stable3pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use stable3pool::state::{MathConfig, StablePoolParams, StablePoolUpdateParams};
 
 const EPOCH_START: u64 = 1_000_000;
 
