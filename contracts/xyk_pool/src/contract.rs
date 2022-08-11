@@ -303,6 +303,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         pool_type: config.pool_type,
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
+        math_params: None,
+        additional_params: None
     })
 }
 

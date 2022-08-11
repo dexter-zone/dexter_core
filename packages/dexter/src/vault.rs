@@ -16,9 +16,9 @@ pub const TWAP_PRECISION: u16 = 9u16;
 /// ## Available pool types
 /// ```
 /// Xyk
-/// Stable
+/// Stable2Pool
 /// Weighted
-/// MetaStable
+/// Stable3Pool
 /// Custom(String::from("Custom"));
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -27,11 +27,11 @@ pub enum PoolType {
     /// XYK pool type
     Xyk {},
     /// Stable pool type
-    Stable {},
+    Stable2Pool {},
+    /// Stable pool type
+    Stable3Pool {},
     /// Weighted pool type
     Weighted {},
-    /// Meta-Stable pool type
-    MetaStable {},
     /// Custom pool type
     Custom(String),
 }
@@ -41,9 +41,9 @@ impl Display for PoolType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
             PoolType::Xyk {} => fmt.write_str("xyk"),
-            PoolType::Stable {} => fmt.write_str("stable"),
+            PoolType::Stable2Pool {} => fmt.write_str("stable-2-pool"),
             PoolType::Weighted {} => fmt.write_str("weighted"),
-            PoolType::MetaStable {} => fmt.write_str("metastable"),
+            PoolType::Stable3Pool {} => fmt.write_str("stable-3-pool"),
             PoolType::Custom(pool_type) => fmt.write_str(format!("custom-{}", pool_type).as_str()),
         }
     }

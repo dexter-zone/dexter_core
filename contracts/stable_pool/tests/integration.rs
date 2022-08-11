@@ -1,20 +1,22 @@
-use cosmwasm_std::testing::{mock_env};
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::testing::mock_env;
+use cosmwasm_std::{attr, from_binary, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::pool::{
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType, SwapResponse,
+};
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
     PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
-use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType,
-    SwapResponse,
-};
-use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+
+use stableswap_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use stableswap_pool::state::{MathConfig, StablePoolParams, StablePoolUpdateParams};
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -42,14 +44,14 @@ fn store_vault_code(app: &mut App) -> u64 {
     app.store_code(factory_contract)
 }
 
-fn store_xyk_pool_code(app: &mut App) -> u64 {
+fn store_stable_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(
         ContractWrapper::new_with_empty(
-            xyk_pool::contract::execute,
-            xyk_pool::contract::instantiate,
-            xyk_pool::contract::query,
+            stableswap_pool::contract::execute,
+            stableswap_pool::contract::instantiate,
+            stableswap_pool::contract::query,
         )
-        .with_reply_empty(xyk_pool::contract::reply),
+        .with_reply_empty(stableswap_pool::contract::reply),
     );
     app.store_code(pool_contract)
 }
@@ -79,13 +81,13 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
 
 /// Initialize a new vault and a XYK Pool with the given assets
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
-    let xyk_pool_code_id = store_xyk_pool_code(app);
+    let stableswap_pool_code_id = store_stable_pool_code(app);
     let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
 
     let pool_configs = vec![PoolConfig {
-        code_id: xyk_pool_code_id,
-        pool_type: PoolType::Xyk {},
+        code_id: stableswap_pool_code_id,
+        pool_type: PoolType::Stable2Pool {},
         fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
@@ -120,7 +122,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     let init_msg = TokenInstantiateMsg {
         name: "x_token".to_string(),
         symbol: "X-Tok".to_string(),
-        decimals: 18,
+        decimals: 6,
         initial_balances: vec![],
         mint: Some(MinterResponse {
             minter: owner.to_string(),
@@ -141,7 +143,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     let asset_infos = vec![
         AssetInfo::NativeToken {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
         },
         AssetInfo::Token {
             contract_addr: token_instance0.clone(),
@@ -151,9 +153,9 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     // Initialize XYK Pool contract instance
     let current_block = app.block_info();
     let msg = VaultExecuteMsg::CreatePool {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable2Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: None,
+        init_params: Some(to_binary(&StablePoolParams { amp: 10u64 }).unwrap()),
         lp_token_name: None,
         lp_token_symbol: None,
     };
@@ -162,7 +164,10 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .unwrap();
 
     assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    assert_eq!(
+        res.events[1].attributes[2],
+        attr("pool_type", "stable-2-pool")
+    );
     let pool_res: PoolInfo = app
         .wrap()
         .query_wasm_smart(
@@ -174,7 +179,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .unwrap();
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
-    assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
+    assert_eq!(PoolType::Stable2Pool {}, pool_res.pool_type);
     assert_eq!(
         Some(Addr::unchecked("dev".to_string())),
         pool_res.developer_addr
@@ -182,20 +187,20 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     let assets = vec![
         Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string(),
+            },
+            amount: Uint128::zero(),
+        },
+        Asset {
             info: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
             amount: Uint128::zero(),
         },
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            amount: Uint128::zero(),
-        },
     ];
 
-    //// -----x----- Check :: ConfigResponse for XYK Pool -----x----- ////
+    //// -----x----- Check :: ConfigResponse for Stable Pool -----x----- ////
 
     let pool_config_res: ConfigResponse = app
         .wrap()
@@ -217,13 +222,25 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
     assert_eq!(vault_instance, pool_config_res.vault_addr);
     assert_eq!(assets, pool_config_res.assets);
-    assert_eq!(PoolType::Xyk {}, pool_config_res.pool_type);
+    assert_eq!(PoolType::Stable2Pool {}, pool_config_res.pool_type);
     assert_eq!(
         current_block.time.seconds(),
         pool_config_res.block_time_last
     );
+    assert_eq!(
+        Some(
+            to_binary(&MathConfig {
+                init_amp: 10u64 * 100,
+                init_amp_time: EPOCH_START,
+                next_amp: 10u64 * 100,
+                next_amp_time: EPOCH_START,
+            })
+            .unwrap()
+        ),
+        pool_config_res.math_params
+    );
 
-    //// -----x----- Check :: FeeResponse for XYK Pool -----x----- ////
+    //// -----x----- Check :: FeeResponse for Stable Pool -----x----- ////
     let pool_fee_res: FeeResponse = app
         .wrap()
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::FeeParams {})
@@ -236,7 +253,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         pool_fee_res.dev_fee_collector
     );
 
-    //// -----x----- Check :: Pool-ID for XYK Pool -----x----- ////
+    //// -----x----- Check :: Pool-ID for Stable Pool -----x----- ////
     let pool_id_res: Uint128 = app
         .wrap()
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::PoolId {})
@@ -259,7 +276,7 @@ fn test_provide_liquidity() {
     let mut app = mock_app(
         owner.clone(),
         vec![Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
@@ -269,7 +286,7 @@ fn test_provide_liquidity() {
         owner.clone(),
         alice_address.clone(),
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(1000_000_000u128),
         }],
     )
@@ -310,16 +327,16 @@ fn test_provide_liquidity() {
     //// -----x----- Check #2 :: Success ::: Liquidity being provided when pool is empty -----x----- ////
     let assets_msg = vec![
         Asset {
-            info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            amount: Uint128::from(100u128),
-        },
-        Asset {
             info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            amount: Uint128::from(100u128),
+            amount: Uint128::from(1000u128),
+        },
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string(),
+            },
+            amount: Uint128::from(1000u128),
         },
     ];
     // Check Query Response
@@ -335,21 +352,21 @@ fn test_provide_liquidity() {
         )
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(100u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(1000u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
     assert_eq!(
         vec![
             Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                amount: Uint128::from(1000u128),
+            },
+            Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(100u128),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                amount: Uint128::from(100u128),
+                amount: Uint128::from(1000u128),
             },
         ],
         join_pool_query_res.provided_assets
@@ -370,7 +387,7 @@ fn test_provide_liquidity() {
         .unwrap_err();
     assert_eq!(
         add_liq_res.root_cause().to_string(),
-        "Insufficient number of xprt tokens sent. Tokens sent = 0. Tokens needed = 100"
+        "Insufficient number of axlusd tokens sent. Tokens sent = 0. Tokens needed = 1000"
     );
 
     //// -----x----- Check #2.2 :: Execution Error ::: CW20 tokens were not approved for transfer via the Vault contract -----x----- ////
@@ -380,8 +397,8 @@ fn test_provide_liquidity() {
             vault_instance.clone(),
             &msg,
             &[Coin {
-                denom: "xprt".to_string(),
-                amount: Uint128::new(110u128),
+                denom: "axlusd".to_string(),
+                amount: Uint128::new(1100u128),
             }],
         )
         .unwrap_err();
@@ -403,17 +420,16 @@ fn test_provide_liquidity() {
         &[],
     )
     .unwrap();
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_instance.clone(),
-            &msg,
-            &[Coin {
-                denom: "xprt".to_string(),
-                amount: Uint128::new(110u128),
-            }],
-        )
-        .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(1100u128),
+        }],
+    )
+    .unwrap();
 
     // Checks -
     // 1. LP tokens minted & transferred to Alice
@@ -440,7 +456,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(100u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(1000u128), vault_bal_res.balance);
 
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
@@ -459,16 +475,16 @@ fn test_provide_liquidity() {
     assert_eq!(
         vec![
             Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                amount: Uint128::from(1000u128),
+            },
+            Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(100u128),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                amount: Uint128::from(100u128),
+                amount: Uint128::from(1000u128),
             },
         ],
         vault_pool_config_res.assets
@@ -484,7 +500,7 @@ fn test_provide_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -498,7 +514,7 @@ fn test_provide_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 offer_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -507,23 +523,23 @@ fn test_provide_liquidity() {
         )
         .unwrap();
 
-    assert_eq!(Uint128::from(100u128), pool_twap_res.total_share);
+    assert_eq!(Uint128::from(1000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
             AssetExchangeRate {
-                offer_info: AssetInfo::Token {
+                ask_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                ask_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                offer_info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
                 rate: Uint128::from(1000000000000000u128),
             },
             AssetExchangeRate {
-                offer_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                ask_info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
-                ask_info: AssetInfo::Token {
+                offer_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
                 rate: Uint128::from(1000000000000000u128),
@@ -532,11 +548,11 @@ fn test_provide_liquidity() {
         pool_twap_res.exchange_infos
     );
 
-    assert_eq!(Uint128::from(100u128), pool_twap_res_t1.total_share);
+    assert_eq!(Uint128::from(1000u128), pool_twap_res_t1.total_share);
     assert_eq!(
         AssetExchangeRate {
             offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
@@ -546,14 +562,14 @@ fn test_provide_liquidity() {
         pool_twap_res_t1.exchange_info
     );
 
-    assert_eq!(Uint128::from(100u128), pool_twap_res_t2.total_share);
+    assert_eq!(Uint128::from(1000u128), pool_twap_res_t2.total_share);
     assert_eq!(
         AssetExchangeRate {
             offer_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
             ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             rate: Uint128::from(1000000000000000u128),
         },
@@ -561,60 +577,11 @@ fn test_provide_liquidity() {
     );
     assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 
-    //// -----x----- Check #3.1 :: Error ::: Provided spread amount exceeds allowed limit -----x----- ////
-
-    let join_pool_query_res: AfterJoinResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &QueryMsg::OnJoinPool {
-                assets_in: Some(assets_msg.clone()),
-                mint_amount: None,
-                slippage_tolerance: Some(Decimal::from_ratio(70u128, 100u128)),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        ResponseType::Failure("error : Provided spread amount exceeds allowed limit".to_string()),
-        join_pool_query_res.response
-    );
-
-    //// -----x----- Check #3.2 :: Error ::: Operation exceeds max slippage limit -----x----- ////
-    let assets_msg = vec![
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            amount: Uint128::from(1000u128),
-        },
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            amount: Uint128::from(100u128),
-        },
-    ];
-    let join_pool_query_res: AfterJoinResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &QueryMsg::OnJoinPool {
-                assets_in: Some(assets_msg.clone()),
-                mint_amount: None,
-                slippage_tolerance: None, // Some(Decimal::from_ratio(70u128, 100u128)),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        ResponseType::Failure("error : Operation exceeds max slippage limit".to_string()),
-        join_pool_query_res.response
-    );
-
     //// -----x----- Check #3.3 :: Success -----x----- ////
     let assets_msg = vec![
         Asset {
             info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             amount: Uint128::from(109u128),
         },
@@ -637,25 +604,7 @@ fn test_provide_liquidity() {
         )
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(109u128), join_pool_query_res.new_shares);
-    // Returned assets are in sorted order
-    assert_eq!(
-        vec![
-            Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                amount: Uint128::from(111u128),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                amount: Uint128::from(109u128),
-            },
-        ],
-        join_pool_query_res.provided_assets
-    );
+    assert_eq!(Uint128::from(110u128), join_pool_query_res.new_shares);
 
     // Execute AddLiquidity via the Vault contract
     let msg = VaultExecuteMsg::JoinPool {
@@ -677,7 +626,7 @@ fn test_provide_liquidity() {
         vault_instance.clone(),
         &msg,
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(1100u128),
         }],
     )
@@ -697,7 +646,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(109u128), recepient_bal_res.balance);
+    assert_eq!(Uint128::from(110u128), recepient_bal_res.balance);
 
     let vault_bal_res: BalanceResponse = app
         .wrap()
@@ -708,7 +657,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(211u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(1111u128), vault_bal_res.balance);
 
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
@@ -727,16 +676,16 @@ fn test_provide_liquidity() {
     assert_eq!(
         vec![
             Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                amount: Uint128::from(1109u128),
+            },
+            Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(211u128),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                amount: Uint128::from(209u128),
+                amount: Uint128::from(1111u128),
             },
         ],
         vault_pool_config_res.assets
@@ -752,7 +701,7 @@ fn test_provide_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -766,7 +715,7 @@ fn test_provide_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 offer_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -775,103 +724,59 @@ fn test_provide_liquidity() {
         )
         .unwrap();
 
-    assert_eq!(Uint128::from(209u128), pool_twap_res.total_share);
+    assert_eq!(Uint128::from(1110u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
+            AssetExchangeRate {
+                offer_info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
+                },
+                rate: Uint128::from(1090162308385933u128),
+            },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
                 ask_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
-                rate: Uint128::from(1089146919431279u128),
-            },
-            AssetExchangeRate {
-                offer_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                rate: Uint128::from(1090861244019138u128),
+                rate: Uint128::from(1089837983798379u128),
             },
         ],
         pool_twap_res.exchange_infos
     );
 
-    assert_eq!(Uint128::from(209u128), pool_twap_res_t1.total_share);
+    assert_eq!(Uint128::from(1110u128), pool_twap_res_t1.total_share);
     assert_eq!(
         AssetExchangeRate {
             offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            rate: Uint128::from(1090861244019138u128),
+            rate: Uint128::from(1090162308385933u128),
         },
         pool_twap_res_t1.exchange_info
     );
 
-    assert_eq!(Uint128::from(209u128), pool_twap_res_t2.total_share);
+    assert_eq!(Uint128::from(1110u128), pool_twap_res_t2.total_share);
     assert_eq!(
         AssetExchangeRate {
             offer_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
             ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
-            rate: Uint128::from(1089146919431279u128),
+            rate: Uint128::from(1089837983798379u128),
         },
         pool_twap_res_t2.exchange_info
     );
-
-    //// -----x----- Check #4 :: Error ::: Invalid tokens -----x----- ////
-    let assets_msg = vec![
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            amount: Uint128::from(10u128),
-        },
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: Addr::unchecked("token2".to_string()),
-            },
-            amount: Uint128::from(10u128),
-        },
-    ];
-    let msg = VaultExecuteMsg::JoinPool {
-        pool_id: Uint128::from(1u128),
-        recipient: Some("recipient".to_string()),
-        lp_to_mint: None,
-        auto_stake: None,
-        slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
-        assets: Some(assets_msg.clone()),
-    };
-    let err_res = app
-        .execute_contract(
-            alice_address.clone(),
-            vault_instance.clone(),
-            &msg,
-            &[Coin {
-                denom: "xprt".to_string(),
-                amount: Uint128::new(1100u128),
-            }],
-        )
-        .unwrap_err();
-    assert_eq!(
-        err_res.root_cause().to_string(),
-        "Invalid sequence of assets"
-    );
 }
-
-
-
-
-
 
 #[test]
 fn test_withdraw_liquidity() {
@@ -880,7 +785,7 @@ fn test_withdraw_liquidity() {
     let mut app = mock_app(
         owner.clone(),
         vec![Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
@@ -889,7 +794,7 @@ fn test_withdraw_liquidity() {
         owner.clone(),
         alice_address.clone(),
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(1000_000_000u128),
         }],
     )
@@ -909,7 +814,7 @@ fn test_withdraw_liquidity() {
     let assets_msg = vec![
         Asset {
             info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             amount: Uint128::from(10_000u128),
         },
@@ -944,7 +849,7 @@ fn test_withdraw_liquidity() {
         vault_instance.clone(),
         &msg,
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(10000u128),
         }],
     )
@@ -1030,14 +935,14 @@ fn test_withdraw_liquidity() {
     assert_eq!(
         vec![
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
                 amount: Uint128::from(5000u128),
             },
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                info: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
                 },
                 amount: Uint128::from(5000u128),
             },
@@ -1056,8 +961,7 @@ fn test_withdraw_liquidity() {
         })
         .unwrap(),
     };
-    app
-        .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
+    app.execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
     let current_block = app.block_info();
 
@@ -1100,14 +1004,14 @@ fn test_withdraw_liquidity() {
     assert_eq!(
         vec![
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
                 amount: Uint128::from(5000u128),
             },
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                info: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
                 },
                 amount: Uint128::from(5000u128),
             },
@@ -1125,7 +1029,7 @@ fn test_withdraw_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -1139,7 +1043,7 @@ fn test_withdraw_liquidity() {
             &pool_addr.clone(),
             &QueryMsg::CumulativePrice {
                 ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 offer_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -1152,20 +1056,20 @@ fn test_withdraw_liquidity() {
     assert_eq!(
         vec![
             AssetExchangeRate {
-                offer_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
+                offer_info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
-                ask_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
                 },
                 rate: Uint128::from(1000000000000000u128),
             },
             AssetExchangeRate {
-                offer_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_info: AssetInfo::Token {
+                offer_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
+                },
+                ask_info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
                 },
                 rate: Uint128::from(1000000000000000u128),
             },
@@ -1177,7 +1081,7 @@ fn test_withdraw_liquidity() {
     assert_eq!(
         AssetExchangeRate {
             offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
@@ -1194,7 +1098,7 @@ fn test_withdraw_liquidity() {
                 contract_addr: token_instance.clone(),
             },
             ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             rate: Uint128::from(1000000000000000u128),
         },
@@ -1203,13 +1107,6 @@ fn test_withdraw_liquidity() {
     assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
-
-
-
-
-
-
-
 #[test]
 fn test_swap() {
     let owner = Addr::unchecked("owner");
@@ -1217,7 +1114,7 @@ fn test_swap() {
     let mut app = mock_app(
         owner.clone(),
         vec![Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
@@ -1226,7 +1123,7 @@ fn test_swap() {
         owner.clone(),
         alice_address.clone(),
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(1000_000_000u128),
         }],
     )
@@ -1246,7 +1143,7 @@ fn test_swap() {
     let assets_msg = vec![
         Asset {
             info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             amount: Uint128::from(10_000u128),
         },
@@ -1281,7 +1178,7 @@ fn test_swap() {
         vault_instance.clone(),
         &msg,
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(10000u128),
         }],
     )
@@ -1295,10 +1192,10 @@ fn test_swap() {
             &QueryMsg::OnSwap {
                 swap_type: SwapType::GiveIn {},
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 amount: Uint128::from(1000u128),
                 max_spread: None,
@@ -1318,7 +1215,7 @@ fn test_swap() {
             &QueryMsg::OnSwap {
                 swap_type: SwapType::Custom("()".to_string()),
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -1343,7 +1240,7 @@ fn test_swap() {
             &QueryMsg::OnSwap {
                 swap_type: SwapType::GiveIn {},
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -1361,19 +1258,19 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_out,
-        Uint128::from(882u128)
+        Uint128::from(962u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(91u128)
+        Uint128::from(9u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(27u128)
+        Uint128::from(29u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(13u128)
+        Uint128::from(14u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.dev_fee,
@@ -1388,7 +1285,7 @@ fn test_swap() {
             &QueryMsg::OnSwap {
                 swap_type: SwapType::GiveOut {},
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
@@ -1406,11 +1303,11 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(1148u128)
+        Uint128::from(1039u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(118u128)
+        Uint128::from(9u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.total_fee,
@@ -1434,12 +1331,12 @@ fn test_swap() {
             &QueryMsg::OnSwap {
                 swap_type: SwapType::GiveIn {},
                 offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                    denom: "axlusd".to_string(),
                 },
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(1000u128),
+                amount: Uint128::from(3000u128),
                 max_spread: Some(Decimal::from_ratio(1u128, 100u128)),
                 belief_price: None,
             },
@@ -1448,57 +1345,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.response,
         ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.091".to_string()
-        )
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.amount_out,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(0u128)
-    );
-
-    // SwapType::GiveOut {},
-    let swap_offer_asset_res: SwapResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &QueryMsg::OnSwap {
-                swap_type: SwapType::GiveOut {},
-                offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
-                belief_price: None,
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        swap_offer_asset_res.response,
-        ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.102787456445993031"
+            "error : Operation exceeds max spread limit. Current spread = 0.028333333333333333"
                 .to_string()
         )
     );
@@ -1527,7 +1374,58 @@ fn test_swap() {
         Uint128::from(0u128)
     );
 
-    //// -----x----- Check #3 :: EXECUTE Failure : Spread check failed :::  -----x----- ////
+    // SwapType::GiveOut {},
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
+                },
+                amount: Uint128::from(5000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        swap_offer_asset_res.response,
+        ResponseType::Failure(
+            "error : Operation exceeds max spread limit. Current spread = 0.060517681370761939"
+                .to_string()
+        )
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.total_fee,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.protocol_fee,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.dev_fee,
+        Uint128::from(0u128)
+    );
+
+    //// -----x----- Check #3 :: EXECUTE Success :::  -----x----- ////
 
     // Execute Swap :: GiveIn Type
     let swap_msg = VaultExecuteMsg::Swap {
@@ -1535,7 +1433,7 @@ fn test_swap() {
             pool_id: Uint128::from(1u128),
             swap_type: SwapType::GiveIn {},
             asset_in: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
@@ -1551,7 +1449,7 @@ fn test_swap() {
         vault_instance.clone(),
         &swap_msg,
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(10000u128),
         }],
     )
@@ -1561,8 +1459,6 @@ fn test_swap() {
     // 1. Tokens transferred as expected
     // 2. Liquidity Pool balance updated
     // 3. Tokens transferred to the Vault
-    // 4. TWAP updated
-    // assert_eq!(res.root_cause().to_string(), "Unauthorized");
     let vault_bal_res: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1572,7 +1468,7 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(9101u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(9020u128), vault_bal_res.balance);
     let dev_bal_res: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1592,7 +1488,7 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(13u128), keeper_bal_res.balance);
+    assert_eq!(Uint128::from(14u128), keeper_bal_res.balance);
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1610,16 +1506,16 @@ fn test_swap() {
     assert_eq!(
         vec![
             Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "axlusd".to_string(),
+                },
+                amount: Uint128::from(11000u128),
+            },
+            Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(9101u128),
-            },
-            Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                amount: Uint128::from(11000u128),
+                amount: Uint128::from(9020u128),
             },
         ],
         vault_pool_config_res.assets
@@ -1634,7 +1530,7 @@ fn test_swap() {
                 contract_addr: token_instance.clone(),
             },
             asset_out: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+                denom: "axlusd".to_string(),
             },
             amount: Uint128::from(1000u128),
             max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
@@ -1647,7 +1543,7 @@ fn test_swap() {
         vault_instance.clone(),
         &swap_msg,
         &[Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(10000u128),
         }],
     )
@@ -1665,28 +1561,234 @@ fn test_swap() {
 }
 
 #[test]
-fn test_update_config() {
+fn update_pool_config() {
     let owner = Addr::unchecked("owner");
     let alice_address = Addr::unchecked("alice");
     let mut app = mock_app(
         owner.clone(),
         vec![Coin {
-            denom: "xprt".to_string(),
+            denom: "axlusd".to_string(),
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
+    // Set Alice's balances
+    app.send_tokens(
+        owner.clone(),
+        alice_address.clone(),
+        &[Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(1000_000_000u128),
+        }],
+    )
+    .unwrap();
 
-    let (_, pool_addr, _, _, _) = instantiate_contracts_instance(&mut app, &owner);
+    let (vault_instance, pool_addr, _lp_token_addr, token_instance, _) =
+        instantiate_contracts_instance(&mut app, &owner);
+    mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token_instance.clone(),
+        Uint128::new(900_000_000_000),
+        alice_address.to_string(),
+    );
 
-    //// -----x----- Success :: Function not supported -----x----- ////
+    //// -----x----- Successfully provide liquidity and mint LP tokens -----x----- ////
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance.clone(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+    ];
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id: Uint128::from(1u128),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
+    app.execute_contract(
+        alice_address.clone(),
+        token_instance.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_instance.clone().to_string(),
+            amount: Uint128::from(1000000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(10000u128),
+        }],
+    )
+    .unwrap();
 
-    let res = app
-        .execute_contract(
-            alice_address.clone(),
-            pool_addr.clone(),
-            &ExecuteMsg::UpdateConfig { params: None },
-            &[],
-        )
+    //  ###########  Check :: Faulure ::  Start changing amp with incorrect next amp   ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: MAX_AMP + 1,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
         .unwrap_err();
-    assert_eq!(res.root_cause().to_string(), "Operation non supported");
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "Amp coefficient must be greater than 0 and less than or equal to {}",
+            MAX_AMP
+        )
+    );
+
+    //  ###########  Check :: Faulure ::  Start changing amp with big difference between the old and new amp value   ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 100 * MAX_AMP_CHANGE + 1,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "The difference between the old and new amp value must not exceed {} times",
+            MAX_AMP_CHANGE
+        )
+    );
+
+    //  ########### Check :: Faulure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 25,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "Amp coefficient cannot be changed more often than once per {} seconds",
+            MIN_AMP_CHANGING_TIME
+        )
+    );
+
+    // Start increasing amp
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
+    });
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 25,
+                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+    };
+
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 17u64);
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 25u64);
+
+    // Start decreasing amp
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
+    });
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 15,
+                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+    };
+
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 20u64);
+
+    // Stop changing amp
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+    };
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 20u64);
 }

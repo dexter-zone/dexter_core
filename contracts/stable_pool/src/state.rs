@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Uint128};
 use cw_storage_plus::Item;
 use dexter::pool::Config;
 use schemars::JsonSchema;
@@ -23,8 +23,6 @@ pub struct Twap {
     pub block_time_last: u64,
 }
 
-
-
 /// ## Description
 /// This structure describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -37,7 +35,6 @@ pub struct MathConfig {
     pub next_amp: u64,
     // This is the timestamp when the current pool amplification should be `next_amp`
     pub next_amp_time: u64,
-    
 }
 
 /// This structure holds stableswap pool parameters.

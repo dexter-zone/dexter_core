@@ -115,7 +115,7 @@
       }
     },
     "PoolType": {
-      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable Weighted MetaStable Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
       "oneOf": [
         {
           "description": "XYK pool type",
@@ -134,10 +134,23 @@
           "description": "Stable pool type",
           "type": "object",
           "required": [
-            "stable"
+            "stable2_pool"
           ],
           "properties": {
-            "stable": {
+            "stable2_pool": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Stable pool type",
+          "type": "object",
+          "required": [
+            "stable3_pool"
+          ],
+          "properties": {
+            "stable3_pool": {
               "type": "object"
             }
           },
@@ -151,19 +164,6 @@
           ],
           "properties": {
             "weighted": {
-              "type": "object"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Meta-Stable pool type",
-          "type": "object",
-          "required": [
-            "meta_stable"
-          ],
-          "properties": {
-            "meta_stable": {
               "type": "object"
             }
           },

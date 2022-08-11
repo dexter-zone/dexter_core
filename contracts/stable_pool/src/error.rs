@@ -1,10 +1,6 @@
-use cosmwasm_std::{OverflowError, Decimal, StdError};
+use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use cosmwasm_std::{Decimal, OverflowError, StdError};
 use thiserror::Error;
-use crate::math::{
-    AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
-    MIN_AMP_CHANGING_TIME, N_COINS,
-};
-
 
 /// ## Description
 /// This enum describes pair contract errors!
@@ -56,7 +52,7 @@ pub enum ContractError {
         "Amp coefficient cannot be changed more often than once per {} seconds",
         MIN_AMP_CHANGING_TIME
     )]
-    MinAmpChangingTimeAssertion {},      
+    MinAmpChangingTimeAssertion {},
 }
 
 impl From<OverflowError> for ContractError {

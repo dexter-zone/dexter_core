@@ -184,7 +184,25 @@ pub struct MigrateMsg {}
 // ----------------x----------------x     Response Types       x----------------x----------------x------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-pub type ConfigResponse = Config;
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ConfigResponse {
+    /// ID of contract which is allowed to create pools of this type
+    pub pool_id: Uint128,
+    pub lp_token_addr: Option<Addr>,
+    /// the vault contract address
+    pub vault_addr: Addr,
+    /// Assets supported by the pool
+    pub assets: Vec<Asset>,
+    /// The pools type (provided in a [`PoolType`])
+    pub pool_type: PoolType,
+    pub fee_info: FeeInfo,
+    /// The last time block
+    pub block_time_last: u64,
+    /// Custom Math Config parameters are reutrned in binary format here
+    pub math_params: Option<Binary>,
+    pub additional_params: Option<Binary>,
+}
+
 
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

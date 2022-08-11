@@ -11,7 +11,6 @@ pub const MAX_AMP_CHANGE: u64 = 10;
 pub const MIN_AMP_CHANGING_TIME: u64 = 86400;
 pub const AMP_PRECISION: u64 = 100;
 
-
 /// ## Description
 /// Calculates the ask amount (the amount of tokens swapped to).
 /// ## Params
@@ -25,7 +24,7 @@ pub fn calc_ask_amount(
     offer_amount: u128,
     amp: u64,
 ) -> Option<u128> {
-    // 
+    //
     let leverage = amp.checked_mul(u64::from(N_COINS)).unwrap();
     let new_offer_pool = offer_pool.checked_add(offer_amount)?;
 
