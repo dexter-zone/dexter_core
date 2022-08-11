@@ -1,5 +1,5 @@
 // use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use cosmwasm_std::{CheckedMultiplyRatioError, ConversionOverflowError, OverflowError, StdError};
+use cosmwasm_std::{CheckedMultiplyRatioError, ConversionOverflowError, OverflowError, StdError, Decimal};
 use thiserror::Error;
 
 
@@ -31,8 +31,8 @@ pub enum ContractError {
     #[error("Operation exceeds max slippage limit")]
     MaxSlippageAssertion {},
 
-    #[error("Operation exceeds max spread limit")]
-    MaxSpreadAssertion {},
+    #[error("Operation exceeds max spread limit. Current spread = {spread_amount}")]
+    MaxSpreadAssertion { spread_amount: Decimal },
 
     #[error("Native token balance mismatch between the argument and the transferred")]
     AssetMismatch {},

@@ -180,6 +180,16 @@
                 "string",
                 "null"
               ]
+            },
+            "slippage_tolerance": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         }
@@ -198,26 +208,6 @@
             "swap_request"
           ],
           "properties": {
-            "deadline": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Uint128"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "limit": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Uint128"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "recipient": {
               "type": [
                 "string",
@@ -388,6 +378,10 @@
         }
       }
     },
+    "Decimal": {
+      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
+      "type": "string"
+    },
     "FeeInfo": {
       "type": "object",
       "required": [
@@ -511,6 +505,26 @@
         },
         "asset_out": {
           "$ref": "#/definitions/AssetInfo"
+        },
+        "belief_price": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_spread": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "pool_id": {
           "$ref": "#/definitions/Uint128"

@@ -135,7 +135,7 @@ impl InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// ## Description
-    UpdateConfig {params: Binary},
+    UpdateConfig {params: Option<Binary>},
     UpdateLiquidity { assets: Vec<Asset> },
 }
 

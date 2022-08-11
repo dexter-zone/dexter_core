@@ -66,6 +66,16 @@
                   "type": "null"
                 }
               ]
+            },
+            "slippage_tolerance": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         }
@@ -125,6 +135,26 @@
             },
             "ask_asset": {
               "$ref": "#/definitions/AssetInfo"
+            },
+            "belief_price": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_spread": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Decimal"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "offer_asset": {
               "$ref": "#/definitions/AssetInfo"
@@ -251,6 +281,10 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Decimal": {
+      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
+      "type": "string"
     },
     "SwapType": {
       "description": "This enum describes available Swap types. ## Available swap types ``` GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request ```",

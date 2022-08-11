@@ -1,31 +1,31 @@
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut,
-    Env, Event, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
-    Uint128, Uint256, WasmMsg,
+    entry_point, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction,
+    MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, Uint256, WasmMsg,
 };
-use std::convert::TryInto;
 use cw2::set_contract_version;
 use cw20::MinterResponse;
 use protobuf::Message;
-use std::vec;
+use std::convert::TryInto;
 use std::str::FromStr;
+use std::vec;
 
-use crate::state::{Twap, CONFIG, TWAPINFO};
 use crate::response::MsgInstantiateContractResponse;
+use crate::state::{Twap, CONFIG, TWAPINFO};
 
-use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg,
-    ResponseType, SwapResponse, Trade,return_join_failure, return_swap_failure, return_exit_failure, DEFAULT_SLIPPAGE, 
-    MAX_ALLOWED_SLIPPAGE
-};
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helper::{decimal2decimal256,get_share_in_assets, get_lp_token_name,get_lp_token_symbol};
+use dexter::error::ContractError;
+use dexter::helper::{
+    decimal2decimal256, get_lp_token_name, get_lp_token_symbol, get_share_in_assets,
+};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::pool::{
+    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
+    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
+    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
+    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
+};
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::error::ContractError;
-
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::xyk_pool";
@@ -34,16 +34,14 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_TOKEN_REPLY_ID: u64 = 1;
 
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 /// ## Description
 /// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
 /// Returns the [`Response`] with the specified attributes if the operation was successful, or a [`ContractError`] if the contract was not created
-/// 
+///
 /// ## Params
 /// * **msg** is a message of type [`InstantiateMsg`] which contains the basic settings for creating a contract
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -91,11 +89,10 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     // LP Token Name
-    let token_name = get_lp_token_name(msg.pool_id.clone(),msg.lp_token_name );
+    let token_name = get_lp_token_name(msg.pool_id.clone(), msg.lp_token_name);
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol );
-
+    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol);
 
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
@@ -114,7 +111,7 @@ pub fn instantiate(
                 marketing: None,
             })?,
             funds: vec![],
-            
+
             label: String::from("Dexter LP token"),
         }
         .into(),
@@ -125,16 +122,15 @@ pub fn instantiate(
     Ok(Response::new().add_submessages(sub_msg))
 }
 
-
 /// # Description
 /// The entry point to the contract for processing the reply from the submessage
-/// 
+///
 /// # Params
 /// * **msg** is the object of type [`Reply`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
     // Get config
-    let mut config : Config = CONFIG.load(deps.storage)?;
+    let mut config: Config = CONFIG.load(deps.storage)?;
 
     // Validation check
     if config.lp_token_addr.is_some() {
@@ -156,15 +152,13 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     Ok(Response::new().add_attribute("liquidity_token_addr", config.lp_token_addr.unwrap()))
 }
 
-
 // ----------------x----------------x----------------x------------------x----------------x----------------
 // ----------------x----------------x  Execute function :: Entry Point  x----------------x----------------
 // ----------------x----------------x----------------x------------------x----------------x----------------
 
-
 /// ## Description
 /// Available the execute messages of the contract.
-/// 
+///
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 /// * **env** is the object of type [`Env`].
@@ -185,11 +179,10 @@ pub fn execute(
     }
 }
 
-
 /// ## Description
 /// Admin Access by Vault :: Callable only by Dexter::Vault --> Updates locally stored asset balances state. Operation --> Updates locally stored [`Asset`] state
 ///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
-/// 
+///
 /// ## Params
 /// * **assets** is a field of type [`Vec<Asset>`]. It is a sorted list of `Asset` which contain the token type details and new updates balances of tokens as accounted by the pool
 pub fn execute_update_pool_liquidity(
@@ -237,17 +230,13 @@ pub fn execute_update_pool_liquidity(
     Ok(Response::new().add_event(event))
 }
 
-
-
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 // ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
-
-
 /// ## Description
 /// Available the query messages of the contract.
-/// 
+///
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 /// * **_env** is the object of type [`Env`].
@@ -259,7 +248,17 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
         QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
-        QueryMsg::OnJoinPool { assets_in, mint_amount, slippage_tolerance } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance)?),
+        QueryMsg::OnJoinPool {
+            assets_in,
+            mint_amount,
+            slippage_tolerance,
+        } => to_binary(&query_on_join_pool(
+            deps,
+            env,
+            assets_in,
+            mint_amount,
+            slippage_tolerance,
+        )?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -270,7 +269,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             ask_asset,
             amount,
             max_spread,
-            belief_price
+            belief_price,
         } => to_binary(&query_on_swap(
             deps,
             env,
@@ -279,7 +278,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             ask_asset,
             amount,
             max_spread,
-            belief_price
+            belief_price,
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -289,10 +288,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-
 /// ## Description
 /// Returns information about the controls settings in a [`ConfigResponse`] object.
-/// 
+///
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
@@ -311,7 +309,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Description
 /// Returns information about the Fees settings in a [`FeeResponse`] object.
 /// ## Params
-/// 
+///
 /// * **deps** is the object of type [`Deps`].
 pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
@@ -325,7 +323,7 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
 
 /// ## Description
 /// Returns information Pool ID which is of type [`Uint128`]
-/// 
+///
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
 pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
@@ -333,11 +331,9 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
     Ok(config.pool_id)
 }
 
-
 //--------x------------------x--------------x-----x-----
 //--------x    Query :: OnJoin, OnExit, OnSwap    x-----
 //--------x------------------x--------------x-----x-----
-
 
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
@@ -345,7 +341,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
-/// 
+///
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// * **deps** is the object of type [`Deps`].
@@ -359,7 +355,6 @@ pub fn query_on_join_pool(
     _mint_amount: Option<Uint128>,
     slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
-        
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
         return Ok(return_join_failure("No assets provided".to_string()));
@@ -392,7 +387,11 @@ pub fn query_on_join_pool(
         )
     } else {
         // Assert slippage tolerance
-        let res = assert_slippage_tolerance(slippage_tolerance, &deposits, &[config.assets[0].amount, config.assets[1].amount]);        
+        let res = assert_slippage_tolerance(
+            slippage_tolerance,
+            &deposits,
+            &[config.assets[0].amount, config.assets[1].amount],
+        );
         // return a `Failure` response if the slippage tolerance is not met
         if !res.is_success() {
             return Ok(return_join_failure(res.to_string()));
@@ -418,14 +417,12 @@ pub fn query_on_join_pool(
     Ok(res)
 }
 
-
-
 /// ## Description
 /// Returns [`AfterExitResponse`] type which contains -  
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and tranfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
-/// 
+///
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
 /// * **deps** is the object of type [`Deps`].
@@ -437,11 +434,12 @@ pub fn query_on_exit_pool(
     _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
-
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure( "Invalid number of LP tokens to burn amount".to_string() ))
-    }    
+        return Ok(return_exit_failure(
+            "Invalid number of LP tokens to burn amount".to_string(),
+        ));
+    }
 
     // Load the config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -459,13 +457,11 @@ pub fn query_on_exit_pool(
     })
 }
 
-
-
 /// ## Description
 /// Returns [`SwapResponse`] type which contains -  
 /// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
-/// 
+///
 /// ## Params
 ///  swap_type - Is of type [`SwapType`] which is either `GiveIn`, `GiveOut` or `Custom`
 ///  offer_asset_info - Of type [`AssetInfo`] which is the asset info of the asset to be traded in the offer side of the trade
@@ -481,9 +477,8 @@ pub fn query_on_swap(
     ask_asset_info: AssetInfo,
     amount: Uint128,
     max_spread: Option<Decimal>,
-    belief_price: Option<Decimal>,    
+    belief_price: Option<Decimal>,
 ) -> StdResult<SwapResponse> {
-
     // Load the config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
 
@@ -492,17 +487,21 @@ pub fn query_on_swap(
     let cur_ask_asset_bal: Uint128;
 
     // Get the current pool balance of the offer_asset and ask_asset
-    if offer_asset_info.equal(&config.assets[0].info) {
+    if offer_asset_info.equal(&config.assets[0].info)
+        && ask_asset_info.equal(&config.assets[1].info)
+    {
         cur_offer_asset_bal = config.assets[0].amount;
         cur_ask_asset_bal = config.assets[1].amount;
-    } else if offer_asset_info.equal(&config.assets[1].info) {
+    } else if offer_asset_info.equal(&config.assets[1].info)
+        && ask_asset_info.equal(&config.assets[0].info)
+    {
         cur_offer_asset_bal = config.assets[1].amount;
         cur_ask_asset_bal = config.assets[0].amount;
     } else {
-        return Ok( return_swap_failure("assets mismatch".to_string()) )
+        return Ok(return_swap_failure("assets mismatch".to_string()));
     }
 
-    // Offer asset and Ask asset 
+    // Offer asset and Ask asset
     let offer_asset: Asset;
     let ask_asset: Asset;
     let (calc_amount, spread_amount): (Uint128, Uint128);
@@ -512,13 +511,12 @@ pub fn query_on_swap(
     match swap_type {
         SwapType::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
-            (calc_amount, spread_amount) = compute_swap(
-                cur_offer_asset_bal,
-                cur_ask_asset_bal,
-                amount,
-            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
-            // Calculate the commission fees 
-            (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(calc_amount);
+            (calc_amount, spread_amount) =
+                compute_swap(cur_offer_asset_bal, cur_ask_asset_bal, amount)
+                    .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            // Calculate the commission fees
+            (total_fee, protocol_fee, dev_fee) =
+                config.fee_info.calculate_underlying_fees(calc_amount);
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount,
@@ -536,9 +534,12 @@ pub fn query_on_swap(
                 cur_ask_asset_bal,
                 amount,
                 config.fee_info.total_fee_bps,
-            ).unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
-            // Calculate the commission fees 
-            (total_fee, protocol_fee, dev_fee) = config.fee_info.calculate_underlying_fees(before_commission_deduction);                        
+            )
+            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            // Calculate the commission fees
+            (total_fee, protocol_fee, dev_fee) = config
+                .fee_info
+                .calculate_underlying_fees(before_commission_deduction);
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
@@ -547,10 +548,22 @@ pub fn query_on_swap(
                 info: ask_asset_info.clone(),
                 amount,
             };
-        },
-        SwapType::Custom(_) => {
-            return Ok( return_swap_failure("SwapType not supported".to_string()) ) 
         }
+        SwapType::Custom(_) => {
+            return Ok(return_swap_failure("SwapType not supported".to_string()))
+        }
+    }
+
+    // Check the max spread limit (if it was specified)
+    let spread_check = assert_max_spread(
+        belief_price,
+        max_spread,
+        offer_asset.amount,
+        ask_asset.amount + total_fee,
+        spread_amount,
+    );
+    if !spread_check.is_success() {
+        return Ok(return_swap_failure(spread_check.to_string()));
     }
 
     Ok(SwapResponse {
@@ -566,11 +579,9 @@ pub fn query_on_swap(
     })
 }
 
-
 //--------x------------------x------x-----x-----
 //--------x    Query :: TWAP Functions    x-----
 //--------x------------------x------x-----x-----
-
 
 /// ## Description
 /// Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
@@ -592,7 +603,6 @@ pub fn query_cumulative_price(
 
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
 
-
     let mut price0_cumulative_last = twap.price0_cumulative_last;
     let mut price1_cumulative_last = twap.price1_cumulative_last;
 
@@ -612,7 +622,7 @@ pub fn query_cumulative_price(
         exchange_rate = price1_cumulative_last;
     } else {
         return Err(StdError::generic_err("Invalid asset"));
-    }   
+    }
 
     // return response
     let resp = CumulativePriceResponse {
@@ -626,7 +636,6 @@ pub fn query_cumulative_price(
 
     Ok(resp)
 }
-
 
 /// ## Description
 /// Returns information about the cumulative prices in a [`CumulativePricesResponse`] object.
@@ -644,9 +653,12 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let mut exchange_infos: Vec<AssetExchangeRate> = vec![];
 
     // Calculate the cumulative price of the offer_asset and ask_asset
-    if let Some((price0_cumulative_new, price1_cumulative_new, _)) =
-        accumulate_prices(env, &twap, config.assets[0].amount.clone(), config.assets[1].amount.clone())?
-    {
+    if let Some((price0_cumulative_new, price1_cumulative_new, _)) = accumulate_prices(
+        env,
+        &twap,
+        config.assets[0].amount.clone(),
+        config.assets[1].amount.clone(),
+    )? {
         price0_cumulative_last = price0_cumulative_new;
         price1_cumulative_last = price1_cumulative_new;
     }
@@ -669,11 +681,9 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     })
 }
 
-
 //--------x-----x------x-----x-----
 //--------x    MigrateMsg    x-----
 //--------x-----x------x-----x-----
-
 
 /// ## Description
 /// Used for migration of contract. Returns the default object of type [`Response`].
@@ -686,13 +696,9 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
     Ok(Response::default())
 }
 
-
-
-
 // ----------------x----------------x----------------x----------------x----------------x----------
 // ----------------x----------------x   MATH Computations    x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------
-
 
 /// ## Description
 /// Returns computed swap for the pool with specified parameters
@@ -722,12 +728,8 @@ pub fn compute_swap(
 
     // commission will be absorbed to pool
     // let return_amount: Uint256 = return_amount - commission_amount;
-    Ok((
-        return_amount.try_into()?,
-        spread_amount.try_into()?,
-    ))
+    Ok((return_amount.try_into()?, spread_amount.try_into()?))
 }
-
 
 /// ## Description
 /// Returns computed offer amount for the pool with specified parameters.
@@ -745,7 +747,8 @@ pub fn compute_offer_amount(
     // ask => offer
     // offer_amount = cp / (ask_pool - ask_amount / (1 - commission_rate)) - offer_pool
     let cp = Uint256::from(offer_pool) * Uint256::from(ask_pool);
-    let one_minus_commission = Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
+    let one_minus_commission =
+        Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
@@ -754,22 +757,22 @@ pub fn compute_offer_amount(
         .multiply_ratio(
             Uint256::from(1u8),
             Uint256::from(
-                ask_pool.checked_sub(
-                    (Uint256::from(before_commission_deduction)).try_into()?,
-                )?,
+                ask_pool.checked_sub((Uint256::from(before_commission_deduction)).try_into()?)?,
             ),
         )
         .checked_sub(offer_pool.into())?
         .try_into()?;
 
-    
     let spread_amount = (offer_amount * Decimal::from_ratio(ask_pool, offer_pool))
         .checked_sub(before_commission_deduction.try_into()?)
         .unwrap_or_else(|_| Uint128::zero());
 
-    Ok((offer_amount, spread_amount, before_commission_deduction.try_into()?))
+    Ok((
+        offer_amount,
+        spread_amount,
+        before_commission_deduction.try_into()?,
+    ))
 }
-
 
 /// ## Description
 /// Shifts block_time when any price is zero to not fill an accumulator with a new price to that period.
@@ -813,7 +816,6 @@ pub fn accumulate_prices(
     Ok(Some((pcl0, pcl1, block_time)))
 }
 
-
 /// ## Description
 /// This is an internal function that enforces slippage tolerance for swaps.
 /// Returns a [`ContractError`] on failure, otherwise returns [`Ok`].
@@ -831,7 +833,7 @@ fn assert_slippage_tolerance(
 
     let slippage_tolerance = slippage_tolerance.unwrap_or(default_slippage);
     if slippage_tolerance.gt(&max_allowed_slippage) {
-        return ResponseType::Failure( (ContractError::AllowedSpreadAssertion {}).to_string() );
+        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
     }
 
     let slippage_tolerance: Decimal256 = decimal2decimal256(slippage_tolerance).unwrap();
@@ -845,7 +847,62 @@ fn assert_slippage_tolerance(
         || Decimal256::from_ratio(deposits[1], deposits[0]) * one_minus_slippage_tolerance
             > Decimal256::from_ratio(pools[1], pools[0])
     {
-        return  ResponseType::Failure( (ContractError::MaxSlippageAssertion {} ).to_string() );
+        return ResponseType::Failure((ContractError::MaxSlippageAssertion {}).to_string());
+    }
+
+    ResponseType::Success {}
+}
+
+/// ## Description
+/// Returns a [`ContractError`] on failure.
+/// If `belief_price` and `max_spread` are both specified, we compute a new spread, otherwise we just use the swap spread to check `max_spread`.
+///
+/// ## Params
+/// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
+/// * **max_spread** is an object of type [`Option<Decimal>`]. This is the max spread allowed so that the swap can be executed successfuly.
+/// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
+/// * **return_amount** is an object of type [`Uint128`]. This is the amount of assets to receive from the swap.
+/// * **spread_amount** is an object of type [`Uint128`]. This is the spread used in the swap.
+pub fn assert_max_spread(
+    belief_price: Option<Decimal>,
+    max_spread: Option<Decimal>,
+    offer_amount: Uint128,
+    return_amount: Uint128,
+    spread_amount: Uint128,
+) -> ResponseType {
+    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+
+    let max_spread = max_spread.unwrap_or(default_spread);
+    if max_spread.gt(&max_allowed_spread) {
+        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
+    }
+    let calc_spread = Decimal::from_ratio(spread_amount, return_amount + spread_amount);
+
+    // If belief price is provided, we compute a new spread
+    if let Some(belief_price) = belief_price {
+        let expected_return = offer_amount * belief_price.inv().unwrap();
+        let spread_amount = expected_return
+            .checked_sub(return_amount)
+            .unwrap_or_else(|_| Uint128::zero());
+        let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
+        if return_amount < expected_return && calc_spread > max_spread {
+            return ResponseType::Failure(
+                (ContractError::MaxSpreadAssertion {
+                    spread_amount: calc_spread,
+                })
+                .to_string(),
+            );
+        }
+    }
+    // check if spread limit is respected or not
+    else if calc_spread > max_spread {
+        return ResponseType::Failure(
+            (ContractError::MaxSpreadAssertion {
+                spread_amount: calc_spread,
+            })
+            .to_string(),
+        );
     }
 
     ResponseType::Success {}

@@ -12,12 +12,16 @@
       "properties": {
         "update_config": {
           "type": "object",
-          "required": [
-            "params"
-          ],
           "properties": {
             "params": {
-              "$ref": "#/definitions/Binary"
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Binary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         }

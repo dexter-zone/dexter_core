@@ -143,9 +143,8 @@ pub fn execute(
         ),
         ExecuteMsg::Swap {
             swap_request,
-            limit,
             recipient,
-        } => execute_swap(deps, env, info, swap_request, limit, recipient),
+        } => execute_swap(deps, env, info, swap_request, recipient),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -810,7 +809,6 @@ pub fn execute_swap(
     env: Env,
     info: MessageInfo,
     swap_request: SingleSwapRequest,
-    _limit: Option<Uint128>,
     op_recipient: Option<String>,
 ) -> Result<Response, ContractError> {
     // Load Pool Info from Storage
@@ -867,15 +865,6 @@ pub fn execute_swap(
     if !pool_info.developer_addr.is_some() {
         swap_response.trade_params.dev_fee = Uint128::zero();
     }
-
-    // // check max spread limit if exist
-    // assert_max_spread(
-    //     belief_price,
-    //     max_spread,
-    //     offer_amount,
-    //     return_amount + commission_amount,
-    //     spread_amount,
-    // )?;
 
     // Create offer and ask assets
     let offer_asset = Asset {
@@ -982,8 +971,6 @@ pub fn execute_swap(
         pool_info.pool_addr.unwrap().to_string(),
         pool_info.assets,
     )?);
-
-    let config = CONFIG.load(deps.storage)?;
 
     // Execute Msg :: Protocol Fee transfer to Keeper contract
     if !swap_response.trade_params.protocol_fee.is_zero() {
