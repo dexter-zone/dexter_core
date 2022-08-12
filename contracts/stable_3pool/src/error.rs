@@ -1,8 +1,8 @@
-use cosmwasm_std::{OverflowError, CheckedMultiplyRatioError, ConversionOverflowError, StdError, Decimal};
-use thiserror::Error;
-use crate::math::{
-    MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME
+use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use cosmwasm_std::{
+    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError,
 };
+use thiserror::Error;
 
 /// ## Description
 /// This enum describes pair contract errors!
@@ -13,7 +13,7 @@ pub enum ContractError {
 
     #[error("{0}")]
     CheckedMultiplyRatioError(#[from] CheckedMultiplyRatioError),
-        
+
     #[error("Unauthorized")]
     Unauthorized {},
 
@@ -21,7 +21,7 @@ pub enum ContractError {
         "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
     )]
     InvalidNumberOfAssets {},
- 
+
     #[error("Prices update for twap failed")]
     PricesUpdateFailed {},
 
@@ -32,7 +32,7 @@ pub enum ContractError {
     InvalidZeroAmount {},
 
     #[error("Operation exceeds max spread limit. Current spread = {spread_amount}")]
-    MaxSpreadAssertion {spread_amount: Decimal },
+    MaxSpreadAssertion { spread_amount: Decimal },
 
     #[error("Provided spread amount exceeds allowed limit")]
     AllowedSpreadAssertion {},
@@ -65,10 +65,10 @@ pub enum ContractError {
         "Amp coefficient cannot be changed more often than once per {} seconds",
         MIN_AMP_CHANGING_TIME
     )]
-    MinAmpChangingTimeAssertion {},    
+    MinAmpChangingTimeAssertion {},
 
     #[error("The asset {0} does not belong to the pair")]
-    InvalidAsset(String),  
+    InvalidAsset(String),
 }
 
 impl From<OverflowError> for ContractError {

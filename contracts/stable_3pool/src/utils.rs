@@ -1,28 +1,22 @@
-use cosmwasm_std::{
-    Decimal, Deps, Env, StdResult,
-    Storage, Uint128, Decimal256 , Fraction
-};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, Fraction, StdResult, Storage, Uint128};
 
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
-use dexter::DecimalCheckedOps;
-use dexter::helper::{select_pools, adjust_precision};
+use dexter::helper::{adjust_precision, select_pools};
 use dexter::pool::Config;
+use dexter::DecimalCheckedOps;
 
-use crate::state::MathConfig;
 use crate::error::ContractError;
 use crate::math::calc_y;
+use crate::state::MathConfig;
 use crate::state::{get_precision, Twap};
-
-
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 
-
 /// ## Description
 ///  Returns the result of a swap, if erros then returns [`ContractError`].
-/// 
+///
 /// ## Params
 /// * **config** is an object of type [`Config`].
 /// * **offer_asset** is an object of type [`Asset`]. This is the asset that is being offered.
@@ -61,7 +55,6 @@ pub(crate) fn compute_swap(
     Ok((return_amount, spread_amount))
 }
 
-
 /// ## Description
 /// Returns an amount of offer assets for a specified amount of ask assets.
 /// ## Params
@@ -83,7 +76,6 @@ pub(crate) fn compute_offer_amount(
     greatest_precision: u8,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
     let commission_rate_decimals = Decimal::from_ratio(commission_rate, 10000u16);
-
 
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;
@@ -111,27 +103,24 @@ pub(crate) fn compute_offer_amount(
             .to_uint128_with_precision(greatest_precision)?,
     )?;
 
-    let offer_amount = adjust_precision(offer_amount, greatest_precision, offer_precision)?;    
+    let offer_amount = adjust_precision(offer_amount, greatest_precision, offer_precision)?;
 
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
-    let spread_amount = offer_amount
-    .saturating_sub(before_commission.to_uint128_with_precision(ask_precision)?);
+    let spread_amount =
+        offer_amount.saturating_sub(before_commission.to_uint128_with_precision(ask_precision)?);
 
-    let commission_amount = commission_rate_decimals.checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
+    let commission_amount = commission_rate_decimals
+        .checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
     Ok((offer_amount, spread_amount, commission_amount))
 }
-
-
-
 
 // --------x--------x--------x--------x--------x--------x--------
 // --------x--------x AMP COMPUTE Functions   x--------x---------
 // --------x--------x--------x--------x--------x--------x--------
 
-
 /// ## Description
 /// Compute the current pool amplification coefficient (AMP).
-/// 
+///
 /// ## Params
 /// * **math_config** is an object of type [`MathConfig`].
 fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
@@ -147,8 +136,8 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
         // time elapsed since AMP change init and the total time range of AMP change
         let elapsed_time =
             Uint128::from(block_time).checked_sub(Uint128::from(math_config.init_amp_time))?;
-        let time_range =
-            Uint128::from(math_config.next_amp_time).checked_sub(Uint128::from(math_config.init_amp_time))?;
+        let time_range = Uint128::from(math_config.next_amp_time)
+            .checked_sub(Uint128::from(math_config.init_amp_time))?;
 
         // Calculate AMP based on if AMP is being increased or decreased
         if math_config.next_amp > math_config.init_amp {
@@ -165,16 +154,13 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
     }
 }
 
-
-
 // --------x--------x--------x--------x--------x--------x--------
 // --------x--------x TWAP Helper Functions   x--------x---------
 // --------x--------x--------x--------x--------x--------x--------
 
-
 /// ## Description
 /// Accumulate token prices for the asset pairs in the pool.
-/// 
+///
 /// ## Params
 /// * **config** is an object of type [`Config`].
 /// * **math_config** is an object of type [`MathConfig`]
@@ -186,14 +172,14 @@ pub fn accumulate_prices(
     config: &mut Config,
     math_config: MathConfig,
     twap: &mut Twap,
-    pools: &[DecimalAsset]
+    pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
     if block_time <= config.block_time_last {
         return Ok(());
     }
-    let time_elapsed = Uint128::from(block_time - config.block_time_last);
+    let time_elapsed = Uint128::from(block_time - twap.block_time_last);
 
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
@@ -203,7 +189,7 @@ pub fn accumulate_prices(
         };
 
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
-        let (return_amount, _)= compute_swap(
+        let (return_amount, _) = compute_swap(
             deps.storage,
             &env,
             &math_config,
@@ -215,8 +201,8 @@ pub fn accumulate_prices(
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
-    
+
     // Update last block time.
-    config.block_time_last = block_time;
+    twap.block_time_last = block_time;
     Ok(())
 }

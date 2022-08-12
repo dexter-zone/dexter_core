@@ -1,11 +1,10 @@
-use cosmwasm_std::{Addr, DepsMut, StdResult, Storage, Uint128};
-use cw_storage_plus::{Item,Map};
+use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128};
+use cw_storage_plus::{Item, Map};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use dexter::asset::{AssetInfo};
+use dexter::asset::AssetInfo;
 use dexter::pool::Config;
-
 
 /// ## Description
 /// Stores config at the given key
@@ -30,7 +29,7 @@ pub struct MathConfig {
     // This is the timestamp when the current pool amplification should be `next_amp`
     pub next_amp_time: u64,
     /// The greatest precision of assets in the pool
-    pub greatest_precision: u8,        
+    pub greatest_precision: u8,
 }
 
 /// ## Description
@@ -41,7 +40,6 @@ pub struct Twap {
     pub cumulative_prices: Vec<(AssetInfo, AssetInfo, Uint128)>,
     pub block_time_last: u64,
 }
-
 
 /// This structure holds stableswap pool parameters.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -62,8 +60,6 @@ pub enum StablePoolUpdateParams {
 // ----------------x----------------x----------------x----------------
 // ----------------x      PRESISION : Store and getter fns     x------
 // ----------------x----------------x----------------x----------------
-
-
 
 /// Stores map of AssetInfo (as String) -> precision
 pub const PRECISIONS: Map<String, u8> = Map::new("precisions");

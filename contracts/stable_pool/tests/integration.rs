@@ -15,8 +15,8 @@ use dexter::vault::{
     SwapType,
 };
 
-use stable3pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use stable3pool::state::{MathConfig, StablePoolParams, StablePoolUpdateParams};
+use stableswap_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use stableswap_pool::state::{MathConfig, StablePoolParams, StablePoolUpdateParams};
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -79,7 +79,7 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-/// Initialize a new vault and a XYK Pool with the given assets
+/// Initialize a new vault and a Stable-2-pool with the given assets
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
     let stableswap_pool_code_id = store_stable_pool_code(app);
     let vault_code_id = store_vault_code(app);
@@ -150,7 +150,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         },
     ];
 
-    // Initialize XYK Pool contract instance
+    // Initialize Stable-2-pool contract instance
     let current_block = app.block_info();
     let msg = VaultExecuteMsg::CreatePool {
         pool_type: PoolType::Stable2Pool {},

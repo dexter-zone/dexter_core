@@ -1,6 +1,6 @@
 pub mod contract;
-pub mod state;
 pub mod math;
+pub mod state;
 pub mod utils;
 
 mod error;

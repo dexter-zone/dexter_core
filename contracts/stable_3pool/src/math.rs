@@ -1,5 +1,5 @@
-use dexter::asset::{Asset, DecimalAsset, Decimal256Ext, AssetInfo};
-use cosmwasm_std::{StdError,Decimal256, StdResult, Uint128, Uint256, Uint64};
+use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Uint64};
+use dexter::asset::{AssetInfo, Decimal256Ext, DecimalAsset};
 use itertools::Itertools;
 
 /// The maximum number of calculation steps for Newton's method.
@@ -10,12 +10,9 @@ pub const MAX_AMP_CHANGE: u64 = 10;
 pub const MIN_AMP_CHANGING_TIME: u64 = 86400;
 pub const AMP_PRECISION: u64 = 100;
 
-
 // ----------------x----------------x----------------
 // ----------------x   STABLE-3-Pool Math     x------
 // ----------------x----------------x----------------
-
-
 
 /// ## Description
 /// Computes the stableswap invariant (D).
@@ -73,8 +70,6 @@ pub(crate) fn compute_d(
     }
 }
 
-
-
 /// ## Description
 /// Computes the new balance of a `to` pool if one makes `from` pool = `new_amount`.
 ///
@@ -93,7 +88,6 @@ pub(crate) fn calc_y(
     amp_: u64,
     greatest_precision: u8,
 ) -> StdResult<Uint128> {
-
     let amp = Uint64::from(amp_);
 
     if from.equal(to) {
@@ -145,7 +139,6 @@ pub(crate) fn calc_y(
     // Should definitely converge in 32 iterations.
     Err(StdError::generic_err("y is not converging"))
 }
-
 
 
 // #[cfg(test)]
@@ -205,4 +198,3 @@ pub(crate) fn calc_y(
 //         assert_eq!(sim_y, y);
 //     }
 // }
-
