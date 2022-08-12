@@ -92,6 +92,7 @@ const MAX_DEV_FEE_PERCENT: u16 = 25u16;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
+    pub swap_fee_dir: SwapType,
     pub total_fee_bps: u16,
     pub protocol_fee_percent: u16,
     pub dev_fee_percent: u16,
@@ -107,16 +108,16 @@ impl FeeInfo {
             && self.dev_fee_percent <= MAX_DEV_FEE_PERCENT
     }    
 
-    // Returns the number of tokens charged as total fee, protocol fee and dev fee 
-    pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
-        // let commission_rate = decimal2decimal256(self.total_fee_bps)?;
+    // // Returns the number of tokens charged as total fee, protocol fee and dev fee 
+    // pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
+    //     // let commission_rate = decimal2decimal256(self.total_fee_bps)?;
 
-        let total_fee: Uint128 = amount *  Decimal::from_ratio( self.total_fee_bps, 10_000u16);
-        let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
-        let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
+    //     let total_fee: Uint128 = amount *  Decimal::from_ratio( self.total_fee_bps, 10_000u16);
+    //     let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
+    //     let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
 
-        (total_fee, protocol_fee, dev_fee)
-    }
+    //     (total_fee, protocol_fee, dev_fee)
+    // }
 
     // Returns the number of tokens charged as total fee, protocol fee and dev fee 
     pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128,Uint128) {

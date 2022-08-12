@@ -146,7 +146,7 @@ pub fn instantiate(
     let token_name = get_lp_token_name(msg.pool_id.clone(), msg.lp_token_name.clone());
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.pool_id.clone(), msg.lp_token_symbol.clone());
+    let token_symbol = get_lp_token_symbol( msg.lp_token_symbol.clone());
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         msg: WasmMsg::Instantiate {
@@ -305,7 +305,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::OnJoinPool {
             assets_in,
             mint_amount,
-        } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount)?),
+            slippage_tolerance
+        } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance )?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -315,6 +316,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price,
         } => to_binary(&query_on_swap(
             deps,
             env,
@@ -322,6 +325,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
+            max_spread,
+            belief_price,
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -337,6 +342,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// * **deps** is the object of type [`Deps`].
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -345,6 +352,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         pool_type: config.pool_type,
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
+        math_params: Some(to_binary(&math_config).unwrap()),        
+        additional_params: None
     })
 }
 
@@ -355,10 +364,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
-        total_fee_bps: config.fee_info.total_fee_bps,
-        protocol_fee_percent: config.fee_info.protocol_fee_percent,
-        dev_fee_percent: config.fee_info.dev_fee_percent,
-        dev_fee_collector: config.fee_info.developer_addr,
+        total_fee_bps: config.fee_info.total_fee,
+        swap_fee_dir: config.fee_info.swap_fee_dir
     })
 }
 
@@ -392,10 +399,11 @@ pub fn query_on_join_pool(
     _env: Env,
     assets_in: Option<Vec<Asset>>,
     mint_amount: Option<Uint128>,
+    slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
-        return Ok(return_join_failure());
+        return Ok(return_join_failure("No assets provided".to_string()));
     }
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
@@ -475,9 +483,9 @@ pub fn query_on_join_pool(
         }
     }
 
-    // If more than one asset, all should be provided.
+    // If more than one asset, all should be provided
     if act_assets_in.len() != pool_assets_weighted.len() {
-        return Ok(return_join_failure());
+        return Ok( return_join_failure(     "If more than one asset, all should be provided".to_string()     ) );
     }
 
     // 3) JoinPoolNoSwap with as many tokens as we can. (What is in perfect ratio)
@@ -506,8 +514,8 @@ pub fn query_on_join_pool(
             maximal_exact_ratio_join(act_assets_in.clone(), &pool_assets_weighted, total_share)?
         };
 
-    if err == (ResponseType::Failure {}) {
-        return Ok(return_join_failure());
+    if !err.is_success() {
+        return Ok(return_join_failure(  err.to_string() ) );
     }
     if remaining_tokens_in.is_empty() {
         return Ok(AfterJoinResponse {
@@ -605,7 +613,7 @@ pub fn query_on_exit_pool(
 ) -> StdResult<AfterExitResponse> {
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure());
+        return Ok(return_exit_failure("Burn amount is zero".to_string()));
     }
 
     let config: Config = CONFIG.load(deps.storage)?;
@@ -635,7 +643,7 @@ pub fn query_on_exit_pool(
         let asset_out = asset.amount * share_out_ratio;
         // Return a `Failure` response if the calculation of the amount of tokens to be burnt from the pool is not valid
         if asset_out > asset.amount {
-            return Ok(return_exit_failure());
+            return Ok(return_exit_failure("Invalid asset out".to_string()));
         }
         // Add the asset to the vector of assets to be transferred to the user from the Vault contract
         refund_assets.push(Asset {
@@ -670,6 +678,8 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
+    max_spread: Option<Decimal>,
+    belief_price: Option<Decimal>,    
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -709,7 +719,7 @@ pub fn query_on_swap(
 
     // if there's 0 assets balance return failure response
     if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
-        return Ok(return_swap_failure());
+        return Ok(return_swap_failure("Invalid swap amounts".to_string()));
     }
 
     // Offer and ask asset precisions
@@ -777,7 +787,7 @@ pub fn query_on_swap(
                 amount: calc_amount,
             };
         }
-        SwapType::Custom(_) => return Ok(return_swap_failure()),
+        SwapType::Custom(_) => return Ok(return_swap_failure("SwapType not supported".to_string()))
     }
 
     Ok(SwapResponse {

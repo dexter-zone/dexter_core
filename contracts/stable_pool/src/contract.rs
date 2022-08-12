@@ -19,7 +19,7 @@ use cw20::MinterResponse;
 
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
 use dexter::helper::{
-    adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets,
+    adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, calculate_underlying_fees
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
@@ -382,9 +382,7 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
         total_fee_bps: config.fee_info.total_fee_bps,
-        protocol_fee_percent: config.fee_info.protocol_fee_percent,
-        dev_fee_percent: config.fee_info.dev_fee_percent,
-        dev_fee_collector: config.fee_info.developer_addr,
+        swap_fee_dir: config.fee_info.swap_fee_dir
     })
 }
 
@@ -530,6 +528,7 @@ pub fn query_on_join_pool(
         provided_assets: act_assets_in,
         new_shares,
         response: dexter::pool::ResponseType::Success {},
+        fee:None
     };
 
     Ok(res)
@@ -572,6 +571,7 @@ pub fn query_on_exit_pool(
         assets_out,
         burn_shares: burn_amount.unwrap(),
         response: dexter::pool::ResponseType::Success {},
+        fee:None
     })
 }
 
@@ -628,7 +628,7 @@ pub fn query_on_swap(
     let offer_asset: Asset;
     let ask_asset: Asset;
     let (mut calc_amount, mut spread_amount): (Uint128, Uint128);
-    let (total_fee, protocol_fee, dev_fee): (Uint128, Uint128, Uint128);
+    let total_fee: Uint128;
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
@@ -647,8 +647,7 @@ pub fn query_on_swap(
             calc_amount = adjust_precision(calc_amount, greater_precision, ask_precision)?;
             spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
             // Calculate the commission fees
-            (total_fee, protocol_fee, dev_fee) =
-                config.fee_info.calculate_underlying_fees(calc_amount);
+            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps );
 
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
@@ -672,7 +671,6 @@ pub fn query_on_swap(
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
             // Calculate the protocol and dev fee
-            (protocol_fee, dev_fee) = config.fee_info.calculate_total_fee_breakup(total_fee);
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
@@ -710,11 +708,14 @@ pub fn query_on_swap(
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
             spread: spread_amount,
-            total_fee: total_fee,
-            protocol_fee,
-            dev_fee,
         },
         response: ResponseType::Success {},
+        fee: Some(
+            Asset {
+                info: ask_asset_info.clone(),
+                amount: total_fee,
+            }
+        )
     })
 }
 

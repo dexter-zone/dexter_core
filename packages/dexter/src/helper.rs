@@ -410,3 +410,8 @@ pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom : &str) 
             &empty_coin });
     coin.amount        
 }
+
+// Returns the number of tokens charged as total fee
+pub fn calculate_underlying_fees( amount: Uint128, total_fee_bps: u16) -> Uint128 {
+        amount *  Decimal::from_ratio( total_fee_bps, 10_000u16)
+}

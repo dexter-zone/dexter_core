@@ -19,7 +19,7 @@ use dexter::helper::{
     build_transfer_cw20_from_user_msg, build_transfer_token_to_user_msg,
     find_sent_native_token_balance,
 };
-use dexter::pool::InstantiateMsg as PoolInstantiateMsg;
+use dexter::pool::{InstantiateMsg as PoolInstantiateMsg, FeeStructs};
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg,
     PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
@@ -408,7 +408,10 @@ pub fn execute_create_pool(
                 pool_type: pool_config.pool_type,
                 vault_addr: env.contract.address,
                 asset_infos: asset_infos.clone(),
-                fee_info: pool_config.fee_info,
+                fee_info: FeeStructs {
+                    swap_fee_dir: pool_config.fee_info.swap_fee_dir,
+                    total_fee_bps: pool_config.fee_info.total_fee_bps,
+                },
                 lp_token_code_id: config.lp_token_code_id,
                 lp_token_name: lp_token_name,
                 lp_token_symbol,
@@ -509,6 +512,8 @@ pub fn execute_join_pool(
     slippage_tolerance: Option<Decimal>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
     // Load the pool info from the storage
     let mut pool_info = POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
@@ -547,6 +552,29 @@ pub fn execute_join_pool(
         )
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
+    // Fee Calculation
+    let mut protocol_fee = Uint128::zero();
+    let mut dev_fee = Uint128::zero();    
+    if after_join_res.fee.clone().is_some() && !after_join_res.fee.clone().unwrap().amount.is_zero() {
+        event = event.add_attribute("fee_asset", after_join_res.fee.clone().unwrap().info.to_string());
+        event = event.add_attribute("total_fee", after_join_res.fee.clone().unwrap().amount.to_string());
+        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(after_join_res.fee.clone().unwrap().amount.clone());
+
+        // Protocol fee = 0 if keeper address is not set
+        if !config.fee_collector.is_some() {
+            protocol_fee = Uint128::zero();
+        }
+        
+    }
+
+
+    // // Dev fee = 0 is dev receiver is not set
+    if !pool_info.developer_addr.is_some() {
+        dev_fee = Uint128::zero();
+    }
+
+
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
 
     // Update asset balances
@@ -564,8 +592,12 @@ pub fn execute_join_pool(
         // - Transfer net calculated CW20 tokens from user to the Vault
         // - Return native tokens to the user (which are to be returned)
         if !to_transfer.is_zero() {
+            let mut act_asset_in = to_transfer;
+            if !after_join_res.fee.clone().unwrap().amount.is_zero() && after_join_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
+                act_asset_in = to_transfer.checked_sub(protocol_fee + dev_fee).unwrap();
+            }
             // PoolInfo State update - Add number of tokens to be transferred to the stored pool state
-            stored_asset.amount = stored_asset.amount.checked_add(to_transfer)?;
+            stored_asset.amount = stored_asset.amount.checked_add(act_asset_in)?;
             // Token Transfers
             if !stored_asset.info.is_native_token() {
                 // Transfer Number of CW tokens = Pool Math instructs that the user needs to provide this number of tokens to the Vault
@@ -642,6 +674,29 @@ pub fn execute_join_pool(
         execute_msgs.push(msg);
     }
 
+    // Execute Msg :: Protocol Fee transfer to Keeper contract
+    if !protocol_fee.is_zero() {
+        execute_msgs.push(build_transfer_token_to_user_msg(
+            after_join_res.fee.clone().unwrap().info.clone(),
+            config.fee_collector.clone().unwrap(),
+            protocol_fee.clone(),
+        )?);
+        event = event.add_attribute(
+            "protocol_fee",
+            protocol_fee.to_string(),
+        )
+    }
+
+    // Execute Msg :: Dev Fee transfer to dev address
+    if !dev_fee.is_zero() {
+        execute_msgs.push(build_transfer_token_to_user_msg(
+            after_join_res.fee.clone().unwrap().info.clone(),
+            pool_info.developer_addr.clone().unwrap(),
+            dev_fee.clone(),
+        )?);
+        event = event.add_attribute("dev_fee", dev_fee.to_string())
+    }
+
     // Save the updated pool state to the storage
     POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
@@ -669,6 +724,8 @@ pub fn execute_exit_pool(
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
     // Load the pool info from the storage
     let mut pool_info = POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
@@ -705,7 +762,7 @@ pub fn execute_exit_pool(
             .unwrap()
             .checked_sub(after_burn_res.burn_shares)?;
     }
-
+    
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
 
     let mut event = Event::new("dexter-vault::exit_pool")
@@ -716,6 +773,26 @@ pub fn execute_exit_pool(
         )
         .add_attribute("lp_tokens_burnt", after_burn_res.burn_shares.to_string());
 
+
+    // Fee Calculation
+    let mut protocol_fee = Uint128::zero();
+    let mut dev_fee = Uint128::zero();    
+    if after_burn_res.fee.clone().is_some() && !after_burn_res.fee.clone().unwrap().amount.is_zero() {
+        event = event.add_attribute("fee_asset", after_burn_res.fee.clone().unwrap().info.to_string());
+        event = event.add_attribute("total_fee", after_burn_res.fee.clone().unwrap().amount.to_string());
+        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(after_burn_res.fee.clone().unwrap().amount.clone());
+
+        // Protocol fee = 0 if keeper address is not set
+        if !config.fee_collector.is_some() {
+            protocol_fee = Uint128::zero();
+        }
+        
+    }
+
+
+
+
     // recipient address
     let recipient_addr = addr_validate_to_lower( deps.api, &recipient )?;
 
@@ -723,18 +800,22 @@ pub fn execute_exit_pool(
     let mut index = 0;
     for stored_asset in pool_info.assets.iter_mut() {
         // If sequence of tokens doesn't match
-        if stored_asset.info != after_burn_res.assets_out[index].info {
+        if stored_asset.info != after_burn_res.assets_out[index].info.clone() {
             return Err(ContractError::InvalidSequenceOfAssets {});
         }
         // Number of tokens to be transferred to the recipient: As instructed by the Pool Math
-        let to_transfer = after_burn_res.assets_out[index].amount;
-
+        let to_transfer = after_burn_res.assets_out[index].amount.clone();
+        // Asset amount to actually account for after deducting the fees
+        let mut act_asset_out = to_transfer;
+        if !after_burn_res.fee.clone().unwrap().amount.is_zero() && after_burn_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
+            act_asset_out = to_transfer.checked_add(protocol_fee + dev_fee).unwrap();
+        }
         // If number of tokens to transfer > 0, then
         // - Update stored pool's asset balances in `PoolInfo` Struct
         // - Transfer tokens to the recipient
         if !to_transfer.is_zero() {
             // PoolInfo State update -
-            stored_asset.amount = stored_asset.amount.checked_sub(to_transfer)?;
+            stored_asset.amount = stored_asset.amount.checked_sub(act_asset_out)?;
             // Token Transfers
             if !stored_asset.info.is_native_token() {
                 // Transfer Number of CW tokens the Pool Math instructs to return
@@ -765,7 +846,7 @@ pub fn execute_exit_pool(
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
         msg: to_binary(&Cw20ExecuteMsg::Burn {
-            amount: after_burn_res.burn_shares,
+            amount: after_burn_res.burn_shares.clone(),
         })?,
         funds: vec![],
     }));
@@ -780,6 +861,29 @@ pub fn execute_exit_pool(
             })?,
             funds: vec![],
         }));
+    }
+
+    // Execute Msg :: Protocol Fee transfer to Keeper contract
+    if !protocol_fee.is_zero() {
+        execute_msgs.push(build_transfer_token_to_user_msg(
+            after_burn_res.fee.clone().unwrap().info.clone(),
+            config.fee_collector.clone().unwrap(),
+            protocol_fee.clone(),
+        )?);
+        event = event.add_attribute(
+            "protocol_fee",
+            protocol_fee.to_string(),
+        )
+    }
+
+    // Execute Msg :: Dev Fee transfer to dev address
+    if !dev_fee.is_zero() {
+        execute_msgs.push(build_transfer_token_to_user_msg(
+            after_burn_res.fee.clone().unwrap().info.clone(),
+            pool_info.developer_addr.clone().unwrap(),
+            dev_fee.clone(),
+        )?);
+        event = event.add_attribute("dev_fee", dev_fee.to_string())
     }
 
     // Pool State Update Execution :: Send Updated pool state to the Pool Contract so it can do its internal computes
@@ -838,7 +942,7 @@ pub fn execute_swap(
         .add_attribute("swap_type", swap_request.swap_type.to_string());
 
     // Query Pool Instance for Math Operations --> Returns response type (success or failure), and the Trade struct containing trade related info
-    let mut swap_response: dexter::pool::SwapResponse =
+    let swap_response: dexter::pool::SwapResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
@@ -852,18 +956,8 @@ pub fn execute_swap(
         }))?;
 
     // If the response is failure
-    if !swap_response.response.is_success() {
-        return Err(ContractError::PoolQueryFailed { error: swap_response.response.to_string() });
-    }
-
-    // Protocol fee = 0 if keeper address is not set
-    if !config.fee_collector.is_some() {
-        swap_response.trade_params.protocol_fee = Uint128::zero();
-    }
-
-    // Dev fee = 0 is dev receiver is not set
-    if !pool_info.developer_addr.is_some() {
-        swap_response.trade_params.dev_fee = Uint128::zero();
+    if !swap_response.response.clone().is_success() {
+        return Err(ContractError::PoolQueryFailed { error: swap_response.response.clone().to_string() });
     }
 
     // Create offer and ask assets
@@ -875,6 +969,27 @@ pub fn execute_swap(
         info: swap_request.asset_out.clone(),
         amount: swap_response.trade_params.amount_out,
     };
+
+    // Fee Calculation
+    let mut protocol_fee = Uint128::zero();
+    let mut dev_fee = Uint128::zero();    
+    if swap_response.fee.clone().is_some() && !swap_response.fee.clone().unwrap().amount.is_zero() {
+        event = event.add_attribute("fee_asset", swap_response.fee.clone().unwrap().info.to_string());
+        event = event.add_attribute("total_fee", swap_response.fee.clone().unwrap().amount.to_string());
+        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(swap_response.fee.clone().unwrap().amount);
+    }
+
+    // Protocol fee = 0 if keeper address is not set
+    if !config.fee_collector.is_some() {
+        protocol_fee = Uint128::zero();
+    }
+
+    // // Dev fee = 0 is dev receiver is not set
+    if !pool_info.developer_addr.is_some() {
+        dev_fee = Uint128::zero();
+    }
+
 
     // Event for indexing support
     event = event
@@ -900,11 +1015,18 @@ pub fn execute_swap(
     let mut ask_asset_updated: bool = false;
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
 
+
     // Execute Swap Msgs and state update operations
     for stored_asset in pool_info.assets.iter_mut() {
+
         // Update state : Offer Asset
         if stored_asset.info == offer_asset.info {
-            stored_asset.amount = stored_asset.amount.checked_add(offer_asset.amount)?;
+            let mut act_amount_in = offer_asset.amount.clone();
+            // If fee is charged in offer asset, then deduct the fee from offer asset amount to be sent to pool as it is transferred to Keeper and dev as part of the fee
+            if swap_response.fee.clone().unwrap().info.equal(&offer_asset.info.clone()) {
+                act_amount_in = act_amount_in.checked_sub(  protocol_fee + dev_fee  )?;
+            }
+            stored_asset.amount = stored_asset.amount.checked_add(act_amount_in)?;
             offer_asset_updated = true;
 
             // Execute Msgs : Transfer offer asset from user to the vault
@@ -939,12 +1061,13 @@ pub fn execute_swap(
 
         // Update state : Ask Asset
         if stored_asset.info == ask_asset.clone().info {
+            let mut act_amount_out = ask_asset.amount.clone();
+            // If fee is charged in offer asset, then deduct the fee from offer asset amount to be sent to pool as it is transferred to Keeper and dev as part of the fee
+            if swap_response.fee.clone().unwrap().info.equal(&ask_asset.info.clone()) {
+                act_amount_out = act_amount_out.checked_add(  protocol_fee + dev_fee  )?;
+            }            
             // Update state : Ask Asset :: Fee charged in Ask Asset
-            stored_asset.amount = stored_asset.amount.checked_sub(
-                ask_asset.clone().amount
-                    + swap_response.trade_params.protocol_fee
-                    + swap_response.trade_params.dev_fee,
-            )?;
+            stored_asset.amount = stored_asset.amount.checked_sub( act_amount_out )?;
             ask_asset_updated = true;
 
             // Execute Msgs : Transfer tokens from Vault to the recipient
@@ -973,26 +1096,26 @@ pub fn execute_swap(
     )?);
 
     // Execute Msg :: Protocol Fee transfer to Keeper contract
-    if !swap_response.trade_params.protocol_fee.is_zero() {
+    if !protocol_fee.is_zero() {
         execute_msgs.push(build_transfer_token_to_user_msg(
-            ask_asset.info.clone(),
+            swap_response.fee.clone().unwrap().info.clone(),
             config.fee_collector.clone().unwrap(),
-            swap_response.trade_params.protocol_fee,
+            protocol_fee.clone(),
         )?);
         event = event.add_attribute(
             "protocol_fee",
-            swap_response.trade_params.protocol_fee.to_string(),
+            protocol_fee.to_string(),
         )
     }
 
     // Execute Msg :: Dev Fee transfer to Keeper contract
-    if !swap_response.trade_params.dev_fee.is_zero() {
+    if !dev_fee.is_zero() {
         execute_msgs.push(build_transfer_token_to_user_msg(
-            ask_asset.info.clone(),
+            swap_response.fee.clone().unwrap().info.clone(),
             pool_info.developer_addr.unwrap(),
-            swap_response.trade_params.dev_fee,
+            dev_fee.clone(),
         )?);
-        event = event.add_attribute("dev_fee", swap_response.trade_params.dev_fee.to_string())
+        event = event.add_attribute("dev_fee", dev_fee.to_string())
     }
 
     Ok(Response::new().add_messages(execute_msgs).add_event(event))

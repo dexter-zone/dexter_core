@@ -20,6 +20,15 @@ pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct FeeStructs {  
+    pub swap_fee_dir: SwapType, 
+    pub total_fee_bps: u16 
+}
+
+
+
+/// ## Description
 /// This structure describes the main control config of pair.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
@@ -32,7 +41,7 @@ pub struct Config {
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    pub fee_info: FeeInfo,
+    pub fee_info: FeeStructs,
     /// The last time block
     pub block_time_last: u64,
 }
@@ -44,9 +53,6 @@ pub struct Trade {
     pub amount_in: Uint128,
     pub amount_out: Uint128,
     pub spread: Uint128,
-    pub total_fee: Uint128,
-    pub protocol_fee: Uint128,
-    pub dev_fee: Uint128,
 }
 
 
@@ -97,7 +103,7 @@ pub struct InstantiateMsg {
     pub vault_addr: Addr,
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
-    pub fee_info: FeeInfo,
+    pub fee_info: FeeStructs,
     pub lp_token_code_id: u64,
     pub lp_token_name: Option<String>,
     pub lp_token_symbol: Option<String>,
@@ -195,7 +201,7 @@ pub struct ConfigResponse {
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    pub fee_info: FeeInfo,
+    pub fee_info: FeeStructs,
     /// The last time block
     pub block_time_last: u64,
     /// Custom Math Config parameters are reutrned in binary format here
@@ -210,6 +216,7 @@ pub struct AfterJoinResponse {
     pub provided_assets: Vec<Asset>,
     pub new_shares: Uint128,
     pub response: ResponseType,
+    pub fee: Option<Asset>,
 }
 
 
@@ -222,6 +229,7 @@ pub struct AfterExitResponse {
     pub burn_shares: Uint128,
     /// Operation will be a `Success` or `Failure`
     pub response: ResponseType,
+    pub fee: Option<Asset>,
 }
 
 /// ## Description
@@ -229,12 +237,7 @@ pub struct AfterExitResponse {
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
     pub total_fee_bps: u16,
-    /// The % of fees collected by the Protocol
-    pub protocol_fee_percent: u16,
-    /// The % of fees collected by the devs
-    pub dev_fee_percent: u16,
-    /// The address to which the collected developer fee is transferred
-    pub dev_fee_collector: Option<Addr>,
+    pub swap_fee_dir: SwapType,
 }
 
 /// ## Description
@@ -243,6 +246,7 @@ pub struct SwapResponse {
     pub trade_params: Trade,
     /// Operation will be a `Success` or `Failure`
     pub response: ResponseType,
+    pub fee: Option<Asset>,
 }
 
 /// ## Description
@@ -265,11 +269,11 @@ pub struct CumulativePricesResponse {
 
 
 pub fn return_join_failure(error: String) -> AfterJoinResponse {
-    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure (error) }
+    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure (error), fee: None, }
 }
 
 pub fn return_exit_failure(error: String) -> AfterExitResponse {
-    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure (error) }
+    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure (error), fee: None }
 }
 
 
@@ -279,11 +283,9 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
             amount_in: Uint128::zero(),
             amount_out: Uint128::zero(),
             spread: Uint128::zero(),
-            total_fee: Uint128::zero(),
-            protocol_fee: Uint128::zero(),
-            dev_fee: Uint128::zero(),
         },
         response: ResponseType::Failure (error),
+        fee: None,
     }
 }
 

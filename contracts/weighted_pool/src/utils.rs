@@ -210,7 +210,7 @@ pub fn maximal_exact_ratio_join(
 pub fn calc_single_asset_join(
     deps: Deps,
     asset_in: &Asset,
-    total_fee_bps: Decimal,
+    total_fee_bps: u16,
     pool_asset_weighted: &WeightedAsset,
     total_shares: Uint128,
 ) -> StdResult<Uint128> {

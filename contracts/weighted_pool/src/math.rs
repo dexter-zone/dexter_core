@@ -157,7 +157,7 @@ pub fn calc_minted_shares_given_single_asset_in(
     in_precision: u32,
     asset_weight_and_balance: &WeightedAsset,
     total_shares: Uint128,
-    swap_fee: Decimal,
+    swap_fee: u16,
 ) -> StdResult<Uint128> {
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
