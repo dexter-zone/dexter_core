@@ -138,12 +138,13 @@ impl FeeInfo {
 pub struct Config {
     /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
-    /// IDs and configs of contracts that are allowed to instantiate pools
-    pub pool_configs: Vec<PoolConfig>,
+    /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: u64,
-    /// contract address to send fees to
+    /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
+    /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
     pub generator_address: Option<Addr>,
+    /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
 }
 
@@ -162,6 +163,25 @@ pub struct PoolConfig {
     /// to get added to generator
     pub is_generator_disabled: bool
 }
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        PoolConfig {
+            code_id: 0,
+            pool_type: PoolType::Xyk {},
+            fee_info: FeeInfo {
+                swap_fee_dir: SwapType::GiveIn {},
+                total_fee_bps: 0,
+                protocol_fee_percent: 0,
+                dev_fee_percent: 0,
+                developer_addr: None,
+            },
+            is_disabled: false,
+            is_generator_disabled: false
+        }
+    }
+}
+
 
 /// ## Description - This is an intermediate structure for storing the key of a pair and used in reply of submessage.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -241,6 +261,10 @@ pub enum ExecuteMsg {
         new_fee_info: Option<FeeInfo>,
     },
     /// CreatePool instantiates pool contract
+    AddNewPool {
+        new_pool_config: PoolConfig,
+    },
+    /// CreatePool instantiates pool contract
     CreatePool {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
@@ -299,11 +323,6 @@ pub enum QueryMsg {
     GetPoolByAddress {
         pool_addr: String,
     },
-    // QuerybatchSwap {
-    //     swap_kind: SwapType,
-    //     batch_swap_steps: Vec<BatchSwapStep>,
-    //     assets: Vec<Asset>,
-    // },
 }
 
 
@@ -324,7 +343,6 @@ pub struct ConfigResponse {
     pub lp_token_code_id: u64,
     pub fee_collector: Option<Addr>,
     pub generator_address: Option<Addr>,
-    pub pool_configs: Vec<PoolConfig>,
 }
 
 pub type PoolConfigResponse = PoolConfig;

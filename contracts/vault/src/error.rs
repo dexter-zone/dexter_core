@@ -12,6 +12,9 @@ pub enum ContractError {
     #[error("LP Token address not found")]
     LpTokenNotFound {},
 
+    #[error("Pool Type already exists")]
+    PoolTypeAlreadyExists {},
+
     #[error("Insufficient number of {denom} tokens sent. Tokens sent = {sent}. Tokens needed = {needed}")]
     InsufficientNativeTokensSent {
         denom: String,

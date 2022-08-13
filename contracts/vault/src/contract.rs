@@ -22,7 +22,7 @@ use dexter::helper::{
 use dexter::pool::{InstantiateMsg as PoolInstantiateMsg, FeeStructs};
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg,
-    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
+    PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,PoolConfig
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -56,7 +56,6 @@ pub fn instantiate(
 
     let config = Config {
         owner: addr_validate_to_lower(deps.api, &msg.owner)?,
-        pool_configs: msg.pool_configs.clone(),
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
@@ -116,6 +115,9 @@ pub fn execute(
             is_disabled,
             new_fee_info,
         } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
+        ExecuteMsg::AddNewPool {
+            new_pool_config
+        } => execute_add_new_pool(deps, env, info, new_pool_config),        
         ExecuteMsg::CreatePool {
             pool_type,
             asset_infos,
@@ -248,17 +250,22 @@ pub fn execute_update_config(
         return Err(ContractError::Unauthorized {});
     }
 
+    // Update fee collector
     if let Some(fee_collector) = fee_collector {
         config.fee_collector = Some(addr_validate_to_lower(deps.api, fee_collector.as_str())?);
     }
 
-    if let Some(generator_address) = generator_address {
-        config.generator_address = Some(addr_validate_to_lower(
-            deps.api,
-            generator_address.as_str(),
-        )?);
+    // Set generator only if its not set
+    if config.generator_address.is_some() {
+        if let Some(generator_address) = generator_address {
+            config.generator_address = Some(addr_validate_to_lower(
+                deps.api,
+                generator_address.as_str(),
+            )?);
+        }
     }
 
+    // Update LP token code id
     if let Some(lp_token_code_id) = lp_token_code_id {
         config.lp_token_code_id = lp_token_code_id;
     }
@@ -288,14 +295,15 @@ pub fn execute_update_pool_config(
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
-    // permission check :: Only owner or the Pool's developer address can execute it
+    // permission check :: If developer address is set then only developer can call this function 
     if pool_config.fee_info.developer_addr.is_some() {
-        if info.sender.clone() != config.owner
-            && info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap()
+        if info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap()
         {
             return Err(ContractError::Unauthorized {});
         }
-    } else {
+    }
+    // permission check :: If developer address is not set then only owner can call this function
+    else {
         if info.sender.clone() != config.owner {
             return Err(ContractError::Unauthorized {});
         }
@@ -327,6 +335,41 @@ pub fn execute_update_pool_config(
 //--------x---------------x--------------x-----
 //--------x  Execute :: Create Pool      x-----
 //--------x---------------x--------------x-----
+
+pub fn execute_add_new_pool(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    new_pool_config: PoolConfig,
+) -> Result<Response, ContractError> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    // permission check : Only owner can execute it
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Check :: If pool type is already registeredits old 
+    let mut pool_config = POOL_CONFIGS.load(deps.storage, new_pool_config.pool_type.to_string() ).unwrap_or_default()  ;
+    if !pool_config.code_id != 0u64 {
+        return Err(ContractError::PoolTypeAlreadyExists {});
+    }
+
+    // validate fee bps limits
+    if !pool_config.fee_info.valid_fee_info() {
+        return Err(ContractError::InvalidFeeInfo {});
+    }
+
+    // Save pool config
+    POOL_CONFIGS.save(deps.storage, new_pool_config.pool_type.to_string(), &pool_config)?;
+
+    // Emit Event
+    let mut event = Event::new("dexter-vault::add_new_pool")
+        .add_attribute("pool_type", pool_config.pool_type.to_string())
+        .add_attribute("code_id",pool_config.code_id.to_string(),);
+    Ok(Response::new().add_event(event))
+}
+
 
 /// ## Description - Creates a new pool with the specified parameters in the `asset_infos` variable. Returns an [`ContractError`] on failure or
 /// returns the address of the contract if the creation was successful.
@@ -372,7 +415,7 @@ pub fn execute_create_pool(
 
     let config = CONFIG.load(deps.storage)?;
 
-    // Get pool type from config
+    // Get current pool's config from stored pool configs
     let pool_config = POOL_CONFIGS
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
@@ -1148,7 +1191,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-/// ## Description - Returns controls settings that specified in custom [`ConfigResponse`] structure
+/// ## Description - Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     let resp = ConfigResponse {
@@ -1156,18 +1199,11 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         lp_token_code_id: config.lp_token_code_id,
         fee_collector: config.fee_collector,
         generator_address: config.generator_address,
-        pool_configs: POOL_CONFIGS
-            .range(deps.storage, None, None, Order::Ascending)
-            .map(|item| {
-                let (_, cfg) = item.unwrap();
-                cfg
-            })
-            .collect(),
     };
     Ok(resp)
 }
 
-/// ## Description - Returns pool's configuration  settings that specified in custom [`PoolConfigResponse`] structure
+/// ## Description - Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] structure
 ///
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
