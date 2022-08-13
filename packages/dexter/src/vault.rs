@@ -12,7 +12,7 @@ pub const TWAP_PRECISION: u16 = 9u16;
 // ----------------x----------------x    {{PoolType}} enum Type       x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-/// This enum describes available Pool types.
+/// This enum describes the key for the different Pool types supported by Dexter
 /// ## Available pool types
 /// ```
 /// Xyk
@@ -89,7 +89,7 @@ const MAX_PROTOCOL_FEE_PERCENT: u16 = 50u16;
 // Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
 const MAX_DEV_FEE_PERCENT: u16 = 25u16;
 
-
+/// ## Description - This struct describes the Fee configuration supported by a particular pool type.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
     pub swap_fee_dir: SwapType,
@@ -108,17 +108,6 @@ impl FeeInfo {
             && self.dev_fee_percent <= MAX_DEV_FEE_PERCENT
     }    
 
-    // // Returns the number of tokens charged as total fee, protocol fee and dev fee 
-    // pub fn calculate_underlying_fees(&self, amount: Uint128) -> (Uint128,Uint128,Uint128) {
-    //     // let commission_rate = decimal2decimal256(self.total_fee_bps)?;
-
-    //     let total_fee: Uint128 = amount *  Decimal::from_ratio( self.total_fee_bps, 10_000u16);
-    //     let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
-    //     let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
-
-    //     (total_fee, protocol_fee, dev_fee)
-    // }
-
     // Returns the number of tokens charged as total fee, protocol fee and dev fee 
     pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128,Uint128) {
         let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
@@ -133,7 +122,7 @@ impl FeeInfo {
 // ----------------x----------------x    Generic struct Types      x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-/// ## Description - This structure describes the main control config of Vault.
+/// ## Description - This struct describes the main control config of Vault.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
@@ -148,7 +137,7 @@ pub struct Config {
     pub next_pool_id: Uint128,
 }
 
-/// This structure stores a pool type's configuration.
+/// This struct stores a pool type's configuration.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolConfig {
     /// ID of contract which is used to create pools of this type
@@ -183,14 +172,14 @@ impl Default for PoolConfig {
 }
 
 
-/// ## Description - This is an intermediate structure for storing the key of a pair and used in reply of submessage.
+/// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct TmpPoolInfo {
     pub pool_id: Uint128,
     pub assets: Vec<AssetInfo>,
 }
 
-/// This structure stores a pool type's configuration.
+/// This struct stores a pool type's configuration.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolInfo {
     /// ID of contract which is allowed to create pools of this type
@@ -219,14 +208,6 @@ pub struct SingleSwapRequest {
     pub belief_price: Option<Decimal>,
 }
 
-// struct BatchSwapStep {
-//     bytes32 poolId;
-//     uint256 assetInIndex;
-//     uint256 assetOutIndex;
-//     uint256 amount;
-//     bytes userData;
-// }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
@@ -249,29 +230,35 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     // Receives LP Tokens when removing Liquidity
     Receive(Cw20ReceiveMsg),
-    /// UpdateConfig updates updatable Config parameters
+    /// Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`, 
+    /// `config.lp_token_code_id` parameters.       
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
         generator_address: Option<String>,
     },
+    ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. 
+    /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
+    /// and updating Fee (` pool_config.fee_info`) for new pool instances
     UpdatePoolConfig {
         pool_type: PoolType,
         is_disabled: Option<bool>,
         new_fee_info: Option<FeeInfo>,
     },
-    /// CreatePool instantiates pool contract
-    AddNewPool {
+    ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
+    AddToRegistery {
         new_pool_config: PoolConfig,
     },
-    /// CreatePool instantiates pool contract
-    CreatePool {
+    /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
+    CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
         lp_token_name: Option<String>,
         lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
+    // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and 
+    // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
         pool_id: Uint128,
         recipient: Option<String>,
@@ -280,6 +267,8 @@ pub enum ExecuteMsg {
         slippage_tolerance: Option<Decimal>,
         auto_stake: Option<bool>,
     },
+    // Entry point for a swap tx between offer and ask assets. The swap request details are passed in 
+    // [`SingleSwapRequest`] Type parameter.                              
     Swap {
         swap_request: SingleSwapRequest,
         recipient: Option<String>,
@@ -296,7 +285,7 @@ pub enum ExecuteMsg {
 }
 
 /// ## Description
-/// This structure describes a CW20 hook message.
+/// This struct describes a CW20 hook message.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
@@ -312,21 +301,24 @@ pub enum Cw20HookMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    /// Config returns controls settings that specified in custom [`ConfigResponse`] structure
+    /// Config returns controls settings that specified in custom [`ConfigResponse`] struct
     Config {},
-    PoolConfig {
+    /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
+    QueryRigistery {
         pool_type: PoolType,
     },
+    /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     GetPoolById {
         pool_id: Uint128,
     },
+    /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     GetPoolByAddress {
         pool_addr: String,
     },
 }
 
 
-/// ## Description -  This structure describes a migration message.
+/// ## Description -  This struct describes a migration message.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
 

@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, POOLS, POOL_CONFIGS, TMP_POOL_INFO};
+use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, ACTIVE_POOLS, REGISTERY, TMP_POOL_INFO};
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 use dexter::helper::{
@@ -78,7 +78,7 @@ pub fn instantiate(
         if !pc.fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
-        POOL_CONFIGS.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
+        REGISTERY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
     CONFIG.save(deps.storage, &config)?;
 
@@ -115,16 +115,16 @@ pub fn execute(
             is_disabled,
             new_fee_info,
         } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
-        ExecuteMsg::AddNewPool {
+        ExecuteMsg::AddToRegistery {
             new_pool_config
-        } => execute_add_new_pool(deps, env, info, new_pool_config),        
-        ExecuteMsg::CreatePool {
+        } => execute_add_to_registery(deps, env, info, new_pool_config),        
+        ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
             lp_token_name,
             lp_token_symbol,
             init_params,
-        } => execute_create_pool(
+        } => execute_create_pool_instance(
             deps,
             env,
             pool_type,
@@ -291,7 +291,7 @@ pub fn execute_update_pool_config(
     new_fee_info: Option<FeeInfo>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_config = POOL_CONFIGS
+    let mut pool_config = REGISTERY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -323,7 +323,7 @@ pub fn execute_update_pool_config(
     }
 
     // Save pool config
-    POOL_CONFIGS.save(
+    REGISTERY.save(
         deps.storage,
         pool_config.pool_type.to_string(),
         &pool_config,
@@ -336,9 +336,16 @@ pub fn execute_update_pool_config(
 //--------x  Execute :: Create Pool      x-----
 //--------x---------------x--------------x-----
 
-pub fn execute_add_new_pool(
+/// ## Description - Adds a new pool with a new [`PoolType`] Key. Returns an [`ContractError`] on failure or
+/// returns the poolType and the code ID for the pool contract which is used for instantiation.
+///
+/// ## Params
+/// * **new_pool_config** is the object of type [`PoolConfig`]. Contains configuration parameters for the new pool.
+/// 
+/// * Executor** Only owner can execute this function
+pub fn execute_add_to_registery(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     new_pool_config: PoolConfig,
 ) -> Result<Response, ContractError> {
@@ -350,10 +357,13 @@ pub fn execute_add_new_pool(
     }
 
     // Check :: If pool type is already registeredits old 
-    let mut pool_config = POOL_CONFIGS.load(deps.storage, new_pool_config.pool_type.to_string() ).unwrap_or_default()  ;
+    let mut pool_config = REGISTERY.load(deps.storage, new_pool_config.pool_type.to_string() ).unwrap_or_default()  ;
     if !pool_config.code_id != 0u64 {
         return Err(ContractError::PoolTypeAlreadyExists {});
     }
+
+    // Set pool config
+    pool_config = new_pool_config;
 
     // validate fee bps limits
     if !pool_config.fee_info.valid_fee_info() {
@@ -361,10 +371,10 @@ pub fn execute_add_new_pool(
     }
 
     // Save pool config
-    POOL_CONFIGS.save(deps.storage, new_pool_config.pool_type.to_string(), &pool_config)?;
+    REGISTERY.save(deps.storage, pool_config.pool_type.to_string(), &pool_config)?;
 
     // Emit Event
-    let mut event = Event::new("dexter-vault::add_new_pool")
+    let  event = Event::new("dexter-vault::add_new_pool")
         .add_attribute("pool_type", pool_config.pool_type.to_string())
         .add_attribute("code_id",pool_config.code_id.to_string(),);
     Ok(Response::new().add_event(event))
@@ -380,7 +390,7 @@ pub fn execute_add_new_pool(
 /// * **lp_token_name** is the name of the LP token to be used for instantiating new LP tokens along-with the Pools.
 /// * **lp_token_symbol** is the symbol of the LP token to be used for instantiating new LP tokens along-with the Pools.
 /// * **init_params** is the object of type [`Binary`] which contains any custom params required by the Pool instance for its initialization.
-pub fn execute_create_pool(
+pub fn execute_create_pool_instance(
     deps: DepsMut,
     env: Env,
     pool_type: PoolType,
@@ -416,7 +426,7 @@ pub fn execute_create_pool(
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
-    let pool_config = POOL_CONFIGS
+    let pool_config = REGISTERY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -512,7 +522,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     tmp_pool_info.lp_token_addr = Some(pool_res.lp_token_addr.clone().unwrap());
 
     // Save the temporary pool info as permanent pool info mapped with the Pool Id
-    POOLS.save(
+    ACTIVE_POOLS.save(
         deps.storage,
         &tmp_pool_info.pool_id.to_string().as_bytes(),
         &tmp_pool_info,
@@ -558,7 +568,7 @@ pub fn execute_join_pool(
     let config = CONFIG.load(deps.storage)?;
 
     // Load the pool info from the storage
-    let mut pool_info = POOLS
+    let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
@@ -601,7 +611,7 @@ pub fn execute_join_pool(
     if after_join_res.fee.clone().is_some() && !after_join_res.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute("fee_asset", after_join_res.fee.clone().unwrap().info.to_string());
         event = event.add_attribute("total_fee", after_join_res.fee.clone().unwrap().amount.to_string());
-        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;   
         (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(after_join_res.fee.clone().unwrap().amount.clone());
 
         // Protocol fee = 0 if keeper address is not set
@@ -741,7 +751,7 @@ pub fn execute_join_pool(
     }
 
     // Save the updated pool state to the storage
-    POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
+    ACTIVE_POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
     Ok(Response::new()
         .add_messages(execute_msgs)
@@ -770,7 +780,7 @@ pub fn execute_exit_pool(
     let config = CONFIG.load(deps.storage)?;
 
     // Load the pool info from the storage
-    let mut pool_info = POOLS
+    let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
@@ -823,7 +833,7 @@ pub fn execute_exit_pool(
     if after_burn_res.fee.clone().is_some() && !after_burn_res.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute("fee_asset", after_burn_res.fee.clone().unwrap().info.to_string());
         event = event.add_attribute("total_fee", after_burn_res.fee.clone().unwrap().amount.to_string());
-        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;   
         (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(after_burn_res.fee.clone().unwrap().amount.clone());
 
         // Protocol fee = 0 if keeper address is not set
@@ -934,7 +944,7 @@ pub fn execute_exit_pool(
         pool_info.pool_addr.clone().unwrap().to_string(),
         pool_info.assets.clone(),
     )?);
-    POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
+    ACTIVE_POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
     Ok(Response::new().add_messages(execute_msgs).add_event(event))
 }
@@ -959,7 +969,7 @@ pub fn execute_swap(
     op_recipient: Option<String>,
 ) -> Result<Response, ContractError> {
     // Load Pool Info from Storage
-    let mut pool_info = POOLS
+    let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
@@ -1019,7 +1029,7 @@ pub fn execute_swap(
     if swap_response.fee.clone().is_some() && !swap_response.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute("fee_asset", swap_response.fee.clone().unwrap().info.to_string());
         event = event.add_attribute("total_fee", swap_response.fee.clone().unwrap().amount.to_string());
-        let pool_config = POOL_CONFIGS.load(deps.storage, pool_info.pool_type.to_string())?;   
+        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;   
         (protocol_fee , dev_fee) = pool_config.fee_info.calculate_total_fee_breakup(swap_response.fee.clone().unwrap().amount);
     }
 
@@ -1126,7 +1136,7 @@ pub fn execute_swap(
     }
 
     // Update PoolInfo stored state
-    POOLS.save(
+    ACTIVE_POOLS.save(
         deps.storage,
         &swap_request.pool_id.to_string().as_bytes(),
         &pool_info,
@@ -1181,7 +1191,7 @@ pub fn execute_swap(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::PoolConfig { pool_type } => to_binary(&query_pool_config(deps, pool_type)?),
+        QueryMsg::QueryRigistery { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
         // TO-DO
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
         // TO-DO
@@ -1207,8 +1217,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 ///
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
-pub fn query_pool_config(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = POOL_CONFIGS.load(deps.storage, pool_type.to_string())?;
+pub fn query_rigistery(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
+    let pool_config = REGISTERY.load(deps.storage, pool_type.to_string()).unwrap_or_default();
     Ok(pool_config)
 }
 
@@ -1217,7 +1227,7 @@ pub fn query_pool_config(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfi
 /// ## Params
 /// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
 pub fn query_pool_by_id(deps: Deps, pool_id: Uint128) -> StdResult<PoolInfoResponse> {
-    let pool_info = POOLS
+    let pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .unwrap();
     Ok(pool_info)
@@ -1232,7 +1242,7 @@ pub fn query_pool_by_addr(deps: Deps, pool_addr: String) -> StdResult<PoolInfoRe
         contract_addr: pool_addr.to_string(),
         msg: to_binary(&dexter::pool::QueryMsg::PoolId {})?,
     }))?;
-    let pool_info = POOLS
+    let pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .unwrap();
     Ok(pool_info)

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "PoolInfoResponse",
-  "description": "This structure stores a pool type's configuration.",
+  "description": "This struct stores a pool type's configuration.",
   "type": "object",
   "required": [
     "assets",
@@ -145,7 +145,7 @@
       ]
     },
     "PoolType": {
-      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
       "oneOf": [
         {
           "description": "XYK pool type",

@@ -15,7 +15,7 @@
       "additionalProperties": false
     },
     {
-      "description": "UpdateConfig updates updatable Config parameters",
+      "description": "Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`, `config.lp_token_code_id` parameters.",
       "type": "object",
       "required": [
         "update_config"
@@ -50,6 +50,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) , and updating Fee (` pool_config.fee_info`) for new pool instances",
       "type": "object",
       "required": [
         "update_pool_config"
@@ -86,13 +87,34 @@
       "additionalProperties": false
     },
     {
-      "description": "CreatePool instantiates pool contract",
+      "description": "Adds a new pool with a new [`PoolType`] Key.",
       "type": "object",
       "required": [
-        "create_pool"
+        "add_to_registery"
       ],
       "properties": {
-        "create_pool": {
+        "add_to_registery": {
+          "type": "object",
+          "required": [
+            "new_pool_config"
+          ],
+          "properties": {
+            "new_pool_config": {
+              "$ref": "#/definitions/PoolConfig"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Creates a new pool with the specified parameters in the `asset_infos` variable.",
+      "type": "object",
+      "required": [
+        "create_pool_instance"
+      ],
+      "properties": {
+        "create_pool_instance": {
           "type": "object",
           "required": [
             "asset_infos",
@@ -383,10 +405,12 @@
       "type": "string"
     },
     "FeeInfo": {
+      "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
       "type": "object",
       "required": [
         "dev_fee_percent",
         "protocol_fee_percent",
+        "swap_fee_dir",
         "total_fee_bps"
       ],
       "properties": {
@@ -410,6 +434,9 @@
           "format": "uint16",
           "minimum": 0.0
         },
+        "swap_fee_dir": {
+          "$ref": "#/definitions/SwapType"
+        },
         "total_fee_bps": {
           "type": "integer",
           "format": "uint16",
@@ -417,8 +444,46 @@
         }
       }
     },
+    "PoolConfig": {
+      "description": "This struct stores a pool type's configuration.",
+      "type": "object",
+      "required": [
+        "code_id",
+        "fee_info",
+        "is_disabled",
+        "is_generator_disabled",
+        "pool_type"
+      ],
+      "properties": {
+        "code_id": {
+          "description": "ID of contract which is used to create pools of this type",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "fee_info": {
+          "$ref": "#/definitions/FeeInfo"
+        },
+        "is_disabled": {
+          "description": "Whether a pool type is disabled or not. If it is disabled, new pools cannot be created, but existing ones can still read the pool configuration",
+          "type": "boolean"
+        },
+        "is_generator_disabled": {
+          "description": "Setting this to true means that pools of this type will not be able to get added to generator",
+          "type": "boolean"
+        },
+        "pool_type": {
+          "description": "The pools type (provided in a [`PoolType`])",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PoolType"
+            }
+          ]
+        }
+      }
+    },
     "PoolType": {
-      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
       "oneOf": [
         {
           "description": "XYK pool type",

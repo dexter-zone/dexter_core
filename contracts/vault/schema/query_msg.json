@@ -3,7 +3,7 @@
   "title": "QueryMsg",
   "oneOf": [
     {
-      "description": "Config returns controls settings that specified in custom [`ConfigResponse`] structure",
+      "description": "Config returns controls settings that specified in custom [`ConfigResponse`] struct",
       "type": "object",
       "required": [
         "config"
@@ -16,12 +16,13 @@
       "additionalProperties": false
     },
     {
+      "description": "Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct",
       "type": "object",
       "required": [
-        "pool_config"
+        "query_rigistery"
       ],
       "properties": {
-        "pool_config": {
+        "query_rigistery": {
           "type": "object",
           "required": [
             "pool_type"
@@ -36,6 +37,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct",
       "type": "object",
       "required": [
         "get_pool_by_id"
@@ -56,6 +58,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct",
       "type": "object",
       "required": [
         "get_pool_by_address"
@@ -78,7 +81,7 @@
   ],
   "definitions": {
     "PoolType": {
-      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
       "oneOf": [
         {
           "description": "XYK pool type",
