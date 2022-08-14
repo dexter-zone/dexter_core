@@ -17,7 +17,7 @@ pub const TWAPINFO: Item<Twap> = Item::new("twap");
 pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 
 /// ## Description
-/// This structure describes the main math config of pool.
+/// This struct describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
     // This is the current amplification used in the pool
@@ -33,7 +33,7 @@ pub struct MathConfig {
 }
 
 /// ## Description
-/// This structure which stores the TWAP calcs related info for the pool
+/// This struct which stores the TWAP calcs related info for the pool
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Twap {
     /// The vector contains cumulative prices for each pair of assets in the pool
@@ -41,7 +41,7 @@ pub struct Twap {
     pub block_time_last: u64,
 }
 
-/// This structure holds stableswap pool parameters.
+/// This struct holds stableswap pool parameters.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct StablePoolParams {

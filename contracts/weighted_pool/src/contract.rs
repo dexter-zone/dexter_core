@@ -638,8 +638,8 @@ fn update_pool_state_for_joins(
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,
-    env: Env,
-    assets_out: Option<Vec<Asset>>,
+    _env: Env,
+    _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
@@ -715,7 +715,6 @@ pub fn query_on_swap(
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // Convert Asset to DecimalAsset types
     let pools = config
