@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "InstantiateMsg",
-  "description": "This structure describes the basic settings for creating a contract.",
+  "description": "This struct describes the basic settings for creating a contract.",
   "type": "object",
   "required": [
     "asset_infos",
@@ -20,7 +20,7 @@
       }
     },
     "fee_info": {
-      "$ref": "#/definitions/FeeInfo"
+      "$ref": "#/definitions/FeeStructs"
     },
     "init_params": {
       "description": "Optional binary serialised parameters for custom pool types",
@@ -131,34 +131,13 @@
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
       "type": "string"
     },
-    "FeeInfo": {
+    "FeeStructs": {
+      "title": "Description",
       "type": "object",
       "required": [
-        "dev_fee_percent",
-        "protocol_fee_percent",
         "total_fee_bps"
       ],
       "properties": {
-        "dev_fee_percent": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "developer_addr": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "protocol_fee_percent": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
         "total_fee_bps": {
           "type": "integer",
           "format": "uint16",
@@ -167,7 +146,7 @@
       }
     },
     "PoolType": {
-      "description": "This enum describes available Pool types. ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
       "oneOf": [
         {
           "description": "XYK pool type",
