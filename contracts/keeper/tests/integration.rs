@@ -41,7 +41,7 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
             code_id: xyk_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
-                total_fee_bps: Decimal::zero(),
+                total_fee_bps: 0u16,
                 protocol_fee_percent: 50u16,
                 dev_fee_percent: 15u16,
                 developer_addr: None,

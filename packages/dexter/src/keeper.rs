@@ -3,14 +3,20 @@ use cosmwasm_std::{Addr};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// This structure stores general parameters for the contract.
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+
+/// This struct describes the Msg used to instantiate in this contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     /// The vault contract address
     pub vault_contract: String,
 }
 
-/// This structure describes the functions that can be executed in this contract.
+/// This struct describes the functions that can be executed in this contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
@@ -23,7 +29,7 @@ pub enum ExecuteMsg {
     },
 }
 
-/// This structure describes the query functions available in the contract.
+/// This struct describes the query functions available in the contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
@@ -32,6 +38,18 @@ pub enum QueryMsg {
     /// Returns the balance for each asset in the specified input parameters
     Balances { assets: Vec<AssetInfo> },
 }
+
+
+/// This struct describes a migration message.
+/// We currently take no arguments for migrations.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MigrateMsg {}
+
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x----------------x    Response Types      x----------------x----------------x--------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
 
 /// A custom struct that holds contract parameters and is used to retrieve them.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -50,8 +68,3 @@ pub struct BalancesResponse {
     pub balances: Vec<Asset>,
 }
 
-
-/// This structure describes a migration message.
-/// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct MigrateMsg {}

@@ -211,7 +211,7 @@ pub struct SingleSwapRequest {
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
+/// This struct describes the Msg used to instantiate in this contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: String,
@@ -222,7 +222,7 @@ pub struct InstantiateMsg {
     pub generator_address: Option<String>,
 }
 
-
+/// This struct describes the functions that can be executed in this contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
