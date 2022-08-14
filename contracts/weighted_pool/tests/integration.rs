@@ -1,20 +1,20 @@
-use cosmwasm_std::testing::{mock_env};
+use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::pool::{
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
+    SwapResponse, WeightedParams,
+};
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
     PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
-use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType,
-    SwapResponse, FeeStructs, WeightedParams
-};
-use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use weighted_pool::state::{MathConfig, WeightedAsset};
 
 const EPOCH_START: u64 = 1_000_000;
@@ -78,10 +78,13 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-/// Initialize a new vault and a WEIGHTED  Pool with the given assets - Tests the following: 
+/// Initialize a new vault and a WEIGHTED  Pool with the given assets - Tests the following:
 /// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
 /// Pool::QueryMsg::{ CreatePoolInstance}
-fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr,Addr, Addr, u128) {
+fn instantiate_contracts_instance(
+    app: &mut App,
+    owner: &Addr,
+) -> (Addr, Addr, Addr, Addr, Addr, u128) {
     let weighted_pool_code_id = store_weighted_pool_code(app);
     let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
@@ -165,7 +168,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         )
         .unwrap();
 
-
     let asset_infos = vec![
         AssetInfo::NativeToken {
             denom: "xprt".to_string(),
@@ -179,15 +181,24 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     ];
 
     let asset_infos_with_weights = vec![
-        (AssetInfo::NativeToken {
-            denom: "xprt".to_string(),
-        }, 33u128),
-        (AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        }, 33u128),
-        (AssetInfo::Token {
-            contract_addr: token_instance1.clone(),
-        }, 34u128),
+        (
+            AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            33u128,
+        ),
+        (
+            AssetInfo::Token {
+                contract_addr: token_instance0.clone(),
+            },
+            33u128,
+        ),
+        (
+            AssetInfo::Token {
+                contract_addr: token_instance1.clone(),
+            },
+            34u128,
+        ),
     ];
 
     // Initialize WEIGHTED  Pool contract instance
@@ -195,7 +206,13 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&WeightedParams { weights: asset_infos_with_weights, exit_fee: Some(Decimal::from_ratio(1u128, 100u128)) }).unwrap()),
+        init_params: Some(
+            to_binary(&WeightedParams {
+                weights: asset_infos_with_weights,
+                exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
+            })
+            .unwrap(),
+        ),
         lp_token_name: None,
         lp_token_symbol: None,
     };
@@ -268,33 +285,46 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         pool_config_res.block_time_last
     );
     assert_eq!(
-        to_binary(&vec![ WeightedAsset { asset : Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance0.clone(),
+        to_binary(&vec![
+            WeightedAsset {
+                asset: Asset {
+                    info: AssetInfo::Token {
+                        contract_addr: token_instance0.clone(),
+                    },
+                    amount: Uint128::zero(),
+                },
+                weight: Decimal::from_ratio(33u128, 100u128)
             },
-            amount: Uint128::zero(),
-        }, weight: Decimal::from_ratio(33u128, 100u128)  },
-            WeightedAsset { asset : Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance1.clone(),
+            WeightedAsset {
+                asset: Asset {
+                    info: AssetInfo::Token {
+                        contract_addr: token_instance1.clone(),
+                    },
+                    amount: Uint128::zero(),
                 },
-                amount: Uint128::zero(),
-            }, weight: Decimal::from_ratio(34u128, 100u128)  },
-            WeightedAsset { asset :  Asset {
-                info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
+                weight: Decimal::from_ratio(34u128, 100u128)
+            },
+            WeightedAsset {
+                asset: Asset {
+                    info: AssetInfo::NativeToken {
+                        denom: "xprt".to_string(),
+                    },
+                    amount: Uint128::zero(),
                 },
-                amount: Uint128::zero(),
-            }, weight: Decimal::from_ratio(33u128, 100u128)  }  ] ).unwrap(),
+                weight: Decimal::from_ratio(33u128, 100u128)
+            }
+        ])
+        .unwrap(),
         pool_config_res.additional_params.unwrap()
     );
     assert_eq!(
-        to_binary(&MathConfig { exit_fee: Some(Decimal::from_ratio(1u128, 100u128)), greatest_precision: 6u8 } ).unwrap(),
+        to_binary(&MathConfig {
+            exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
+            greatest_precision: 6u8
+        })
+        .unwrap(),
         pool_config_res.math_params.unwrap()
     );
-
-
-
 
     //// -----x----- Check :: FeeResponse for WEIGHTED Pool -----x----- ////
     let pool_fee_res: FeeResponse = app
@@ -319,7 +349,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         current_block.time.seconds() as u128,
     );
 }
-
 
 /// Tests Pool::ExecuteMsg::UpdateConfig for WEIGHTED  Pool which is not supported
 #[test]
@@ -348,11 +377,6 @@ fn test_update_config() {
         .unwrap_err();
     assert_eq!(res.root_cause().to_string(), "Operation non supported");
 }
-
-
-
-
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
@@ -453,8 +477,8 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-        assert_eq!(None, join_pool_query_res.fee);
-        assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
+    assert_eq!(None, join_pool_query_res.fee);
+    assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(10024u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
     assert_eq!(
@@ -540,17 +564,16 @@ fn test_query_on_join_pool() {
         &[],
     )
     .unwrap();
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_instance.clone(),
-            &msg,
-            &[Coin {
-                denom: "xprt".to_string(),
-                amount: Uint128::new(110u128),
-            }],
-        )
-        .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(110u128),
+        }],
+    )
+    .unwrap();
 
     // Checks -
     // 1. LP tokens minted & transferred to Alice
@@ -838,8 +861,6 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(Uint128::from(200u128), vault_bal_res.balance);
 
-
-
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1003,14 +1024,6 @@ fn test_query_on_join_pool() {
     //     "Invalid sequence of assets"
     // );
 }
-
-
-
-
-
-
-
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
@@ -1229,10 +1242,9 @@ fn test_on_exit_pool() {
         })
         .unwrap(),
     };
-    app
-        .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
+    app.execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
-    let current_block = app.block_info();
+    let _current_block = app.block_info();
 
     // Checks -
     // 1. LP tokens burnt
@@ -1382,10 +1394,6 @@ fn test_on_exit_pool() {
     // assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
-
-
-
-
 /// Tests the following -
 /// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
@@ -1429,420 +1437,693 @@ fn test_swap() {
         alice_address.to_string(),
     );
 
-    // //// -----x----- Successfully provide liquidity and mint LP tokens -----x----- ////
-    // let assets_msg = vec![
-    //     Asset {
-    //         info: AssetInfo::NativeToken {
-    //             denom: "xprt".to_string(),
-    //         },
-    //         amount: Uint128::from(10_000u128),
-    //     },
-    //     Asset {
-    //         info: AssetInfo::Token {
-    //             contract_addr: token_instance.clone(),
-    //         },
-    //         amount: Uint128::from(10_000u128),
-    //     },
-    // ];
-    // let msg = VaultExecuteMsg::JoinPool {
-    //     pool_id: Uint128::from(1u128),
-    //     recipient: None,
-    //     lp_to_mint: None,
-    //     auto_stake: None,
-    //     slippage_tolerance: None,
-    //     assets: Some(assets_msg.clone()),
-    // };
-    // app.execute_contract(
-    //     alice_address.clone(),
-    //     token_instance.clone(),
-    //     &Cw20ExecuteMsg::IncreaseAllowance {
-    //         spender: vault_instance.clone().to_string(),
-    //         amount: Uint128::from(1000000000u128),
-    //         expires: None,
-    //     },
-    //     &[],
-    // )
-    // .unwrap();
-    // app.execute_contract(
-    //     alice_address.clone(),
-    //     vault_instance.clone(),
-    //     &msg,
-    //     &[Coin {
-    //         denom: "xprt".to_string(),
-    //         amount: Uint128::new(10000u128),
-    //     }],
-    // )
-    // .unwrap();
+    //// -----x----- Successfully provide liquidity and mint LP tokens -----x----- ////
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance0.clone(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance1.clone(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+    ];
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id: Uint128::from(1u128),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
+    app.execute_contract(
+        alice_address.clone(),
+        token_instance0.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_instance.clone().to_string(),
+            amount: Uint128::from(1000000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        token_instance1.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_instance.clone().to_string(),
+            amount: Uint128::from(1000000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(10000u128),
+        }],
+    )
+    .unwrap();
 
-    // //// -----x----- Check #1 :: Error ::: assets mismatch || SwapType not supported -----x----- ////
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::GiveIn {},
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: None,
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(
-    //     swap_offer_asset_res.response,
-    //     ResponseType::Failure("assets mismatch".to_string())
-    // );
+    //// -----x----- Check #1 :: Error ::: assets mismatch || SwapType not supported -----x----- ////
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: None,
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        swap_offer_asset_res.response,
+        ResponseType::Failure("Invalid swap amounts".to_string())
+    );
 
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::Custom("()".to_string()),
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: None,
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(
-    //     swap_offer_asset_res.response,
-    //     ResponseType::Failure("SwapType not supported".to_string())
-    // );
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::Custom("()".to_string()),
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: None,
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        swap_offer_asset_res.response,
+        ResponseType::Failure("SwapType not supported".to_string())
+    );
 
-    // //// -----x----- Check #1 :: QUERY Success :::  -----x----- ////
-    // // SwapType::GiveIn {},
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::GiveIn {},
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_in,
-    //     Uint128::from(1000u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_out,
-    //     Uint128::from(882u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.spread,
-    //     Uint128::from(91u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee.clone().unwrap().info,
-    //     AssetInfo::Token {
-    //         contract_addr: token_instance.clone(),
-    //     }
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee.clone().unwrap().amount,
-    //     Uint128::from(27u128)
-    // );        
+    //// -----x----- Check #1 :: QUERY Success :::  -----x----- ////
+    // SwapType::GiveIn {}, XPRT --> Token0
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(882u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(91u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(27u128)
+    );
 
+    // SwapType::GiveOut {},  XPRT --> Token0
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1149u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(149u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(30u128)
+    );
 
-    // // SwapType::GiveOut {},
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::GiveOut {},
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_out,
-    //     Uint128::from(1000u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_in,
-    //     Uint128::from(1148u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.spread,
-    //     Uint128::from(118u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee.clone().unwrap().info,
-    //     AssetInfo::Token {
-    //         contract_addr: token_instance.clone(),
-    //     }
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee.clone().unwrap().amount,
-    //     Uint128::from(30u128)
-    // );
+    // SwapType::GiveIn {}, XPRT --> Token1
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(857u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(117u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(26u128)
+    );
 
-    // //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
-    // // SwapType::GiveIn {},
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::GiveIn {},
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: Some(Decimal::from_ratio(1u128, 100u128)),
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(
-    //     swap_offer_asset_res.response,
-    //     ResponseType::Failure(
-    //         "error : Operation exceeds max spread limit. Current spread = 0.091".to_string()
-    //     )
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_in,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_out,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.spread,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee,
-    //     None
-    // );
+    // SwapType::GiveOut {},  XPRT --> Token1
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1186u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(186u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(30u128)
+    );
 
-    // // SwapType::GiveOut {},
-    // let swap_offer_asset_res: SwapResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         pool_addr.clone(),
-    //         &QueryMsg::OnSwap {
-    //             swap_type: SwapType::GiveOut {},
-    //             offer_asset: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             ask_asset: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(1000u128),
-    //             max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
-    //             belief_price: None,
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(
-    //     swap_offer_asset_res.response,
-    //     ResponseType::Failure(
-    //         "error : Operation exceeds max spread limit. Current spread = 0.102787456445993031"
-    //             .to_string()
-    //     )
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_in,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.amount_out,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.spread,
-    //     Uint128::from(0u128)
-    // );
-    // assert_eq!(
-    //     swap_offer_asset_res.fee,
-    //     None
-    // );
+    // SwapType::GiveIn {}, Token0 --> Token1
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(857u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(117u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(26u128)
+    );
 
-    // //// -----x----- Check #3 :: EXECUTE Failure : Spread check failed :::  -----x----- ////
+    // SwapType::GiveOut {},  Token0 --> Token1
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1186u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(186u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(30u128)
+    );
 
-    // // Execute Swap :: GiveIn Type
-    // let swap_msg = VaultExecuteMsg::Swap {
-    //     swap_request: SingleSwapRequest {
-    //         pool_id: Uint128::from(1u128),
-    //         swap_type: SwapType::GiveIn {},
-    //         asset_in: AssetInfo::NativeToken {
-    //             denom: "xprt".to_string(),
-    //         },
-    //         asset_out: AssetInfo::Token {
-    //             contract_addr: token_instance.clone(),
-    //         },
-    //         amount: Uint128::from(1000u128),
-    //         max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-    //         belief_price: None,
-    //     },
-    //     recipient: None,
-    // };
-    // app.execute_contract(
-    //     alice_address.clone(),
-    //     vault_instance.clone(),
-    //     &swap_msg,
-    //     &[Coin {
-    //         denom: "xprt".to_string(),
-    //         amount: Uint128::new(10000u128),
-    //     }],
-    // )
-    // .unwrap();
+    // SwapType::GiveIn {}, Token0 --> XPRT
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                ask_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(882u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(91u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(27u128)
+    );
 
-    // // Checks -
-    // // 1. Tokens transferred as expected
-    // // 2. Liquidity Pool balance updated
-    // // 3. Tokens transferred to the Vault
-    // // 4. TWAP updated
-    // // assert_eq!(res.root_cause().to_string(), "Unauthorized");
-    // let vault_bal_res: BalanceResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         &token_instance.clone(),
-    //         &Cw20QueryMsg::Balance {
-    //             address: vault_instance.clone().to_string(),
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(Uint128::from(9101u128), vault_bal_res.balance);
-    // let dev_bal_res: BalanceResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         &token_instance.clone(),
-    //         &Cw20QueryMsg::Balance {
-    //             address: "dev".to_string(),
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(Uint128::from(4u128), dev_bal_res.balance);
-    // let keeper_bal_res: BalanceResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         &token_instance.clone(),
-    //         &Cw20QueryMsg::Balance {
-    //             address: "fee_collector".to_string(),
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(Uint128::from(13u128), keeper_bal_res.balance);
-    // let vault_pool_config_res: PoolInfoResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         &vault_instance.clone(),
-    //         &VaultQueryMsg::GetPoolById {
-    //             pool_id: Uint128::from(1u128),
-    //         },
-    //     )
-    //     .unwrap();
-    // let pool_config_res: ConfigResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(&pool_addr.clone(), &QueryMsg::Config {})
-    //     .unwrap();
-    // assert_eq!(pool_config_res.assets, vault_pool_config_res.assets);
-    // assert_eq!(
-    //     vec![
-    //         Asset {
-    //             info: AssetInfo::Token {
-    //                 contract_addr: token_instance.clone(),
-    //             },
-    //             amount: Uint128::from(9101u128),
-    //         },
-    //         Asset {
-    //             info: AssetInfo::NativeToken {
-    //                 denom: "xprt".to_string(),
-    //             },
-    //             amount: Uint128::from(11000u128),
-    //         },
-    //     ],
-    //     vault_pool_config_res.assets
-    // );
+    // SwapType::GiveOut {},  Token0 --> XPRT
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                ask_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1149u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(149u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(30u128)
+    );
 
-    // let keeper_bal_before = app
-    //     .wrap()
-    //     .query_balance(&"fee_collector".to_string(), "xprt")
-    //     .unwrap();
+    //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
+    // SwapType::GiveIn {},
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(1u128, 100u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        swap_offer_asset_res.response,
+        ResponseType::Failure(
+            "error : Operation exceeds max spread limit. Current spread = 0.091".to_string()
+        )
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(0u128)
+    );
+    assert_eq!(swap_offer_asset_res.fee, None);
 
-    // // Execute Swap :: GiveOut Type
-    // let swap_msg = VaultExecuteMsg::Swap {
-    //     swap_request: SingleSwapRequest {
-    //         pool_id: Uint128::from(1u128),
-    //         swap_type: SwapType::GiveOut {},
-    //         asset_in: AssetInfo::Token {
-    //             contract_addr: token_instance.clone(),
-    //         },
-    //         asset_out: AssetInfo::NativeToken {
-    //             denom: "xprt".to_string(),
-    //         },
-    //         amount: Uint128::from(1000u128),
-    //         max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-    //         belief_price: None,
-    //     },
-    //     recipient: None,
-    // };
-    // app.execute_contract(
-    //     alice_address.clone(),
-    //     vault_instance.clone(),
-    //     &swap_msg,
-    //     &[Coin {
-    //         denom: "xprt".to_string(),
-    //         amount: Uint128::new(10000u128),
-    //     }],
-    // )
-    // .unwrap();
-    // let vault_bal_res: BalanceResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(
-    //         &token_instance.clone(),
-    //         &Cw20QueryMsg::Balance {
-    //             address: vault_instance.clone().to_string(),
-    //         },
-    //     )
-    //     .unwrap();
-    // assert_eq!(Uint128::from(10041u128), vault_bal_res.balance);
+    // SwapType::GiveOut {},
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000u128),
+                max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
+                belief_price: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        swap_offer_asset_res.response,
+        ResponseType::Failure(
+            "error : Operation exceeds max spread limit. Current spread = 0.126378286683630195"
+                .to_string()
+        )
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(0u128)
+    );
+    assert_eq!(swap_offer_asset_res.fee, None);
 
-    // let keeper_bal_after = app
-    //     .wrap()
-    //     .query_balance(&"fee_collector".to_string(), "xprt")
-    //     .unwrap();
-    // assert_eq!(keeper_bal_before.amount + Uint128::from(14u128) , keeper_bal_after.amount);
+    //// -----x----- Check #3 :: EXECUTE Failure : Spread check failed :::  -----x----- ////
 
+    // Execute Swap :: GiveIn Type
+    let swap_msg = VaultExecuteMsg::Swap {
+        swap_request: SingleSwapRequest {
+            pool_id: Uint128::from(1u128),
+            swap_type: SwapType::GiveIn {},
+            asset_in: AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            asset_out: AssetInfo::Token {
+                contract_addr: token_instance1.clone(),
+            },
+            amount: Uint128::from(1000u128),
+            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
+            belief_price: None,
+        },
+        recipient: None,
+    };
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &swap_msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(10000u128),
+        }],
+    )
+    .unwrap();
 
+    // Checks -
+    // 1. Tokens transferred as expected
+    // 2. Liquidity Pool balance updated
+    // 3. Tokens transferred to the Vault
+    // 4. TWAP updated
+    // assert_eq!(res.root_cause().to_string(), "Unauthorized");
+    let vault_bal_res: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(Uint128::from(9128u128), vault_bal_res.balance);
+    let dev_bal_res: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: "dev".to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(Uint128::from(3u128), dev_bal_res.balance);
+    let keeper_bal_res: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: "fee_collector".to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(Uint128::from(12u128), keeper_bal_res.balance);
+    let vault_pool_config_res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance.clone(),
+            &VaultQueryMsg::GetPoolById {
+                pool_id: Uint128::from(1u128),
+            },
+        )
+        .unwrap();
+    let pool_config_res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(&pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+    assert_eq!(pool_config_res.assets, vault_pool_config_res.assets);
+    assert_eq!(
+        vec![
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(10000u128),
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(9128u128),
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(11000u128),
+            },
+        ],
+        vault_pool_config_res.assets
+    );
+
+    let keeper_bal_before = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "xprt")
+        .unwrap();
+
+    // Execute Swap :: GiveOut Type
+    let swap_msg = VaultExecuteMsg::Swap {
+        swap_request: SingleSwapRequest {
+            pool_id: Uint128::from(1u128),
+            swap_type: SwapType::GiveOut {},
+            asset_in: AssetInfo::Token {
+                contract_addr: token_instance0.clone(),
+            },
+            asset_out: AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            amount: Uint128::from(1000u128),
+            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
+            belief_price: None,
+        },
+        recipient: None,
+    };
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &swap_msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(10000u128),
+        }],
+    )
+    .unwrap();
+    let vault_bal_res: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance0.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(Uint128::from(11034u128), vault_bal_res.balance);
+
+    let keeper_bal_after = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "xprt")
+        .unwrap();
+    assert_eq!(
+        keeper_bal_before.amount + Uint128::from(14u128),
+        keeper_bal_after.amount
+    );
 }
-
-

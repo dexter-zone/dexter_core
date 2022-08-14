@@ -14,7 +14,8 @@ use dexter::asset::{
     addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset,
 };
 use dexter::helper::{
-    adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, select_pools, calculate_underlying_fees
+    adjust_precision, calculate_underlying_fees, get_lp_token_name, get_lp_token_symbol,
+    get_share_in_assets, select_pools,
 };
 // use dexter::helper::decimal2decimal256;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
@@ -22,7 +23,7 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE
+    Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
@@ -153,7 +154,7 @@ pub fn instantiate(
     let token_name = get_lp_token_name(msg.pool_id.clone(), msg.lp_token_name.clone());
 
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol( msg.lp_token_symbol.clone());
+    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol.clone());
     // Create LP token
     let sub_msg: Vec<SubMsg> = vec![SubMsg {
         msg: WasmMsg::Instantiate {
@@ -312,8 +313,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::OnJoinPool {
             assets_in,
             mint_amount,
-            slippage_tolerance
-        } => to_binary(&query_on_join_pool(deps, env, assets_in, mint_amount, slippage_tolerance )?),
+            slippage_tolerance,
+        } => to_binary(&query_on_join_pool(
+            deps,
+            env,
+            assets_in,
+            mint_amount,
+            slippage_tolerance,
+        )?),
         QueryMsg::OnExitPool {
             assets_out,
             burn_amount,
@@ -372,7 +379,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         pool_type: config.pool_type,
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
-        math_params: Some(to_binary(&math_config).unwrap()),        
+        math_params: Some(to_binary(&math_config).unwrap()),
         additional_params: Some(to_binary(&pool_assets_weighted).unwrap()),
     })
 }
@@ -384,7 +391,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
-        total_fee_bps: config.fee_info.total_fee_bps
+        total_fee_bps: config.fee_info.total_fee_bps,
     })
 }
 
@@ -498,14 +505,16 @@ pub fn query_on_join_pool(
                 provided_assets: act_assets_in,
                 new_shares: num_shares,
                 response: dexter::pool::ResponseType::Success {},
-                fee: None
+                fee: None,
             });
         }
     }
 
     // If more than one asset, all should be provided
     if act_assets_in.len() != pool_assets_weighted.len() {
-        return Ok( return_join_failure(     "If more than one asset, all should be provided".to_string()     ) );
+        return Ok(return_join_failure(
+            "If more than one asset, all should be provided".to_string(),
+        ));
     }
 
     // 3) JoinPoolNoSwap with as many tokens as we can. (What is in perfect ratio)
@@ -535,14 +544,14 @@ pub fn query_on_join_pool(
         };
 
     if !err.is_success() {
-        return Ok(return_join_failure(  err.to_string() ) );
+        return Ok(return_join_failure(err.to_string()));
     }
     if remaining_tokens_in.is_empty() {
         return Ok(AfterJoinResponse {
             provided_assets: act_assets_in,
             new_shares: num_shares,
             response: dexter::pool::ResponseType::Success {},
-            fee: None
+            fee: None,
         });
     }
 
@@ -598,7 +607,7 @@ pub fn query_on_join_pool(
         provided_assets: final_tokens_joined,
         new_shares: num_shares,
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     };
     Ok(res)
 }
@@ -678,7 +687,7 @@ pub fn query_on_exit_pool(
         assets_out: refund_assets,
         burn_shares: act_burn_shares,
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     })
 }
 
@@ -702,7 +711,7 @@ pub fn query_on_swap(
     ask_asset_info: AssetInfo,
     amount: Uint128,
     max_spread: Option<Decimal>,
-    belief_price: Option<Decimal>,    
+    belief_price: Option<Decimal>,
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -777,7 +786,7 @@ pub fn query_on_swap(
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps );
+            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
@@ -804,13 +813,18 @@ pub fn query_on_swap(
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
 
             // Calculate the commission fees
-            total_fee = calculate_underlying_fees(before_commission_deduction, config.fee_info.total_fee_bps);
+            total_fee = calculate_underlying_fees(
+                before_commission_deduction,
+                config.fee_info.total_fee_bps,
+            );
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
             };
         }
-        SwapType::Custom(_) => return Ok(return_swap_failure("SwapType not supported".to_string()))
+        SwapType::Custom(_) => {
+            return Ok(return_swap_failure("SwapType not supported".to_string()))
+        }
     }
 
     // Check the max spread limit (if it was specified)
@@ -832,12 +846,10 @@ pub fn query_on_swap(
             spread: spread_amount,
         },
         response: ResponseType::Success {},
-        fee: Some(
-            Asset {
-                info: ask_asset_info.clone(),
-                amount: total_fee,
-            }
-        )        
+        fee: Some(Asset {
+            info: ask_asset_info.clone(),
+            amount: total_fee,
+        }),
     })
 }
 
@@ -972,7 +984,6 @@ pub fn transform_to_decimal_asset(deps: Deps, assets: &Vec<Asset>) -> Vec<Decima
         .unwrap();
     decimal_assets
 }
-
 
 /// ## Description
 /// Returns a [`ContractError`] on failure.

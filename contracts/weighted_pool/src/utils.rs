@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env,Uint256, StdResult, Storage, Uint128};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128, Uint256};
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
-use dexter::helper::{adjust_precision, select_pools, decimal2decimal256};
+use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{Config, ResponseType};
 
 use crate::error::ContractError;
@@ -84,11 +84,13 @@ pub(crate) fn compute_offer_amount(
         Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
-    let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string() )?;
-    let before_commission_deduction = ask_asset_amount * Decimal::from_str(&inv_one_minus_commission.clone().to_string() )?;
+    let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string())?;
+    let before_commission_deduction =
+        ask_asset_amount * Decimal::from_str(&inv_one_minus_commission.clone().to_string())?;
 
     // Ask pool balance after swap
-    let pool_post_swap_out_balance = Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
+    let pool_post_swap_out_balance =
+        Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
@@ -116,7 +118,7 @@ pub(crate) fn compute_offer_amount(
         token_precision,
     )?;
 
-    Ok((real_offer, spread_amount, before_commission_deduction_ ))
+    Ok((real_offer, spread_amount, before_commission_deduction_))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -237,6 +239,6 @@ pub fn calc_single_asset_join(
         in_precision.into(),
         pool_asset_weighted,
         total_shares,
-        Decimal::from_ratio( total_fee_bps, 10_000u16),
+        Decimal::from_ratio(total_fee_bps, 10_000u16),
     )
 }

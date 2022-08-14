@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, Decimal, StdError};
+use cosmwasm_std::{Decimal, OverflowError, StdError};
 use thiserror::Error;
 
 /// ## Description
@@ -11,7 +11,6 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    
     #[error("Invalid exit fee. Exit fee cannot be more than 1%")]
     InvalidExitFee {},
 
