@@ -80,6 +80,8 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
 }
 
 /// Initialize a new vault and a Stable-2-pool with the given assets
+/// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
+/// Pool::QueryMsg::{ CreatePoolInstance}
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
     let stableswap_pool_code_id = store_stable_pool_code(app);
     let vault_code_id = store_vault_code(app);

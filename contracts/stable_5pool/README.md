@@ -1,6 +1,6 @@
-# Dexter Protocol :: Stable Pool
+# Dexter Protocol :: Stable-5-Pool
 
-Dexter's Stable Pool implements the stableswap invariant for its compute calculations on Liquidity provision / withdrawal and swaps. Most of the stableswap compute code is taken from the Astroport's `pair_stable` contract
+Dexter's Stable-5-Pool implements the stableswap invariant for upto 5 assets in the pool and implements compute calculations on Liquidity provision / withdrawal and swaps.
 
 ## Contract State
 
@@ -53,6 +53,8 @@ struct MathConfig {
     pub next_amp: u64,
     // This is the timestamp when the current pool amplification should be `next_amp`
     pub next_amp_time: u64,
+    /// The greatest precision of assets in the pool
+    pub greatest_precision: u8,
 }
 ```
 

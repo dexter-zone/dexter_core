@@ -126,6 +126,24 @@ struct SwapResponse {
 }
 ```
 
+### `CumulativePriceResponse` struct - Helper struct for [`QueryMsg::CumulativePrice`]
+
+```
+struct CumulativePriceResponse {
+    pub exchange_info: AssetExchangeRate,
+    pub total_share: Uint128,
+}
+```
+
+### `CumulativePricesResponse` struct - Helper struct for [`QueryMsg::CumulativePrices`]
+
+```
+struct CumulativePricesResponse {
+    pub exchange_info: Vec<AssetExchangeRate>,
+    pub total_share: Uint128,
+}
+```
+
 ## Build schema and run unit-tests
 
 ```

@@ -1,5 +1,5 @@
 [package]
-name = "stable3pool"
+name = "stable5pool"
 version = "1.0.0"
 authors = ["AstroTechLabs"]
 edition = "2021"

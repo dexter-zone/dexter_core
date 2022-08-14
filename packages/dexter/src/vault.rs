@@ -18,7 +18,7 @@ pub const TWAP_PRECISION: u16 = 9u16;
 /// Xyk
 /// Stable2Pool
 /// Weighted
-/// Stable3Pool
+/// Stable5Pool
 /// Custom(String::from("Custom"));
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -29,7 +29,7 @@ pub enum PoolType {
     /// Stable pool type
     Stable2Pool {},
     /// Stable pool type
-    Stable3Pool {},
+    Stable5Pool {},
     /// Weighted pool type
     Weighted {},
     /// Custom pool type
@@ -43,7 +43,7 @@ impl Display for PoolType {
             PoolType::Xyk {} => fmt.write_str("xyk"),
             PoolType::Stable2Pool {} => fmt.write_str("stable-2-pool"),
             PoolType::Weighted {} => fmt.write_str("weighted"),
-            PoolType::Stable3Pool {} => fmt.write_str("stable-3-pool"),
+            PoolType::Stable5Pool {} => fmt.write_str("stable-3-pool"),
             PoolType::Custom(pool_type) => fmt.write_str(format!("custom-{}", pool_type).as_str()),
         }
     }

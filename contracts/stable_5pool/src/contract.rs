@@ -403,7 +403,6 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
         total_fee_bps: config.fee_info.total_fee_bps,
-        swap_fee_dir: config.fee_info.swap_fee_dir
     })
 }
 
