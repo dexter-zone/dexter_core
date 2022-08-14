@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env,Uint256, StdResult, Storage, Uint128};
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
-use dexter::helper::{adjust_precision, select_pools};
+use dexter::helper::{adjust_precision, select_pools, decimal2decimal256};
 use dexter::pool::{Config, ResponseType};
 
 use crate::error::ContractError;
@@ -75,17 +75,26 @@ pub(crate) fn compute_offer_amount(
     ask_weight: Decimal,
     offer_pool: &DecimalAsset,
     offer_weight: Decimal,
-) -> StdResult<(Uint128, Uint128)> {
+    commission_rate: u16,
+) -> StdResult<(Uint128, Uint128, Uint128)> {
     // get ask asset precisison
     let token_precision = get_precision(storage, &offer_pool.info)?;
 
-    let pool_post_swap_out_balance = ask_pool.amount - ask_asset.amount;
+    let one_minus_commission =
+        Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
+    let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
+
+    let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string() )?;
+    let before_commission_deduction = ask_asset_amount * Decimal::from_str(&inv_one_minus_commission.clone().to_string() )?;
+
+    // Ask pool balance after swap
+    let pool_post_swap_out_balance = Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
 
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
     let real_offer = solve_constant_function_invariant(
         Decimal::from_str(&ask_pool.amount.to_string())?,
-        Decimal::from_str(&pool_post_swap_out_balance.to_string())?,
+        pool_post_swap_out_balance,
         ask_weight,
         Decimal::from_str(&offer_pool.amount.to_string())?,
         offer_weight,
@@ -100,7 +109,14 @@ pub(crate) fn compute_offer_amount(
     let ideal_offer = (ask_asset.amount * (offer_pool.amount / ask_pool.amount))
         .to_uint128_with_precision(token_precision)?;
     let spread_amount = real_offer - ideal_offer;
-    Ok((real_offer, spread_amount))
+
+    let before_commission_deduction_ = adjust_precision(
+        before_commission_deduction.atomics(),
+        before_commission_deduction.decimal_places() as u8,
+        token_precision,
+    )?;
+
+    Ok((real_offer, spread_amount, before_commission_deduction_ ))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -221,6 +237,6 @@ pub fn calc_single_asset_join(
         in_precision.into(),
         pool_asset_weighted,
         total_shares,
-        total_fee_bps,
+        Decimal::from_ratio( total_fee_bps, 10_000u16),
     )
 }

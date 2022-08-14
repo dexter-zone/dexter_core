@@ -22,7 +22,7 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, WeightedParams,
+    Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE
 };
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
@@ -364,8 +364,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
-        total_fee_bps: config.fee_info.total_fee_bps,
-        swap_fee_dir: config.fee_info.swap_fee_dir
+        total_fee_bps: config.fee_info.total_fee_bps
     })
 }
 
@@ -771,7 +770,8 @@ pub fn query_on_swap(
                 amount,
             };
             // Calculate the number of offer_asset tokens to be transferred from the trader to the Vault contract
-            (calc_amount, spread_amount) = compute_offer_amount(
+            let before_commission_deduction: Uint128;
+            (calc_amount, spread_amount, before_commission_deduction) = compute_offer_amount(
                 deps.storage,
                 &env,
                 &ask_asset.to_decimal_asset(ask_precision)?,
@@ -779,18 +779,30 @@ pub fn query_on_swap(
                 ask_weight,
                 &offer_pool,
                 offer_weight,
+                config.fee_info.total_fee_bps,
             )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
 
             // Calculate the commission fees
-            (total_fee, protocol_fee, dev_fee) =
-                config.fee_info.calculate_underlying_fees(calc_amount);
+            total_fee = calculate_underlying_fees(before_commission_deduction, config.fee_info.total_fee_bps);
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
             };
         }
         SwapType::Custom(_) => return Ok(return_swap_failure("SwapType not supported".to_string()))
+    }
+
+    // Check the max spread limit (if it was specified)
+    let spread_check = assert_max_spread(
+        belief_price,
+        max_spread,
+        offer_asset.amount,
+        ask_asset.amount + total_fee,
+        spread_amount,
+    );
+    if !spread_check.is_success() {
+        return Ok(return_swap_failure(spread_check.to_string()));
     }
 
     Ok(SwapResponse {
@@ -939,4 +951,60 @@ pub fn transform_to_decimal_asset(deps: Deps, assets: &Vec<Asset>) -> Vec<Decima
         .collect::<StdResult<Vec<DecimalAsset>>>()
         .unwrap();
     decimal_assets
+}
+
+
+/// ## Description
+/// Returns a [`ContractError`] on failure.
+/// If `belief_price` and `max_spread` are both specified, we compute a new spread, otherwise we just use the swap spread to check `max_spread`.
+///
+/// ## Params
+/// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
+/// * **max_spread** is an object of type [`Option<Decimal>`]. This is the max spread allowed so that the swap can be executed successfuly.
+/// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
+/// * **return_amount** is an object of type [`Uint128`]. This is the amount of assets to receive from the swap.
+/// * **spread_amount** is an object of type [`Uint128`]. This is the spread used in the swap.
+pub fn assert_max_spread(
+    belief_price: Option<Decimal>,
+    max_spread: Option<Decimal>,
+    offer_amount: Uint128,
+    return_amount: Uint128,
+    spread_amount: Uint128,
+) -> ResponseType {
+    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+
+    let max_spread = max_spread.unwrap_or(default_spread);
+    if max_spread.gt(&max_allowed_spread) {
+        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
+    }
+    let calc_spread = Decimal::from_ratio(spread_amount, return_amount + spread_amount);
+
+    // If belief price is provided, we compute a new spread
+    if let Some(belief_price) = belief_price {
+        let expected_return = offer_amount * belief_price.inv().unwrap();
+        let spread_amount = expected_return
+            .checked_sub(return_amount)
+            .unwrap_or_else(|_| Uint128::zero());
+        let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
+        if return_amount < expected_return && calc_spread > max_spread {
+            return ResponseType::Failure(
+                (ContractError::MaxSpreadAssertion {
+                    spread_amount: calc_spread,
+                })
+                .to_string(),
+            );
+        }
+    }
+    // check if spread limit is respected or not
+    else if calc_spread > max_spread {
+        return ResponseType::Failure(
+            (ContractError::MaxSpreadAssertion {
+                spread_amount: calc_spread,
+            })
+            .to_string(),
+        );
+    }
+
+    ResponseType::Success {}
 }
