@@ -321,7 +321,7 @@ pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
 }
 
 /// ## Description
-/// Returns information Pool ID which is of type [`Uint128`]
+/// Returns Pool ID which is of type [`Uint128`]
 ///
 /// ## Params
 /// * **deps** is the object of type [`Deps`].
@@ -336,10 +336,11 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 
 /// ## Description
 /// Returns [`AfterJoinResponse`] type which contains -  
-/// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount of info of tokens which are to be subtracted from
-/// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
+/// provided_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount of info of tokens which will be provided
+///  by the user to the Vault
 /// new_shares - New LP shares which are to be minted
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// fee - A [`Option<Asset>`] which is the fee to be charged. XYK pool doesn't charge any fee on pool Joins, so it is `None`
 ///
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
@@ -419,9 +420,10 @@ pub fn query_on_join_pool(
 
 /// ## Description
 /// Returns [`AfterExitResponse`] type which contains -  
-/// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and tranfer from the Vault to the user
+/// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of number of tokens to be transferred to the recepient from the Vault
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// fee - A [`Option<Asset>`] which is the fee to be charged. XYK pool doesn't charge any fee on pool Exits, so it is `None`
 ///
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
@@ -460,8 +462,9 @@ pub fn query_on_exit_pool(
 
 /// ## Description
 /// Returns [`SwapResponse`] type which contains -  
-/// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
+/// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// fee - A [`Option<Asset>`] which is the fee to be charged. XYK pool charges fee in `AskAsset` on swaps`
 ///
 /// ## Params
 ///  swap_type - Is of type [`SwapType`] which is either `GiveIn`, `GiveOut` or `Custom`

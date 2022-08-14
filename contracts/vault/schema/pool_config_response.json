@@ -48,7 +48,6 @@
       "required": [
         "dev_fee_percent",
         "protocol_fee_percent",
-        "swap_fee_dir",
         "total_fee_bps"
       ],
       "properties": {
@@ -71,9 +70,6 @@
           "type": "integer",
           "format": "uint16",
           "minimum": 0.0
-        },
-        "swap_fee_dir": {
-          "$ref": "#/definitions/SwapType"
         },
         "total_fee_bps": {
           "type": "integer",
@@ -139,48 +135,6 @@
         },
         {
           "description": "Custom pool type",
-          "type": "object",
-          "required": [
-            "custom"
-          ],
-          "properties": {
-            "custom": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "SwapType": {
-      "description": "This enum describes available Swap types. ## Available swap types ``` GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request ```",
-      "oneOf": [
-        {
-          "type": "object",
-          "required": [
-            "give_in"
-          ],
-          "properties": {
-            "give_in": {
-              "type": "object"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "required": [
-            "give_out"
-          ],
-          "properties": {
-            "give_out": {
-              "type": "object"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Custom swap type",
           "type": "object",
           "required": [
             "custom"

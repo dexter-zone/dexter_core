@@ -645,7 +645,7 @@ pub fn execute_join_pool(
         // - Return native tokens to the user (which are to be returned)
         if !to_transfer.is_zero() {
             let mut act_asset_in = to_transfer;
-            if !after_join_res.fee.clone().unwrap().amount.is_zero() && after_join_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
+            if after_join_res.fee.is_some() && !after_join_res.fee.clone().unwrap().amount.is_zero() && after_join_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
                 act_asset_in = to_transfer.checked_sub(protocol_fee + dev_fee).unwrap();
             }
             // PoolInfo State update - Add number of tokens to be transferred to the stored pool state
@@ -859,7 +859,7 @@ pub fn execute_exit_pool(
         let to_transfer = after_burn_res.assets_out[index].amount.clone();
         // Asset amount to actually account for after deducting the fees
         let mut act_asset_out = to_transfer;
-        if !after_burn_res.fee.clone().unwrap().amount.is_zero() && after_burn_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
+        if after_burn_res.fee.is_some() && !after_burn_res.fee.clone().unwrap().amount.is_zero() && after_burn_res.fee.clone().unwrap().info.eq(&stored_asset.info.clone() ) {
             act_asset_out = to_transfer.checked_add(protocol_fee + dev_fee).unwrap();
         }
         // If number of tokens to transfer > 0, then

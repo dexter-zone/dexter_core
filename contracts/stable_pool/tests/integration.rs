@@ -152,7 +152,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     // Initialize Stable-2-pool contract instance
     let current_block = app.block_info();
-    let msg = VaultExecuteMsg::CreatePool {
+    let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable2Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&StablePoolParams { amp: 10u64 }).unwrap()),
@@ -779,7 +779,7 @@ fn test_provide_liquidity() {
 }
 
 #[test]
-fn test_withdraw_liquidity() {
+fn test_on_exit_pool() {
     let owner = Addr::unchecked("owner");
     let alice_address = Addr::unchecked("alice");
     let mut app = mock_app(

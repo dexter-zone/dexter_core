@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Stores config at the given key
 pub const CONFIG: Item<Config> = Item::new("config");
 
-/// Stores custom Twap at the given key which can be different between different dexter pools
+/// Stores Twap prices for the tokens supported by the pool
 pub const TWAPINFO: Item<Twap> = Item::new("twap");
 
 /// ## Description

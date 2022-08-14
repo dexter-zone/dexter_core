@@ -11,7 +11,7 @@ use dexter::vault::{
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType,
-    SwapResponse,
+    SwapResponse, FeeStructs
 };
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
@@ -77,7 +77,9 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-/// Initialize a new vault and a XYK Pool with the given assets
+/// Initialize a new vault and a XYK Pool with the given assets - Tests the following: 
+/// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
+/// XYKPool::QueryMsg::{ CreatePoolInstance}
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
     let xyk_pool_code_id = store_xyk_pool_code(app);
     let vault_code_id = store_vault_code(app);
@@ -150,7 +152,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     // Initialize XYK Pool contract instance
     let current_block = app.block_info();
-    let msg = VaultExecuteMsg::CreatePool {
+    let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
@@ -202,11 +204,8 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::Config {})
         .unwrap();
     assert_eq!(
-        FeeInfo {
+        FeeStructs {
             total_fee_bps: 300u16,
-            protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
-            developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
         pool_config_res.fee_info
     );
@@ -229,12 +228,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::FeeParams {})
         .unwrap();
     assert_eq!(300u16, pool_fee_res.total_fee_bps);
-    assert_eq!(49u16, pool_fee_res.protocol_fee_percent);
-    assert_eq!(15u16, pool_fee_res.dev_fee_percent);
-    assert_eq!(
-        Some(Addr::unchecked("dev".to_string())),
-        pool_fee_res.dev_fee_collector
-    );
 
     //// -----x----- Check :: Pool-ID for XYK Pool -----x----- ////
     let pool_id_res: Uint128 = app
@@ -252,8 +245,42 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
 }
 
+
+/// Tests XYKPool::ExecuteMsg::UpdateConfig for XYK Pool which is not supported
 #[test]
-fn test_provide_liquidity() {
+fn test_update_config() {
+    let owner = Addr::unchecked("owner");
+    let alice_address = Addr::unchecked("alice");
+    let mut app = mock_app(
+        owner.clone(),
+        vec![Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(100_000_000_000u128),
+        }],
+    );
+
+    let (_, pool_addr, _, _, _) = instantiate_contracts_instance(&mut app, &owner);
+
+    //// -----x----- Success :: Function not supported -----x----- ////
+
+    let res = app
+        .execute_contract(
+            alice_address.clone(),
+            pool_addr.clone(),
+            &ExecuteMsg::UpdateConfig { params: None },
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(res.root_cause().to_string(), "Operation non supported");
+}
+
+
+/// Tests the following -
+/// XYKPool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::JoinPool - Token transfer from user to vault and LP token minting to user are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
+#[test]
+fn test_query_on_join_pool() {
     let owner = Addr::unchecked("owner");
     let alice_address = Addr::unchecked("alice");
     let mut app = mock_app(
@@ -334,7 +361,8 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
-    assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
+        assert_eq!(None, join_pool_query_res.fee);
+        assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(100u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
     assert_eq!(
@@ -605,6 +633,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
+    assert_eq!(None, join_pool_query_res.fee);        
     assert_eq!(
         ResponseType::Failure("error : Operation exceeds max slippage limit".to_string()),
         join_pool_query_res.response
@@ -870,11 +899,12 @@ fn test_provide_liquidity() {
 
 
 
-
-
-
+/// Tests the following -
+/// XYKPool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
-fn test_withdraw_liquidity() {
+fn test_on_exit_pool() {
     let owner = Addr::unchecked("owner");
     let alice_address = Addr::unchecked("alice");
     let mut app = mock_app(
@@ -1210,6 +1240,10 @@ fn test_withdraw_liquidity() {
 
 
 
+/// Tests the following -
+/// XYKPool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
 fn test_swap() {
     let owner = Addr::unchecked("owner");
@@ -1367,18 +1401,10 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(91u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(27u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(13u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(4u128)
-    );
+    // assert_eq!(
+    //     swap_offer_asset_res.trade_params.total_fee,
+    //     Uint128::from(27u128)
+    // );
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1413,16 +1439,14 @@ fn test_swap() {
         Uint128::from(118u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(14u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(4u128)
     );
 
     //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
@@ -1464,16 +1488,8 @@ fn test_swap() {
         Uint128::from(0u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(0u128)
+        swap_offer_asset_res.fee,
+        None
     );
 
     // SwapType::GiveOut {},
@@ -1515,16 +1531,8 @@ fn test_swap() {
         Uint128::from(0u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(0u128)
+        swap_offer_asset_res.fee,
+        None
     );
 
     //// -----x----- Check #3 :: EXECUTE Failure : Spread check failed :::  -----x----- ////
@@ -1625,6 +1633,11 @@ fn test_swap() {
         vault_pool_config_res.assets
     );
 
+    let keeper_bal_before = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "xprt")
+        .unwrap();
+
     // Execute Swap :: GiveOut Type
     let swap_msg = VaultExecuteMsg::Swap {
         swap_request: SingleSwapRequest {
@@ -1662,31 +1675,12 @@ fn test_swap() {
         )
         .unwrap();
     assert_eq!(Uint128::from(10041u128), vault_bal_res.balance);
-}
 
-#[test]
-fn test_update_config() {
-    let owner = Addr::unchecked("owner");
-    let alice_address = Addr::unchecked("alice");
-    let mut app = mock_app(
-        owner.clone(),
-        vec![Coin {
-            denom: "xprt".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
-        }],
-    );
+    let keeper_bal_after = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "xprt")
+        .unwrap();
+    assert_eq!(keeper_bal_before.amount + Uint128::from(14u128) , keeper_bal_after.amount);
 
-    let (_, pool_addr, _, _, _) = instantiate_contracts_instance(&mut app, &owner);
 
-    //// -----x----- Success :: Function not supported -----x----- ////
-
-    let res = app
-        .execute_contract(
-            alice_address.clone(),
-            pool_addr.clone(),
-            &ExecuteMsg::UpdateConfig { params: None },
-            &[],
-        )
-        .unwrap_err();
-    assert_eq!(res.root_cause().to_string(), "Operation non supported");
 }

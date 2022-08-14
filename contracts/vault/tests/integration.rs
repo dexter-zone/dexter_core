@@ -451,7 +451,7 @@ fn test_add_to_registery() {
 
 
 #[test]
-fn create_pool() {
+fn test_create_pool_instance() {
     let mut app = mock_app();
     let owner = String::from("owner");
     let token_code_id = store_token_code(&mut app);
@@ -564,4 +564,115 @@ fn create_pool() {
     assert_eq!(assets, pool_res.assets);
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
     assert_eq!(None, pool_res.developer_addr);
+}
+
+
+
+
+
+#[test]
+fn test_update_owner() {
+    let mut app = mock_app();
+    let owner = String::from("owner");
+    let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
+
+    let new_owner = String::from("new_owner");
+
+    // New owner
+    let msg = ExecuteMsg::ProposeNewOwner {
+        owner: new_owner.clone(),
+        expires_in: 100, // seconds
+    };
+
+    // Unauthed check
+    let err = app
+        .execute_contract(
+            Addr::unchecked("not_owner"),
+            vault_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(err.root_cause().to_string(), "Generic error: Unauthorized");
+
+    // Claim before proposal
+    let err = app
+        .execute_contract(
+            Addr::unchecked(new_owner.clone()),
+            vault_instance.clone(),
+            &ExecuteMsg::ClaimOwnership {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(
+        err.root_cause().to_string(),
+        "Generic error: Ownership proposal not found"
+    );
+
+    // Propose new owner
+    app.execute_contract(Addr::unchecked("owner"), vault_instance.clone(), &msg, &[])
+        .unwrap();
+
+    // Claim from invalid addr
+    let err = app
+        .execute_contract(
+            Addr::unchecked("invalid_addr"),
+            vault_instance.clone(),
+            &ExecuteMsg::ClaimOwnership {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(err.root_cause().to_string(), "Generic error: Unauthorized");
+
+    // Drop ownership proposal
+    let err = app
+        .execute_contract(
+            Addr::unchecked(new_owner.clone()),
+            vault_instance.clone(),
+            &ExecuteMsg::DropOwnershipProposal {},
+            &[],
+        )
+        .unwrap_err();
+    // new_owner is not an owner yet
+    assert_eq!(err.root_cause().to_string(), "Generic error: Unauthorized");
+
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &ExecuteMsg::DropOwnershipProposal {},
+        &[],
+    )
+    .unwrap();
+
+    // Try to claim ownership
+    let err = app
+        .execute_contract(
+            Addr::unchecked(new_owner.clone()),
+            vault_instance.clone(),
+            &ExecuteMsg::ClaimOwnership {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(
+        err.root_cause().to_string(),
+        "Generic error: Ownership proposal not found"
+    );
+
+    // Propose new owner again
+    app.execute_contract(Addr::unchecked("owner"), vault_instance.clone(), &msg, &[])
+        .unwrap();
+    // Claim ownership
+    app.execute_contract(
+        Addr::unchecked(new_owner.clone()),
+        vault_instance.clone(),
+        &ExecuteMsg::ClaimOwnership {},
+        &[],
+    )
+    .unwrap();
+
+    // Let's query the contract state
+    let msg = QueryMsg::Config {};
+    let res: ConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
+
+    assert_eq!(res.owner, new_owner)
 }

@@ -410,7 +410,6 @@
       "required": [
         "dev_fee_percent",
         "protocol_fee_percent",
-        "swap_fee_dir",
         "total_fee_bps"
       ],
       "properties": {
@@ -433,9 +432,6 @@
           "type": "integer",
           "format": "uint16",
           "minimum": 0.0
-        },
-        "swap_fee_dir": {
-          "$ref": "#/definitions/SwapType"
         },
         "total_fee_bps": {
           "type": "integer",
