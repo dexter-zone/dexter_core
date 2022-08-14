@@ -7,7 +7,7 @@ use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType, SwapResponse,
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType, SwapResponse, FeeStructs
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -207,11 +207,8 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::Config {})
         .unwrap();
     assert_eq!(
-        FeeInfo {
+        FeeStructs {
             total_fee_bps: 300u16,
-            protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
-            developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
         pool_config_res.fee_info
     );
@@ -246,12 +243,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::FeeParams {})
         .unwrap();
     assert_eq!(300u16, pool_fee_res.total_fee_bps);
-    assert_eq!(49u16, pool_fee_res.protocol_fee_percent);
-    assert_eq!(15u16, pool_fee_res.dev_fee_percent);
-    assert_eq!(
-        Some(Addr::unchecked("dev".to_string())),
-        pool_fee_res.dev_fee_collector
-    );
 
     //// -----x----- Check :: Pool-ID for Stable Pool -----x----- ////
     let pool_id_res: Uint128 = app
@@ -269,8 +260,251 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
 }
 
+
+/// Tests Pool::ExecuteMsg::UpdateConfig for stableswap Pool which supports [`StartChangingAmp`] and [`StopChangingAmp`] messages
 #[test]
-fn test_provide_liquidity() {
+fn test_update_config() {
+    let owner = Addr::unchecked("owner");
+    let alice_address = Addr::unchecked("alice");
+    let mut app = mock_app(
+        owner.clone(),
+        vec![Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(100_000_000_000u128),
+        }],
+    );
+    // Set Alice's balances
+    app.send_tokens(
+        owner.clone(),
+        alice_address.clone(),
+        &[Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(1000_000_000u128),
+        }],
+    )
+    .unwrap();
+
+    let (vault_instance, pool_addr, _lp_token_addr, token_instance, _) =
+        instantiate_contracts_instance(&mut app, &owner);
+    mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token_instance.clone(),
+        Uint128::new(900_000_000_000),
+        alice_address.to_string(),
+    );
+
+    //// -----x----- Successfully provide liquidity and mint LP tokens -----x----- ////
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance.clone(),
+            },
+            amount: Uint128::from(10_000u128),
+        },
+    ];
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id: Uint128::from(1u128),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
+    app.execute_contract(
+        alice_address.clone(),
+        token_instance.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_instance.clone().to_string(),
+            amount: Uint128::from(1000000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "axlusd".to_string(),
+            amount: Uint128::new(10000u128),
+        }],
+    )
+    .unwrap();
+
+    //  ###########  Check :: Faulure ::  Start changing amp with incorrect next amp   ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: MAX_AMP + 1,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "Amp coefficient must be greater than 0 and less than or equal to {}",
+            MAX_AMP
+        )
+    );
+
+    //  ###########  Check :: Faulure ::  Start changing amp with big difference between the old and new amp value   ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 100 * MAX_AMP_CHANGE + 1,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "The difference between the old and new amp value must not exceed {} times",
+            MAX_AMP_CHANGE
+        )
+    );
+
+    //  ########### Check :: Faulure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 25,
+                next_amp_time: app.block_info().time.seconds(),
+            })
+            .unwrap(),
+        ),
+    };
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+    assert_eq!(
+        resp.root_cause().to_string(),
+        format!(
+            "Amp coefficient cannot be changed more often than once per {} seconds",
+            MIN_AMP_CHANGING_TIME
+        )
+    );
+
+    // Start increasing amp
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
+    });
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 25,
+                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+    };
+
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 17u64);
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 25u64);
+
+    // Start decreasing amp
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
+    });
+
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+                next_amp: 15,
+                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
+            })
+            .unwrap(),
+        ),
+    };
+
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 20u64);
+
+    // Stop changing amp
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+    };
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
+    });
+
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.amp, 20u64);
+}
+
+
+
+
+
+/// Tests the following -
+/// Pool::QueryMsg::OnJoinPool for StablePool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::JoinPool - Token transfer from user to vault and LP token minting to user are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
+#[test]
+fn test_query_on_join_pool() {
     let owner = Addr::unchecked("owner");
     let alice_address = Addr::unchecked("alice");
     let mut app = mock_app(
@@ -351,6 +585,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
+    assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(1000u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
@@ -603,6 +838,7 @@ fn test_provide_liquidity() {
             },
         )
         .unwrap();
+    assert_eq!(None, join_pool_query_res.fee);        
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(110u128), join_pool_query_res.new_shares);
 
@@ -778,6 +1014,11 @@ fn test_provide_liquidity() {
     );
 }
 
+
+/// Tests the following -
+/// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
 fn test_on_exit_pool() {
     let owner = Addr::unchecked("owner");
@@ -1107,6 +1348,12 @@ fn test_on_exit_pool() {
     assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
+
+
+/// Tests the following -
+/// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
+/// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
+/// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
 fn test_swap() {
     let owner = Addr::unchecked("owner");
@@ -1265,17 +1512,16 @@ fn test_swap() {
         Uint128::from(9u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(14u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(4u128)
-    );
+    );    
+
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1310,17 +1556,16 @@ fn test_swap() {
         Uint128::from(9u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(14u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(4u128)
-    );
+    );    
+
 
     //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
     // SwapType::GiveIn {},
@@ -1362,16 +1607,8 @@ fn test_swap() {
         Uint128::from(0u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(0u128)
+        swap_offer_asset_res.fee.clone(),
+        None
     );
 
     // SwapType::GiveOut {},
@@ -1413,18 +1650,9 @@ fn test_swap() {
         Uint128::from(0u128)
     );
     assert_eq!(
-        swap_offer_asset_res.trade_params.total_fee,
-        Uint128::from(0u128)
+        swap_offer_asset_res.fee.clone(),
+        None
     );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.protocol_fee,
-        Uint128::from(0u128)
-    );
-    assert_eq!(
-        swap_offer_asset_res.trade_params.dev_fee,
-        Uint128::from(0u128)
-    );
-
     //// -----x----- Check #3 :: EXECUTE Success :::  -----x----- ////
 
     // Execute Swap :: GiveIn Type
@@ -1538,6 +1766,13 @@ fn test_swap() {
         },
         recipient: None,
     };
+
+    let keeper_bal_before = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "axlusd")
+        .unwrap();
+
+
     app.execute_contract(
         alice_address.clone(),
         vault_instance.clone(),
@@ -1558,237 +1793,13 @@ fn test_swap() {
         )
         .unwrap();
     assert_eq!(Uint128::from(10041u128), vault_bal_res.balance);
-}
 
-#[test]
-fn update_pool_config() {
-    let owner = Addr::unchecked("owner");
-    let alice_address = Addr::unchecked("alice");
-    let mut app = mock_app(
-        owner.clone(),
-        vec![Coin {
-            denom: "axlusd".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
-        }],
-    );
-    // Set Alice's balances
-    app.send_tokens(
-        owner.clone(),
-        alice_address.clone(),
-        &[Coin {
-            denom: "axlusd".to_string(),
-            amount: Uint128::new(1000_000_000u128),
-        }],
-    )
-    .unwrap();
 
-    let (vault_instance, pool_addr, _lp_token_addr, token_instance, _) =
-        instantiate_contracts_instance(&mut app, &owner);
-    mint_some_tokens(
-        &mut app,
-        owner.clone(),
-        token_instance.clone(),
-        Uint128::new(900_000_000_000),
-        alice_address.to_string(),
-    );
-
-    //// -----x----- Successfully provide liquidity and mint LP tokens -----x----- ////
-    let assets_msg = vec![
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "axlusd".to_string(),
-            },
-            amount: Uint128::from(10_000u128),
-        },
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            amount: Uint128::from(10_000u128),
-        },
-    ];
-    let msg = VaultExecuteMsg::JoinPool {
-        pool_id: Uint128::from(1u128),
-        recipient: None,
-        lp_to_mint: None,
-        auto_stake: None,
-        slippage_tolerance: None,
-        assets: Some(assets_msg.clone()),
-    };
-    app.execute_contract(
-        alice_address.clone(),
-        token_instance.clone(),
-        &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vault_instance.clone().to_string(),
-            amount: Uint128::from(1000000000u128),
-            expires: None,
-        },
-        &[],
-    )
-    .unwrap();
-    app.execute_contract(
-        alice_address.clone(),
-        vault_instance.clone(),
-        &msg,
-        &[Coin {
-            denom: "axlusd".to_string(),
-            amount: Uint128::new(10000u128),
-        }],
-    )
-    .unwrap();
-
-    //  ###########  Check :: Faulure ::  Start changing amp with incorrect next amp   ###########
-
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
-                next_amp: MAX_AMP + 1,
-                next_amp_time: app.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-    };
-    let resp = app
-        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap_err();
-    assert_eq!(
-        resp.root_cause().to_string(),
-        format!(
-            "Amp coefficient must be greater than 0 and less than or equal to {}",
-            MAX_AMP
-        )
-    );
-
-    //  ###########  Check :: Faulure ::  Start changing amp with big difference between the old and new amp value   ###########
-
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
-                next_amp: 100 * MAX_AMP_CHANGE + 1,
-                next_amp_time: app.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-    };
-    let resp = app
-        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap_err();
-    assert_eq!(
-        resp.root_cause().to_string(),
-        format!(
-            "The difference between the old and new amp value must not exceed {} times",
-            MAX_AMP_CHANGE
-        )
-    );
-
-    //  ########### Check :: Faulure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
-
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
-                next_amp: 25,
-                next_amp_time: app.block_info().time.seconds(),
-            })
-            .unwrap(),
-        ),
-    };
-    let resp = app
-        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap_err();
-    assert_eq!(
-        resp.root_cause().to_string(),
-        format!(
-            "Amp coefficient cannot be changed more often than once per {} seconds",
-            MIN_AMP_CHANGING_TIME
-        )
-    );
-
-    // Start increasing amp
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
-    });
-
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
-                next_amp: 25,
-                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-            })
-            .unwrap(),
-        ),
-    };
-
-    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap();
-
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
-    });
-
-    let res: ConfigResponse = app
+    let keeper_bal_after = app
         .wrap()
-        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .query_balance(&"fee_collector".to_string(), "axlusd")
         .unwrap();
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
-    assert_eq!(params.amp, 17u64);
+    assert_eq!(keeper_bal_before.amount + Uint128::from(14u128) , keeper_bal_after.amount);
 
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
-    });
 
-    let res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
-        .unwrap();
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
-    assert_eq!(params.amp, 25u64);
-
-    // Start decreasing amp
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME);
-    });
-
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
-                next_amp: 15,
-                next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
-            })
-            .unwrap(),
-        ),
-    };
-
-    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap();
-
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
-    });
-
-    let res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
-        .unwrap();
-
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
-    assert_eq!(params.amp, 20u64);
-
-    // Stop changing amp
-    let msg = ExecuteMsg::UpdateConfig {
-        params: Some(to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap()),
-    };
-    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap();
-
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(MIN_AMP_CHANGING_TIME / 2);
-    });
-
-    let res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
-        .unwrap();
-
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
-    assert_eq!(params.amp, 20u64);
 }

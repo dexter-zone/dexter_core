@@ -6,7 +6,7 @@ Dexter's XYK Pool uses the widely known xy=k formula for its compute calculation
 
 | Message    | Description                                                                  |
 | ---------- | ---------------------------------------------------------------------------- |
-| `CONFIG`   | Stores Vault contract's core Configuration parameters in a [`Config`] struct |
+| `CONFIG`   | Stores Pool contract's core Configuration parameters in a [`Config`] struct  |
 | `TWAPINFO` | Stores Twap prices for the tokens supported by the pool in a [`Twap`] struct |
 
 ---

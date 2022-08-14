@@ -79,7 +79,7 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
 
 /// Initialize a new vault and a XYK Pool with the given assets - Tests the following: 
 /// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
-/// XYKPool::QueryMsg::{ CreatePoolInstance}
+/// Pool::QueryMsg::{ CreatePoolInstance}
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
     let xyk_pool_code_id = store_xyk_pool_code(app);
     let vault_code_id = store_vault_code(app);
@@ -246,7 +246,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 }
 
 
-/// Tests XYKPool::ExecuteMsg::UpdateConfig for XYK Pool which is not supported
+/// Tests Pool::ExecuteMsg::UpdateConfig for XYK Pool which is not supported
 #[test]
 fn test_update_config() {
     let owner = Addr::unchecked("owner");
@@ -276,7 +276,7 @@ fn test_update_config() {
 
 
 /// Tests the following -
-/// XYKPool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::JoinPool - Token transfer from user to vault and LP token minting to user are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -900,7 +900,7 @@ fn test_query_on_join_pool() {
 
 
 /// Tests the following -
-/// XYKPool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -1241,7 +1241,7 @@ fn test_on_exit_pool() {
 
 
 /// Tests the following -
-/// XYKPool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -1401,10 +1401,17 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(91u128)
     );
-    // assert_eq!(
-    //     swap_offer_asset_res.trade_params.total_fee,
-    //     Uint128::from(27u128)
-    // );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::Token {
+            contract_addr: token_instance.clone(),
+        }
+    );
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().amount,
+        Uint128::from(27u128)
+    );        
+
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app

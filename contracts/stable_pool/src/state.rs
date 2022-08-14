@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 /// Stores config at the given key
 pub const CONFIG: Item<Config> = Item::new("config");
 
-/// Stores custom Twap at the given key which can be different between different dexter pools
+/// Stores Twap prices for the tokens supported by the pool
 pub const TWAPINFO: Item<Twap> = Item::new("twap");
 
 /// Stores custom config at the given key which can be different between different dexter pools
 pub const MATHCONFIG: Item<MathConfig> = Item::new("math-config");
 
 /// ## Description
-/// This structure which stores the TWAP calcs related info for the pool
+/// This struct which stores the TWAP calcs related info for the pool
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Twap {
     pub price0_cumulative_last: Uint128,
@@ -24,7 +24,7 @@ pub struct Twap {
 }
 
 /// ## Description
-/// This structure describes the main math config of pool.
+/// This struct describes the main math configuration of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
     // This is the current amplification used in the pool
@@ -37,7 +37,7 @@ pub struct MathConfig {
     pub next_amp_time: u64,
 }
 
-/// This structure holds stableswap pool parameters.
+/// This struct holds stableswap pool parameters.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct StablePoolParams {
