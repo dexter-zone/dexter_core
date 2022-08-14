@@ -80,6 +80,13 @@ pub fn instantiate(
     // Weights assigned to assets
     let WeightedParams { weights, exit_fee } = from_binary(&msg.init_params.unwrap())?;
 
+    // Exit fee cannot be set more than 1%
+    if exit_fee.is_some() {
+        if exit_fee.unwrap() > Decimal::from_ratio(1u128, 100u128) {
+            return Err(ContractError::InvalidExitFee {});
+        }
+    }
+
     // Error if number of assets and weights provided do not match
     if msg.asset_infos.len() != weights.len() {
         return Err(ContractError::NumberOfAssetsAndWeightsMismatch {});
@@ -344,6 +351,19 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
+    // Get pool current liquidity + and token weights : Convert assets to WeightedAssets
+    let pool_assets_weighted: Vec<WeightedAsset> = config
+        .assets
+        .iter()
+        .map(|asset| {
+            let weight = get_weight(deps.storage, &asset.info)?;
+            Ok(WeightedAsset {
+                asset: asset.clone(),
+                weight,
+            })
+        })
+        .collect::<StdResult<Vec<WeightedAsset>>>()?;
+
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -353,7 +373,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
         math_params: Some(to_binary(&math_config).unwrap()),        
-        additional_params: None
+        additional_params: Some(to_binary(&pool_assets_weighted).unwrap()),
     })
 }
 
@@ -397,8 +417,8 @@ pub fn query_on_join_pool(
     deps: Deps,
     _env: Env,
     assets_in: Option<Vec<Asset>>,
-    mint_amount: Option<Uint128>,
-    slippage_tolerance: Option<Decimal>,
+    _mint_amount: Option<Uint128>,
+    _slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
@@ -429,7 +449,7 @@ pub fn query_on_join_pool(
     // 1) get all 'pool assets' (aka current pool liquidity + balancer weight)
 
     let config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    // let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 

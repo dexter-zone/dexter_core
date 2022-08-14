@@ -11,6 +11,10 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    
+    #[error("Invalid exit fee. Exit fee cannot be more than 1%")]
+    InvalidExitFee {},
+
     #[error("Number of assets and weights provided do not match")]
     NumberOfAssetsAndWeightsMismatch {},
 
