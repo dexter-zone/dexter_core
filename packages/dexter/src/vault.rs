@@ -92,7 +92,6 @@ const MAX_DEV_FEE_PERCENT: u16 = 25u16;
 /// ## Description - This struct describes the Fee configuration supported by a particular pool type.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeInfo {
-    pub swap_fee_dir: SwapType,
     pub total_fee_bps: u16,
     pub protocol_fee_percent: u16,
     pub dev_fee_percent: u16,
@@ -156,10 +155,9 @@ pub struct PoolConfig {
 impl Default for PoolConfig {
     fn default() -> Self {
         PoolConfig {
-            code_id: 0,
+            code_id: 0u64,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
-                swap_fee_dir: SwapType::GiveIn {},
                 total_fee_bps: 0,
                 protocol_fee_percent: 0,
                 dev_fee_percent: 0,

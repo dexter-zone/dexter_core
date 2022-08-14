@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Binary, CosmosMsg, Deps, DepsMut, Env, Event,
-    MessageInfo, Order, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    MessageInfo, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, WasmMsg, WasmQuery, Decimal
 };
 use protobuf::Message;
@@ -256,7 +256,7 @@ pub fn execute_update_config(
     }
 
     // Set generator only if its not set
-    if config.generator_address.is_some() {
+    if !config.generator_address.is_some() {
         if let Some(generator_address) = generator_address {
             config.generator_address = Some(addr_validate_to_lower(
                 deps.api,
@@ -356,9 +356,9 @@ pub fn execute_add_to_registery(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Check :: If pool type is already registeredits old 
+    // Check :: If pool type is already registered  
     let mut pool_config = REGISTERY.load(deps.storage, new_pool_config.pool_type.to_string() ).unwrap_or_default()  ;
-    if !pool_config.code_id != 0u64 {
+    if pool_config.code_id != 0u64 {
         return Err(ContractError::PoolTypeAlreadyExists {});
     }
 
@@ -462,7 +462,6 @@ pub fn execute_create_pool_instance(
                 vault_addr: env.contract.address,
                 asset_infos: asset_infos.clone(),
                 fee_info: FeeStructs {
-                    swap_fee_dir: pool_config.fee_info.swap_fee_dir,
                     total_fee_bps: pool_config.fee_info.total_fee_bps,
                 },
                 lp_token_code_id: config.lp_token_code_id,

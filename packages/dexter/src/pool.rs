@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
-use crate::vault::{FeeInfo, PoolType, SwapType};
+use crate::vault::{PoolType, SwapType};
 
 use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
@@ -22,7 +22,6 @@ pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FeeStructs {  
-    pub swap_fee_dir: SwapType, 
     pub total_fee_bps: u16 
 }
 
@@ -237,7 +236,6 @@ pub struct AfterExitResponse {
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
     pub total_fee_bps: u16,
-    pub swap_fee_dir: SwapType,
 }
 
 /// ## Description
