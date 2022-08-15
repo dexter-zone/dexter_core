@@ -163,14 +163,6 @@ pub enum ExecuteMsg {
     /// Claims contract ownership
     /// ## Executor - Only the newly proposed owner can execute this
     ClaimOwnership {},
-
-    /// Sets a new proxy contract for a specific generator
-    /// Sets a proxy for the pool
-    /// ## Executor -  Only the current owner  can execute this
-    MoveToProxy {
-        lp_token: String,
-        proxy: String,
-    },
 }
 
 /// This structure describes custom hooks for the CW20.

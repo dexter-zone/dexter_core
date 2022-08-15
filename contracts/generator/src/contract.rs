@@ -191,9 +191,6 @@ pub fn execute(
         ExecuteMsg::UpdateAllowedProxies { add, remove } => {
             update_allowed_proxies(deps, info, add, remove)
         },
-        ExecuteMsg::MoveToProxy { lp_token, proxy } => {
-            move_to_proxy(deps, env, info, lp_token, proxy)
-        }
         ExecuteMsg::ClaimRewards { lp_tokens } => {
             let mut lp_tokens_addr: Vec<Addr> = vec![];
             for lp_token in &lp_tokens {
@@ -599,89 +596,6 @@ fn update_allowed_proxies(
 
     CONFIG.save(deps.storage, &cfg)?;
     Ok(Response::default().add_attribute("action", "update_allowed_proxies"))
-}
-
-
-/// ## Description
-/// Sets the reward proxy contract for a specifi generator. Returns a [`ContractError`] on failure, otherwise
-/// returns a [`Response`] with the specified attributes if the operation was successful.
-/// 
-/// ## Params
-/// * **lp_token** is the object of type [`String`]. Its the address of the LP token for which we are setting the reward proxy.
-/// * **proxy** is the object of type [`String`]. Its the address of the reward proxy.
-fn move_to_proxy(
-    mut deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: String,
-    proxy: String,
-) -> Result<Response, ContractError> {
-    let lp_addr = addr_validate_to_lower(deps.api, &lp_token)?;
-    let proxy_addr = addr_validate_to_lower(deps.api, &proxy)?;
-
-    let cfg = CONFIG.load(deps.storage)?;
-
-    // Permission check
-    if info.sender != cfg.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    if !cfg.allowed_reward_proxies.contains(&proxy_addr) {
-        return Err(ContractError::RewardProxyNotAllowed {});
-    }
-
-    // Create generator pool if it doesn't exist
-    if !POOL_INFO.has(deps.storage, &lp_addr) {
-        let vault_cfg: VaultConfigResponse = deps
-            .querier
-            .query_wasm_smart(cfg.vault.clone(), &VaultQueryMsg::Config {})?;
-
-        create_pool(deps.branch(), &env, &lp_addr, &cfg, &vault_cfg)?;
-    }
-
-    // Error if proxy is already set
-    let mut pool_info = POOL_INFO.load(deps.storage, &lp_addr.clone())?;
-    if pool_info.reward_proxy.is_some() {
-        return Err(ContractError::PoolAlreadyHasRewardProxyContract {});
-    }
-
-    // Initialize the proxy contract's reward share values
-    update_proxy_asset(deps.branch(), &proxy_addr)?;
-    pool_info
-        .orphan_proxy_rewards
-        .update(&proxy_addr, Uint128::zero())?;
-    pool_info
-        .accumulated_proxy_rewards_per_share
-        .update(&proxy_addr, Decimal::zero())?;
-    pool_info.reward_proxy = Some(proxy_addr);
-
-    let res: BalanceResponse = deps.querier.query_wasm_smart(
-        lp_addr.clone(),
-        &cw20::Cw20QueryMsg::Balance {
-            address: env.contract.address.to_string(),
-        },
-    )?;
-
-    // Transfer LP tokens to the proxy contract 
-    let messages = if !res.balance.is_zero() {
-        vec![WasmMsg::Execute {
-            contract_addr: lp_addr.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Send {
-                contract: pool_info.reward_proxy.clone().unwrap().to_string(),
-                msg: to_binary(&ProxyCw20HookMsg::Deposit {})?,
-                amount: res.balance,
-            })?,
-            funds: vec![],
-        }]
-    } else {
-        vec![]
-    };
-
-    POOL_INFO.save(deps.storage, &lp_addr, &pool_info)?;
-
-    Ok(Response::new()
-        .add_messages(messages)
-        .add_attributes(vec![attr("action", "move_to_proxy"), attr("proxy", proxy)]))
 }
 
 
