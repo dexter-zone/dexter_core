@@ -10,6 +10,7 @@ pub mod approx_pow;
 pub mod generator;
 pub mod generator_proxy;
 pub mod vesting;
+pub mod ref_staking;
 
 
 #[allow(clippy::all)]

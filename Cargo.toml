@@ -1,6 +1,14 @@
 [workspace]
 members = [
-    "contracts/*", 
+    "contracts/keeper", 
+    "contracts/vault", 
+    "contracts/lp_token", 
+    "contracts/stable_5pool", 
+    "contracts/stable_pool", 
+    "contracts/xyk_pool", 
+    "contracts/weighted_pool", 
+    "contracts/dexter_generator/*", 
+    # "contracts/*",
     "packages/*"
 ]
 

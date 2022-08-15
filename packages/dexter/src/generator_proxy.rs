@@ -33,18 +33,18 @@ pub enum ExecuteMsg {
     /// Withdraw pending token rewards from the 3rd party staking contract
     UpdateRewards {},
     /// Sends rewards to a recipient
-    SendRewards { account: String, amount: Uint128 },
+    SendRewards { account: Addr, amount: Uint128 },
     /// Withdraw LP tokens and outstanding token rewards
     Withdraw {
         /// The address that will receive the withdrawn tokens and rewards
-        account: String,
+        account: Addr,
         /// The amount of LP tokens to withdraw
         amount: Uint128,
     },
     /// Withdraw LP tokens without claiming rewards
     EmergencyWithdraw {
         /// The address that will receive the withdrawn tokens
-        account: String,
+        account: Addr,
         /// The amount of LP tokens to withdraw
         amount: Uint128,
     },

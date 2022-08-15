@@ -4,7 +4,6 @@ use dexter::{
     generator::{PoolInfo, RestrictedVector, UserInfo, ExecuteOnReply, Config},
     DecimalCheckedOps,
 };
-// use astroport_governance::voting_escrow::{get_total_voting_power, get_voting_power};
 
 use cosmwasm_std::{Addr, DepsMut, Decimal, StdResult, Storage, Uint128, Uint64};
 use cw_storage_plus::{Item, Map};

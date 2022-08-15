@@ -1,8 +1,10 @@
 [package]
-name = "dexter-generator"
-version = "1.0.0"
-authors = ["Astroport, Astrotechlabs"]
-edition = "2021"
+name = "anchor-staking"
+version = "0.0.0"
+authors = ["Terraform Labs, PTE."]
+edition = "2018"
+description = "A Staking contract for Anchor Protocol - distribute rewards to stakers"
+license = "Apache-2.0"
 
 exclude = [
   # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
@@ -15,23 +17,29 @@ exclude = [
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true
+
 [features]
+# for quicker tests, cargo test --lib
 # for more explicit tests, cargo test --features=backtraces
 backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
-cosmwasm-std = "1.0"
-cw2 = { version = "0.13.2" }
 cw20 = { version = "0.13.2" }
+cosmwasm-std = "1.0"
 cw-storage-plus = "0.13.2"
+dexter = { path = "../../../packages/dexter", default-features = false }
 schemars = "0.8.1"
 serde = { version = "1.0.125", default-features = false, features = ["derive"] }
-thiserror = { version = "1.0.24" }
-dexter = { path = "../../packages/dexter", default-features = false }
-protobuf = { version = "2", features = ["with-bytes"] }
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"
-cw-multi-test = "0.13.2"
-# dexter-token = {path = "../../token"}
-# dexter-vesting = {path = "../vesting"}

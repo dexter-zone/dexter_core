@@ -19,10 +19,10 @@ cosmwasm-std = { version = "1.0.0" }
 cw-storage-plus = { version = "0.13.2" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
-dexter = { path = "../../packages/dexter", default-features = false }
+dexter = { path = "../../../packages/dexter", default-features = false }
 thiserror = { version = "1.0.20" }
 
 [dev-dependencies]
 cosmwasm-schema = { version = "1.0.0", default-features = false  }
-lp-token = {path = "../lp_token"}
+lp-token = {path = "../../lp_token"}
 cw-multi-test = "0.13.2"

@@ -16,7 +16,6 @@ use dexter::generator::{UserInfo, PoolInfo , RestrictedVector, UnbondingInfo};
 use dexter::querier::{query_token_balance,config_info_by_pool};
 use dexter::helper:: { claim_ownership, drop_ownership_proposal, propose_new_owner, };
 use dexter::{
-    vault::{ConfigResponse as VaultConfigResponse, QueryMsg as VaultQueryMsg, PoolConfig},
     generator::{
         ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PendingTokenResponse,
         PoolInfoResponse, PoolLengthResponse, QueryMsg, RewardInfoResponse, ExecuteOnReply, Config
@@ -310,11 +309,8 @@ fn receive_cw20(
     let cfg = CONFIG.load(deps.storage)?;
 
     if !POOL_INFO.has(deps.storage, &lp_token) {
-        let vault_cfg: VaultConfigResponse = deps
-            .querier
-            .query_wasm_smart(cfg.vault.clone(), &VaultQueryMsg::Config {})?;
 
-        create_pool(deps.branch(), &env, &lp_token, &cfg, &vault_cfg)?;
+        create_pool(deps.branch(), &env, &lp_token, &cfg)?;
     }
 
     match from_binary(&cw20_msg.msg)? {
@@ -435,10 +431,6 @@ pub fn execute_setup_pools(
         setup_pools.push((pool_addr, alloc_point));
     }
 
-    let vault_cfg: VaultConfigResponse = deps
-        .querier
-        .query_wasm_smart(cfg.vault.clone(), &VaultQueryMsg::Config {})?;
-
     // Update rewards state for currently supported pools
     let prev_pools: Vec<Addr> = cfg.active_pools.iter().map(|pool| pool.0.clone()).collect();
     mass_update_pools(deps.branch(), &env, &cfg, &prev_pools)?;
@@ -446,7 +438,7 @@ pub fn execute_setup_pools(
     // Add new pools to the list of active pools after checking if its not already supported
     for (lp_token, _) in &setup_pools {
         if !POOL_INFO.has(deps.storage, lp_token) {
-            create_pool(deps.branch(), &env, lp_token, &cfg, &vault_cfg)?;
+            create_pool(deps.branch(), &env, lp_token, &cfg)?;
         }
     }
 
@@ -814,7 +806,7 @@ pub fn unstake(
             contract_addr: pool.reward_proxy.clone().unwrap().to_string(),
             funds: vec![],
             msg: to_binary(&ProxyExecuteMsg::Withdraw {
-                account: account.to_string(),
+                account: account.clone(),
                 amount,
             })?,
         });
@@ -966,7 +958,7 @@ pub fn emergency_unstake(
     let cfg = CONFIG.load(deps.storage)?;
 
     let mut pool = POOL_INFO.load(deps.storage, &lp_token)?;
-    let user = USER_INFO.load(deps.storage, (&lp_token, &info.sender))?;
+    let user = USER_INFO.load(deps.storage, (&lp_token, &info.sender.clone()))?;
 
     // Instantiate the transfer call for the LP token
     let mut transfer_msgs: Vec<WasmMsg> = vec![];
@@ -993,7 +985,7 @@ pub fn emergency_unstake(
         transfer_msgs.push( WasmMsg::Execute {
             contract_addr: proxy.to_string(),
             msg: to_binary(&ProxyExecuteMsg::EmergencyWithdraw {
-                account: info.sender.to_string(),
+                account: info.sender.clone(),
                 amount: user.amount,
             })?,
             funds: vec![],
@@ -1023,7 +1015,7 @@ pub fn emergency_unstake(
     user.unbonding_periods.push( unbonding_period );    
 
     // Change the user's balance
-    USER_INFO.save(deps.storage, (&lp_token, &info.sender), &user)?;
+    USER_INFO.save(deps.storage, (&lp_token, &info.sender.clone()), &user)?;
     POOL_INFO.save(deps.storage, &lp_token, &pool)?;
 
     Ok(Response::new()
@@ -1076,7 +1068,7 @@ fn send_orphan_proxy_rewards(
                         contract_addr: proxy.to_string(),
                         funds: vec![],
                         msg: to_binary(&ProxyExecuteMsg::SendRewards {
-                            account: recipient.to_string(),
+                            account: recipient.clone(),
                             amount: *amount,
                         })?,
                     });
@@ -1544,7 +1536,6 @@ pub fn create_pool(
     env: &Env,
     lp_token: &Addr,
     cfg: &Config,
-    vault_cfg: &VaultConfigResponse,
 ) -> Result<PoolInfo, ContractError> {
     let pool_info = config_info_by_pool(&deps.querier, lp_token.clone().to_string())?;
 
@@ -1749,7 +1740,7 @@ pub fn send_pending_rewards(
                         contract_addr: proxy.to_string(),
                         funds: vec![],
                         msg: to_binary(&ProxyExecuteMsg::SendRewards {
-                            account: to.to_string(),
+                            account: to.to_owned(),
                             amount: pending_proxy_rewards,
                         })?,
                     });
