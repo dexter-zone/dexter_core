@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, QuerierWrapper, Decimal,QueryRequest, WasmQuery, Addr, StdResult, Storage, Uint128, to_binary};
+use cosmwasm_std::{CanonicalAddr, QuerierWrapper, Decimal,QueryRequest, WasmQuery, Addr, StdResult, Uint128, to_binary};
 use cw_storage_plus::{Item, Map};
 use cw20::{Cw20QueryMsg, MinterResponse};
 
@@ -10,8 +10,6 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 pub const USERS: Map<&Addr, StakerInfo> = Map::new("user");
 
-
-static PREFIX_REWARD: &[u8] = b"reward";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {

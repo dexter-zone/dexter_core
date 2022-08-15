@@ -7,8 +7,6 @@ use dexter::{
 
 use cosmwasm_std::{Addr, DepsMut, Decimal, StdResult, Storage, Uint128, Uint64};
 use cw_storage_plus::{Item, Map};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ----------------x----------------x--------------x----------------

@@ -20,6 +20,7 @@ The Generator contract here is taken from the Astroport's generator contract and
 | `SetTokensPerBlock`        | Admin function. Set a new amount of DEX tokens to distribute per block                                                                                         |
 | `UpdateConfig`             | Admin function. Failitates updating some of the configuration param of the Dexter Generator Contract                                                           |
 | `SetupPools`               | Admin function. Setup generators with their respective allocation points.                                                                                      |
+| `DeactivatePool`           | Admin function. Sets the allocation points to zero for the generator associated with the specified LP token. Recalculates total allocation points.             |
 | `SetAllowedRewardProxies`  | Admin function. Allowed reward proxy contracts that can interact with the Generator.                                                                           |
 | `SendOrphanProxyReward`    | Admin function. Sends orphan proxy rewards (which were left behind after emergency withdrawals) to another address                                             |
 | `UpdateAllowedProxies`     | Admin function. Add or remove a proxy contract that can interact with the Generator                                                                            |
@@ -32,7 +33,6 @@ The Generator contract here is taken from the Astroport's generator contract and
 | `ProposeNewOwner`          | Admin function. Creates a request to change contract ownership                                                                                                 |
 | `DropOwnershipProposal`    | Admin function. Removes a request to change contract ownership                                                                                                 |
 | `ClaimOwnership`           | New Admin function. Claims contract ownership block                                                                                                            |
-| `MoveToProxy`              | Admin function. Sets a new proxy contract for a specific generator                                                                                             |
 
 ## Supported Query Msgs
 

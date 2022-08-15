@@ -77,7 +77,7 @@ pub fn instantiate(
         total_alloc_point: Uint128::zero(),
         start_block: msg.start_block,
         allowed_reward_proxies,
-        vesting_contract: addr_validate_to_lower(deps.api, &msg.vesting_contract)?,
+        vesting_contract: None,
         active_pools: vec![],
         checkpoint_generator_limit: None,
         unbonding_period: msg.unbonding_period,
@@ -157,11 +157,6 @@ pub fn instantiate(
 /// * **ExecuteMsg::DeactivatePool { lp_token }** Sets the allocation point to zero for specified
 /// LP token.
 ///
-/// * **ExecuteMsg::DeactivatePools { pool_types }** Sets the allocation point to zero for each pool
-/// by the pool type
-///
-/// * **ExecuteMsg::CheckpointUserBoost { user, generators }** Updates the boost emissions for
-/// specified user and generators
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     mut deps: DepsMut,
@@ -171,6 +166,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig {
+            dex_token,
             vesting_contract,
             guardian,
             checkpoint_generator_limit,
@@ -178,12 +174,38 @@ pub fn execute(
         } => execute_update_config(
             deps,
             info,
+            dex_token,
             vesting_contract,
             guardian,
             checkpoint_generator_limit,
             unbonding_period
         ),
         ExecuteMsg::SetupPools { pools } => execute_setup_pools(deps, env, info, pools),
+        ExecuteMsg::DeactivatePool { lp_token } => {
+            let cfg = CONFIG.load(deps.storage)?;
+            // Permission check :: Onlw owner can call
+            if info.sender != cfg.owner {
+                return Err(ContractError::Unauthorized {});
+            }
+            let lp_token_addr = addr_validate_to_lower(deps.api, &lp_token)?;
+            let active_pools: Vec<Addr> =
+                cfg.active_pools.iter().map(|pool| pool.0.clone()).collect();
+            mass_update_pools(deps.branch(), &env, &cfg, &active_pools)?;
+            deactivate_pool(deps, lp_token_addr)
+        },
+        ExecuteMsg::SetTokensPerBlock { amount } => {
+            let cfg = CONFIG.load(deps.storage)?;
+            if info.sender != cfg.owner {
+                return Err(ContractError::Unauthorized {});
+            }
+
+            update_rewards_and_execute(
+                deps,
+                env,
+                None,
+                ExecuteOnReply::SetTokensPerBlock { amount },
+            )
+        },                
         ExecuteMsg::SetAllowedRewardProxies { proxies } => {
             set_allowed_reward_proxies(deps, info, proxies)
         },
@@ -225,19 +247,6 @@ pub fn execute(
             recipient,
             lp_token,
         } => send_orphan_proxy_rewards(deps, info, recipient, lp_token),
-        ExecuteMsg::SetTokensPerBlock { amount } => {
-            let cfg = CONFIG.load(deps.storage)?;
-            if info.sender != cfg.owner {
-                return Err(ContractError::Unauthorized {});
-            }
-
-            update_rewards_and_execute(
-                deps,
-                env,
-                None,
-                ExecuteOnReply::SetTokensPerBlock { amount },
-            )
-        },
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
@@ -270,17 +279,6 @@ pub fn execute(
             })
             .map_err(|e| e.into())
         },
-        ExecuteMsg::DeactivatePool { lp_token } => {
-            let cfg = CONFIG.load(deps.storage)?;
-            if info.sender != cfg.vault {
-                return Err(ContractError::Unauthorized {});
-            }
-            let lp_token_addr = addr_validate_to_lower(deps.api, &lp_token)?;
-            let active_pools: Vec<Addr> =
-                cfg.active_pools.iter().map(|pool| pool.0.clone()).collect();
-            mass_update_pools(deps.branch(), &env, &cfg, &active_pools)?;
-            deactivate_pool(deps, lp_token_addr)
-        }
     }
 }
 
@@ -357,11 +355,13 @@ fn receive_cw20(
 pub fn execute_update_config(
     deps: DepsMut,
     info: MessageInfo,
+    dex_token: Option<String>,
     vesting_contract: Option<String>,
     guardian: Option<String>,
     checkpoint_generator_limit: Option<u32>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
+    // Load Config
     let mut config = CONFIG.load(deps.storage)?;
 
     // Permission check
@@ -369,18 +369,33 @@ pub fn execute_update_config(
         return Err(ContractError::Unauthorized {});
     }
 
-    if let Some(vesting_contract) = vesting_contract {
-        config.vesting_contract = addr_validate_to_lower(deps.api, vesting_contract.as_str())?;
+    // Check and update config::dex_token
+    if let Some(dex_token) = dex_token {
+        if config.dex_token.is_some() {
+            return Err(ContractError::DexTokenAlreadySet {});
+        }
+        config.dex_token = Some(addr_validate_to_lower(deps.api, dex_token.as_str())?);
     }
 
+    // Check and update config::vesting_contract
+    if let Some(vesting_contract) = vesting_contract {
+        if config.vesting_contract.is_some() {
+            return Err(ContractError::VestingContractAlreadySet {});
+        }
+        config.vesting_contract = Some(addr_validate_to_lower(deps.api, vesting_contract.as_str())?);
+    }
+
+    // Update Guardian
     if let Some(guardian) = guardian {
         config.guardian = Some(addr_validate_to_lower(deps.api, guardian.as_str())?);
     }
 
+    // Update checkpoint_generator_limit
     if let Some(generator_limit) = checkpoint_generator_limit {
         config.checkpoint_generator_limit = Some(generator_limit);
     }
 
+    // Update unbonding_period
     if let Some(unbonding_period) = unbonding_period {
         config.unbonding_period = unbonding_period;
     }
@@ -418,13 +433,13 @@ pub fn execute_setup_pools(
         return Err(ContractError::Unauthorized {});
     }
 
+    // Duplicacy check
     let pools_set: HashSet<String> = pools.clone().into_iter().map(|pc| pc.0).collect();
     if pools_set.len() != pools.len() {
         return Err(ContractError::PoolDuplicate {});
     }
 
     let mut setup_pools: Vec<(Addr, Uint128)> = vec![];
-
     // Validation check on pools, add them to setup_poools if they are valid
     for (addr, alloc_point) in pools {
         let pool_addr = addr_validate_to_lower(deps.api, &addr)?;
@@ -1431,7 +1446,7 @@ fn query_pool_info(
         dex_tokens_per_block,
         last_reward_block: pool.last_reward_block.u64(),
         current_block: env.block.height,
-        pending_astro_rewards: pending_dex_rewards,
+        pending_dex_rewards: pending_dex_rewards,
         reward_proxy: pool.reward_proxy,
         pending_proxy_rewards: pending_on_proxy,
         accumulated_proxy_rewards_per_share: pool
@@ -1537,8 +1552,6 @@ pub fn create_pool(
     lp_token: &Addr,
     cfg: &Config,
 ) -> Result<PoolInfo, ContractError> {
-    let pool_info = config_info_by_pool(&deps.querier, lp_token.clone().to_string())?;
-
     // Create Pool 
     POOL_INFO.save(
         deps.storage,
@@ -1639,30 +1652,24 @@ pub fn accumulate_rewards_per_share(
 
     let mut lp_supply : Uint128 = Uint128::zero();
 
-    // Update reward share for proxy rewards 
+    // Update reward share for proxy rewards : In case proxy is set and LP tokens are staked
     if let Some(proxy) = &pool.reward_proxy {
-        let proxy_lp_supply: Uint128 =
-            querier.query_wasm_smart(proxy, &ProxyQueryMsg::Deposit {})?;
-
+        let proxy_lp_supply: Uint128 =  querier.query_wasm_smart(proxy, &ProxyQueryMsg::Deposit {})?;
         if !proxy_lp_supply.is_zero() {
-            let reward_amount: Uint128 =
-                querier.query_wasm_smart(proxy, &ProxyQueryMsg::Reward {})?;
-
-            let token_rewards =
-                reward_amount.checked_sub(pool.proxy_reward_balance_before_update)?;
-
+            let reward_amount: Uint128 =  querier.query_wasm_smart(proxy, &ProxyQueryMsg::Reward {})?;
+            let token_rewards =  reward_amount.checked_sub(pool.proxy_reward_balance_before_update)?;
             let share = Decimal::from_ratio(token_rewards, proxy_lp_supply);
-            pool.accumulated_proxy_rewards_per_share
-                .update(proxy, share)?;
+            pool.accumulated_proxy_rewards_per_share.update(proxy, share)?;
             pool.proxy_reward_balance_before_update = reward_amount;
         }
         // Lp token supply
         lp_supply = querier.query_wasm_smart(proxy, &ProxyQueryMsg::Deposit {})?
     }
 
+    // Update Lp token balance available with pool in-case it is 0
     if lp_supply.is_zero() {
         let bal_res :BalanceResponse  = querier.query_wasm_smart(
-            &env.contract.address,
+            lp_token,
             &cw20::Cw20QueryMsg::Balance {
                 address: env.contract.address.to_string(),
             },
@@ -1670,6 +1677,7 @@ pub fn accumulate_rewards_per_share(
         lp_supply = bal_res.balance;
     }
 
+    // Update reward share for the LP token
     if env.block.height > pool.last_reward_block.u64() {
         if !lp_supply.is_zero() {
             let alloc_point = get_alloc_point(&cfg.active_pools, lp_token);
@@ -1719,7 +1727,7 @@ pub fn send_pending_rewards(
     // Send proxy rewards Msg
     if !pending_rewards.is_zero() {
         messages.push(WasmMsg::Execute {
-            contract_addr: cfg.vesting_contract.to_string(),
+            contract_addr: cfg.vesting_contract.clone().unwrap().to_string(),
             msg: to_binary(&VestingExecuteMsg::Claim {
                 recipient: Some(to.to_string()),
                 amount: Some(pending_rewards),

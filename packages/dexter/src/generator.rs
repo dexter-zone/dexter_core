@@ -27,7 +27,7 @@ pub struct Config {
     /// The list of allowed proxy reward contracts
     pub allowed_reward_proxies: Vec<Addr>,
     /// The vesting contract from which rewards are distributed
-    pub vesting_contract: Addr,
+    pub vesting_contract: Option<Addr>,
     /// The list of active pools (LP Token Addresses) with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
     /// The guardian address which can add or remove tokens from blacklist
@@ -58,8 +58,6 @@ pub struct InstantiateMsg {
     pub tokens_per_block: Uint128,
     /// Start block for distributing DEX
     pub start_block: Uint64,
-    /// The DEX vesting contract that drips DEX rewards
-    pub vesting_contract: String,
     /// Number of seconds to wait before a user can withdraw his LP tokens once they are in unbonding phase
     pub unbonding_period: u64,    
 }
@@ -68,16 +66,12 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    /// Set a new amount of DEX tokens to distribute per block
-    /// ## Executor - Only the owner can execute this.
-    SetTokensPerBlock {
-        /// The new amount of DEX to distro per block
-        amount: Uint128,
-    },    
     /// Failitates updating some of the configuration param of the Dexter Generator Contract
     /// ## Executor -  Only the owner can execute it.
     UpdateConfig {
-        /// The new vesting contract address
+        // The DEX Token address
+        dex_token: Option<String>,
+        /// The DEX Vesting contract address
         vesting_contract: Option<String>,
         /// The new generator guardian
         guardian: Option<String>,
@@ -87,6 +81,12 @@ pub enum ExecuteMsg {
         /// period for existing unbonding positions
         unbonding_period: Option<u64>,
     },
+    /// Set a new amount of DEX tokens to distribute per block
+    /// ## Executor - Only the owner can execute this.
+    SetTokensPerBlock {
+        /// The new amount of DEX to distro per block
+        amount: Uint128,
+    },    
     /// Setup generators with their respective allocation points.
     /// ## Executor - Only the owner can execute this.
     SetupPools {
@@ -332,7 +332,7 @@ pub struct ConfigResponse {
     /// List of 3rd party reward proxies allowed to interact with the Generator contract
     pub allowed_reward_proxies: Vec<Addr>,
     /// The DEX vesting contract address
-    pub vesting_contract: Addr,
+    pub vesting_contract: Option<Addr>,
     /// The list of active pools with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
     /// The guardian address
@@ -356,7 +356,7 @@ pub struct PoolInfoResponse {
     /// Total amount of DEX rewards already accumulated per LP token staked
     pub global_reward_index: Decimal,
     /// Pending amount of total DEX rewards which are claimable by stakers right now
-    pub pending_astro_rewards: Uint128,
+    pub pending_dex_rewards: Uint128,
     /// The address of the 3rd party reward proxy contract
     pub reward_proxy: Option<Addr>,
     /// Pending amount of total proxy rewards which are claimable by stakers right now

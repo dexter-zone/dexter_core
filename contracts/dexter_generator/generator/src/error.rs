@@ -10,6 +10,12 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Dex token already set")]
+    DexTokenAlreadySet {},
+
+    #[error("Vesting contract already set")]
+    VestingContractAlreadySet {},
+
     #[error("Insufficient balance in contract to process claim")]
     BalanceTooSmall {},
 

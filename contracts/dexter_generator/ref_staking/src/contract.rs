@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 
 use cosmwasm_std::{
-    from_binary, to_binary, Addr, Binary, CanonicalAddr, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 
@@ -16,7 +16,6 @@ use crate::{
 };
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use std::collections::BTreeMap;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
