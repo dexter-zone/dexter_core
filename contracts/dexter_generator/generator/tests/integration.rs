@@ -524,8 +524,6 @@ fn test_setup_pool_deactivate_pool() {
 
     let current_block = app.block_info();
     // Query::PoolInfo Check
-    let empty_proxy: Vec<(Addr, Decimal)> = vec![];
-    let empty_proxy_orphan: Vec<(Addr, Uint128)> = vec![];
     let pool_info_res: PoolInfoResponse = app.wrap().query_wasm_smart(&generator_instance, &QueryMsg::PoolInfo { lp_token: lp_token2.clone().to_string() }).unwrap();
     assert_eq!( Uint128::from(200u128), pool_info_res.alloc_point);
     assert_eq!( Uint128::from(0u128), pool_info_res.dex_tokens_per_block);
@@ -535,9 +533,9 @@ fn test_setup_pool_deactivate_pool() {
     assert_eq!( Uint128::from(0u128), pool_info_res.pending_dex_rewards);
     assert_eq!( None, pool_info_res.reward_proxy);
     assert_eq!( None, pool_info_res.pending_proxy_rewards);
-    assert_eq!( empty_proxy, pool_info_res.accumulated_proxy_rewards_per_share);
+    assert_eq!( Decimal::zero(), pool_info_res.accumulated_proxy_rewards_per_share);
     assert_eq!( Uint128::from(0u128), pool_info_res.proxy_reward_balance_before_update);
-    assert_eq!( empty_proxy_orphan, pool_info_res.orphan_proxy_rewards);
+    assert_eq!( Uint128::from(0u128), pool_info_res.orphan_proxy_rewards);
     assert_eq!( Uint128::from(0u128), pool_info_res.lp_supply);
 
     // Deactivate 1 pool

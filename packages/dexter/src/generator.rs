@@ -257,11 +257,11 @@ pub struct PoolInfo {
     /// the reward proxy contract
     pub reward_proxy: Option<Addr>,
     /// Accumulated reward indexes per reward proxy. Vector of pools (reward_proxy, index).
-    pub accumulated_proxy_rewards_per_share: RestrictedVector<Decimal>,
+    pub accumulated_proxy_rewards_per_share: Decimal,
     /// for calculation of new proxy rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// the orphan proxy rewards which are left by emergency withdrawals. Vector of pools (reward_proxy, index).
-    pub orphan_proxy_rewards: RestrictedVector<Uint128>
+    pub orphan_proxy_rewards: Uint128
 }
 
 /// This structure stores the outstanding amount of token rewards that a user accrued.
@@ -274,8 +274,7 @@ pub struct UserInfo {
     /// The amount of DEX rewards a user already received or is not eligible for; used for proper reward calculation
     pub reward_debt: Uint128,
     /// Proxy reward amount a user already received per reward proxy; used for proper reward calculation
-    /// Vector of pools (reward_proxy, reward debited).
-    pub reward_debt_proxy: RestrictedVector<Uint128>,
+    pub reward_debt_proxy: Uint128,
     /// Vector containing unbonding information for each unbonding period.
     pub unbonding_periods: Vec<UnbondingInfo>,
 }
@@ -310,8 +309,8 @@ pub struct PoolLengthResponse {
 pub struct PendingTokenResponse {
     /// The amount of pending DEX
     pub pending: Uint128,
-    /// The amount of pending 3rd party reward tokens
-    pub pending_on_proxy: Option<Vec<Asset>>,
+    /// a pending token on proxy
+    pub pending_on_proxy: Option<Uint128>,
 }
 
 /// This structure holds the response returned when querying the contract for general parameters
@@ -362,11 +361,11 @@ pub struct PoolInfoResponse {
     /// Pending amount of total proxy rewards which are claimable by stakers right now
     pub pending_proxy_rewards: Option<Uint128>,
     /// Total amount of 3rd party token rewards already accumulated per LP token staked per proxy
-    pub accumulated_proxy_rewards_per_share: Vec<(Addr, Decimal)>,
+    pub accumulated_proxy_rewards_per_share: Decimal,
     /// Reward balance for the dual rewards proxy before updating accrued rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// The amount of orphan proxy rewards which are left behind by emergency withdrawals and not yet transferred out
-    pub orphan_proxy_rewards: Vec<(Addr, Uint128)>,
+    pub orphan_proxy_rewards: Uint128,
     /// Total amount of lp tokens staked in the pool's generator
     pub lp_supply: Uint128,
 }
@@ -381,16 +380,6 @@ pub struct RewardInfoResponse {
     pub proxy_reward_token: Option<Addr>,
 }
 
-
-/// This structure holds the parameters used to return information about a staked in
-/// a specific generator.
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
-pub struct StakerResponse {
-    // The staker's address
-    pub account: String,
-    // The amount that the staker currently has in the generator
-    pub amount: Uint128,
-}
 
 // ----------------x----------------x--------------x--------------
 // ----------------     RestrictedVector       x--------------

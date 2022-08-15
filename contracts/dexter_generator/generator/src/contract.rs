@@ -978,24 +978,9 @@ pub fn emergency_unstake(
     // Instantiate the transfer call for the LP token
     let mut transfer_msgs: Vec<WasmMsg> = vec![];
     if let Some(proxy) = &pool.reward_proxy {
-        let accumulated_proxy_rewards: HashMap<_, _> = accumulate_pool_proxy_rewards(&pool, &user)?
-            .into_iter()
-            .collect();
+        let accumulated_proxy_rewards = accumulate_pool_proxy_rewards(&pool, &user)?;
         // All users' proxy rewards become orphaned
-        pool.orphan_proxy_rewards = pool
-            .orphan_proxy_rewards
-            .inner_ref()
-            .iter()
-            .map(|(addr, amount)| {
-                let user_amount = accumulated_proxy_rewards
-                    .get(addr)
-                    .cloned()
-                    .unwrap_or_default();
-                let amount = amount.checked_add(user_amount)?;
-                Ok((addr.clone(), amount))
-            })
-            .collect::<StdResult<Vec<_>>>()?
-            .into();
+        pool.orphan_proxy_rewards = pool.orphan_proxy_rewards.checked_add(accumulated_proxy_rewards)?;
 
         transfer_msgs.push( WasmMsg::Execute {
             contract_addr: proxy.to_string(),
@@ -1068,28 +1053,18 @@ fn send_orphan_proxy_rewards(
 
     let mut pool = POOL_INFO.load(deps.storage, &lp_token)?;
 
-    if pool.orphan_proxy_rewards.inner_ref().is_empty() {
+    if pool.orphan_proxy_rewards.is_zero() {
         return Err(ContractError::ZeroOrphanRewards {});
     }
 
-    // Transfer orphan rewards to the recipient
-    let submessages = pool
-        .orphan_proxy_rewards
-        .inner_ref()
-        .iter()
-        .filter(|(_, value)| !value.is_zero())
-        .map(|(proxy, amount)| {
-                let msg = SubMsg::new(WasmMsg::Execute {
-                        contract_addr: proxy.to_string(),
+    let msg = SubMsg::new(WasmMsg::Execute {
+                        contract_addr: pool.reward_proxy.clone().unwrap().to_string(),
                         funds: vec![],
                         msg: to_binary(&ProxyExecuteMsg::SendRewards {
                             account: recipient.clone(),
-                            amount: *amount,
+                            amount: pool.orphan_proxy_rewards.clone(),
                         })?,
-                    });
-                    Ok(msg)
-            })
-        .collect::<StdResult<Vec<_>>>()?;
+    });
 
     // Clear the orphaned proxy rewards
     pool.orphan_proxy_rewards = Default::default();
@@ -1097,7 +1072,7 @@ fn send_orphan_proxy_rewards(
     POOL_INFO.save(deps.storage, &lp_token, &pool)?;
 
     Ok(Response::new()
-        .add_submessages(submessages)
+        .add_submessage(msg)
         .add_attribute("action", "send_orphan_rewards")
         .add_attribute("recipient", recipient)
         .add_attribute("lp_token", lp_token.to_string()))
@@ -1260,54 +1235,46 @@ pub fn pending_token(
     let mut pending_on_proxy = None;
     let mut lp_supply: Uint128 = Uint128::zero();
 
-    if let Some(proxy) = &pool.reward_proxy {
-        let lp_supply: Uint128 = deps
-            .querier
-            .query_wasm_smart(proxy, &ProxyQueryMsg::Deposit {})?;
+    match &pool.reward_proxy {
+        Some(proxy) => {
+            lp_supply = deps
+                .querier
+                .query_wasm_smart(proxy, &ProxyQueryMsg::Deposit {})?;
 
-        if !lp_supply.is_zero() {
-            let proxy_rewards = accumulate_pool_proxy_rewards(&pool, &user_info)?
-                .into_iter()
-                .map(|(proxy_addr, mut reward)| {
-                    // Add reward pending on proxy
-                    if proxy_addr.eq(proxy) {
-                        let res: Option<Uint128> = deps
-                            .querier
-                            .query_wasm_smart(proxy, &ProxyQueryMsg::PendingToken {})?;
-                        if let Some(token_rewards) = res {
-                            let share = user_info
-                                .amount
-                                .multiply_ratio(token_rewards, lp_supply);
-                            reward = reward.checked_add(share)?;
-                        }
-                    }
-                    let info = PROXY_REWARD_ASSET.load(deps.storage, &proxy_addr)?;
-                    Ok(Asset {
-                        info,
-                        amount: reward,
-                    })
-                })
-                .collect::<StdResult<Vec<_>>>()?;
+            if !lp_supply.is_zero() {
+                let res: Option<Uint128> = deps
+                    .querier
+                    .query_wasm_smart(proxy, &ProxyQueryMsg::PendingToken {})?;
 
-            pending_on_proxy = Some(proxy_rewards);
+                let mut acc_per_share_on_proxy = pool.accumulated_proxy_rewards_per_share;
+                if let Some(token_rewards) = res {
+                    let share = Decimal::from_ratio(token_rewards, lp_supply);
+                    acc_per_share_on_proxy = pool
+                        .accumulated_proxy_rewards_per_share
+                        .checked_add(share)?;
+                }
+
+                pending_on_proxy = Some(
+                    acc_per_share_on_proxy
+                        .checked_mul_uint128(user_info.amount)?
+                        .checked_sub(user_info.reward_debt_proxy)?,
+                );
+            }
         }
-    } else {
-        lp_supply = query_token_balance(
-            &deps.querier,
-            lp_token.clone(),
-            env.contract.address.clone(),
-        )?;
+        None => {
+            lp_supply = query_token_balance(&deps.querier, lp_token.clone(), env.contract.address.clone())?;
+        }
     }
 
     let mut acc_per_share = pool.accumulated_rewards_per_share;
     if env.block.height > pool.last_reward_block.u64() && !lp_supply.is_zero() {
         let alloc_point = get_alloc_point(&cfg.active_pools, &lp_token);
-        let token_rewards = calculate_rewards(&env, &pool, &alloc_point, &cfg)?;
+
+        let token_rewards = calculate_rewards(&env, &pool,  &alloc_point, &cfg)?;
         let share = Decimal::from_ratio(token_rewards, lp_supply);
         acc_per_share = pool.accumulated_rewards_per_share.checked_add(share)?;
     }
 
-    // we should calculate rewards by virtual amount
     let pending = acc_per_share
         .checked_mul_uint128(user_info.amount)?
         .checked_sub(user_info.reward_debt)?;
@@ -1357,21 +1324,14 @@ fn query_reward_info(deps: Deps, lp_token: String) -> Result<RewardInfoResponse,
 fn query_orphan_proxy_rewards(
     deps: Deps,
     lp_token: String,
-) -> Result<Vec<(AssetInfo, Uint128)>, ContractError> {
+) -> Result<(AssetInfo, Uint128), ContractError> {
     let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
 
     let pool = POOL_INFO.load(deps.storage, &lp_token)?;
     if pool.reward_proxy.is_some() {
-        let orphan_rewards = pool
-            .orphan_proxy_rewards
-            .inner_ref()
-            .iter()
-            .map(|(proxy, amount)| {
-                let asset = PROXY_REWARD_ASSET.load(deps.storage, proxy)?;
-                Ok((asset, *amount))
-            })
-            .collect::<StdResult<Vec<_>>>()?;
-        Ok(orphan_rewards)
+        let orphan_rewards = pool.orphan_proxy_rewards;
+        let proxy_asset = PROXY_REWARD_ASSET.load(deps.storage, &pool.reward_proxy.unwrap())?;
+        Ok((proxy_asset, orphan_rewards))
     } else {
         Err(ContractError::PoolDoesNotHaveAdditionalRewards {})
     }
@@ -1449,12 +1409,9 @@ fn query_pool_info(
         pending_dex_rewards: pending_dex_rewards,
         reward_proxy: pool.reward_proxy,
         pending_proxy_rewards: pending_on_proxy,
-        accumulated_proxy_rewards_per_share: pool
-            .accumulated_proxy_rewards_per_share
-            .inner_ref()
-            .clone(),
+        accumulated_proxy_rewards_per_share: pool.accumulated_proxy_rewards_per_share,
         proxy_reward_balance_before_update: pool.proxy_reward_balance_before_update,
-        orphan_proxy_rewards: pool.orphan_proxy_rewards.inner_ref().clone(),
+        orphan_proxy_rewards: pool.orphan_proxy_rewards,
         lp_supply,
         global_reward_index: pool.accumulated_rewards_per_share,
     })
@@ -1659,7 +1616,7 @@ pub fn accumulate_rewards_per_share(
             let reward_amount: Uint128 =  querier.query_wasm_smart(proxy, &ProxyQueryMsg::Reward {})?;
             let token_rewards =  reward_amount.checked_sub(pool.proxy_reward_balance_before_update)?;
             let share = Decimal::from_ratio(token_rewards, proxy_lp_supply);
-            pool.accumulated_proxy_rewards_per_share.update(proxy, share)?;
+            pool.accumulated_proxy_rewards_per_share.checked_add(share)?;
             pool.proxy_reward_balance_before_update = reward_amount;
         }
         // Lp token supply
@@ -1737,24 +1694,18 @@ pub fn send_pending_rewards(
     }
 
     // Calculate pending proxy rewards 
-    let proxy_rewards = accumulate_pool_proxy_rewards(pool, user)?;
+    if let Some(proxy) = &pool.reward_proxy {
+        let pending_proxy_rewards = accumulate_pool_proxy_rewards(pool, user)?;
 
-    // Send proxy rewards Msg
-    for (proxy, pending_proxy_rewards) in proxy_rewards {
         if !pending_proxy_rewards.is_zero() {
-            match &pool.reward_proxy {
-                Some(reward_proxy) if reward_proxy.as_str() == proxy.as_str() => {
-                    messages.push(WasmMsg::Execute {
-                        contract_addr: proxy.to_string(),
-                        funds: vec![],
-                        msg: to_binary(&ProxyExecuteMsg::SendRewards {
-                            account: to.to_owned(),
-                            amount: pending_proxy_rewards,
-                        })?,
-                    });
-                }
-                _ => { }
-            }
+            messages.push(WasmMsg::Execute {
+                contract_addr: proxy.to_string(),
+                funds: vec![],
+                msg: to_binary(&ProxyExecuteMsg::SendRewards {
+                    account: to.to_owned(),
+                    amount: pending_proxy_rewards,
+                })?,
+            });
         }
     }
 

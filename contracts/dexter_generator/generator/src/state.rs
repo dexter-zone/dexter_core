@@ -58,47 +58,21 @@ pub fn update_user_balance(
             .checked_mul_uint128(user.amount)?;
     };
 
-    user.reward_debt_proxy = pool
-        .accumulated_proxy_rewards_per_share
-        .inner_ref()
-        .iter()
-        .map(|(proxy, rewards_per_share)| {
-            let rewards_debt = rewards_per_share.checked_mul_uint128(user.amount)?;
-            Ok((proxy.clone(), rewards_debt))
-        })
-        .collect::<StdResult<Vec<_>>>()?
-        .into();
-
+    user.reward_debt_proxy = pool.accumulated_proxy_rewards_per_share.checked_mul_uint128(user.amount)?;
     Ok(user)
 }
 
 /// ### Description
-/// Returns the vector of reward amount per proxy taking into account the amount of debited rewards.
+/// Returns the number of reward amount per proxy taking into account the amount of debited rewards.
 pub fn accumulate_pool_proxy_rewards(
     pool: &PoolInfo,
     user: &UserInfo,
-) -> StdResult<Vec<(Addr, Uint128)>> {
-    if !pool
-        .accumulated_proxy_rewards_per_share
-        .inner_ref()
-        .is_empty()
-    {
-        let rewards_debt_map: HashMap<_, _> =
-            user.reward_debt_proxy.inner_ref().iter().cloned().collect();
-        pool.accumulated_proxy_rewards_per_share
-            .inner_ref()
-            .iter()
-            .map(|(proxy, rewards_per_share)| {
-                let reward_debt = rewards_debt_map.get(proxy).cloned().unwrap_or_default();
-                let pending_proxy_rewards = rewards_per_share
-                    .checked_mul_uint128( user.amount )?
-                    .saturating_sub(reward_debt);
-
-                Ok((proxy.clone(), pending_proxy_rewards))
-            })
-            .collect()
+) -> StdResult<Uint128> {
+    if !pool.accumulated_proxy_rewards_per_share.is_zero()    {
+        let pending_proxy_rewards = pool.accumulated_proxy_rewards_per_share.checked_mul_uint128( user.amount )?.saturating_sub(user.reward_debt);
+        Ok(pending_proxy_rewards)
     } else {
-        Ok(vec![])
+        Ok(Uint128::zero())
     }
 }
 
