@@ -200,19 +200,8 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
 
 // }
 
-
-// #[test]
-// fn test_set_allowed_reward_proxies() { 
-
-// }
-
 // #[test]
 // fn test_send_orphan_proxy_reward() { 
-
-// }
-
-// #[test]
-// fn test_update_allowed_provies() { 
 
 // }
 
@@ -584,6 +573,78 @@ fn test_setup_pool_deactivate_pool() {
     // Query::PoolLength Check
     let pool_length_res: PoolLengthResponse = app.wrap().query_wasm_smart(&generator_instance, &QueryMsg::PoolLength {}).unwrap();
     assert_eq!( 3, pool_length_res.length);
+
+
+}
+
+
+
+// Tests the following -
+//  ExecuteMsg::SetAllowedRewardProxies
+//  ExecuteMsg::UpdateAllowedProxies
+#[test]
+fn test_set_update_allowed_proxies() { 
+    let owner = "owner".to_string();
+    let mut app = mock_app(owner.clone(), vec![Coin { denom: "xprt".to_string(), amount: Uint128::new(100_000_000_000u128)}]);
+    let (generator_instance, _) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
+
+
+    //// -----x----- Error :: Permission Check -----x----- ////
+
+    let msg = ExecuteMsg::SetAllowedRewardProxies {
+        proxies: vec![ "proxy1".to_string(),  "proxy2".to_string() ] ,
+    };
+    let err_res = app.execute_contract(
+        Addr::unchecked("not_owner".to_string().clone()),
+        generator_instance.clone(),
+        &msg,
+        &[],
+    )
+    .unwrap_err();
+    assert_eq!(err_res.root_cause().to_string(), "Unauthorized");
+
+    let msg = ExecuteMsg::UpdateAllowedProxies {
+        add: Some(vec![ "proxy1".to_string(),  "proxy2".to_string() ]) , remove: None
+    };
+    let err_res = app.execute_contract(
+        Addr::unchecked("not_owner".to_string().clone()),
+        generator_instance.clone(),
+        &msg,
+        &[],
+    )
+    .unwrap_err();
+    assert_eq!(err_res.root_cause().to_string(), "Unauthorized");
+
+    //// -----x----- Success :: -----x----- ////
+
+    let msg = ExecuteMsg::SetAllowedRewardProxies {
+        proxies: vec![ "proxy1".to_string(),  "proxy2".to_string() ] ,
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &msg,
+        &[],
+    )
+    .unwrap();
+    // Query::Config Check
+    let config_res: ConfigResponse = app.wrap().query_wasm_smart(&generator_instance, &QueryMsg::Config {}).unwrap();
+    assert_eq!(vec![ Addr::unchecked("proxy1".to_string()), Addr::unchecked("proxy2".to_string())  ] , config_res.allowed_reward_proxies);
+
+
+    let msg = ExecuteMsg::UpdateAllowedProxies {
+        add: Some(vec![ "proxy3".to_string(),  "proxy4".to_string() ]) , remove: Some(vec![ "proxy1".to_string() ])
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &msg,
+        &[],
+    )
+    .unwrap();
+    // Query::Config Check
+    let config_res: ConfigResponse = app.wrap().query_wasm_smart(&generator_instance, &QueryMsg::Config {}).unwrap();
+    assert_eq!(vec![ Addr::unchecked("proxy2".to_string()), Addr::unchecked("proxy3".to_string()), Addr::unchecked("proxy4".to_string())  ] , config_res.allowed_reward_proxies);
 
 
 }
