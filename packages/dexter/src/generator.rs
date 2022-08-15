@@ -9,6 +9,34 @@ use crate::asset::{Asset, AssetInfo};
 use crate::DecimalCheckedOps;
 
 
+/// This structure stores the core parameters for the Generator contract.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct Config {
+    /// Address allowed to change contract parameters
+    pub owner: Addr,
+    /// The Vault address
+    pub vault: Addr,
+    /// The DEX token address
+    pub dex_token: Option<Addr>,
+    /// Total amount of ASTRO rewards per block
+    pub tokens_per_block: Uint128,
+    /// Total allocation points. Must be the sum of all allocation points in all active generators
+    pub total_alloc_point: Uint128,
+    /// The block number when the ASTRO distribution starts
+    pub start_block: Uint64,
+    /// The list of allowed proxy reward contracts
+    pub allowed_reward_proxies: Vec<Addr>,
+    /// The vesting contract from which rewards are distributed
+    pub vesting_contract: Addr,
+    /// The list of active pools (LP Token Addresses) with allocation points
+    pub active_pools: Vec<(Addr, Uint128)>,
+    /// The guardian address which can add or remove tokens from blacklist
+    pub guardian: Option<Addr>,
+    /// The amount of generators
+    pub checkpoint_generator_limit: Option<u32>,
+    /// Number of seconds to wait before a user can withdraw his LP tokens once they are in unbonding phase
+    pub unbonding_period: u64,
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x       InstantiateMsg, ExecuteMsg QueryMsg        x----------------
@@ -40,81 +68,89 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    /// Update the address of the DEX vesting contract
-    /// ## Executor
-    /// Only the owner can execute it.
+    /// Set a new amount of DEX tokens to distribute per block
+    /// ## Executor - Only the owner can execute this.
+    SetTokensPerBlock {
+        /// The new amount of DEX to distro per block
+        amount: Uint128,
+    },    
+    /// Failitates updating some of the configuration param of the Dexter Generator Contract
+    /// ## Executor -  Only the owner can execute it.
     UpdateConfig {
         /// The new vesting contract address
         vesting_contract: Option<String>,
         /// The new generator guardian
         guardian: Option<String>,
-        /// The amount of generators
+        /// Max numbrt of generators which can be supported by the contract 
         checkpoint_generator_limit: Option<u32>,
-        /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding
+        /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update
+        /// period for existing unbonding positions
         unbonding_period: Option<u64>,
     },
     /// Setup generators with their respective allocation points.
-    /// ## Executor
-    /// Only the owner  can execute this.
+    /// ## Executor - Only the owner can execute this.
     SetupPools {
         /// The list of pools with allocation point.
         pools: Vec<(String, Uint128)>,
     },
-    /// Update the given pool's DEX allocation slice
-    /// ## Executor
-    /// Only the owner  can execute this.
-    UpdatePool {
-        /// The address of the LP token contract address whose allocation we change
-        lp_token: String,
-        /// This flag determines whether the pool gets 3rd party token rewards
-        has_asset_rewards: bool,
-    },
-    /// Update rewards and return it to user.
-    ClaimRewards {
-        /// the LP token contract address
-        lp_tokens: Vec<String>,
-    },
-    /// Unbond LP tokens from the Generator
-    Withdraw {
-        /// The address of the LP token to withdraw
-        lp_token: String,
-        /// The amount to withdraw
-        amount: Uint128,
-    },
-    /// Unbond LP tokens from the Generator without withdrawing outstanding rewards. 
-    EmergencyWithdraw {
-        /// The address of the LP token to withdraw
-        lp_token: String,
-    },
-    /// Unlock LP tokens from the Generator
-    Unlock {
-        /// The address of the LP token to withdraw
-        lp_token: String,
-    },
     /// Allowed reward proxy contracts that can interact with the Generator
+    /// ## Executor - Only the owner can execute this.
     SetAllowedRewardProxies {
         /// The full list of allowed proxy contracts
         proxies: Vec<String>,
     },
     /// Sends orphan proxy rewards (which were left behind after emergency withdrawals) to another address
+    /// ## Executor - Only the owner can execute this.
     SendOrphanProxyReward {
         /// The transfer recipient
         recipient: String,
         /// The address of the LP token contract for which we send orphaned rewards
         lp_token: String,
     },
-    /// Receives a message of type [`Cw20ReceiveMsg`]
-    Receive(Cw20ReceiveMsg),
-    /// Set a new amount of DEX to distribute per block
-    /// ## Executor
-    /// Only the owner can execute this.
-    SetTokensPerBlock {
-        /// The new amount of DEX to distro per block
+    /// Add or remove a proxy contract that can interact with the Generator
+    /// ## Executor - Only the owner can execute this.
+    UpdateAllowedProxies {
+        /// Allowed proxy contract
+        add: Option<Vec<String>>,
+        /// Proxy contracts to remove
+        remove: Option<Vec<String>>,
+    },
+    /// Sets the allocation point to zero for the specified pool
+    /// ## Executor -  Only the current owner  can execute this
+    DeactivatePool {
+        lp_token: String,
+    },
+    /// Update rewards and transfer them to user.
+    /// ## Executor - Open for users
+    ClaimRewards {
+        /// the LP token contract address
+        lp_tokens: Vec<String>,
+    },
+    /// Unstake LP tokens from the Generator. LP tokens need to be unbonded for a period of time before they can be withdrawn.
+    /// ## Executor - Open for users
+    Unstake {
+        /// The address of the LP token to withdraw
+        lp_token: String,
+        /// The amount to withdraw
         amount: Uint128,
     },
+    ///  Unstake LP tokens from the Generator without withdrawing outstanding rewards.  LP tokens need to be unbonded for a period of time before they can be withdrawn.
+    /// ## Executor - Open for users
+    EmergencyUnstake {
+        /// The address of the LP token to withdraw
+        lp_token: String,
+    },
+    /// Unlock and withdraw LP tokens from the Generator
+    /// ## Executor - Open for users
+    Unlock {
+        /// The address of the LP token to withdraw
+        lp_token: String,
+    },
+    /// Receives a message of type [`Cw20ReceiveMsg`]
+    Receive(Cw20ReceiveMsg),
+
     /// Creates a request to change contract ownership
-    /// ## Executor
-    /// Only the current owner can execute this.
+    /// ## Executor -  Only the current owner can execute this.
     ProposeNewOwner {
         /// The newly proposed owner
         owner: String,
@@ -122,31 +158,18 @@ pub enum ExecuteMsg {
         expires_in: u64,
     },
     /// Removes a request to change contract ownership
-    /// ## Executor
-    /// Only the current owner can execute this
+    /// ## Executor -  Only the current owner can execute this
     DropOwnershipProposal {},
     /// Claims contract ownership
-    /// ## Executor
-    /// Only the newly proposed owner can execute this
+    /// ## Executor - Only the newly proposed owner can execute this
     ClaimOwnership {},
-    /// Add or remove a proxy contract that can interact with the Generator
-    UpdateAllowedProxies {
-        /// Allowed proxy contract
-        add: Option<Vec<String>>,
-        /// Proxy contracts to remove
-        remove: Option<Vec<String>>,
-    },
+
     /// Sets a new proxy contract for a specific generator
     /// Sets a proxy for the pool
-    /// ## Executor
-    /// Only the current owner  can execute this
+    /// ## Executor -  Only the current owner  can execute this
     MoveToProxy {
         lp_token: String,
         proxy: String,
-    },
-    /// Sets the allocation point to zero for the specified pool
-    DeactivatePool {
-        lp_token: String,
     },
 }
 
@@ -159,6 +182,44 @@ pub enum Cw20HookMsg {
     /// DepositFor performs a token deposit on behalf of another address that's not the message sender.
     DepositFor(Addr),
 }
+
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub enum ExecuteOnReply {
+    /// Stake LP tokens in the Generator to receive token emissions
+    Deposit {
+        /// The LP token to stake
+        lp_token: Addr,
+        /// The account that receives ownership of the staked tokens
+        account: Addr,
+        /// The amount of tokens to deposit
+        amount: Uint128,
+    },
+    /// Updates reward and returns it to user.
+    ClaimRewards {
+        /// The list of LP tokens contract
+        lp_tokens: Vec<Addr>,
+        /// The rewards recipient
+        account: Addr,
+    },
+    /// Unstake LP tokens from the Generator
+    Unstake {
+        /// The LP tokens to withdraw
+        lp_token: Addr,
+        /// The account that receives the withdrawn LP tokens
+        account: Addr,
+        /// The amount of tokens to withdraw
+        amount: Uint128,
+    },
+    /// Sets a new amount of ASTRO to distribute per block between all active generators
+    SetTokensPerBlock {
+        /// The new amount of ASTRO to distribute per block
+        amount: Uint128,
+    },
+}
+
+
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -189,18 +250,6 @@ pub enum QueryMsg {
 /// This structure describes a migration message.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 pub struct MigrateMsg {
-    /// The Factory address
-    pub vault: Option<String>,
-    /// The blocked list of tokens
-    pub blocked_list_tokens: Option<Vec<AssetInfo>>,
-    /// The guardian address
-    pub guardian: Option<String>,
-    /// Whitelist code id
-    pub whitelist_code_id: Option<u64>,
-    /// The voting escrow contract
-    pub voting_escrow: Option<String>,
-    /// The limit of generators
-    pub generator_limit: Option<u32>,
 }
 
 // ----------------x----------------x----------------x----------------x-------------x----------------
@@ -220,9 +269,7 @@ pub struct PoolInfo {
     /// for calculation of new proxy rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// the orphan proxy rewards which are left by emergency withdrawals. Vector of pools (reward_proxy, index).
-    pub orphan_proxy_rewards: RestrictedVector<Uint128>,
-    /// The pool has assets giving additional rewards
-    pub has_asset_rewards: bool,
+    pub orphan_proxy_rewards: RestrictedVector<Uint128>
 }
 
 /// This structure stores the outstanding amount of token rewards that a user accrued.
