@@ -22,12 +22,11 @@ pub const PRECISIONS: Map<String, u8> = Map::new("precisions");
 /// Stores map of AssetInfo (as String) -> precision
 pub const WEIGHTS: Map<String, Decimal> = Map::new("weights");
 
-
 /// ## Description
 /// This struct describes the main math config of pool.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MathConfig {
-    /// Exit fee in % charged when liquidity is withdrawn from the pool 
+    /// Exit fee in % charged when liquidity is withdrawn from the pool
     pub exit_fee: Option<Decimal>,
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,
@@ -45,7 +44,6 @@ pub struct Twap {
 // ----------------x----------------x----------------x----------------
 // ----------------x      PRESISION : Store and getter fns     x------
 // ----------------x----------------x----------------x----------------
-
 
 /// ## Description
 /// Store all token precisions and return the greatest one.
@@ -70,7 +68,6 @@ pub(crate) fn get_precision(storage: &dyn Storage, asset_info: &AssetInfo) -> St
 // ----------------x----------------x----------------x----------------
 // ----------------x      WEIGHTS : Store and getter fns     x------
 // ----------------x----------------x----------------x----------------
-
 
 /// ## Description
 /// Store all token weights

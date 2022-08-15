@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use cosmwasm_std::Addr;
 use cw_storage_plus::Item;
+use dexter::asset::AssetInfo;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 /// ## Description
 /// This structure holds the main parameters for the of generator_proxy_to_mirror contract.
@@ -17,7 +17,7 @@ pub struct Config {
     /// The 3rd party reward contract address
     pub reward_contract_addr: Addr,
     /// The 3rd party reward token
-    pub reward_token_addr: Addr,
+    pub reward_token: AssetInfo,
 }
 
 /// ## Description

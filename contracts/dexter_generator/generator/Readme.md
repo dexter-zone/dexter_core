@@ -15,24 +15,25 @@ The Generator contract here is taken from the Astroport's generator contract and
 
 ## Supported Execute Msgs
 
-| Message                    | Description                                                                                                                                                    |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SetTokensPerBlock`        | Admin function. Set a new amount of DEX tokens to distribute per block                                                                                         |
-| `UpdateConfig`             | Admin function. Failitates updating some of the configuration param of the Dexter Generator Contract                                                           |
-| `SetupPools`               | Admin function. Setup generators with their respective allocation points.                                                                                      |
-| `DeactivatePool`           | Admin function. Sets the allocation points to zero for the generator associated with the specified LP token. Recalculates total allocation points.             |
-| `SetAllowedRewardProxies`  | Admin function. Allowed reward proxy contracts that can interact with the Generator.                                                                           |
-| `SendOrphanProxyReward`    | Admin function. Sends orphan proxy rewards (which were left behind after emergency withdrawals) to another address                                             |
-| `UpdateAllowedProxies`     | Admin function. Add or remove a proxy contract that can interact with the Generator                                                                            |
-| `Cw20HookMsg`              | Update rewards and transfer them to user.                                                                                                                      |
-| `Cw20HookMsg::Deposit`     | Deposit performs a token deposit on behalf of the message sender.                                                                                              |
-| `ClaimRewards::DepositFor` | DepositFor performs a token deposit on behalf of another address that's not the message sender.                                                                |
-| `Unstake`                  | Unstake LP tokens from the Generator. LP tokens need to be unbonded for a period of time before they can be withdrawn.                                         |
-| `EmergencyUnstake`         | Unstake LP tokens from the Generator without withdrawing outstanding rewards. LP tokens need to be unbonded for a period of time before they can be withdrawn. |
-| `Unlock`                   | Unlock and withdraw LP tokens from the Generator                                                                                                               |
-| `ProposeNewOwner`          | Admin function. Creates a request to change contract ownership                                                                                                 |
-| `DropOwnershipProposal`    | Admin function. Removes a request to change contract ownership                                                                                                 |
-| `ClaimOwnership`           | New Admin function. Claims contract ownership block                                                                                                            |
+| Message                   | Description                                                                                                                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SetTokensPerBlock`       | Admin function. Set a new amount of DEX tokens to distribute per block                                                                                         |
+| `UpdateConfig`            | Admin function. Failitates updating some of the configuration param of the Dexter Generator Contract                                                           |
+| `SetupPools`              | Admin function. Setup generators with their respective allocation points.                                                                                      |
+| `DeactivatePool`          | Admin function. Sets the allocation points to zero for the generator associated with the specified LP token. Recalculates total allocation points.             |
+| `SetAllowedRewardProxies` | Admin function. Allowed reward proxy contracts that can interact with the Generator.                                                                           |
+| `SendOrphanProxyReward`   | Admin function. Sends orphan proxy rewards (which were left behind after emergency withdrawals) to another address                                             |
+| `UpdateAllowedProxies`    | Admin function. Add or remove a proxy contract that can interact with the Generator                                                                            |
+| `Cw20HookMsg`             | Update rewards and transfer them to user.                                                                                                                      |
+| `Cw20HookMsg::Deposit`    | Deposit performs a token deposit on behalf of the message sender.                                                                                              |
+| `Cw20HookMsg::DepositFor` | DepositFor performs a token deposit on behalf of another address that's not the message sender.                                                                |
+| `ClaimRewards`            | DepositFor performs a token deposit on behalf of another address that's not the message sender.                                                                |
+| `Unstake`                 | Unstake LP tokens from the Generator. LP tokens need to be unbonded for a period of time before they can be withdrawn.                                         |
+| `EmergencyUnstake`        | Unstake LP tokens from the Generator without withdrawing outstanding rewards. LP tokens need to be unbonded for a period of time before they can be withdrawn. |
+| `Unlock`                  | Unlock and withdraw LP tokens from the Generator                                                                                                               |
+| `ProposeNewOwner`         | Admin function. Creates a request to change contract ownership                                                                                                 |
+| `DropOwnershipProposal`   | Admin function. Removes a request to change contract ownership                                                                                                 |
+| `ClaimOwnership`          | New Admin function. Claims contract ownership block                                                                                                            |
 
 ## Supported Query Msgs
 

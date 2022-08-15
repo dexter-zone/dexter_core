@@ -2,8 +2,8 @@
 use cosmwasm_std::entry_point;
 
 use cosmwasm_std::{
-    from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
+    from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo,
+    Response, StdError, StdResult, Uint128, WasmMsg,
 };
 
 use dexter::ref_staking::{
@@ -11,9 +11,7 @@ use dexter::ref_staking::{
     StakerInfoResponse, StateResponse,
 };
 
-use crate::{
-    state::{ Config, StakerInfo, State, CONFIG, STATE, USERS},
-};
+use crate::state::{Config, StakerInfo, State, CONFIG, STATE, USERS};
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 
@@ -24,14 +22,18 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
+    CONFIG.save(
+        deps.storage,
+        &Config {
+            anchor_token: deps.api.addr_canonicalize(&msg.anchor_token)?,
+            staking_token: deps.api.addr_canonicalize(&msg.staking_token)?,
+            distribution_schedule: msg.distribution_schedule,
+        },
+    )?;
 
-    CONFIG.save(deps.storage, &Config {
-        anchor_token: deps.api.addr_canonicalize(&msg.anchor_token)?,
-        staking_token: deps.api.addr_canonicalize(&msg.staking_token)?,
-        distribution_schedule: msg.distribution_schedule,
-    } )?;
-
-    STATE.save(deps.storage, &State {
+    STATE.save(
+        deps.storage,
+        &State {
             last_distributed: env.block.time.seconds(),
             total_bond_amount: Uint128::zero(),
             global_reward_index: Decimal::zero(),
@@ -182,7 +184,6 @@ pub fn withdraw(deps: DepsMut, env: Env, info: MessageInfo) -> StdResult<Respons
         ]))
 }
 
-
 fn increase_bond_amount(state: &mut State, staker_info: &mut StakerInfo, amount: Uint128) {
     state.total_bond_amount += amount;
     staker_info.bond_amount += amount;
@@ -278,7 +279,9 @@ pub fn query_staker_info(
 ) -> StdResult<StakerInfoResponse> {
     // let staker_raw = deps.api.addr_canonicalize(&staker)?;
 
-    let mut staker_info: StakerInfo = USERS.load(deps.storage,  &deps.api.addr_validate(&staker.clone())? ).unwrap_or_default();
+    let mut staker_info: StakerInfo = USERS
+        .load(deps.storage, &deps.api.addr_validate(&staker.clone())?)
+        .unwrap_or_default();
     if let Some(block_time) = block_time {
         let config = CONFIG.load(deps.storage)?;
         let mut state = STATE.load(deps.storage)?;
@@ -294,7 +297,6 @@ pub fn query_staker_info(
         pending_reward: staker_info.pending_reward,
     })
 }
-
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {

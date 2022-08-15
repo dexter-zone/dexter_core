@@ -3,6 +3,8 @@ use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::asset::AssetInfo;
+
 /// This structure describes the basic parameters for creating a contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -14,8 +16,8 @@ pub struct InstantiateMsg {
     pub lp_token_addr: String,
     /// The 3rd party reward contract address
     pub reward_contract_addr: String,
-    /// The 3rd party reward token contract address
-    pub reward_token_addr: String,
+    /// The 3rd party reward token
+    pub reward_token: AssetInfo,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

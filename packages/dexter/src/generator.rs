@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use crate::asset::{Asset, AssetInfo};
 use crate::DecimalCheckedOps;
 
-
 /// This structure stores the core parameters for the Generator contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
@@ -18,11 +17,11 @@ pub struct Config {
     pub vault: Addr,
     /// The DEX token address
     pub dex_token: Option<Addr>,
-    /// Total amount of ASTRO rewards per block
+    /// Total amount of DEX TOKEN rewards per block
     pub tokens_per_block: Uint128,
     /// Total allocation points. Must be the sum of all allocation points in all active generators
     pub total_alloc_point: Uint128,
-    /// The block number when the ASTRO distribution starts
+    /// The block number when the DEX TOKEN distribution starts
     pub start_block: Uint64,
     /// The list of allowed proxy reward contracts
     pub allowed_reward_proxies: Vec<Addr>,
@@ -42,7 +41,6 @@ pub struct Config {
 // ----------------x----------------x       InstantiateMsg, ExecuteMsg QueryMsg        x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 /// This structure describes the parameters used for creating a contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -59,9 +57,8 @@ pub struct InstantiateMsg {
     /// Start block for distributing DEX
     pub start_block: Uint64,
     /// Number of seconds to wait before a user can withdraw his LP tokens once they are in unbonding phase
-    pub unbonding_period: u64,    
+    pub unbonding_period: u64,
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -75,7 +72,7 @@ pub enum ExecuteMsg {
         vesting_contract: Option<String>,
         /// The new generator guardian
         guardian: Option<String>,
-        /// Max numbrt of generators which can be supported by the contract 
+        /// Max numbrt of generators which can be supported by the contract
         checkpoint_generator_limit: Option<u32>,
         /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update
         /// period for existing unbonding positions
@@ -86,12 +83,19 @@ pub enum ExecuteMsg {
     SetTokensPerBlock {
         /// The new amount of DEX to distro per block
         amount: Uint128,
-    },    
+    },
     /// Setup generators with their respective allocation points.
     /// ## Executor - Only the owner can execute this.
     SetupPools {
         /// The list of pools with allocation point.
         pools: Vec<(String, Uint128)>,
+    },
+    /// Setup proxies (should be whitelisted) for a generator.
+    /// ## Executor - Only the owner can execute this.
+    SetupProxyForPool {
+        /// The list of pools with allocation point.
+        lp_token: String,
+        proxy_addr: String,
     },
     /// Allowed reward proxy contracts that can interact with the Generator
     /// ## Executor - Only the owner can execute this.
@@ -117,9 +121,7 @@ pub enum ExecuteMsg {
     },
     /// Sets the allocation point to zero for the specified pool
     /// ## Executor -  Only the current owner  can execute this
-    DeactivatePool {
-        lp_token: String,
-    },
+    DeactivatePool { lp_token: String },
     /// Update rewards and transfer them to user.
     /// ## Executor - Open for users
     ClaimRewards {
@@ -175,8 +177,6 @@ pub enum Cw20HookMsg {
     DepositFor(Addr),
 }
 
-
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum ExecuteOnReply {
     /// Stake LP tokens in the Generator to receive token emissions
@@ -204,15 +204,14 @@ pub enum ExecuteOnReply {
         /// The amount of tokens to withdraw
         amount: Uint128,
     },
-    /// Sets a new amount of ASTRO to distribute per block between all active generators
+    /// Sets a new amount of DEX TOKEN to distribute per block between all active generators
     SetTokensPerBlock {
-        /// The new amount of ASTRO to distribute per block
+        /// The new amount of DEX TOKEN to distribute per block
         amount: Uint128,
     },
+    /// Sets a proxy contract for an existing generator pool
+    AddProxy { lp_token: Addr, reward_proxy: Addr },
 }
-
-
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -224,29 +223,48 @@ pub enum QueryMsg {
     /// PoolLength returns the length of the array that contains all the instantiated pool generators
     PoolLength {},
     /// Deposit returns the LP token amount deposited in a specific generator
-    Deposit { lp_token: String, user: String },
+    Deposit {
+        lp_token: String,
+        user: String,
+    },
     /// PendingToken returns the amount of rewards that can be claimed by an account that deposited a specific LP token in a generator
-    PendingToken { lp_token: String, user: String },
+    PendingToken {
+        lp_token: String,
+        user: String,
+    },
     /// RewardInfo returns reward information for a specified LP token
-    RewardInfo { lp_token: String },
+    RewardInfo {
+        lp_token: String,
+    },
     /// OrphanProxyRewards returns orphaned reward information for the specified LP token
-    OrphanProxyRewards { lp_token: String },
+    OrphanProxyRewards {
+        lp_token: String,
+    },
     /// PoolInfo returns information about a pool associated with the specified LP token alongside
     /// the total pending amount of DEX and proxy rewards claimable by generator stakers (for that LP token)
-    PoolInfo { lp_token: String },
+    PoolInfo {
+        lp_token: String,
+    },
+    UserInfo {
+        lp_token: String,
+        user: String,
+    },
     /// SimulateFutureReward returns the amount of DEX that will be distributed until a future block and for a specific generator
-    SimulateFutureReward { lp_token: String, future_block: u64 },
+    SimulateFutureReward {
+        lp_token: String,
+        future_block: u64,
+    },
 }
-
 
 /// This structure describes a migration message.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
-pub struct MigrateMsg {
-}
+pub struct MigrateMsg {}
 
 // ----------------x----------------x----------------x----------------x-------------x----------------
 // ----------------     Type Definitions : PoolInfo, UserInfo, UnbondingInfo        x----------------
 // ----------------x----------------x----------------x----------------x-------------x----------------
+
+pub type UserInfoResponse = UserInfo;
 
 /// This structure describes the main information of pool
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -261,7 +279,7 @@ pub struct PoolInfo {
     /// for calculation of new proxy rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// the orphan proxy rewards which are left by emergency withdrawals. Vector of pools (reward_proxy, index).
-    pub orphan_proxy_rewards: Uint128
+    pub orphan_proxy_rewards: Uint128,
 }
 
 /// This structure stores the outstanding amount of token rewards that a user accrued.
@@ -279,7 +297,6 @@ pub struct UserInfo {
     pub unbonding_periods: Vec<UnbondingInfo>,
 }
 
-
 /// This structure stores the outstanding amount of token rewards that a user accrued.
 /// Currently the contract works with UserInfoV2 structure, but this structure is kept for
 /// compatibility with the old version.
@@ -291,11 +308,9 @@ pub struct UnbondingInfo {
     pub unlock_timstamp: u64,
 }
 
-
 // ----------------x----------------x--------------x--------------
 // ----------------     Response Definitions       x--------------
 // ----------------x----------------x--------------x--------------
-
 
 /// This structure holds the response returned when querying the total length of the array that keeps track of instantiated generators
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -340,7 +355,6 @@ pub struct ConfigResponse {
     pub checkpoint_generator_limit: Option<u32>,
 }
 
-
 /// This structure holds the response returned when querying for a pool's information
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolInfoResponse {
@@ -370,7 +384,6 @@ pub struct PoolInfoResponse {
     pub lp_supply: Uint128,
 }
 
-
 /// This structure holds the response returned when querying for the token addresses used to reward a specific generator
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct RewardInfoResponse {
@@ -379,7 +392,6 @@ pub struct RewardInfoResponse {
     /// The address of the 3rd party reward token
     pub proxy_reward_token: Option<Addr>,
 }
-
 
 // ----------------x----------------x--------------x--------------
 // ----------------     RestrictedVector       x--------------

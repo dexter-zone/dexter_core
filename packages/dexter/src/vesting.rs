@@ -44,7 +44,6 @@ pub enum ExecuteMsg {
     ClaimOwnership {},
 }
 
-
 /// This structure stores vesting information for a specific address that is getting tokens.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct VestingAccount {
@@ -53,7 +52,6 @@ pub struct VestingAccount {
     /// The vesting schedules targeted at the `address`
     pub schedules: Vec<VestingSchedule>,
 }
-
 
 /// This structure stores parameters for a batch of vesting schedules.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

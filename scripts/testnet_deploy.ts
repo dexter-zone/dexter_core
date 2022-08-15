@@ -1,14 +1,14 @@
-// import { PersistenceClient } from "persistenceonejs";
+import { PersistenceClient } from "persistenceonejs";
 import { coins } from "@cosmjs/stargate";
 
 async function Demo() {
-  // const alice = await PersistenceClient.init(
-  //   "obtain door word season wealth inspire tobacco shallow thumb tip walk forum someone verb pistol bright mutual nest fog valley tiny section sauce typical"
-  // ); //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
-  // const codes = await alice.query.cosmwasm.wasm.v1.codes({});
-  // console.log(codes);
-  // const [account] = await alice.wallet.getAccounts();
-  // const aliceaddress = account.address; //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
+  const alice = await PersistenceClient.init(
+    "obtain door word season wealth inspire tobacco shallow thumb tip walk forum someone verb pistol bright mutual nest fog valley tiny section sauce typical"
+  ); //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
+  const codes = await alice.query.cosmwasm.wasm.v1.codes({});
+  console.log(codes);
+  const [account] = await alice.wallet.getAccounts();
+  const aliceaddress = account.address; //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
   // const pstake =
   //   "persistence14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sjvz4fk"; //cw20 token address on chain
   // const res = await alice.wasm.execute(

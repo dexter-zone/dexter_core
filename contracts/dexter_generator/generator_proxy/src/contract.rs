@@ -6,12 +6,13 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 
 use crate::error::ContractError;
 use crate::state::{Config, CONFIG};
-use dexter::ref_staking::{
-    Cw20HookMsg as StakingCw20HookMsg, ExecuteMsg as StakingExecuteMsg, QueryMsg as StakingQueryMsg,
-    StakerInfoResponse,
-};
 use dexter::generator_proxy::{
     CallbackMsg, ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
+};
+use dexter::helper::build_transfer_token_to_user_msg;
+use dexter::ref_staking::{
+    Cw20HookMsg as StakingCw20HookMsg, ExecuteMsg as StakingExecuteMsg,
+    QueryMsg as StakingQueryMsg, StakerInfoResponse,
 };
 
 use cw2::set_contract_version;
@@ -34,7 +35,7 @@ pub fn instantiate(
         pair_addr: deps.api.addr_validate(&msg.pair_addr)?,
         lp_token_addr: deps.api.addr_validate(&msg.lp_token_addr)?,
         reward_contract_addr: deps.api.addr_validate(&msg.reward_contract_addr)?,
-        reward_token_addr: deps.api.addr_validate(&msg.reward_token_addr)?,
+        reward_token: msg.reward_token,
     };
     CONFIG.save(deps.storage, &config)?;
 
@@ -110,7 +111,7 @@ fn receive_cw20(
     Ok(response)
 }
 
-/// @dev Claims pending rewards from the ANC LP staking contract
+/// @dev Claims pending rewards from the proxy LP staking contract
 fn update_rewards(deps: DepsMut) -> Result<Response, ContractError> {
     let mut response = Response::new();
     let cfg = CONFIG.load(deps.storage)?;
@@ -126,9 +127,9 @@ fn update_rewards(deps: DepsMut) -> Result<Response, ContractError> {
     Ok(response)
 }
 
-/// @dev Transfers ANC rewards
-/// @param account : User to which ANC tokens are to be transferred
-/// @param amount : Number of ANC to be transferred
+/// @dev Transfers proxy rewards
+/// @param account : User to which proxy tokens are to be transferred
+/// @param amount : Number of proxy to be transferred
 fn send_rewards(
     deps: DepsMut,
     info: MessageInfo,
@@ -140,17 +141,13 @@ fn send_rewards(
     if info.sender != cfg.generator_contract_addr {
         return Err(ContractError::Unauthorized {});
     };
-
     response
         .messages
-        .push(SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: cfg.reward_token_addr.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                recipient: account.to_string(),
-                amount,
-            })?,
-            funds: vec![],
-        })));
+        .push(SubMsg::new(build_transfer_token_to_user_msg(
+            cfg.reward_token,
+            account,
+            amount,
+        )?));
     Ok(response)
 }
 
@@ -241,7 +238,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pair_addr: cfg.pair_addr.to_string(),
             lp_token_addr: cfg.lp_token_addr.to_string(),
             reward_contract_addr: cfg.reward_contract_addr.to_string(),
-            reward_token_addr: cfg.reward_token_addr.to_string(),
+            reward_token: cfg.reward_token,
         }),
         QueryMsg::Deposit {} => {
             let res: StakerInfoResponse = deps.querier.query_wasm_smart(
@@ -255,14 +252,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_binary(&deposit_amount)
         }
         QueryMsg::Reward {} => {
-            let res: Result<BalanceResponse, StdError> = deps.querier.query_wasm_smart(
-                cfg.reward_token_addr,
-                &Cw20QueryMsg::Balance {
-                    address: env.contract.address.into_string(),
-                },
-            );
-            let reward_amount = res?.balance;
-
+            let reward_amount = cfg
+                .reward_token
+                .query_for_balance(&deps.querier, env.contract.address)?;
             to_binary(&reward_amount)
         }
         QueryMsg::PendingToken {} => {
@@ -278,7 +270,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }
         QueryMsg::RewardInfo {} => {
             let config = CONFIG.load(deps.storage)?;
-            to_binary(&config.reward_token_addr)
+            to_binary(&config.reward_token)
         }
     }
 }

@@ -5,10 +5,8 @@ use cosmwasm_std::{Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
-// Copied from Anchor protocol's Staking contract interface here - 
+// Copied from Anchor protocol's Staking contract interface here -
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {

@@ -8,9 +8,8 @@ use crate::state::{
     MathConfig, StablePoolParams, StablePoolUpdateParams, Twap, CONFIG, MATHCONFIG, TWAPINFO,
 };
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary,  Decimal, 
-    Deps, DepsMut, Env, Event, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError,
-    StdResult, SubMsg, Uint128, WasmMsg,
+    entry_point, from_binary, to_binary, Binary, Decimal, Deps, DepsMut, Env, Event, Fraction,
+    MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
 };
 use std::str::FromStr;
 
@@ -19,7 +18,8 @@ use cw20::MinterResponse;
 
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
 use dexter::helper::{
-    adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, calculate_underlying_fees
+    adjust_precision, calculate_underlying_fees, get_lp_token_name, get_lp_token_symbol,
+    get_share_in_assets,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
@@ -527,7 +527,7 @@ pub fn query_on_join_pool(
         provided_assets: act_assets_in,
         new_shares,
         response: dexter::pool::ResponseType::Success {},
-        fee:None
+        fee: None,
     };
 
     Ok(res)
@@ -570,7 +570,7 @@ pub fn query_on_exit_pool(
         assets_out,
         burn_shares: burn_amount.unwrap(),
         response: dexter::pool::ResponseType::Success {},
-        fee:None
+        fee: None,
     })
 }
 
@@ -646,7 +646,7 @@ pub fn query_on_swap(
             calc_amount = adjust_precision(calc_amount, greater_precision, ask_precision)?;
             spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
             // Calculate the commission fees
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps );
+            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
@@ -709,12 +709,10 @@ pub fn query_on_swap(
             spread: spread_amount,
         },
         response: ResponseType::Success {},
-        fee: Some(
-            Asset {
-                info: ask_asset_info.clone(),
-                amount: total_fee,
-            }
-        )
+        fee: Some(Asset {
+            info: ask_asset_info.clone(),
+            amount: total_fee,
+        }),
     })
 }
 

@@ -1,17 +1,16 @@
+pub mod approx_pow;
 pub mod asset;
+pub mod error;
+pub mod generator;
+pub mod generator_proxy;
+pub mod helper;
 pub mod keeper;
 pub mod lp_token;
 pub mod pool;
 pub mod querier;
-pub mod vault;
-pub mod error;
-pub mod helper;
-pub mod approx_pow;
-pub mod generator;
-pub mod generator_proxy;
-pub mod vesting;
 pub mod ref_staking;
-
+pub mod vault;
+pub mod vesting;
 
 #[allow(clippy::all)]
 mod uints {
@@ -67,7 +66,5 @@ pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
     })
 }
 
-
-
-pub use uints::U256;
 pub use decimal_checked_ops::DecimalCheckedOps;
+pub use uints::U256;

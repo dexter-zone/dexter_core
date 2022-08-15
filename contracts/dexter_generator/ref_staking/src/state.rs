@@ -1,15 +1,16 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, QuerierWrapper, Decimal,QueryRequest, WasmQuery, Addr, StdResult, Uint128, to_binary};
-use cw_storage_plus::{Item, Map};
+use cosmwasm_std::{
+    to_binary, Addr, CanonicalAddr, Decimal, QuerierWrapper, QueryRequest, StdResult, Uint128,
+    WasmQuery,
+};
 use cw20::{Cw20QueryMsg, MinterResponse};
-
+use cw_storage_plus::{Item, Map};
 
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 pub const USERS: Map<&Addr, StakerInfo> = Map::new("user");
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
@@ -58,7 +59,6 @@ impl Default for StakerInfo {
     }
 }
 
-
 // /// returns return staker_info of the given owner
 // pub fn store_staker_info(
 //     storage: &mut dyn Storage,
@@ -85,7 +85,6 @@ impl Default for StakerInfo {
 //         }),
 //     }
 // }
-
 
 /// Query asset price igonoring price age
 pub fn query_anc_minter(querier: &QuerierWrapper, anchor_token: Addr) -> StdResult<String> {

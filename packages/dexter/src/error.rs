@@ -1,7 +1,8 @@
 // use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use cosmwasm_std::{CheckedMultiplyRatioError, ConversionOverflowError, OverflowError, StdError, Decimal};
+use cosmwasm_std::{
+    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError,
+};
 use thiserror::Error;
-
 
 /// ## Description
 /// This enum describes stableswap pair contract errors!
@@ -17,7 +18,7 @@ pub enum ContractError {
     Unauthorized {},
 
     #[error("Operation non supported")]
-    NonSupported {},    
+    NonSupported {},
 
     #[error("Doubling assets in asset infos")]
     DoublingAssets {},
@@ -61,4 +62,3 @@ impl From<ConversionOverflowError> for ContractError {
         StdError::from(o).into()
     }
 }
-

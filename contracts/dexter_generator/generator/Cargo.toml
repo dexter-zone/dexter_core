@@ -33,6 +33,8 @@ protobuf = { version = "2", features = ["with-bytes"] }
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"
 cw-multi-test = "0.13.2"
+anchor-staking = { path = "../ref_staking"}
+dexter-generator-proxy = { path = "../generator_proxy"}
 dexter-vesting = {path = "../vesting"}
 lp-token = {path = "../../lp_token"}
 dexter-vault = { path = "../../vault"}

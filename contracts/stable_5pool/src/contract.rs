@@ -1,7 +1,7 @@
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128,
-    Uint64, WasmMsg,
+    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event,
+    Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, Uint64,
+    WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::MinterResponse;
@@ -31,7 +31,8 @@ use dexter::asset::{
     addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset,
 };
 use dexter::helper::{
-    adjust_precision, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, select_pools, calculate_underlying_fees
+    adjust_precision, calculate_underlying_fees, get_lp_token_name, get_lp_token_symbol,
+    get_share_in_assets, select_pools,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::querier::{query_supply, query_vault_config};
@@ -610,7 +611,7 @@ pub fn query_on_join_pool(
         provided_assets: act_assets_in,
         new_shares: mint_amount,
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     };
 
     Ok(res)
@@ -670,7 +671,7 @@ pub fn query_on_exit_pool(
         assets_out: refund_assets,
         burn_shares: act_burn_amount,
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     })
 }
 
@@ -780,7 +781,7 @@ pub fn query_on_swap(
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps );
+            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
@@ -838,19 +839,15 @@ pub fn query_on_swap(
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
-            spread: spread_amount
+            spread: spread_amount,
         },
         response: ResponseType::Success {},
-        fee: Some(
-            Asset {
-                info: ask_asset_info.clone(),
-                amount: total_fee,
-            }
-        )
+        fee: Some(Asset {
+            info: ask_asset_info.clone(),
+            amount: total_fee,
+        }),
     })
 }
-
-
 
 /// ## Description
 /// Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.

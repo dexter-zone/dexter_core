@@ -5,9 +5,9 @@ use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType};
 
+use crate::helper::{is_valid_name, is_valid_symbol};
 use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
-use crate::helper::{is_valid_name, is_valid_symbol};
 
 /// The default slippage (5%)
 pub const DEFAULT_SLIPPAGE: &str = "0.005";
@@ -21,11 +21,9 @@ pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
 
 /// ## Description
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct FeeStructs {  
-    pub total_fee_bps: u16 
+pub struct FeeStructs {
+    pub total_fee_bps: u16,
 }
-
-
 
 /// ## Description
 /// This struct describes the main control config of pool.
@@ -65,14 +63,14 @@ pub struct Trade {
 #[serde(rename_all = "snake_case")]
 pub enum ResponseType {
     Success {},
-    Failure (String),
+    Failure(String),
 }
 
 impl Display for ResponseType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
             ResponseType::Success {} => fmt.write_str("success"),
-            ResponseType::Failure (error) => fmt.write_str(format!("error : {}", error).as_str()),
+            ResponseType::Failure(error) => fmt.write_str(format!("error : {}", error).as_str()),
         }
     }
 }
@@ -84,17 +82,14 @@ impl ResponseType {
     pub fn is_success(&self) -> bool {
         match self {
             ResponseType::Success {} => true,
-            ResponseType::Failure (_)  => false,
+            ResponseType::Failure(_) => false,
         }
     }
 }
 
-
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate, Execute Msgs and Queries       x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// ## Description
 /// This struct describes the basic settings for creating a contract.
@@ -138,7 +133,6 @@ impl InstantiateMsg {
     }
 }
 
-
 /// ## Description
 ///
 /// This struct describes the execute messages of the contract.
@@ -146,7 +140,7 @@ impl InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// ## Description - Update updatable parameters related to Pool's configuration
-    UpdateConfig {params: Option<Binary>},
+    UpdateConfig { params: Option<Binary> },
     /// ## Description - Executable only by Dexter Vault.  Updates locally stored asset balances state for the pool and updates the TWAP.
     UpdateLiquidity { assets: Vec<Asset> },
 }
@@ -193,14 +187,11 @@ pub enum QueryMsg {
     CumulativePrices {},
 }
 
-
 /// ## Description
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
-
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------
@@ -225,7 +216,6 @@ pub struct ConfigResponse {
     pub additional_params: Option<Binary>,
 }
 
-
 /// ## Description - Helper struct for [`QueryMsg::OnJoinPool`]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AfterJoinResponse {
@@ -238,7 +228,6 @@ pub struct AfterJoinResponse {
     // Is the fee to be charged
     pub fee: Option<Asset>,
 }
-
 
 /// ## Description  - Helper struct for [`QueryMsg::OnExitPool`]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -289,15 +278,23 @@ pub struct CumulativePricesResponse {
 // ----------------x----------------x     Helper response functions       x----------------x------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 pub fn return_join_failure(error: String) -> AfterJoinResponse {
-    AfterJoinResponse { provided_assets: vec![], new_shares: Uint128::zero(), response: ResponseType::Failure (error), fee: None, }
+    AfterJoinResponse {
+        provided_assets: vec![],
+        new_shares: Uint128::zero(),
+        response: ResponseType::Failure(error),
+        fee: None,
+    }
 }
 
 pub fn return_exit_failure(error: String) -> AfterExitResponse {
-    AfterExitResponse { assets_out: vec![], burn_shares: Uint128::zero(), response: ResponseType::Failure (error), fee: None }
+    AfterExitResponse {
+        assets_out: vec![],
+        burn_shares: Uint128::zero(),
+        response: ResponseType::Failure(error),
+        fee: None,
+    }
 }
-
 
 pub fn return_swap_failure(error: String) -> SwapResponse {
     SwapResponse {
@@ -306,7 +303,7 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
             amount_out: Uint128::zero(),
             spread: Uint128::zero(),
         },
-        response: ResponseType::Failure (error),
+        response: ResponseType::Failure(error),
         fee: None,
     }
 }
@@ -316,7 +313,7 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct WeightedParams{
+pub struct WeightedParams {
     pub weights: Vec<(AssetInfo, u128)>,
     pub exit_fee: Option<Decimal>,
 }

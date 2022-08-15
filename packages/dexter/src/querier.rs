@@ -1,9 +1,9 @@
-use crate::{asset::{AssetInfo}, vault};
-use cosmwasm_std::{
-    to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper,
-    QueryRequest, StdResult, Uint128, WasmQuery,
-};
 use crate::pool;
+use crate::{asset::AssetInfo, vault};
+use cosmwasm_std::{
+    to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper, QueryRequest, StdResult, Uint128,
+    WasmQuery,
+};
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 
 const NATIVE_TOKEN_PRECISION: u8 = 6;
@@ -53,7 +53,6 @@ pub fn query_token_balance(
     Ok(res.balance)
 }
 
-
 /// ## Description
 /// Returns the total supply at the specified contract address.
 /// ## Params
@@ -85,7 +84,6 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: AssetInfo) ->
     })
 }
 
-
 /// Returns the configuration for the Vault contract.
 /// ## Params
 /// * **querier** is an object of type [`QuerierWrapper`].
@@ -98,7 +96,6 @@ pub fn query_vault_config(
     querier.query_wasm_smart(vault_contract, &vault::QueryMsg::Config {})
 }
 
-
 /// Returns the configuration for the Pool contract.
 /// ## Params
 /// * **querier** is an object of type [`QuerierWrapper`].
@@ -107,6 +104,7 @@ pub fn config_info_by_pool(
     querier: &QuerierWrapper,
     pool_contract: String,
 ) -> StdResult<pool::ConfigResponse> {
-    let config : pool::ConfigResponse =  querier.query_wasm_smart(pool_contract, &pool::QueryMsg::Config {})?;
+    let config: pool::ConfigResponse =
+        querier.query_wasm_smart(pool_contract, &pool::QueryMsg::Config {})?;
     Ok(config)
 }

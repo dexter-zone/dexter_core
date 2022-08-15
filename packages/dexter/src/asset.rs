@@ -1,8 +1,8 @@
 use cosmwasm_std::{
-    to_binary, Addr, Api, BankMsg, Coin, CosmosMsg, MessageInfo, QuerierWrapper, StdError,ConversionOverflowError,
-    StdResult, Uint128, WasmMsg,Decimal256, Uint256, Fraction
+    to_binary, Addr, Api, BankMsg, Coin, ConversionOverflowError, CosmosMsg, Decimal256, Fraction,
+    MessageInfo, QuerierWrapper, StdError, StdResult, Uint128, Uint256, WasmMsg,
 };
-use cw20::{Cw20ExecuteMsg};
+use cw20::Cw20ExecuteMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -10,7 +10,6 @@ use std::fmt;
 use crate::querier::{query_balance, query_token_balance};
 
 pub const NATIVE_TOKEN_PRECISION: u8 = 6;
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{AssetInfo}} struct Type    x----------------x----------------
@@ -36,7 +35,6 @@ impl fmt::Display for AssetInfo {
 }
 
 impl AssetInfo {
-
     pub fn as_string(&self) -> String {
         match self {
             AssetInfo::NativeToken { denom } => denom.to_string(),
@@ -58,9 +56,7 @@ impl AssetInfo {
             AssetInfo::Token { contract_addr, .. } => {
                 query_token_balance(querier, contract_addr.clone(), addr)
             }
-            AssetInfo::NativeToken { denom, .. } => {
-                query_balance(querier, addr, denom.to_string())
-            }
+            AssetInfo::NativeToken { denom, .. } => query_balance(querier, addr, denom.to_string()),
         }
     }
 
@@ -143,15 +139,11 @@ impl AssetInfo {
 
         Ok(decimals)
     }
-
-
 }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     {{Asset}} struct Type       x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// ## Description - This enum describes a asset (native or CW20).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -240,14 +232,12 @@ impl Asset {
 // ----------------x----------------x    {{AssetExchangeRate}} struct Type    x----------------x--------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetExchangeRate {
     pub offer_info: AssetInfo,
     pub ask_info: AssetInfo,
     pub rate: Uint128,
 }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x {{DecimalAsset}} struct Type    x----------------x----------------
@@ -260,7 +250,6 @@ pub struct DecimalAsset {
     pub info: AssetInfo,
     pub amount: Decimal256,
 }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x {{Decimal256Ext}} trait Type   x----------------x----------------
@@ -347,13 +336,9 @@ impl Decimal256Ext for Decimal256 {
     }
 }
 
-
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Some Helper functions      x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
-
 
 /// Returns a lowercased, validated address upon success. Otherwise returns [`Err`]
 pub fn addr_validate_to_lower(api: &dyn Api, addr: &str) -> StdResult<Addr> {
@@ -376,7 +361,6 @@ pub fn addr_opt_validate(api: &dyn Api, addr: &Option<String>) -> StdResult<Opti
 }
 
 // const TOKEN_SYMBOL_MAX_LENGTH: usize = 4;
-
 
 /// Returns an [`Asset`] object representing a native token and an amount of tokens.
 /// ## Params
@@ -413,4 +397,3 @@ pub fn native_asset_info(denom: String) -> AssetInfo {
 pub fn token_asset_info(contract_addr: Addr) -> AssetInfo {
     AssetInfo::Token { contract_addr }
 }
-

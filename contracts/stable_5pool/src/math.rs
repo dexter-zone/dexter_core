@@ -140,7 +140,6 @@ pub(crate) fn calc_y(
     Err(StdError::generic_err("y is not converging"))
 }
 
-
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

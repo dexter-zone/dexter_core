@@ -1,13 +1,11 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_std::{Addr};
+use cosmwasm_std::Addr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// This struct describes the Msg used to instantiate in this contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -39,17 +37,14 @@ pub enum QueryMsg {
     Balances { assets: Vec<AssetInfo> },
 }
 
-
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
 
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// A custom struct that holds contract parameters and is used to retrieve them.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -67,4 +62,3 @@ pub struct ConfigResponse {
 pub struct BalancesResponse {
     pub balances: Vec<Asset>,
 }
-

@@ -1,20 +1,18 @@
-use crate::asset::{addr_validate_to_lower,DecimalAsset, Asset, AssetInfo};
+use crate::asset::{addr_validate_to_lower, Asset, AssetInfo, DecimalAsset};
+use crate::error::ContractError;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg
+    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
-use cw20_base::msg::{ExecuteMsg as CW20ExecuteMsg};
+use cw20_base::msg::ExecuteMsg as CW20ExecuteMsg;
 use cw_storage_plus::Item;
+use itertools::Itertools;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use itertools::Itertools;
-use crate::error::ContractError;
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x       Ownership Update helper functions          x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// ## Description
 /// Describes the basic settings for creating a request for a change of ownership.
@@ -25,7 +23,6 @@ pub struct OwnershipProposal {
     /// time to live a request
     pub ttl: u64,
 }
-
 
 /// ## Description - Creates a new request to change ownership. Only owner can execute it.
 /// `new_owner` is a new owner.
@@ -119,7 +116,6 @@ pub fn claim_ownership(
 // ----------------x----------------x        Transfer tokens helper functions          x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 /// @dev Helper function which returns a cosmos wasm msg to transfer cw20 tokens to a recipient address
 /// @param recipient : Address to be transferred cw20 tokens to
 /// @param token_contract_address : Contract address of the cw20 token to transfer
@@ -175,33 +171,23 @@ pub fn build_transfer_cw20_from_user_msg(
     }))
 }
 
-
 /// Helper Function. Returns CosmosMsg which transfers CW20 Tokens from owner to recipient. (Transfers DEX from user to itself )
 pub fn build_transfer_token_to_user_msg(
     asset: AssetInfo,
     recipient: Addr,
     amount: Uint128,
 ) -> StdResult<CosmosMsg> {
-
     match asset {
-        AssetInfo::NativeToken { denom, } => {
-            Ok(build_send_native_asset_msg(
-                recipient,
-                &denom,
-                amount,
-            )?)
-        },
-        AssetInfo::Token { contract_addr, } => {
-            Ok(build_transfer_cw20_token_msg(
-                recipient,
-                contract_addr.to_string(),
-                amount
-            )?)
-        },
+        AssetInfo::NativeToken { denom } => {
+            Ok(build_send_native_asset_msg(recipient, &denom, amount)?)
+        }
+        AssetInfo::Token { contract_addr } => Ok(build_transfer_cw20_token_msg(
+            recipient,
+            contract_addr.to_string(),
+            amount,
+        )?),
     }
 }
-
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x        Pools / Swap :  Helper functions          x----------------
@@ -262,7 +248,6 @@ pub fn select_pools(
     }
 }
 
-
 /// Checks swap parameters. Otherwise returns [`Err`]
 /// ## Params
 /// * **offer_amount** is a [`Uint128`] representing an amount of offer tokens.
@@ -290,11 +275,7 @@ pub fn check_swap_parameters(
 /// * **pools** are an array of [`Asset`] type items.
 /// * **amount** is the object of type [`Uint128`].
 /// * **total_share** is the object of type [`Uint128`].
-pub fn get_share_in_assets(
-    pools: Vec<Asset>,
-    amount: Uint128,
-    total_share: Uint128,
-) -> Vec<Asset> {
+pub fn get_share_in_assets(pools: Vec<Asset>, amount: Uint128, total_share: Uint128) -> Vec<Asset> {
     let mut share_ratio = Decimal::zero();
     if !total_share.is_zero() {
         share_ratio = Decimal::from_ratio(amount, total_share);
@@ -312,7 +293,6 @@ pub fn get_share_in_assets(
 // ----------------x----------------x        Generic Math :: Helper functions          x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-
 /// ## Description
 /// Converts [`Decimal`] to [`Decimal256`].
 pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
@@ -323,7 +303,6 @@ pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
         ))
     })
 }
-
 
 /// ## Description
 /// Return a value using a newly specified precision.
@@ -347,23 +326,21 @@ pub fn adjust_precision(
     })
 }
 
-
 /// Returns LP token name to be set for a new LP token being initialized
-/// 
+///
 /// ## Params
 /// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
 /// * **lp_token_name** is an object of type Option[`String`], provided as an input by the user creating the pool
 pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> String {
     let mut token_name = pool_id.to_string() + "-Dex-LP".to_string().as_str();
     if !lp_token_name.is_none() {
-        token_name = pool_id.to_string() + "-" + lp_token_name.unwrap().as_str(); 
+        token_name = pool_id.to_string() + "-" + lp_token_name.unwrap().as_str();
     }
     return token_name;
-
 }
 
 /// Returns LP token symbol to be set for a new LP token being initialized
-/// 
+///
 /// ## Params
 /// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
 /// * **lp_token_symbol** is an object of type Option[`String`], provided as an input by the user creating the pool
@@ -371,13 +348,10 @@ pub fn get_lp_token_symbol(lp_token_symbol: Option<String>) -> String {
     // numbers in symbol not supported
     let mut token_symbol = "DEX-LP".to_string();
     if !lp_token_symbol.is_none() {
-        token_symbol = "LP_".to_string()  +  lp_token_symbol.unwrap().as_str();
+        token_symbol = "LP_".to_string() + lp_token_symbol.unwrap().as_str();
     }
     return token_symbol;
-
 }
-
-
 
 pub fn is_valid_name(name: &str) -> bool {
     let bytes = name.as_bytes();
@@ -400,18 +374,20 @@ pub fn is_valid_symbol(symbol: &str) -> bool {
     true
 }
 
-
 /// Retusn the number of native tokens sent by the user
 /// ## Params
 /// * **message_info** is an object of type [`MessageInfo`]
-pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom : &str) -> Uint128 {
+pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom: &str) -> Uint128 {
     let empty_coin = Coin::new(0u128, denom);
-    let coin = message_info.funds.iter().find(|x| x.clone().denom == denom).unwrap_or_else(||  {
-            &empty_coin });
-    coin.amount        
+    let coin = message_info
+        .funds
+        .iter()
+        .find(|x| x.clone().denom == denom)
+        .unwrap_or_else(|| &empty_coin);
+    coin.amount
 }
 
 // Returns the number of tokens charged as total fee
-pub fn calculate_underlying_fees( amount: Uint128, total_fee_bps: u16) -> Uint128 {
-        amount *  Decimal::from_ratio( total_fee_bps, 10_000u16)
+pub fn calculate_underlying_fees(amount: Uint128, total_fee_bps: u16) -> Uint128 {
+    amount * Decimal::from_ratio(total_fee_bps, 10_000u16)
 }

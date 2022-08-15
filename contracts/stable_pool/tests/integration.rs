@@ -7,7 +7,8 @@ use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType, SwapResponse, FeeStructs
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
+    SwapResponse,
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -262,7 +263,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
 }
 
-
 /// Tests Pool::ExecuteMsg::UpdateConfig for stableswap Pool which supports [`StartChangingAmp`] and [`StopChangingAmp`] messages
 #[test]
 fn test_update_config() {
@@ -496,10 +496,6 @@ fn test_update_config() {
     let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 20u64);
 }
-
-
-
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnJoinPool for StablePool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
@@ -840,7 +836,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, join_pool_query_res.fee);        
+    assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(110u128), join_pool_query_res.new_shares);
 
@@ -1015,7 +1011,6 @@ fn test_query_on_join_pool() {
         pool_twap_res_t2.exchange_info
     );
 }
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
@@ -1350,8 +1345,6 @@ fn test_on_exit_pool() {
     assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
-
-
 /// Tests the following -
 /// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
@@ -1522,8 +1515,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );    
-
+    );
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1566,8 +1558,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );    
-
+    );
 
     //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
     // SwapType::GiveIn {},
@@ -1608,10 +1599,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee.clone(),
-        None
-    );
+    assert_eq!(swap_offer_asset_res.fee.clone(), None);
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1651,10 +1639,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee.clone(),
-        None
-    );
+    assert_eq!(swap_offer_asset_res.fee.clone(), None);
     //// -----x----- Check #3 :: EXECUTE Success :::  -----x----- ////
 
     // Execute Swap :: GiveIn Type
@@ -1774,7 +1759,6 @@ fn test_swap() {
         .query_balance(&"fee_collector".to_string(), "axlusd")
         .unwrap();
 
-
     app.execute_contract(
         alice_address.clone(),
         vault_instance.clone(),
@@ -1796,12 +1780,12 @@ fn test_swap() {
         .unwrap();
     assert_eq!(Uint128::from(10041u128), vault_bal_res.balance);
 
-
     let keeper_bal_after = app
         .wrap()
         .query_balance(&"fee_collector".to_string(), "axlusd")
         .unwrap();
-    assert_eq!(keeper_bal_before.amount + Uint128::from(14u128) , keeper_bal_after.amount);
-
-
+    assert_eq!(
+        keeper_bal_before.amount + Uint128::from(14u128),
+        keeper_bal_after.amount
+    );
 }

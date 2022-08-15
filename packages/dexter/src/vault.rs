@@ -1,5 +1,5 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_std::{Addr,Decimal, Uint128, Binary};
+use cosmwasm_std::{Addr, Binary, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -98,24 +98,23 @@ pub struct FeeInfo {
     pub developer_addr: Option<Addr>,
 }
 
-impl FeeInfo { 
-
+impl FeeInfo {
     /// This method is used to check fee bps.
     pub fn valid_fee_info(&self) -> bool {
         self.total_fee_bps <= MAX_TOTAL_FEE_BPS
             && self.protocol_fee_percent <= MAX_PROTOCOL_FEE_PERCENT
             && self.dev_fee_percent <= MAX_DEV_FEE_PERCENT
-    }    
-
-    // Returns the number of tokens charged as total fee, protocol fee and dev fee 
-    pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128,Uint128) {
-        let protocol_fee: Uint128 = total_fee *  Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
-        let dev_fee: Uint128 = total_fee *  Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
-        (protocol_fee, dev_fee)
     }
 
+    // Returns the number of tokens charged as total fee, protocol fee and dev fee
+    pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128, Uint128) {
+        let protocol_fee: Uint128 =
+            total_fee * Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
+        let dev_fee: Uint128 =
+            total_fee * Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
+        (protocol_fee, dev_fee)
+    }
 }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Generic struct Types      x----------------x-------------------
@@ -149,7 +148,7 @@ pub struct PoolConfig {
     pub is_disabled: bool,
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
-    pub is_generator_disabled: bool
+    pub is_generator_disabled: bool,
 }
 
 impl Default for PoolConfig {
@@ -164,11 +163,10 @@ impl Default for PoolConfig {
                 developer_addr: None,
             },
             is_disabled: false,
-            is_generator_disabled: false
+            is_generator_disabled: false,
         }
     }
 }
-
 
 /// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -194,7 +192,6 @@ pub struct PoolInfo {
     pub developer_addr: Option<Addr>,
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct SingleSwapRequest {
     pub pool_id: Uint128,
@@ -205,7 +202,6 @@ pub struct SingleSwapRequest {
     pub max_spread: Option<Decimal>,
     pub belief_price: Option<Decimal>,
 }
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
@@ -228,14 +224,14 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     // Receives LP Tokens when removing Liquidity
     Receive(Cw20ReceiveMsg),
-    /// Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`, 
+    /// Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`,
     /// `config.lp_token_code_id` parameters.       
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
         generator_address: Option<String>,
     },
-    ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. 
+    ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set.
     /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
     /// and updating Fee (` pool_config.fee_info`) for new pool instances
     UpdatePoolConfig {
@@ -255,7 +251,7 @@ pub enum ExecuteMsg {
         lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
-    // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and 
+    // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
         pool_id: Uint128,
@@ -265,8 +261,8 @@ pub enum ExecuteMsg {
         slippage_tolerance: Option<Decimal>,
         auto_stake: Option<bool>,
     },
-    // Entry point for a swap tx between offer and ask assets. The swap request details are passed in 
-    // [`SingleSwapRequest`] Type parameter.                              
+    // Entry point for a swap tx between offer and ask assets. The swap request details are passed in
+    // [`SingleSwapRequest`] Type parameter.
     Swap {
         swap_request: SingleSwapRequest,
         recipient: Option<String>,
@@ -302,29 +298,20 @@ pub enum QueryMsg {
     /// Config returns controls settings that specified in custom [`ConfigResponse`] struct
     Config {},
     /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
-    QueryRigistery {
-        pool_type: PoolType,
-    },
+    QueryRigistery { pool_type: PoolType },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
-    GetPoolById {
-        pool_id: Uint128,
-    },
+    GetPoolById { pool_id: Uint128 },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
-    GetPoolByAddress {
-        pool_addr: String,
-    },
+    GetPoolByAddress { pool_addr: String },
 }
-
 
 /// ## Description -  This struct describes a migration message.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MigrateMsg {}
 
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------
 // ----------------x----------------x----------------x----------------x----------------x----------------
-
 
 /// ## Description -  A custom struct for each query response that returns controls settings of contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

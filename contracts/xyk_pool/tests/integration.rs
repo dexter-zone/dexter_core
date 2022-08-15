@@ -1,20 +1,20 @@
-use cosmwasm_std::testing::{mock_env};
+use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::pool::{
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
+    SwapResponse,
+};
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
     PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
-use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType,
-    SwapResponse, FeeStructs
-};
-use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -77,7 +77,7 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-/// Initialize a new vault and a XYK Pool with the given assets - Tests the following: 
+/// Initialize a new vault and a XYK Pool with the given assets - Tests the following:
 /// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
 /// Pool::QueryMsg::{ CreatePoolInstance}
 fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr, u128) {
@@ -245,7 +245,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
 }
 
-
 /// Tests Pool::ExecuteMsg::UpdateConfig for XYK Pool which is not supported
 #[test]
 fn test_update_config() {
@@ -273,7 +272,6 @@ fn test_update_config() {
         .unwrap_err();
     assert_eq!(res.root_cause().to_string(), "Operation non supported");
 }
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
@@ -361,8 +359,8 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-        assert_eq!(None, join_pool_query_res.fee);
-        assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
+    assert_eq!(None, join_pool_query_res.fee);
+    assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(100u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
     assert_eq!(
@@ -431,17 +429,16 @@ fn test_query_on_join_pool() {
         &[],
     )
     .unwrap();
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_instance.clone(),
-            &msg,
-            &[Coin {
-                denom: "xprt".to_string(),
-                amount: Uint128::new(110u128),
-            }],
-        )
-        .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(110u128),
+        }],
+    )
+    .unwrap();
 
     // Checks -
     // 1. LP tokens minted & transferred to Alice
@@ -633,7 +630,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, join_pool_query_res.fee);        
+    assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(
         ResponseType::Failure("error : Operation exceeds max slippage limit".to_string()),
         join_pool_query_res.response
@@ -897,8 +894,6 @@ fn test_query_on_join_pool() {
     );
 }
 
-
-
 /// Tests the following -
 /// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
@@ -1086,8 +1081,7 @@ fn test_on_exit_pool() {
         })
         .unwrap(),
     };
-    app
-        .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
+    app.execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
     let current_block = app.block_info();
 
@@ -1232,13 +1226,6 @@ fn test_on_exit_pool() {
     );
     assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
-
-
-
-
-
-
-
 
 /// Tests the following -
 /// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
@@ -1410,8 +1397,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(27u128)
-    );        
-
+    );
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1494,10 +1480,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee,
-        None
-    );
+    assert_eq!(swap_offer_asset_res.fee, None);
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1537,10 +1520,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee,
-        None
-    );
+    assert_eq!(swap_offer_asset_res.fee, None);
 
     //// -----x----- Check #3 :: EXECUTE Failure : Spread check failed :::  -----x----- ////
 
@@ -1687,7 +1667,8 @@ fn test_swap() {
         .wrap()
         .query_balance(&"fee_collector".to_string(), "xprt")
         .unwrap();
-    assert_eq!(keeper_bal_before.amount + Uint128::from(14u128) , keeper_bal_after.amount);
-
-
+    assert_eq!(
+        keeper_bal_before.amount + Uint128::from(14u128),
+        keeper_bal_after.amount
+    );
 }

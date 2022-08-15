@@ -15,14 +15,15 @@ use crate::state::{Twap, CONFIG, TWAPINFO};
 use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
 use dexter::error::ContractError;
 use dexter::helper::{
-    decimal2decimal256, get_lp_token_name, get_lp_token_symbol, get_share_in_assets, calculate_underlying_fees
+    calculate_underlying_fees, decimal2decimal256, get_lp_token_name, get_lp_token_symbol,
+    get_share_in_assets,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE
+    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
 use dexter::vault::{SwapType, TWAP_PRECISION};
@@ -304,7 +305,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
         math_params: None,
-        additional_params: None
+        additional_params: None,
     })
 }
 
@@ -316,7 +317,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 pub fn query_fee_params(deps: Deps) -> StdResult<FeeResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
     Ok(FeeResponse {
-        total_fee_bps: config.fee_info.total_fee_bps
+        total_fee_bps: config.fee_info.total_fee_bps,
     })
 }
 
@@ -412,7 +413,7 @@ pub fn query_on_join_pool(
         provided_assets: act_assets_in,
         new_shares,
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     };
 
     Ok(res)
@@ -456,7 +457,7 @@ pub fn query_on_exit_pool(
         assets_out,
         burn_shares: burn_amount.unwrap(),
         response: dexter::pool::ResponseType::Success {},
-        fee: None
+        fee: None,
     })
 }
 
@@ -520,7 +521,7 @@ pub fn query_on_swap(
                     .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees
 
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps );
+            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount,
@@ -541,7 +542,10 @@ pub fn query_on_swap(
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
             // Calculate the commission fees
-            total_fee = calculate_underlying_fees(before_commission_deduction, config.fee_info.total_fee_bps);
+            total_fee = calculate_underlying_fees(
+                before_commission_deduction,
+                config.fee_info.total_fee_bps,
+            );
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
@@ -572,15 +576,13 @@ pub fn query_on_swap(
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
-            spread: spread_amount,            
+            spread: spread_amount,
         },
         response: ResponseType::Success {},
-        fee: Some(
-            Asset {
-                info: ask_asset_info.clone(),
-                amount: total_fee,
-            }
-        )
+        fee: Some(Asset {
+            info: ask_asset_info.clone(),
+            amount: total_fee,
+        }),
     })
 }
 

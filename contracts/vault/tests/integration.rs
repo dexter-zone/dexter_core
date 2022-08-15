@@ -4,7 +4,8 @@ use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolConfig, PoolInfo, PoolType, QueryMsg, PoolConfigResponse
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolConfig, PoolConfigResponse, PoolInfo,
+    PoolType, QueryMsg,
 };
 
 fn mock_app() -> App {
@@ -84,8 +85,6 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     return vault_instance;
 }
 
-
-
 #[test]
 fn proper_initialization() {
     let mut app = mock_app();
@@ -140,16 +139,19 @@ fn proper_initialization() {
     );
     assert_eq!(None, config_res.generator_address);
 
-
-    let msg = QueryMsg::QueryRigistery { pool_type: PoolType::Xyk {}  };
-    let registery_res: PoolConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
+    let msg = QueryMsg::QueryRigistery {
+        pool_type: PoolType::Xyk {},
+    };
+    let registery_res: PoolConfigResponse =
+        app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
     assert_eq!(xyk_pool_code_id, registery_res.code_id);
     assert_eq!(PoolType::Xyk {}, registery_res.pool_type);
     assert_eq!(pool_configs[0].fee_info, registery_res.fee_info);
     assert_eq!(pool_configs[0].is_disabled, registery_res.is_disabled);
-    assert_eq!(pool_configs[0].is_generator_disabled, registery_res.is_generator_disabled);
-
-
+    assert_eq!(
+        pool_configs[0].is_generator_disabled,
+        registery_res.is_generator_disabled
+    );
 
     //// -----x----- Error :: PoolConfigDuplicate Error -----x----- ////
 
@@ -236,7 +238,6 @@ fn proper_initialization() {
     assert_eq!(res.root_cause().to_string(), "Invalid FeeInfo params");
 }
 
-
 #[test]
 fn update_config() {
     let mut app = mock_app();
@@ -288,8 +289,6 @@ fn update_config() {
     );
 }
 
-
-
 #[test]
 fn test_add_to_registery() {
     let mut app = mock_app();
@@ -333,94 +332,99 @@ fn test_add_to_registery() {
         )
         .unwrap();
 
-
-    let msg = QueryMsg::QueryRigistery { pool_type: PoolType::Xyk {}  };
-    let registery_res: PoolConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
+    let msg = QueryMsg::QueryRigistery {
+        pool_type: PoolType::Xyk {},
+    };
+    let registery_res: PoolConfigResponse =
+        app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
     assert_eq!(xyk_pool_code_id, registery_res.code_id);
     assert_eq!(PoolType::Xyk {}, registery_res.pool_type);
     assert_eq!(pool_configs[0].fee_info, registery_res.fee_info);
     assert_eq!(pool_configs[0].is_disabled, registery_res.is_disabled);
-    assert_eq!(pool_configs[0].is_generator_disabled, registery_res.is_generator_disabled);
-
+    assert_eq!(
+        pool_configs[0].is_generator_disabled,
+        registery_res.is_generator_disabled
+    );
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistery {
         new_pool_config: PoolConfig {
-                    code_id: xyk_pool_code_id,
-                    pool_type: PoolType::Xyk {},
-                    fee_info: FeeInfo {
-                        total_fee_bps: 10_0u16,
-                        protocol_fee_percent: 49u16,
-                        dev_fee_percent: 15u16,
-                        developer_addr: None,
-                    },
-                    is_disabled: false,
-                    is_generator_disabled: false,
-                },
+            code_id: xyk_pool_code_id,
+            pool_type: PoolType::Xyk {},
+            fee_info: FeeInfo {
+                total_fee_bps: 10_0u16,
+                protocol_fee_percent: 49u16,
+                dev_fee_percent: 15u16,
+                developer_addr: None,
+            },
+            is_disabled: false,
+            is_generator_disabled: false,
+        },
     };
 
-    let err_res = app.execute_contract(
-        Addr::unchecked("not_owner".to_string().clone()),
-        vault_instance.clone(),
-        &msg,
-        &[],
-    )
-    .unwrap_err();
+    let err_res = app
+        .execute_contract(
+            Addr::unchecked("not_owner".to_string().clone()),
+            vault_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap_err();
     assert_eq!(err_res.root_cause().to_string(), "Unauthorized");
 
-    let err_res = app.execute_contract(
-        Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        &msg,
-        &[],
-    )
-    .unwrap_err();
+    let err_res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap_err();
     assert_eq!(err_res.root_cause().to_string(), "Pool Type already exists");
-
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistery {
         new_pool_config: PoolConfig {
-                    code_id: xyk_pool_code_id,
-                    pool_type: PoolType::Stable2Pool {},
-                    fee_info: FeeInfo {
-                        total_fee_bps: 10_001u16,
-                        protocol_fee_percent: 49u16,
-                        dev_fee_percent: 15u16,
-                        developer_addr: None,
-                    },
-                    is_disabled: false,
-                    is_generator_disabled: false,
-                },
+            code_id: xyk_pool_code_id,
+            pool_type: PoolType::Stable2Pool {},
+            fee_info: FeeInfo {
+                total_fee_bps: 10_001u16,
+                protocol_fee_percent: 49u16,
+                dev_fee_percent: 15u16,
+                developer_addr: None,
+            },
+            is_disabled: false,
+            is_generator_disabled: false,
+        },
     };
 
-    let err_res = app.execute_contract(
-        Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        &msg,
-        &[],
-    )
-    .unwrap_err();
+    let err_res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap_err();
     assert_eq!(err_res.root_cause().to_string(), "Invalid FeeInfo params");
-
 
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let stable_pool_code_id = 2u64;
     let msg = ExecuteMsg::AddToRegistery {
         new_pool_config: PoolConfig {
-                    code_id: stable_pool_code_id,
-                    pool_type: PoolType::Stable2Pool {},
-                    fee_info: FeeInfo {
-                        total_fee_bps: 1_001u16,
-                        protocol_fee_percent: 49u16,
-                        dev_fee_percent: 15u16,
-                        developer_addr: None,
-                    },
-                    is_disabled: false,
-                    is_generator_disabled: false,
-                },
+            code_id: stable_pool_code_id,
+            pool_type: PoolType::Stable2Pool {},
+            fee_info: FeeInfo {
+                total_fee_bps: 1_001u16,
+                protocol_fee_percent: 49u16,
+                dev_fee_percent: 15u16,
+                developer_addr: None,
+            },
+            is_disabled: false,
+            is_generator_disabled: false,
+        },
     };
 
     app.execute_contract(
@@ -431,24 +435,25 @@ fn test_add_to_registery() {
     )
     .unwrap();
 
-
-    let msg = QueryMsg::QueryRigistery { pool_type: PoolType::Stable2Pool {}  };
-    let registery_res: PoolConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
+    let msg = QueryMsg::QueryRigistery {
+        pool_type: PoolType::Stable2Pool {},
+    };
+    let registery_res: PoolConfigResponse =
+        app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
     assert_eq!(stable_pool_code_id, registery_res.code_id);
     assert_eq!(PoolType::Stable2Pool {}, registery_res.pool_type);
-    assert_eq!(FeeInfo {
-        total_fee_bps: 1_001u16,
-        protocol_fee_percent: 49u16,
-        dev_fee_percent: 15u16,
-        developer_addr: None,
-    }, registery_res.fee_info);
-    assert_eq!( false, registery_res.is_disabled);
-    assert_eq!( false, registery_res.is_generator_disabled);
-
+    assert_eq!(
+        FeeInfo {
+            total_fee_bps: 1_001u16,
+            protocol_fee_percent: 49u16,
+            dev_fee_percent: 15u16,
+            developer_addr: None,
+        },
+        registery_res.fee_info
+    );
+    assert_eq!(false, registery_res.is_disabled);
+    assert_eq!(false, registery_res.is_generator_disabled);
 }
-
-
-
 
 #[test]
 fn test_create_pool_instance() {
@@ -565,10 +570,6 @@ fn test_create_pool_instance() {
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
     assert_eq!(None, pool_res.developer_addr);
 }
-
-
-
-
 
 #[test]
 fn test_update_owner() {

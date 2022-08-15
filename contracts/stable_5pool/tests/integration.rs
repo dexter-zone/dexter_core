@@ -6,7 +6,8 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, ExecuteMsg, FeeResponse, QueryMsg, ResponseType, SwapResponse, FeeStructs
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, ExecuteMsg, FeeResponse, FeeStructs,
+    QueryMsg, ResponseType, SwapResponse,
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -78,7 +79,7 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-/// Initialize a new vault and a Stable-5-Pool with the given assets - Tests the following: 
+/// Initialize a new vault and a Stable-5-Pool with the given assets - Tests the following:
 /// Vault::ExecuteMsg::{ Config, PoolId, FeeParams}
 /// Pool::QueryMsg::{ CreatePoolInstance}
 fn instantiate_contracts_instance(
@@ -297,8 +298,6 @@ fn instantiate_contracts_instance(
         current_block.time.seconds() as u128,
     );
 }
-
-
 
 /// Tests Pool::ExecuteMsg::UpdateConfig for stableswap Pool which supports [`StartChangingAmp`] and [`StopChangingAmp`] messages
 #[test]
@@ -558,12 +557,6 @@ fn test_update_config() {
     assert_eq!(params.amp, 20u64);
 }
 
-
-
-
-
-
-
 /// Tests the following -
 /// Pool::QueryMsg::OnJoinPool for StablePool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::JoinPool - Token transfer from user to vault and LP token minting to user are processed as expected and Balances are updated correctly
@@ -631,7 +624,6 @@ fn test_query_on_join_pool() {
     assert_eq!(empty_assets, join_pool_query_res.provided_assets);
     assert_eq!(None, join_pool_query_res.fee);
 
-
     //// -----x----- Check #2 :: Success ::: Liquidity being provided when pool is empty -----x----- ////
     let assets_msg = vec![
         Asset {
@@ -665,8 +657,8 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-        assert_eq!(None, join_pool_query_res.fee);
-        assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
+    assert_eq!(None, join_pool_query_res.fee);
+    assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(3000u128), join_pool_query_res.new_shares);
     // Returned assets are in sorted order
     assert_eq!(
@@ -1181,7 +1173,6 @@ fn test_query_on_join_pool() {
     // );
 }
 
-
 /// Tests the following -
 /// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
@@ -1571,7 +1562,6 @@ fn test_on_exit_pool() {
     // assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
-
 /// Tests the following -
 /// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
@@ -1767,7 +1757,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );  
+    );
 
     // // SwapType:: axlUSD --> token0 ::: GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1810,7 +1800,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );  
+    );
 
     // SwapType:: axlUSD --> token1 ::: GiveIn {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1853,7 +1843,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );  
+    );
 
     // // SwapType:: axlUSD --> token1 ::: GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1896,7 +1886,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );  
+    );
 
     // SwapType:: token1 --> axlUSD  ::: GiveIn {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1939,7 +1929,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );  
+    );
 
     // SwapType:: token1 --> axlUSD  ::: GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -1982,7 +1972,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );         
+    );
 
     // SwapType:: token1 --> token0  ::: GiveIn {},
     let swap_offer_asset_res: SwapResponse = app
@@ -2025,8 +2015,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(29u128)
-    );      
-
+    );
 
     // SwapType:: token1 --> token0  ::: GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -2069,8 +2058,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
-    );    
-
+    );
 
     //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
     // SwapType::GiveIn {},
@@ -2111,11 +2099,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee.clone(),
-        None
-    );
-
+    assert_eq!(swap_offer_asset_res.fee.clone(), None);
 
     // // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -2155,11 +2139,7 @@ fn test_swap() {
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(
-        swap_offer_asset_res.fee.clone(),
-        None
-    );
-
+    assert_eq!(swap_offer_asset_res.fee.clone(), None);
 
     //// -----x----- Check #3 :: EXECUTE Success :::  -----x----- ////
 
@@ -2301,4 +2281,3 @@ fn test_swap() {
         .unwrap();
     assert_eq!(Uint128::from(11030u128), vault_bal_res.balance);
 }
-

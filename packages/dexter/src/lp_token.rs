@@ -1,11 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::helper::{is_valid_name, is_valid_symbol};
 use cosmwasm_std::{StdError, StdResult, Uint128};
 use cw20::{Cw20Coin, Logo, MinterResponse};
-use crate::helper::{is_valid_name, is_valid_symbol};
-
-
 
 /// ## Description -  This structure describes the basic settings for creating a token contract.
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]

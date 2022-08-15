@@ -13,6 +13,9 @@ pub enum ContractError {
     #[error("Dex token already set")]
     DexTokenAlreadySet {},
 
+    #[error("Generator pool doesn't exist")]
+    PoolDoesntExist {},
+
     #[error("Vesting contract already set")]
     VestingContractAlreadySet {},
 
