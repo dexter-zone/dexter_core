@@ -5,7 +5,7 @@ import {
   setupWebKeplr,
   CosmWasmClient,
 } from "cosmwasm";
-import { coins } from "@cosmjs/stargate";
+import { coins, Coin } from "@cosmjs/stargate";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 
 // ----------- PERSISTENCE END-POINTS -------------
@@ -20,6 +20,18 @@ const mnemonic =
   "rifle same bitter control garage duck grab spare mountain doctor rubber cook";
 
 async function Demo() {
+  const val1 = await PersistenceClient.init(
+    "flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer",
+    {
+      rpc: rpcEndpoint,
+      chainId: "test-core-1",
+      gasPrices: { denom: "", amount: "0" },
+      gasAdjustment: "1.5",
+    }
+  );
+  const [val1Account] = await val1.wallet.getAccounts();
+  const val1Address = val1Account.address;
+  console.log(val1Address);
   // const config = {
   //   chainId: "test-core-1",
   //   rpcEndpoint: rpcEndpoint,
@@ -39,9 +51,9 @@ async function Demo() {
   // const q_config = await client.queryContractSmart(contractAddr, {
   //   config: {},
   // });
-  const alice = await PersistenceClient.init(
-    "obtain door word season wealth inspire tobacco shallow thumb tip walk forum someone verb pistol bright mutual nest fog valley tiny section sauce typical"
-  ); //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
+  // const alice = await PersistenceClient.init(
+  //   "obtain door word season wealth inspire tobacco shallow thumb tip walk forum someone verb pistol bright mutual nest fog valley tiny section sauce typical"
+  // ); //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
   // const codes = await alice.query.cosmwasm.wasm.v1.codes({});
   // console.log(codes);
   // const [account] = await alice.wallet.getAccounts();
