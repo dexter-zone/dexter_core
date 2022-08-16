@@ -3,11 +3,11 @@ use cosmwasm_std::{attr, from_binary, to_binary, Addr, Coin, Decimal, Timestamp,
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
-use dexter::asset::{Asset, AssetInfo};
+use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
     AfterExitResponse, AfterJoinResponse, ConfigResponse, ExecuteMsg, FeeResponse, FeeStructs,
-    QueryMsg, ResponseType, SwapResponse,
+    QueryMsg, ResponseType, SwapResponse, CumulativePriceResponse, CumulativePricesResponse
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -864,6 +864,21 @@ fn test_query_on_join_pool() {
     //     )
     //     .unwrap();
 
+    // assert_eq!(Uint128::from(3000u128), pool_twap_res_t2.total_share);
+    // assert_eq!(
+    //     AssetExchangeRate {
+    //         offer_info: AssetInfo::Token {
+    //             contract_addr: token_instance0.clone(),
+    //         },
+    //         ask_info: AssetInfo::NativeToken {
+    //             denom: "axlusd".to_string(),
+    //         },
+    //         rate: Uint128::from(1000000000000000u128),
+    //     },
+    //     pool_twap_res_t2.exchange_info
+    // );
+
+
     // assert_eq!(Uint128::from(3000u128), pool_twap_res.total_share);
     // assert_eq!(
     //     vec![
@@ -939,19 +954,6 @@ fn test_query_on_join_pool() {
     //     pool_twap_res_t1.exchange_info
     // );
 
-    // assert_eq!(Uint128::from(1000u128), pool_twap_res_t2.total_share);
-    // assert_eq!(
-    //     AssetExchangeRate {
-    //         offer_info: AssetInfo::Token {
-    //             contract_addr: token_instance.clone(),
-    //         },
-    //         ask_info: AssetInfo::NativeToken {
-    //             denom: "axlusd".to_string(),
-    //         },
-    //         rate: Uint128::from(1000000000000000u128),
-    //     },
-    //     pool_twap_res_t2.exchange_info
-    // );
     // assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 
     // //// -----x----- Check #3.3 :: Success -----x----- ////

@@ -959,7 +959,7 @@ pub fn claim_rewards(
 
     let mut send_rewards_msg: Vec<WasmMsg> = vec![];
     for lp_token in &lp_tokens {
-        let mut pool = POOL_INFO.load(deps.storage, lp_token)?;
+        let  pool = POOL_INFO.load(deps.storage, lp_token)?;
         let user = USER_INFO.load(deps.storage, (lp_token, &account))?;
 
         // ExecuteMsg to send rewards to the user
@@ -967,7 +967,7 @@ pub fn claim_rewards(
 
         // Update user's amount
         let amount = user.amount;
-        let mut user = update_user_balance(user, &pool, amount)?;
+        let user = update_user_balance(user, &pool, amount)?;
 
         // Update state
         USER_INFO.save(deps.storage, (lp_token, &account), &user)?;

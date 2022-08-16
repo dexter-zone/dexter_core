@@ -10,3 +10,4 @@ Cargo.lock
 **/*.rs.bk
 
 scripts/node_modules
+scripts/persistenceJS
