@@ -1,12 +1,15 @@
-import { PersistenceClient } from "persistenceonejs";
+import { PersistenceClient, cosmwasm } from "persistenceonejs";
 import {
   SigningCosmWasmClient,
   Secp256k1HdWallet,
   setupWebKeplr,
   CosmWasmClient,
 } from "cosmwasm";
-import { coins, Coin } from "@cosmjs/stargate";
-import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
+// import { coins, Coin } from "@cosmjs/stargate";
+// import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
+import * as Pako from "pako";
+import * as fs from "fs";
+import { contractProposal } from "./submitMsgProposal.js";
 
 // ----------- PERSISTENCE END-POINTS -------------
 // testnet: https://rpc.testnet.persistence.one:443     :: test-core-1
@@ -16,22 +19,52 @@ import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 const rpcEndpoint = "https://rpc.testnet.persistence.one:443";
 
 // Using a random generated mnemonic
-const mnemonic =
-  "rifle same bitter control garage duck grab spare mountain doctor rubber cook";
+const mnemonic = "";
 
 async function Demo() {
-  const val1 = await PersistenceClient.init(
-    "flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer",
-    {
-      rpc: rpcEndpoint,
-      chainId: "test-core-1",
-      gasPrices: { denom: "", amount: "0" },
-      gasAdjustment: "1.5",
-    }
-  );
-  const [val1Account] = await val1.wallet.getAccounts();
-  const val1Address = val1Account.address;
-  console.log(val1Address);
+  // Create a new persistence client
+  const client = await PersistenceClient.init(mnemonic, {
+    rpc: rpcEndpoint,
+    chainId: "test-core-1",
+    gasPrices: {
+      denom: "uxprt",
+      amount: "2000000",
+    },
+    gasAdjustment: "1.5",
+  });
+  const [Account] = await client.wallet.getAccounts();
+  const wallet_address = Account.address;
+  console.log(wallet_address);
+
+  try {
+    console.log("Submitting Proposal to deploy Dexter Vault Contract ...");
+    const wasm = fs.readFileSync("../artifacts/dexter_vault.wasm");
+    //wasm proposl of type StoreCodeProposal
+    const wasmStoreProposal = {
+      typeUrl: "/cosmwasm.wasm.v1.StoreCodeProposal",
+      value: Uint8Array.from(
+        cosmwasm.wasm.v1.StoreCodeProposal.encode(
+          cosmwasm.wasm.v1.StoreCodeProposal.fromPartial({
+            title: "Dexter: Vault",
+            description: "Add wasm code for dexter Vault contract.",
+            runAs: wallet_address,
+            wasmByteCode: Pako.gzip(wasm, { level: 9 }),
+            instantiatePermission: {
+              permission: cosmwasm.wasm.v1.accessTypeFromJSON(1), //'cosmjs-types/cosmwasm/wasm/v1beta1/types'
+            },
+          })
+        ).finish()
+      ),
+    };
+    const res = await contractProposal(client, wasmStoreProposal);
+    console.log(res);
+    // let proposalId = res[0].events[3].attributes[1].value; //js formating
+    // let json = res;
+    // console.log("proposalId => ", proposalId);
+  } catch (e) {
+    console.log("Proposal Error has occoured => ", e);
+  }
+
   // const config = {
   //   chainId: "test-core-1",
   //   rpcEndpoint: rpcEndpoint,
