@@ -1,15 +1,15 @@
 import { PersistenceClient, cosmwasm } from "persistenceonejs";
-import {
-  SigningCosmWasmClient,
-  Secp256k1HdWallet,
-  setupWebKeplr,
-  CosmWasmClient,
-} from "cosmwasm";
+// import {
+//   SigningCosmWasmClient,
+//   Secp256k1HdWallet,
+//   setupWebKeplr,
+//   CosmWasmClient,
+// } from "cosmwasm";
 // import { coins, Coin } from "@cosmjs/stargate";
 // import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import * as Pako from "pako";
 import * as fs from "fs";
-import { contractProposal } from "./submitMsgProposal.js";
+import { InitiateContractProposal } from "./helpers/helpers.js";
 
 // ----------- PERSISTENCE END-POINTS -------------
 // testnet: https://rpc.testnet.persistence.one:443     :: test-core-1
@@ -34,35 +34,63 @@ async function Demo() {
   });
   const [Account] = await client.wallet.getAccounts();
   const wallet_address = Account.address;
-  console.log(wallet_address);
+  console.log(` WALLET ADDRESS =  ${wallet_address}`);
 
-  try {
-    console.log("Submitting Proposal to deploy Dexter Vault Contract ...");
-    const wasm = fs.readFileSync("../artifacts/dexter_vault.wasm");
-    //wasm proposl of type StoreCodeProposal
-    const wasmStoreProposal = {
-      typeUrl: "/cosmwasm.wasm.v1.StoreCodeProposal",
-      value: Uint8Array.from(
-        cosmwasm.wasm.v1.StoreCodeProposal.encode(
-          cosmwasm.wasm.v1.StoreCodeProposal.fromPartial({
-            title: "Dexter: Vault",
-            description: "Add wasm code for dexter Vault contract.",
-            runAs: wallet_address,
-            wasmByteCode: Pako.gzip(wasm, { level: 9 }),
-            instantiatePermission: {
-              permission: cosmwasm.wasm.v1.accessTypeFromJSON(1), //'cosmjs-types/cosmwasm/wasm/v1beta1/types'
-            },
-          })
-        ).finish()
-      ),
-    };
-    const res = await contractProposal(client, wasmStoreProposal);
-    console.log(res);
-    // let proposalId = res[0].events[3].attributes[1].value; //js formating
-    // let json = res;
-    // console.log("proposalId => ", proposalId);
-  } catch (e) {
-    console.log("Proposal Error has occoured => ", e);
+  // -----------x-------------x-------------x-----
+  // ----------- CONTRACT DEPLOYMENT -------------
+  // -----------x-------------x-------------x-----
+
+  // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
+  let contracts = [
+    { name: "Dexter Vault", path: "../artifacts/dexter_vault.wasm" },
+    { name: "Dexter Keeper", path: "../artifacts/dexter_keeper.wasm" },
+    { name: "LP Token", path: "../artifacts/lp_token.wasm" },
+    { name: "XYK Pool", path: "../artifacts/xyk_pool.wasm" },
+    { name: "Weighted Pool", path: "../artifacts/weighted_pool.wasm" },
+    { name: "Stableswap Pool", path: "../artifacts/stableswap_pool.wasm" },
+    { name: "Dexter Vesting", path: "../artifacts/dexter_vesting.wasm" },
+    { name: "Dexter Generator", path: "../artifacts/dexter_generator.wasm" },
+    {
+      name: "Dexter Generator : Proxy",
+      path: "../artifacts/dexter_generator_proxy.wasm",
+    },
+    { name: "Staking contract", path: "../artifacts/anchor_staking.wasm" },
+  ];
+
+  // LOOP -::- CREATE PROTOCOLS FOR EACH CONTRACT ON-CHAIN
+  for (let i = 0; i < contracts.length; i++) {
+    let contract_name = contracts[i]["name"];
+    let contract_path = contracts[i]["path"];
+
+    try {
+      console.log(
+        `\nSubmitting Proposal to deploy ${contract_name} Contract ...`
+      );
+      const wasm = fs.readFileSync(contract_path);
+      //wasm proposl of type StoreCodeProposal
+      const wasmStoreProposal = {
+        typeUrl: "/cosmwasm.wasm.v1.StoreCodeProposal",
+        value: Uint8Array.from(
+          cosmwasm.wasm.v1.StoreCodeProposal.encode(
+            cosmwasm.wasm.v1.StoreCodeProposal.fromPartial({
+              title: contract_name,
+              description: `Add wasm code for ${contract_name} contract.`,
+              runAs: wallet_address,
+              wasmByteCode: Pako.gzip(wasm, { level: 9 }),
+              instantiatePermission: {
+                permission: cosmwasm.wasm.v1.accessTypeFromJSON(1),
+              },
+            })
+          ).finish()
+        ),
+      };
+      const res = await InitiateContractProposal(client, wasmStoreProposal);
+      let proposalId = res[0].events[3].attributes[1].value;
+      // const json = JSON.parse(res.rawLog?);
+      // console.log(res);
+    } catch (e) {
+      console.log("Proposal Error has occoured => ", e);
+    }
   }
 
   // const config = {
