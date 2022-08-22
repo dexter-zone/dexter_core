@@ -4,14 +4,18 @@ import { Any } from "cosmjs-types/google/protobuf/any.js";
 // import { Any } from "cosmjs-types/google/protobuf/any";
 import * as Long from "long";
 
-/// SUBMIT PROPOSAL FOR DEPLOYMENT OF A WASM CONTRACT ON PERSISTENCE ONE NETWORK
-/// 512 XPRT are required as deposit to deploy the contract
-export async function InitiateContractProposal(
+// --------x----- Governance Module Helpers -----x-----------
+// --------x-------------x-------------x----- -----x---------
+
+/// GOV MODULE -- SUBMIT PROPOSAL ExecuteMssg
+/// Network : 512 XPRT are required as deposit to deploy the contract
+/// Tokens transferred - initialDeposit amount is transferred from user a/c to the module address
+export async function Gov_MsgSubmitProposal(
   client: PersistenceClient,
   proposal: { typeUrl?: string; value?: Uint8Array }
 ) {
   const [account] = await client.wallet.getAccounts();
-  //submit proposal
+  //submit proposal Msg
   const proposalMsg = {
     typeUrl: "/cosmos.gov.v1beta1.MsgSubmitProposal",
     value: {
@@ -20,18 +24,85 @@ export async function InitiateContractProposal(
       proposer: account.address,
     },
   };
+  // sign & broadcast the transaction
   const res = await client.core.signAndBroadcast(
     account.address,
     [proposalMsg],
     { amount: coins(2_000_000, "uxprt"), gas: "20000000" },
     "Proposal Submitted!"
   );
+  // Handle the response
   if (res.code === 0) {
     const json = JSON.parse(res.rawLog);
     console.log("Transactions executed successfully => ", res.transactionHash);
     let proposalId = json[0].events[3].attributes[1].value;
     console.log(`Proposal Id is = ${proposalId} `);
     return json; //return json response, for proposalID use json[0].events[3].attributes[1].value
+  } else {
+    return res.rawLog;
+  }
+}
+
+/// GOV MODULE -- Deposit with Propsoal - ExecuteMssg
+export async function Gov_MsgDeposit(
+  client: PersistenceClient,
+  proposal_id: number,
+  amount: number,
+  denom: string
+) {
+  const [account] = await client.wallet.getAccounts();
+  // Deposit with Propsoal
+  const proposalMsg = {
+    typeUrl: "/cosmos.gov.v1beta1.MsgDeposit",
+    value: {
+      proposal_id: Long.fromNumber(proposal_id),
+      depositor: account.address,
+      amount: coins(amount, denom),
+    },
+  };
+  // sign & broadcast the transaction
+  const res = await client.core.signAndBroadcast(
+    account.address,
+    [proposalMsg],
+    { amount: coins(2_000_000, denom), gas: "20000000" },
+    "Proposal Submitted!"
+  );
+  // Handle the response
+  if (res.code === 0) {
+    const json = JSON.parse(res.rawLog);
+    console.log("Transactions executed successfully => ", res.transactionHash);
+    let proposalId = json[0].events[3].attributes[1].value;
+    return json;
+  } else {
+    return res.rawLog;
+  }
+}
+
+/// GOV MODULE -- VOTE on Propsoal - ExecuteMssg
+export async function voteOnProposal(
+  client: PersistenceClient,
+  proposalid: number,
+  vote: number
+) {
+  const [account] = await client.wallet.getAccounts();
+  // Vote on Propsoal
+  const sendMsg = {
+    typeUrl: "/cosmos.gov.v1beta1.MsgVote",
+    value: {
+      proposalId: Long.fromNumber(proposalid),
+      voter: account.address,
+      option: cosmos.gov.v1beta1.voteOptionFromJSON(vote),
+    },
+  };
+  // sign & broadcast the transaction
+  const res = await client.core.signAndBroadcast(
+    account.address,
+    [sendMsg],
+    { amount: coins(10_000_000, "stake"), gas: "2000000" },
+    "Vote Yes!"
+  );
+  if (res.code === 0) {
+    return res;
   } else {
     return res.rawLog;
   }
@@ -61,34 +132,6 @@ export async function Send(
     "test send"
   );
   console.log(res);
-}
-
-/// VOTE ON PROPOSAL
-export async function voteOnProposal(
-  client: PersistenceClient,
-  proposalid: number,
-  vote: number
-) {
-  const [account] = await client.wallet.getAccounts();
-  const sendMsg = {
-    typeUrl: "/cosmos.gov.v1beta1.MsgVote",
-    value: {
-      proposalId: Long.fromNumber(proposalid),
-      voter: account.address,
-      option: cosmos.gov.v1beta1.voteOptionFromJSON(vote),
-    },
-  };
-  const res = await client.core.signAndBroadcast(
-    account.address,
-    [sendMsg],
-    { amount: coins(10_000_000, "stake"), gas: "2000000" },
-    "Vote Yes!"
-  );
-  if (res.code === 0) {
-    return res;
-  } else {
-    return res.rawLog;
-  }
 }
 
 export async function MultiSend(
