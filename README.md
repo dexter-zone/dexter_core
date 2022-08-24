@@ -89,11 +89,3 @@ docker run --rm -v "$(pwd)":/code \
 | `Dexter Generator : Proxy` | 14      | -                                                                      |
 | `Example Staking contract` | 15      | -                                                                      |
 | `Stable-5-Swap pool`       | 16      | -                                                                      |
-
-code_id = 9 hex = 0da5bfdcf360057b9cfd0a37c3a149310b03c6afe0c219bc931169948defcf4e--> XYK Pool
-code_id = 10 hex = 19cbeb7d8a7eb3678982c92e7792276b9a4ecc45cba3ba0a412014508e11a0ee--> Weighted Pool
-code_id = 11 hex = be5602ebf73c54f781a4d9d001fff127231c0d8444d22e2b5bb3b0d2f8e9a79b--> Stableswap Pool
-code_id = 12 hex = 9fed0b82283c3881c242cc51d80c1d9b73fb8fd038da726d6f850de2736a253f--> Dexter Vesting
-code_id = 13 hex = d83433369379a5cec32b7ea4de7574222964ddec9f70d64c7775acbb1e008747--> Dexter Generator
-code_id = 14 hex = 9764f035f5daa0215c7fcbcf4774403732c432077cddb34566156d17ff9dd8e2--> Dexter Generator : Proxy
-code_id = 15 hex = ee159a69576fed23ca7521ecbc7919206be1d619c57da37d846e061b2580614d--> Example Staking contract
