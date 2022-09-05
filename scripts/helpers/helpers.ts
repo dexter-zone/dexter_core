@@ -1,13 +1,97 @@
-import { PersistenceClient, cosmos } from "persistenceonejs";
+import { PersistenceClient, cosmos, cosmwasm } from "persistenceonejs";
 import { coins, Coin } from "@cosmjs/stargate";
 import { Any } from "cosmjs-types/google/protobuf/any.js";
 // import { Any } from "cosmjs-types/google/protobuf/any";
 import * as Long from "long";
+import { readFileSync, writeFileSync } from "fs";
+import path from "path";
+
+export const ARTIFACTS_PATH = "../artifacts";
+
+// Reads json containing contract addresses located in /artifacts folder. Naming convention : bombay-12 / columbus-5
+export function readArtifact(name: string = "artifact") {
+  try {
+    const data = readFileSync(
+      path.join(ARTIFACTS_PATH, `${name}.json`),
+      "utf8"
+    );
+    return JSON.parse(data);
+  } catch (e) {
+    return {};
+  }
+}
+
+export function writeArtifact(data: object, name: string = "artifact") {
+  writeFileSync(
+    path.join(ARTIFACTS_PATH, `${name}.json`),
+    JSON.stringify(data, null, 2)
+  );
+}
+
+// --------x-------------x-------------x----- -----x---------
+// --------x----- QUERY :: Helpers Functions-----x-----------
+// --------x-------------x-------------x----- -----x---------
+
+// Return list of codeIds with codeInfos having datahash for the contract
+export async function getCodeIdsListWithPrintedHexHashes(
+  client: PersistenceClient
+) {
+  let codes = await client.query.cosmwasm.wasm.v1.codes({});
+  let codeInfos = codes["codeInfos"];
+  let pagination = codes["pagination"];
+
+  for (let i = 0; i < codeInfos.length; i++) {
+    let hex = Buffer.from(codeInfos[i]["dataHash"]).toString("hex");
+    let code_id = codeInfos[i]["codeId"];
+    console.log(` code_id = ${code_id} hex = ${hex}`);
+  }
+  return codes;
+}
+
+// Return address of instantiated contract instance address for a given codeId
+export async function getContractsByCodeId(
+  client: PersistenceClient,
+  codeId: number
+) {
+  let codes = await client.query.cosmwasm.wasm.v1.contractsByCode(
+    cosmwasm.wasm.v1.QueryContractsByCodeRequest.fromPartial({ codeId: 8 })
+  );
+  return codes;
+}
+
+// --------x-------------x-------------x----- -----x---------
+// --------x----- EXECUTE CONTRACT :: Helpers Functions-----x-----------
+// --------x-------------x-------------x----- -----x---------
+
+export async function executeContract(
+  client: PersistenceClient,
+  wallet_address: string,
+  contract_address: string,
+  msg: any,
+  memo?: string,
+  funds?: Coin[] | undefined
+) {
+  try {
+    const res = await client.wasm.execute(
+      wallet_address,
+      contract_address,
+      msg,
+      { amount: coins(2_000_000, "uxprt"), gas: "200000" },
+      memo,
+      funds
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Proposal Error has occoured => ", e);
+  }
+}
 
 // --------x----- Governance Module Helpers -----x-----------
 // --------x-------------x-------------x----- -----x---------
 
-/// GOV MODULE -- SUBMIT PROPOSAL ExecuteMssg
+/// GOV MODULE -- SUBMIT PROPOSAL ExecuteMsg
 /// Network : 512 XPRT are required as deposit to deploy the contract
 /// Tokens transferred - initialDeposit amount is transferred from user a/c to the module address
 export async function Gov_MsgSubmitProposal(
@@ -43,7 +127,7 @@ export async function Gov_MsgSubmitProposal(
   }
 }
 
-/// GOV MODULE -- Deposit with Propsoal - ExecuteMssg
+/// GOV MODULE -- Deposit with Propsoal - ExecuteMsg
 export async function Gov_MsgDeposit(
   client: PersistenceClient,
   proposal_id: number,
@@ -78,7 +162,7 @@ export async function Gov_MsgDeposit(
   }
 }
 
-/// GOV MODULE -- VOTE on Propsoal - ExecuteMssg
+/// GOV MODULE -- VOTE on Propsoal - ExecuteMsg
 export async function voteOnProposal(
   client: PersistenceClient,
   proposalid: number,
