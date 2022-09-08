@@ -133,11 +133,6 @@ pub fn execute(
             lp_token_symbol,
             init_params,
         ),
-        // ExecuteMsg::InitializeLpTokenForPoolInstance {
-        //     pool_id,
-        //     lp_token_name,
-        //     lp_token_symbol,
-        // } => execute_initialize_lp_token(deps, env, pool_id, lp_token_name, lp_token_symbol),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
