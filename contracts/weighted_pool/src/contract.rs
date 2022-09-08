@@ -80,11 +80,12 @@ pub fn instantiate(
     }
 
     // Calculate total weight and the weight share of each asset in the pool and store it in the storage
-    let total_weight = weights.iter().map(|(_, weight)| *weight).sum::<u128>();
+    let total_weight = weights.iter().map(|w| w.amount).sum::<Uint128>();
+
     let mut asset_weights: Vec<(AssetInfo, Decimal)> = vec![];
-    for (asset_info, asset_weight) in weights.iter() {
-        let normalized_weight = get_normalized_weight(*asset_weight, total_weight);
-        asset_weights.push((asset_info.clone(), normalized_weight));
+    for asset in weights.iter() {
+        let normalized_weight = get_normalized_weight(asset.amount.clone(), total_weight);
+        asset_weights.push((asset.info.clone(), normalized_weight));
     }
     store_weights(deps.branch(), asset_weights)?;
 

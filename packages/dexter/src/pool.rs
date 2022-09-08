@@ -289,6 +289,6 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WeightedParams {
-    pub weights: Vec<(AssetInfo, u128)>,
+    pub weights: Vec<Asset>,
     pub exit_fee: Option<Decimal>,
 }

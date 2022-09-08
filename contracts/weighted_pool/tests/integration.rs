@@ -178,24 +178,24 @@ fn instantiate_contracts_instance(
     ];
 
     let asset_infos_with_weights = vec![
-        (
-            AssetInfo::NativeToken {
+        Asset {
+            info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
-            33u128,
-        ),
-        (
-            AssetInfo::Token {
+            amount: Uint128::from(33u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
-            33u128,
-        ),
-        (
-            AssetInfo::Token {
+            amount: Uint128::from(33u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
                 contract_addr: token_instance1.clone(),
             },
-            34u128,
-        ),
+            amount: Uint128::from(34u128),
+        },
     ];
 
     // Initialize WEIGHTED  Pool contract instance
@@ -217,8 +217,6 @@ fn instantiate_contracts_instance(
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "weighted"));
     let pool_res: PoolInfo = app
         .wrap()
         .query_wasm_smart(

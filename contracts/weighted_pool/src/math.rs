@@ -202,6 +202,6 @@ fn fee_ratio(normalized_weight: Decimal, swap_fee: Decimal) -> Decimal {
 /// ## Params
 /// * **weight** is the weight of the asset.
 /// * **total_weight** is the total weight of all assets.
-pub fn get_normalized_weight(weight: u128, total_weight: u128) -> Decimal {
+pub fn get_normalized_weight(weight: Uint128, total_weight: Uint128) -> Decimal {
     Decimal::from_ratio(weight, total_weight)
 }
