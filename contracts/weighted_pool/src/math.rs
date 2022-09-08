@@ -1,11 +1,10 @@
-use cosmwasm_std::{Addr, Decimal, Decimal256, DepsMut, StdResult, Storage, Uint128, Uint256};
-use std::{convert::TryFrom, str::FromStr};
+use cosmwasm_std::{Decimal, Decimal256, StdResult, Storage, Uint128, Uint256};
+use std::str::FromStr;
 
 use dexter::{
     approx_pow::pow_approx,
-    asset::{Asset, DecimalAsset},
+    asset::DecimalAsset,
     helper::{adjust_precision, decimal2decimal256},
-    U256,
 };
 
 use crate::state::WeightedAsset;

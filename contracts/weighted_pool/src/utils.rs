@@ -24,7 +24,7 @@ use crate::state::{get_precision, get_weight, MathConfig, Twap, WeightedAsset};
 /// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub(crate) fn compute_swap(
     storage: &dyn Storage,
-    env: &Env,
+    _env: &Env,
     offer_asset: &DecimalAsset,
     offer_pool: &DecimalAsset,
     offer_weight: Decimal,
@@ -69,7 +69,7 @@ pub(crate) fn compute_swap(
 /// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub(crate) fn compute_offer_amount(
     storage: &dyn Storage,
-    env: &Env,
+    _env: &Env,
     ask_asset: &DecimalAsset,
     ask_pool: &DecimalAsset,
     ask_weight: Decimal,

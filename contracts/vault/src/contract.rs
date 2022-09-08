@@ -14,7 +14,8 @@ use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo}
 use dexter::helper::{
     build_send_native_asset_msg, build_transfer_cw20_from_user_msg, build_transfer_cw20_token_msg,
     build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
-    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner,
+    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, is_valid_name,
+    is_valid_symbol, propose_new_owner,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
@@ -133,11 +134,6 @@ pub fn execute(
             lp_token_symbol,
             init_params,
         ),
-        // ExecuteMsg::InitializeLpTokenForPoolInstance {
-        //     pool_id,
-        //     lp_token_name,
-        //     lp_token_symbol,
-        // } => execute_initialize_lp_token(deps, env, pool_id, lp_token_name, lp_token_symbol),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -277,10 +273,10 @@ pub fn execute_update_config(
         }
     }
 
-    // // Update LP token code id
-    // if let Some(lp_token_code_id) = lp_token_code_id {
-    //     config.lp_token_code_id = lp_token_code_id;
-    // }
+    // Update LP token code id
+    if let Some(lp_token_code_id) = lp_token_code_id {
+        config.lp_token_code_id = lp_token_code_id;
+    }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attribute("action", "update_config"))
@@ -439,6 +435,13 @@ pub fn execute_create_pool_instance(
         });
     }
 
+    if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
+        return Err(ContractError::InvalidLpTokenName {});
+    }
+    if !lp_token_symbol.is_none() && !is_valid_symbol(&lp_token_symbol.as_ref().unwrap()) {
+        return Err(ContractError::InvalidLpTokenSymbol {});
+    }
+
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
@@ -480,9 +483,6 @@ pub fn execute_create_pool_instance(
                 fee_info: FeeStructs {
                     total_fee_bps: pool_config.fee_info.total_fee_bps,
                 },
-                lp_token_code_id: config.lp_token_code_id.unwrap(),
-                lp_token_name: lp_token_name.clone(),
-                lp_token_symbol: lp_token_symbol.clone(),
                 init_params,
             })?,
             funds: vec![],
@@ -503,7 +503,7 @@ pub fn execute_create_pool_instance(
         id: INSTANTIATE_LP_REPLY_ID,
         msg: WasmMsg::Instantiate {
             admin: None,
-            code_id: config.lp_token_code_id.unwrap(),
+            code_id: config.lp_token_code_id,
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,
@@ -1344,7 +1344,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     let resp = ConfigResponse {
         owner: config.owner,
-        lp_token_code_id: config.lp_token_code_id.unwrap(),
+        lp_token_code_id: config.lp_token_code_id,
         fee_collector: config.fee_collector,
         generator_address: config.generator_address,
     };

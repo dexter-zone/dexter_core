@@ -44,14 +44,11 @@ fn store_vault_code(app: &mut App) -> u64 {
 }
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            weighted_pool::contract::execute,
-            weighted_pool::contract::instantiate,
-            weighted_pool::contract::query,
-        )
-        .with_reply_empty(weighted_pool::contract::reply),
-    );
+    let pool_contract = Box::new(ContractWrapper::new_with_empty(
+        weighted_pool::contract::execute,
+        weighted_pool::contract::instantiate,
+        weighted_pool::contract::query,
+    ));
     app.store_code(pool_contract)
 }
 

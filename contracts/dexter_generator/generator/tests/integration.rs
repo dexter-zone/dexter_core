@@ -98,14 +98,11 @@ fn store_vault_code(app: &mut App) -> u64 {
 }
 
 fn store_xyk_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            xyk_pool::contract::execute,
-            xyk_pool::contract::instantiate,
-            xyk_pool::contract::query,
-        )
-        .with_reply_empty(xyk_pool::contract::reply),
-    );
+    let pool_contract = Box::new(ContractWrapper::new_with_empty(
+        xyk_pool::contract::execute,
+        xyk_pool::contract::instantiate,
+        xyk_pool::contract::query,
+    ));
     app.store_code(pool_contract)
 }
 

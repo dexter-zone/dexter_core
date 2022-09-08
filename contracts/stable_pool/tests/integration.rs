@@ -46,14 +46,11 @@ fn store_vault_code(app: &mut App) -> u64 {
 }
 
 fn store_stable_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            stableswap_pool::contract::execute,
-            stableswap_pool::contract::instantiate,
-            stableswap_pool::contract::query,
-        )
-        .with_reply_empty(stableswap_pool::contract::reply),
-    );
+    let pool_contract = Box::new(ContractWrapper::new_with_empty(
+        stableswap_pool::contract::execute,
+        stableswap_pool::contract::instantiate,
+        stableswap_pool::contract::query,
+    ));
     app.store_code(pool_contract)
 }
 

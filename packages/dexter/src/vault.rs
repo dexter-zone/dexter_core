@@ -15,11 +15,11 @@ pub const TWAP_PRECISION: u16 = 9u16;
 /// This enum describes the key for the different Pool types supported by Dexter
 /// ## Available pool types
 /// ```
-/// Xyk
-/// Stable2Pool
-/// Weighted
-/// Stable5Pool
-/// Custom(String::from("Custom"));
+//// Xyk
+//// Stable2Pool
+//// Weighted
+//// Stable5Pool
+//// Custom(String::from("Custom"));
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -56,8 +56,8 @@ impl Display for PoolType {
 /// This enum describes available Swap types.
 /// ## Available swap types
 /// ```
-/// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
-/// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
+//// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
+//// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -126,7 +126,7 @@ pub struct Config {
     /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
     /// The Contract ID that is used for instantiating LP tokens for new pools
-    pub lp_token_code_id: Option<u64>,
+    pub lp_token_code_id: u64,
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
@@ -213,7 +213,7 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
     pub pool_configs: Vec<PoolConfig>,
-    pub lp_token_code_id: Option<u64>,
+    pub lp_token_code_id: u64,
     pub fee_collector: Option<String>,
     pub generator_address: Option<String>,
 }
