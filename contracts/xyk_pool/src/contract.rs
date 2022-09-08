@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction,
+    entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction,
     MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
@@ -174,11 +174,41 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::SetLpToken { lp_token_addr } => set_lp_token(deps, env, info, lp_token_addr),
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
+}
+
+/// ## Description
+/// Admin Access by Vault :: Callable only by Dexter::Vault --> Sets LP token address once it is instiantiated.
+///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
+///
+/// ## Params
+/// * **lp_token_addr** is a field of type [`Addr`]. It is the address of the LP token.
+pub fn set_lp_token(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token_addr: Addr,
+) -> Result<Response, ContractError> {
+    // Get config
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // Acess Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Update state
+    config.lp_token_addr = Some(lp_token_addr);
+    CONFIG.save(deps.storage, &config)?;
+
+    let event = Event::new("dexter-pool::set-lp-token")
+        .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
+    Ok(Response::new().add_event(event))
 }
 
 /// ## Description

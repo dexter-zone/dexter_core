@@ -139,6 +139,8 @@ impl InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    /// ## Description - Set  updatable parameters related to Pool's configuration
+    SetLpToken { lp_token_addr: Addr },
     /// ## Description - Update updatable parameters related to Pool's configuration
     UpdateConfig { params: Option<Binary> },
     /// ## Description - Executable only by Dexter Vault.  Updates locally stored asset balances state for the pool and updates the TWAP.

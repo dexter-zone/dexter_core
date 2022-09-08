@@ -9,6 +9,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("InvalidSubMsgId")]
+    InvalidSubMsgId {},
+
     #[error("LP Token address not found")]
     LpTokenNotFound {},
 

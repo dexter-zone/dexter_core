@@ -126,7 +126,7 @@ pub struct Config {
     /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
     /// The Contract ID that is used for instantiating LP tokens for new pools
-    pub lp_token_code_id: u64,
+    pub lp_token_code_id: Option<u64>,
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
@@ -213,7 +213,7 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
     pub pool_configs: Vec<PoolConfig>,
-    pub lp_token_code_id: u64,
+    pub lp_token_code_id: Option<u64>,
     pub fee_collector: Option<String>,
     pub generator_address: Option<String>,
 }
@@ -251,6 +251,11 @@ pub enum ExecuteMsg {
         lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
+    // InitializeLpTokenForPoolInstance {
+    //     pool_id: Uint128,
+    //     lp_token_name: Option<String>,
+    //     lp_token_symbol: Option<String>,
+    // },
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {

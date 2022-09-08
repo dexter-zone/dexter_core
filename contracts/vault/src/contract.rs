@@ -12,13 +12,11 @@ use crate::state::{ACTIVE_POOLS, CONFIG, OWNERSHIP_PROPOSAL, REGISTERY, TMP_POOL
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 use dexter::helper::{
-    build_send_native_asset_msg, build_transfer_cw20_token_msg, claim_ownership,
-    drop_ownership_proposal, propose_new_owner,
+    build_send_native_asset_msg, build_transfer_cw20_from_user_msg, build_transfer_cw20_token_msg,
+    build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
+    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner,
 };
-use dexter::helper::{
-    build_transfer_cw20_from_user_msg, build_transfer_token_to_user_msg,
-    find_sent_native_token_balance,
-};
+use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg,
@@ -27,7 +25,7 @@ use dexter::vault::{
 };
 
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-vault";
@@ -35,6 +33,7 @@ const CONTRACT_NAME: &str = "dexter-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_POOL_REPLY_ID: u64 = 1;
+const INSTANTIATE_LP_REPLY_ID: u64 = 2;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -134,6 +133,11 @@ pub fn execute(
             lp_token_symbol,
             init_params,
         ),
+        // ExecuteMsg::InitializeLpTokenForPoolInstance {
+        //     pool_id,
+        //     lp_token_name,
+        //     lp_token_symbol,
+        // } => execute_initialize_lp_token(deps, env, pool_id, lp_token_name, lp_token_symbol),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -273,10 +277,10 @@ pub fn execute_update_config(
         }
     }
 
-    // Update LP token code id
-    if let Some(lp_token_code_id) = lp_token_code_id {
-        config.lp_token_code_id = lp_token_code_id;
-    }
+    // // Update LP token code id
+    // if let Some(lp_token_code_id) = lp_token_code_id {
+    //     config.lp_token_code_id = lp_token_code_id;
+    // }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attribute("action", "update_config"))
@@ -463,7 +467,7 @@ pub fn execute_create_pool_instance(
     TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
 
     // Sub Msg to initialize the pool instance
-    let sub_msg: Vec<SubMsg> = vec![SubMsg {
+    let init_pool_sub_msg: SubMsg = SubMsg {
         id: INSTANTIATE_POOL_REPLY_ID,
         msg: WasmMsg::Instantiate {
             admin: Some(config.owner.to_string()),
@@ -471,14 +475,14 @@ pub fn execute_create_pool_instance(
             msg: to_binary(&PoolInstantiateMsg {
                 pool_id: pool_id,
                 pool_type: pool_config.pool_type,
-                vault_addr: env.contract.address,
+                vault_addr: env.contract.address.clone(),
                 asset_infos: asset_infos.clone(),
                 fee_info: FeeStructs {
                     total_fee_bps: pool_config.fee_info.total_fee_bps,
                 },
-                lp_token_code_id: config.lp_token_code_id,
-                lp_token_name: lp_token_name,
-                lp_token_symbol,
+                lp_token_code_id: config.lp_token_code_id.unwrap(),
+                lp_token_name: lp_token_name.clone(),
+                lp_token_symbol: lp_token_symbol.clone(),
                 init_params,
             })?,
             funds: vec![],
@@ -487,10 +491,41 @@ pub fn execute_create_pool_instance(
         .into(),
         gas_limit: None,
         reply_on: ReplyOn::Success,
-    }];
+    };
+
+    // LP Token Name
+    let token_name = get_lp_token_name(pool_id.clone(), lp_token_name.clone());
+    // LP Token Symbol
+    let token_symbol = get_lp_token_symbol(lp_token_symbol.clone());
+
+    // Sub Msg to initialize the LP token instance
+    let init_lp_token_sub_msg: SubMsg = SubMsg {
+        id: INSTANTIATE_LP_REPLY_ID,
+        msg: WasmMsg::Instantiate {
+            admin: None,
+            code_id: config.lp_token_code_id.unwrap(),
+            msg: to_binary(&TokenInstantiateMsg {
+                name: token_name,
+                symbol: token_symbol,
+                decimals: 6,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: env.contract.address.clone().to_string(),
+                    cap: None,
+                }),
+                marketing: None,
+            })?,
+            funds: vec![],
+
+            label: String::from("Dexter LP token"),
+        }
+        .into(),
+        gas_limit: None,
+        reply_on: ReplyOn::Success,
+    };
 
     Ok(Response::new()
-        .add_submessages(sub_msg)
+        .add_submessages([init_pool_sub_msg, init_lp_token_sub_msg])
         .add_attributes(vec![
             attr("action", "create_pool"),
             attr("pool_type", pool_type.to_string()),
@@ -513,23 +548,51 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
         })?;
 
-    // Retrieve the pool address from the submessage
-    let pool_contract = addr_validate_to_lower(deps.api, res.get_contract_address())?;
+    let mut response = Response::new();
 
-    // Query the pool contract for the Lp Token address
-    let pool_res: dexter::pool::ConfigResponse =
-        deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: String::from(pool_contract.clone()),
-            msg: to_binary(&dexter::pool::QueryMsg::Config {})?,
-        }))?;
-    // Error if the LP token address is not found
-    if pool_res.lp_token_addr.is_none() {
-        return Err(ContractError::LpTokenNotFound {});
+    match msg.id {
+        // Reply from the submessage to instantiate the pool instance
+        INSTANTIATE_POOL_REPLY_ID => {
+            // Update the pool address in the temporary pool info
+            tmp_pool_info.pool_addr = Some(addr_validate_to_lower(
+                deps.api,
+                res.get_contract_address(),
+            )?);
+            response = response.add_attributes(vec![
+                attr("action", "reply"),
+                attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
+            ]);
+            // Store the temporary Pool Info
+            TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+        }
+        // Reply from the submessage to instantiate the LP token instance
+        INSTANTIATE_LP_REPLY_ID => {
+            // Update the LP token address in the temporary pool info
+            tmp_pool_info.lp_token_addr = Some(addr_validate_to_lower(
+                deps.api,
+                res.get_contract_address(),
+            )?);
+            response = response.add_attributes(vec![
+                attr("action", "reply"),
+                attr(
+                    "lp_token_addr",
+                    tmp_pool_info.lp_token_addr.clone().unwrap(),
+                ),
+            ]);
+            response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: tmp_pool_info.pool_addr.clone().unwrap().to_string(),
+                funds: vec![],
+                msg: to_binary(&dexter::pool::ExecuteMsg::SetLpToken {
+                    lp_token_addr: tmp_pool_info.lp_token_addr.clone().unwrap(),
+                })?,
+            }));
+            // Store the temporary Pool Info
+            TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+        }
+        _ => {
+            return Err(ContractError::InvalidSubMsgId {});
+        }
     }
-
-    // Set the pool address and LP token address in the temporary pool info
-    tmp_pool_info.pool_addr = Some(pool_contract.clone());
-    tmp_pool_info.lp_token_addr = Some(pool_res.lp_token_addr.clone().unwrap());
 
     // Save the temporary pool info as permanent pool info mapped with the Pool Id
     ACTIVE_POOLS.save(
@@ -537,17 +600,42 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         &tmp_pool_info.pool_id.to_string().as_bytes(),
         &tmp_pool_info,
     )?;
+    // Retrieve the pool address from the submessage
+    // let pool_contract = addr_validate_to_lower(deps.api, res.get_contract_address())?;
+
+    // // Query the pool contract for the Lp Token address
+    // let pool_res: dexter::pool::ConfigResponse =
+    //     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+    //         contract_addr: String::from(pool_contract.clone()),
+    //         msg: to_binary(&dexter::pool::QueryMsg::Config {})?,
+    //     }))?;
+    // // Error if the LP token address is not found
+    // if pool_res.lp_token_addr.is_none() {
+    //     return Err(ContractError::LpTokenNotFound {});
+    // }
+
+    // Set the pool address and LP token address in the temporary pool info
+    // tmp_pool_info.pool_addr = Some(pool_contract.clone());
+    // tmp_pool_info.lp_token_addr = Some(pool_res.lp_token_addr.clone().unwrap());
+
+    // Save the temporary pool info as permanent pool info mapped with the Pool Id
+    // ACTIVE_POOLS.save(
+    //     deps.storage,
+    //     &tmp_pool_info.pool_id.to_string().as_bytes(),
+    //     &tmp_pool_info,
+    // )?;
 
     // Update the next pool id in the config and save it
     let mut config = CONFIG.load(deps.storage)?;
     config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
     CONFIG.save(deps.storage, &config)?;
 
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "register"),
-        attr("pool_contract_addr", pool_contract.clone()),
-        attr("lp_token_addr", pool_res.lp_token_addr.unwrap()),
-    ]))
+    Ok(response)
+    // Ok(Response::new().add_attributes(vec![
+    //     attr("action", "register"),
+    //     attr("pool_contract_addr", pool_contract.clone()),
+    //     // attr("lp_token_addr", pool_res.lp_token_addr.unwrap()),
+    // ]))
 }
 
 //--------x---------------x--------------x-----x-----
@@ -1256,7 +1344,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     let resp = ConfigResponse {
         owner: config.owner,
-        lp_token_code_id: config.lp_token_code_id,
+        lp_token_code_id: config.lp_token_code_id.unwrap(),
         fee_collector: config.fee_collector,
         generator_address: config.generator_address,
     };
