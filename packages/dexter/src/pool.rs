@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType};
-
-use crate::helper::{is_valid_name, is_valid_symbol};
-use cosmwasm_std::{Addr, Binary, Decimal, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal, Uint128};
 use std::fmt::{Display, Formatter, Result};
 
 /// The default slippage (5%)
@@ -104,33 +102,8 @@ pub struct InstantiateMsg {
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
     pub fee_info: FeeStructs,
-    pub lp_token_code_id: u64,
-    pub lp_token_name: Option<String>,
-    pub lp_token_symbol: Option<String>,
     /// Optional binary serialised parameters for custom pool types
     pub init_params: Option<Binary>,
-}
-
-impl InstantiateMsg {
-    pub fn validate(&self) -> StdResult<()> {
-        // Check name, symbol for LP Token
-
-        if !self.lp_token_name.clone().is_none()
-            && !is_valid_name(self.lp_token_name.as_ref().unwrap())
-        {
-            return Err(StdError::generic_err(
-                "Name is not in the expected format (3-50 UTF-8 bytes)",
-            ));
-        }
-        if !self.lp_token_symbol.is_none()
-            && !is_valid_symbol(&self.lp_token_symbol.as_ref().unwrap())
-        {
-            return Err(StdError::generic_err(
-                "Ticker symbol is not in expected format [a-zA-Z\\-]{3,12}",
-            ));
-        }
-        Ok(())
-    }
 }
 
 /// ## Description
@@ -139,6 +112,8 @@ impl InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    /// ## Description - Set  updatable parameters related to Pool's configuration
+    SetLpToken { lp_token_addr: Addr },
     /// ## Description - Update updatable parameters related to Pool's configuration
     UpdateConfig { params: Option<Binary> },
     /// ## Description - Executable only by Dexter Vault.  Updates locally stored asset balances state for the pool and updates the TWAP.
@@ -314,6 +289,6 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WeightedParams {
-    pub weights: Vec<(AssetInfo, u128)>,
+    pub weights: Vec<Asset>,
     pub exit_fee: Option<Decimal>,
 }

@@ -3,25 +3,19 @@ use crate::math::{
     calc_ask_amount, calc_offer_amount, compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE,
     MIN_AMP_CHANGING_TIME, N_COINS,
 };
-use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
     MathConfig, StablePoolParams, StablePoolUpdateParams, Twap, CONFIG, MATHCONFIG, TWAPINFO,
 };
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary, Decimal, Deps, DepsMut, Env, Event, Fraction,
-    MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
+    entry_point, from_binary, to_binary, Addr, Binary, Decimal, Deps, DepsMut, Env, Event,
+    Fraction, MessageInfo, Response, StdError, StdResult, Uint128,
 };
 use std::str::FromStr;
 
 use cw2::set_contract_version;
-use cw20::MinterResponse;
 
-use dexter::asset::{addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo};
-use dexter::helper::{
-    adjust_precision, calculate_underlying_fees, get_lp_token_name, get_lp_token_symbol,
-    get_share_in_assets,
-};
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
+use dexter::helper::{adjust_precision, calculate_underlying_fees, get_share_in_assets};
 use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
@@ -32,15 +26,12 @@ use dexter::querier::{query_supply, query_token_precision, query_vault_config};
 use dexter::vault::{SwapType, TWAP_PRECISION};
 use dexter::U256;
 
-use protobuf::Message;
 use std::vec;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::stableswap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// A `reply` call code ID of sub-message.
-const INSTANTIATE_TOKEN_REPLY_ID: u64 = 1;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -60,9 +51,6 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
-    // check valid token info
-    msg.validate()?;
 
     // Stableswap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
@@ -111,67 +99,7 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
     MATHCONFIG.save(deps.storage, &math_config)?;
 
-    // LP Token Name
-    let token_name = get_lp_token_name(msg.pool_id.clone(), msg.lp_token_name);
-
-    // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol);
-
-    // Create LP token
-    let sub_msg: Vec<SubMsg> = vec![SubMsg {
-        msg: WasmMsg::Instantiate {
-            code_id: msg.lp_token_code_id,
-            msg: to_binary(&TokenInstantiateMsg {
-                name: token_name,
-                symbol: token_symbol,
-                decimals: 6,
-                initial_balances: vec![],
-                mint: Some(MinterResponse {
-                    minter: msg.vault_addr.clone().to_string(),
-                    cap: None,
-                }),
-                marketing: None,
-            })?,
-            funds: vec![],
-            admin: None,
-            label: String::from("Dexter LP token"),
-        }
-        .into(),
-        id: INSTANTIATE_TOKEN_REPLY_ID,
-        gas_limit: None,
-        reply_on: ReplyOn::Success,
-    }];
-    Ok(Response::new().add_submessages(sub_msg))
-}
-
-/// # Description
-/// The entry point to the contract for processing the reply from the submessage
-///
-/// # Params
-/// * **msg** is the object of type [`Reply`].
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
-    // Get config
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    // Validation check
-    if config.lp_token_addr.is_some() {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // get lp token address from reply
-    let data = msg.result.unwrap().data.unwrap();
-    let res: MsgInstantiateContractResponse =
-        Message::parse_from_bytes(data.as_slice()).map_err(|_| {
-            StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
-        })?;
-    config.lp_token_addr = Some(addr_validate_to_lower(
-        deps.api,
-        res.get_contract_address(),
-    )?);
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new().add_attribute("liquidity_token_addr", config.lp_token_addr.unwrap()))
+    Ok(Response::new())
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -194,11 +122,41 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::SetLpToken { lp_token_addr } => set_lp_token(deps, env, info, lp_token_addr),
         ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
+}
+
+/// ## Description
+/// Admin Access by Vault :: Callable only by Dexter::Vault --> Sets LP token address once it is instiantiated.
+///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
+///
+/// ## Params
+/// * **lp_token_addr** is a field of type [`Addr`]. It is the address of the LP token.
+pub fn set_lp_token(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token_addr: Addr,
+) -> Result<Response, ContractError> {
+    // Get config
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // Acess Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Update state
+    config.lp_token_addr = Some(lp_token_addr);
+    CONFIG.save(deps.storage, &config)?;
+
+    let event = Event::new("dexter-pool::set-lp-token")
+        .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
+    Ok(Response::new().add_event(event))
 }
 
 /// ## Description

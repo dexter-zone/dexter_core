@@ -25,14 +25,11 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
     );
     let vault_code_id = router.store_code(vault_contract);
 
-    let xyk_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            xyk_pool::contract::execute,
-            xyk_pool::contract::instantiate,
-            xyk_pool::contract::query,
-        )
-        .with_reply_empty(xyk_pool::contract::reply),
-    );
+    let xyk_contract = Box::new(ContractWrapper::new_with_empty(
+        xyk_pool::contract::execute,
+        xyk_pool::contract::instantiate,
+        xyk_pool::contract::query,
+    ));
     let xyk_code_id = router.store_code(xyk_contract);
 
     // Instantiate Vault Contract

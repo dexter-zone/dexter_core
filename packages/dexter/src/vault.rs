@@ -15,11 +15,11 @@ pub const TWAP_PRECISION: u16 = 9u16;
 /// This enum describes the key for the different Pool types supported by Dexter
 /// ## Available pool types
 /// ```
-/// Xyk
-/// Stable2Pool
-/// Weighted
-/// Stable5Pool
-/// Custom(String::from("Custom"));
+//// Xyk
+//// Stable2Pool
+//// Weighted
+//// Stable5Pool
+//// Custom(String::from("Custom"));
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -56,8 +56,8 @@ impl Display for PoolType {
 /// This enum describes available Swap types.
 /// ## Available swap types
 /// ```
-/// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
-/// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
+//// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
+//// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -251,6 +251,11 @@ pub enum ExecuteMsg {
         lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
+    // InitializeLpTokenForPoolInstance {
+    //     pool_id: Uint128,
+    //     lp_token_name: Option<String>,
+    //     lp_token_symbol: Option<String>,
+    // },
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {

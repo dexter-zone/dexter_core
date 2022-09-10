@@ -71,3 +71,21 @@ docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   cosmwasm/workspace-optimizer:0.12.6
 ```
+
+### PERSISTENCE TESTNET INSTANCE
+
+| Name                       | Code Id | Instantiated Address                                                   |
+| -------------------------- | ------- | ---------------------------------------------------------------------- |
+| `Dexter Vault`             | 6       | persistence1fyr2mptjswz4w6xmgnpgm93x0q4s4wdl6srv3rtz3utc4f6fmxeqm56xzf |
+| `Dexter Keeper`            | 7       | -                                                                      |
+| `LP Token :: Test token 1` | 8       | persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng |
+| `LP Token :: Test token 2` | 8       | persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr |
+| `LP Token :: Test token 3` | 8       | persistence1vhjnzk9ly03dugffvzfcwgry4dgc8x0sv0nqqtfxj3ajn7rn5ghqtpaner |
+| `XYK Pool`                 | 9       | -                                                                      |
+| `Weighted Pool`            | 10      | -                                                                      |
+| `Stableswap Pool`          | 11      | -                                                                      |
+| `Dexter Vesting`           | 12      | -                                                                      |
+| `Dexter Generator`         | 13      | -                                                                      |
+| `Dexter Generator : Proxy` | 14      | -                                                                      |
+| `Example Staking contract` | 15      | -                                                                      |
+| `Stable-5-Swap pool`       | 16      | -                                                                      |

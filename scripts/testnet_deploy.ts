@@ -1,82 +1,498 @@
-import { PersistenceClient } from "persistenceonejs";
-import {
-  SigningCosmWasmClient,
-  Secp256k1HdWallet,
-  setupWebKeplr,
-  CosmWasmClient,
-} from "cosmwasm";
-import { coins, Coin } from "@cosmjs/stargate";
-import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
+import { PersistenceClient, cosmwasm } from "cosmoschainsjs";
+import * as Pako from "pako";
+import * as fs from "fs";
+import { Gov_MsgSubmitProposal, voteOnProposal, readArtifact, writeArtifact, executeContract,
+  query_gov_proposal, find_code_id_from_contract_hash, query_wasm_contractsByCode, query_wasm_code} from "./helpers/helpers.js";
+import { toBinary } from "@cosmjs/cosmwasm-stargate";
+import { Slip10RawIndex, pathToString, stringToPath } from '@cosmjs/crypto';
+import { DirectSecp256k1HdWallet, decodePubkey } from "@cosmjs/proto-signing";
+import { fromBase64, toBase64, fromHex , toHex} from "@cosmjs/encoding";
+import { networkInterfaces } from "os";
 
 // ----------- PERSISTENCE END-POINTS -------------
 // testnet: https://rpc.testnet.persistence.one:443     :: test-core-1
 // mainnet: https://rpc.persistence.one:443             :: core-1
 
 // This is your rpc endpoint
-const rpcEndpoint = "https://rpc.testnet.persistence.one:443";
+const rpcEndpoint = "http://localhost:26657";
 
-// Using a random generated mnemonic
-const mnemonic =
-  "rifle same bitter control garage duck grab spare mountain doctor rubber cook";
+// Make HD path used during wallet creation
+export function makeHdPath(coinType = 118, account = 0) {
+  return [
+    Slip10RawIndex.hardened(44),
+    Slip10RawIndex.hardened(coinType),
+    Slip10RawIndex.hardened(0),
+    Slip10RawIndex.normal(0),
+    Slip10RawIndex.normal(account)
+  ];
+}
 
 async function Demo() {
-  const val1 = await PersistenceClient.init(
-    "flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer",
-    {
-      rpc: rpcEndpoint,
-      chainId: "test-core-1",
-      gasPrices: { denom: "", amount: "0" },
-      gasAdjustment: "1.5",
+
+  // Using a random generated mnemonic
+  const mnemonic = "gravity bus kingdom auto limit gate humble abstract reopen resemble awkward cannon maximum bread balance insane banana maple screen mimic cluster pigeon badge walnut";
+  const deposit_amount = 512_000_000;
+  const fee_denom = "uxprt";
+  const CHAIN_ID = "testing";
+
+  // network : stores contract addresses
+  let network = readArtifact(CHAIN_ID);
+  console.log("network")
+
+  // Create a new persistence client
+  const client = await PersistenceClient.init(mnemonic , {
+    rpc: rpcEndpoint,
+    chainId: CHAIN_ID,
+    gasPrices: {
+      denom: fee_denom,
+      amount: "2000000",
+    },
+    gasAdjustment: "1.5",
+  });
+
+  // Create Persistence Validators
+  const validator_1 = await PersistenceClient.init("flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer" , {
+    rpc: rpcEndpoint,
+    chainId: "testing",
+    gasPrices: {
+      denom: fee_denom,
+      amount: "2000000",
+    },
+    gasAdjustment: "1.5",
+  });
+  const validator_2 = await PersistenceClient.init("horse end velvet train canoe walnut lottery security sure right rigid busy either sand bar palace choice extend august mystery action surround coconut online" , {
+    rpc: rpcEndpoint,
+    chainId: "testing",
+    gasPrices: {
+      denom: fee_denom,
+      amount: "2000000",
+    },
+    gasAdjustment: "1.5",
+  });
+  
+  // Get wallet address
+  const [Account] = await client.wallet.getAccounts();
+  const wallet_address = Account.address;
+  console.log(`WALLET ADDRESS =  ${wallet_address}`);
+
+  // Get chain height
+  const height = await client.wasm.getHeight();
+  console.log(`Blockchain height = ${height}`);
+
+  // Get xprt balance
+  const balance_res = await client.wasm.getBalance( wallet_address, fee_denom);
+  let wallet_balance = Number(balance_res["amount"])/10**6;
+  console.log(`Wallet's XPRT balance = ${wallet_balance}`);
+
+  // let codes = await getContractsByCodeId(client, 1);
+  // console.log(`CODES = ${JSON.stringify(codes)}`);
+
+  // return;
+
+  // -----------x-------------x-------------x------------------------------
+  // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------
+  // -----------x-------------x-------------x------------------------------
+
+  // // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
+  let contracts = [
+  { name: "Dexter Vault", path: "../artifacts/dexter_vault.wasm", proposal_id: 0, hash:"8c90ca57c3624d4676a0f63c898ff15dc709ef6066359b6e9c3dc094b3012774"  }, 
+  { name: "Dexter Keeper", path: "../artifacts/dexter_keeper.wasm", proposal_id: 0, hash:"51de835121fcfa4fd772d68889b98294c789bc2a50a80a9132fead99b755e0c3"  }, 
+  { name: "LP Token", path: "../artifacts/lp_token.wasm", proposal_id: 0, hash:"48ac9688ad68b66c36184b47682c061ae2763c769e458ef190064d2013563418"  }, 
+  { name: "XYK Pool", path: "../artifacts/xyk_pool.wasm", proposal_id: 0, hash:"34f5f23b815105bb76da42efaaae31e682501560a291100c96c4a94d99f2c96a"  }, 
+  { name: "Weighted Pool", path: "../artifacts/weighted_pool.wasm", proposal_id: 0, hash:"c2a9fbb275327831fdec61bffb694014613ed010bfd8448c8116abb2248a64f5"  }, 
+  { name: "Stableswap Pool", path: "../artifacts/stableswap_pool.wasm", proposal_id: 0, hash:"4ec84d214a1403addf1460013c08b0316699a51bd85e343692b01f5a482b1bb4"  }, 
+  { name: "Stable5Swap Pool", path: "../artifacts/stable5pool.wasm", proposal_id: 0, hash:"b2c73f4f3633db13f9bef932e6dd0f00acb36128b34d292e81e142282adb4664"  }, 
+  { name: "Dexter Vesting", path: "../artifacts/dexter_vesting.wasm", proposal_id: 0, hash:"9fed0b82283c3881c242cc51d80c1d9b73fb8fd038da726d6f850de2736a253f"  }, 
+  { name: "Dexter Generator", path: "../artifacts/dexter_generator.wasm", proposal_id: 0, hash:"d83433369379a5cec32b7ea4de7574222964ddec9f70d64c7775acbb1e008747"  }, 
+  {
+    name: "Dexter Generator : Proxy",
+    path: "../artifacts/dexter_generator_proxy.wasm",
+    proposal_id: 0 ,
+    hash: "3d0d2eb1b6b8ba699ec2a0fbf2677da2d7b481adf84d19dc1c0641dbfd346289"
+  },
+  { name: "Staking contract", path: "../artifacts/anchor_staking.wasm", proposal_id: 0, hash:"e119395d04dafdaf6f87cf38c1fb6cf81ddbd69b7874d7751bb7be66bd3a9883"  },
+  ];
+
+  // UPLOAD CODE OF ALL CONTRACTS
+  if (!network.contracts_store_code_proposals_executed || network.contracts_store_code_proposals_executed == 0) {        
+    console.log(network.contracts_store_code_proposals_executed);
+    console.log("GETGRTGE")
+      // Loop across all contracts
+      for (let i = 0; i < contracts.length; i++) {
+        // TRANSATION 1. --> Make proposal on-chain      
+        try {
+          console.log(`\nSubmitting Proposal to store ${contracts[i]["name"]} Contract ...`);
+          const wasm = fs.readFileSync(contracts[i]["path"]);
+          const wasmStoreProposal = {
+            typeUrl: "/cosmwasm.wasm.v1.StoreCodeProposal",
+            value: Uint8Array.from(
+              cosmwasm.wasm.v1.StoreCodeProposal.encode(
+                cosmwasm.wasm.v1.StoreCodeProposal.fromPartial({
+                  title: contracts[i]["name"],
+                  description: `Add wasm code for ${contracts[i]["name"]} contract.`,
+                  runAs: wallet_address,
+                  wasmByteCode: Pako.gzip(wasm, { level: 9 }),
+                  instantiatePermission: {                  
+                    permission: cosmwasm.wasm.v1.accessTypeFromJSON(1),
+                  },
+                })
+              ).finish()
+            ),
+          };
+          const res = await Gov_MsgSubmitProposal(client, wasmStoreProposal, fee_denom, deposit_amount);
+          contracts[i]["proposal_id"] = Number(res[0].events[3].attributes[1].value);          
+          console.log(`${contracts[i]["name"]} STORE CODE PROPOSAL ID = ${contracts[i]["proposal_id"]}`)
+        } catch (e) {
+          console.log("Proposal Error has occoured => ", e);
+        }  
+        // TRANSACTION 2. --> Vote on proposal
+        if (contracts[i]["proposal_id"] > 0 && CHAIN_ID == "testing") {
+          try {
+            await voteOnProposal(client, contracts[i]["proposal_id"], 1, fee_denom);
+            await voteOnProposal(validator_1, contracts[i]["proposal_id"], 1, fee_denom);
+            await voteOnProposal(validator_2, contracts[i]["proposal_id"], 1, fee_denom);
+            console.log("Voted successfully")
+          } catch (e) {
+            console.log("Error has occoured while voting => ", e);
+          }
+        }
+      }
+      network.contracts_store_code_proposals_executed = true;
+
+      // Update propsoal IDs stored 
+      network.vault_store_code_proposal_id = contracts[0]["proposal_id"];
+      network.keeper_store_code_proposal_id = contracts[1]["proposal_id"];
+      network.lp_token_store_code_proposal_id = contracts[2]["proposal_id"];
+      network.xyk_pool_store_code_proposal_id = contracts[3]["proposal_id"];
+      network.weighted_pool_store_code_proposal_id = contracts[4]["proposal_id"];
+      network.stableswap_pool_store_code_proposal_id = contracts[5]["proposal_id"];
+      network.stable5swap_store_code_proposal_id = contracts[6]["proposal_id"];
+      network.vesting_store_code_proposal_id = contracts[7]["proposal_id"];
+      network.generator_store_code_proposal_id = contracts[8]["proposal_id"];
+      network.generator_proxy_store_code_proposal_id = contracts[9]["proposal_id"];
+      network.eq_staking_store_code_proposal_id = contracts[10]["proposal_id"];
+      writeArtifact(network, CHAIN_ID);
+  }  
+
+  // GET CODE-IDs FOR ALL CONTRACTS
+  if (!network.vault_contract_code_id || network.vault_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[0]["hash"]);
+    network.vault_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.keeper_contract_code_id || network.keeper_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[1]["hash"]);
+    network.keeper_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.lp_token_contract_code_id || network.lp_token_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[2]["hash"]);
+    network.lp_token_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.xyk_pool_contract_code_id || network.xyk_pool_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[3]["hash"]);
+    network.xyk_pool_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.weighted_pool_contract_code_id || network.weighted_pool_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[4]["hash"]);
+    network.weighted_pool_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.stableswap_contract_code_id || network.stableswap_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[5]["hash"]);
+    network.stableswap_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.stable5swap_pool_contract_code_id || network.stable5swap_pool_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[6]["hash"]);
+    network.stable5swap_pool_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.vesting_contract_code_id || network.vesting_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[7]["hash"]);
+    network.vesting_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.generator_contract_code_id || network.generator_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[8]["hash"]);
+    network.generator_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.generator_proxy_contract_code_id || network.generator_proxy_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[9]["hash"]);
+    network.generator_proxy_contract_code_id = Number(code_id_res);  
+  }
+  if (!network.staking_contract_contract_code_id || network.staking_contract_contract_code_id == 0) {
+    let code_id_res = await find_code_id_from_contract_hash(client, contracts[10]["hash"]);
+    network.staking_contract_contract_code_id = Number(code_id_res);  
+  }
+  writeArtifact(network, CHAIN_ID);
+
+
+  // -----------x-------------x---------x---------------
+  // ----------- INSTANTIATE DEXTER VAULT  -------------
+  // -----------x-------------x---------x---------------
+
+  // INSTANTIATE DEXTER VAULT CONTRACT --> If vault contract has not been instantiated yet 
+  if (network.vault_contract_code_id > 0 && (!network.vault_instantiate_proposal_id || network.vault_instantiate_proposal_id == 0 )) {  
+      console.log(`\nSubmitting Proposal to instantiate Dexter VAULT Contract ...`);
+      // Make proposal to instantiate Vault contract
+      if (network.vault_contract_code_id > 0) {
+        let init_vault_msg = {
+          pool_configs: [
+                  {
+                    code_id: network.xyk_pool_contract_code_id,
+                    pool_type: { xyk: {} },
+                    fee_info: {
+                      total_fee_bps: 300,
+                      protocol_fee_percent: 49,
+                      dev_fee_percent: 15,
+                      developer_addr: wallet_address,
+                    },
+                    is_disabled: false,
+                    is_generator_disabled: false,
+                  },
+                  {
+                    code_id: network.stableswap_contract_code_id,
+                    pool_type: { stable2_pool: {} },
+                    fee_info: {
+                      total_fee_bps: 300,
+                      protocol_fee_percent: 49,
+                      dev_fee_percent: 15,
+                      developer_addr: null,
+                    },
+                    is_disabled: false,
+                    is_generator_disabled: false,
+                  },
+                  {
+                    code_id: network.stable5swap_pool_contract_code_id,
+                    pool_type: { stable5_pool: {} },
+                    fee_info: {
+                      total_fee_bps: 300,
+                      protocol_fee_percent: 49,
+                      dev_fee_percent: 15,
+                      developer_addr: null,
+                    },
+                    is_disabled: false,
+                    is_generator_disabled: false,
+                  },
+                  {
+                    code_id: network.weighted_pool_contract_code_id,
+                    pool_type: { weighted: {} },
+                    fee_info: {
+                      total_fee_bps: 300,
+                      protocol_fee_percent: 49,
+                      dev_fee_percent: 15,
+                      developer_addr: null,
+                    },
+                    is_disabled: false,
+                    is_generator_disabled: false,
+                  },
+                ],          
+          lp_token_code_id: network.lp_token_contract_code_id,
+          fee_collector: null,
+          owner: wallet_address,
+          generator_address: null,
+        };
+        try {
+          const wasmInstantiateProposal = {
+            typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+            value: Uint8Array.from(
+              cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+                cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                  title: "Dexter Vault",
+                  description:  "Dexter Vault contract, used facilitating token swaps and instantiating pools",
+                  runAs: wallet_address,
+                  admin: wallet_address,
+                  codeId: network.vault_contract_code_id.toString(),
+                  label: "Dexter Vault",
+                  msg: Buffer.from(JSON.stringify(init_vault_msg)).toString("base64"),
+                })
+              ).finish()
+            ),
+          };
+          const res = await Gov_MsgSubmitProposal(client, wasmInstantiateProposal, fee_denom, deposit_amount);
+          console.log(res);
+          network.vault_instantiate_proposal_id = Number(res[0].events[3].attributes[1].value);
+          writeArtifact(network, CHAIN_ID);
+          // const json = JSON.parse(res.rawLog?);
+        } catch (e) {
+          console.log("Proposal Error has occoured => ", e);
+        }
+        // Vote on Proposal
+        if (network.vault_instantiate_proposal_id > 0  && CHAIN_ID == "testing") {
+          try {
+            console.log(`Voting on Proposal # ${network.vault_instantiate_proposal_id}`);
+            await voteOnProposal(client, network.vault_instantiate_proposal_id, 1, fee_denom);
+            await voteOnProposal(validator_1, network.vault_instantiate_proposal_id, 1, fee_denom);
+            await voteOnProposal(validator_2, network.vault_instantiate_proposal_id, 1, fee_denom);      
+            console.log("Voted successfully")
+          } catch (e) {
+            console.log("Error has occoured while voting => ", e);
+          }
+        }
+      }
+  }
+
+  // Get VAULT Contract Address if the proposal has passed
+  if (!network.vault_contract_address || network.vault_contract_address == "") {
+    let res = await query_wasm_contractsByCode(client, network.vault_contract_code_id );
+    // console.log(res);
+    network.vault_contract_address = res["contracts"][  res["contracts"].length - 1 ];
+    writeArtifact(network, CHAIN_ID);
+  }
+
+  // -----------x-------------x-------------x---------x---------------
+  // ----------- CONTRACT INSTIANTIATION :: TEST TOKENS --------------
+  // -----------x-------------x-------------x---------x---------------
+
+  if (!network.dummy_tokens_instantiated) {
+    let tokens_ = [
+      {name:"C-OSMO", symbol:"OSMO", decimals:6},
+      {name:"C-JUNO", symbol:"JUNO", decimals:6},
+      {name:"C-FET", symbol:"FET", decimals:6}
+    ]
+    for (let i=0;i<tokens_.length;i++) {
+      let token_init_msg = {
+        name: tokens_[i]["name"],
+        symbol: tokens_[i]["symbol"],
+        decimals: tokens_[i]["decimals"],
+        initial_balances: [{ address: wallet_address, amount: "10000000000000" }],
+        mint: { minter: wallet_address, amount: "1000000000000000" },
+      };
+      console.log(token_init_msg);
+      try {
+        const wasmInstantiateProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+              cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                title: "Test token",
+                description: "Test token for testing dexter DEX",
+                runAs: wallet_address,
+                admin: wallet_address,
+                codeId: network.lp_token_contract_code_id.toString(),
+                label: "Dummy token",
+                msg: Buffer.from(JSON.stringify(token_init_msg)).toString("base64"), // Buffer.from(JSON.stringify(init_msg)),
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(client, wasmInstantiateProposal, fee_denom, deposit_amount);
+        let proposalId = res[0].events[3].attributes[1].value;
+        if (proposalId > 0) {
+          network.dummy_tokens_instantiated = true;
+          writeArtifact(network, CHAIN_ID);
+        } 
+        console.log(`Proposal Id for dummy token ${tokens_[i]["name"]} = ${proposalId}`)
+        await voteOnProposal(client, proposalId, 1, fee_denom);
+        await voteOnProposal(validator_1, proposalId, 1, fee_denom);
+        await voteOnProposal(validator_2, proposalId, 1, fee_denom);       
+        console.log(res);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }    
     }
-  );
-  const [val1Account] = await val1.wallet.getAccounts();
-  const val1Address = val1Account.address;
-  console.log(val1Address);
-  // const config = {
-  //   chainId: "test-core-1",
-  //   rpcEndpoint: rpcEndpoint,
-  //   prefix: "persistence",
-  // };
-  // const client = await CosmWasmClient.connect(rpcEndpoint);
-  // console.log(client);
+  }
 
-  // // Create a wallet
-  // const wallet = await Secp256k1HdWallet.fromMnemonic(mnemonic);
-  // console.log(wallet);
+  // Get VAULT Contract Address if the proposal has passed
+  if (!network.test_tokens_addresses || network.test_tokens_addresses.length < 3 ) {
+    let res = await query_wasm_contractsByCode(client, network.lp_token_contract_code_id );
+    if (res["contracts"].length > 0) {
+      network.test_tokens_addresses = res["contracts"];
+      writeArtifact(network, CHAIN_ID);  
+    }
+  }
 
-  // This is your contract address
-  // const contractAddr =
-  //   "wasm19qws2lfd8pskyn0cfgpl5yjjyq3msy5402qr8nkzff9kdnkaepyqycedfh";
-  // const conswasm_client = await CosmWasmClient.connect(rpcEndpoint);
-  // const q_config = await client.queryContractSmart(contractAddr, {
-  //   config: {},
-  // });
-  // const alice = await PersistenceClient.init(
-  //   "obtain door word season wealth inspire tobacco shallow thumb tip walk forum someone verb pistol bright mutual nest fog valley tiny section sauce typical"
-  // ); //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
-  // const codes = await alice.query.cosmwasm.wasm.v1.codes({});
-  // console.log(codes);
-  // const [account] = await alice.wallet.getAccounts();
+  // -----------x-------------x--------------x---------------x---------------x-----------------------
+  // ----------- MAKE PROPOSALS TO UPDATE INSTANTIATION PERMISSIONS FOR POOL CONTRACTS  -------------
+  // -----------x-------------x--------------x---------------x---------------x-----------------------
 
-  // const aliceaddress = account.address; //persistence1ht0tun4u5uj4f4z83p9tncjerwu27ycsm52txm
-  // const pstake =
-  //   "persistence14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sjvz4fk"; //cw20 token address on chain
-  // const res = await alice.wasm.execute(
-  //   aliceaddress,
-  //   pstake,
-  //   {
-  //     transfer: {
-  //       recipient: "persistence123em6jp7y96rtylp6tjk9r0dcescl0k4ccqvpu", //recipient address
-  //       amount: "10",
-  //     },
-  //   },
-  //   { amount: coins(2_000_000, "stake"), gas: "200000" }
-  // );
-  // console.log(res);
-  // const balance = await alice.wasm.queryContractSmart(pstake, {
-  //   balance: { address: "persistence123em6jp7y96rtylp6tjk9r0dcescl0k4ccqvpu" },
-  // });
-  // console.log(balance);
+
+  // MAKE PROPOSALS TO UPDATE INSTANTIATE PERMISSION FOR CONTRACTS WHICH ARE TO BE INSTANTIATED BY THE VAULT CONTRACT
+  let contracts_to_be_updated = [
+    { name:"LP Token Pool", codeId: network.lp_token_contract_code_id, proposal_id:0 },
+    { name:"XYK Pool", codeId: network.xyk_pool_contract_code_id, proposal_id:0 },
+    { name:"Stableswap Pool", codeId: network.stableswap_contract_code_id, proposal_id:0 },
+    { name:"Stable5swap Pool", codeId: network.stable5swap_pool_contract_code_id, proposal_id:0 },
+    { name:"Weighted Pool", codeId: network.weighted_pool_contract_code_id, proposal_id:0 }
+  ]
+  if (!network.proposals_to_update_permissions || network.proposals_to_update_permissions == 0 ) {
+    // Loop
+    for (let i=0;i<contracts_to_be_updated.length;i++) {
+      // TRANSATION 1. --> Make proposal on-chain
+      try {
+        console.log(`\nSubmitting Proposal to update Dexter ${contracts_to_be_updated[i]["name"]} Contract instantiation permission ...`);
+        const wasmUpdateContractInstantiationPermissionProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.UpdateInstantiateConfigProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.UpdateInstantiateConfigProposal.encode(
+              cosmwasm.wasm.v1.UpdateInstantiateConfigProposal.fromPartial({
+                title: `Dexter :: ${contracts_to_be_updated[i]["name"]} update instantiation config`,
+                description: `Update Dexter ${contracts_to_be_updated[i]["name"]} contract instantiation permission to vault addresss`,
+                accessConfigUpdates: [
+                  {
+                    codeId: contracts_to_be_updated[i].codeId,
+                    instantiatePermission: {
+                      address: network.vault_contract_address,
+                      permission: cosmwasm.wasm.v1.accessTypeFromJSON(2),
+                    }
+                  }
+                ]
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(client, wasmUpdateContractInstantiationPermissionProposal, fee_denom, deposit_amount);
+        contracts_to_be_updated[i]["proposal_id"] = Number(res[0].events[3].attributes[1].value);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }  
+      // TRANSACTION 2. --> Vote on proposal
+      if (contracts_to_be_updated[i]["proposal_id"] > 0 && CHAIN_ID == "testing") {
+        try {
+          console.log(`Voting on Proposal # ${contracts_to_be_updated[i]["proposal_id"]}`);
+          await voteOnProposal(client, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
+          await voteOnProposal(validator_1, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
+          await voteOnProposal(validator_2, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
+          console.log("Voted successfully")
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
+    }
+    network.proposals_to_update_permissions = true;
+
+    // Update propsoal IDs stored 
+    network.lp_token_instantiate_permissions_proposal_id = contracts_to_be_updated[0]["proposal_id"];
+    network.xyk_pool_instantiate_permissions_proposal_id = contracts_to_be_updated[1]["proposal_id"];
+    network.stableswap_pool_instantiate_permissions_proposal_id = contracts_to_be_updated[2]["proposal_id"];
+    network.stable5pool_instantiate_permissions_proposal_id = contracts_to_be_updated[3]["proposal_id"];
+    network.weighted_instantiate_permissions_proposal_id = contracts_to_be_updated[4]["proposal_id"];
+    writeArtifact(network, CHAIN_ID);    
+  }
+
+  // let res = await query_gov_proposal(client, network.xyk_pool_instantiate_permissions_proposal_id);
+  let res = await query_wasm_code(client, network.xyk_pool_contract_code_id);
+  console.log(res.codeInfo.instantiatePermission);     
+
+  // return
+
+  let add_create_pool_exec_msg = {
+    create_pool_instance: {
+      pool_type: { xyk: {} },
+      asset_infos: [
+        { native_token: { denom: fee_denom } },
+        { token: { contract_addr: network.test_tokens_addresses[0] } },
+      ],
+    },
+  };
+  let ex = await executeContract(client, wallet_address, network.vault_contract_address, add_create_pool_exec_msg );
+  console.log(ex)
+
+  let events = ex?.logs[0].events;
+  console.log(events);
+
+  for (let i=0;i<events?.length;i++) {
+    console.log(events[i])
+  }
+ 
 }
 
 Demo().catch(console.log);
+
+
+

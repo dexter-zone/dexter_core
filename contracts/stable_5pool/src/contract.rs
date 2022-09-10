@@ -1,18 +1,14 @@
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event,
-    Fraction, MessageInfo, Reply, ReplyOn, Response, StdError, StdResult, SubMsg, Uint128, Uint64,
-    WasmMsg,
+    entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
+    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint64, WasmMsg,
 };
 use cw2::set_contract_version;
-use cw20::MinterResponse;
 use itertools::Itertools;
-use protobuf::Message;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
-use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
     get_precision, store_precisions, MathConfig, StablePoolParams, StablePoolUpdateParams, Twap,
     CONFIG, MATHCONFIG, TWAPINFO,
@@ -27,14 +23,10 @@ use dexter::pool::{
     Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 
-use dexter::asset::{
-    addr_validate_to_lower, Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset,
-};
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{
-    adjust_precision, calculate_underlying_fees, get_lp_token_name, get_lp_token_symbol,
-    get_share_in_assets, select_pools,
+    adjust_precision, calculate_underlying_fees, get_share_in_assets, select_pools,
 };
-use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::SwapType;
 
@@ -42,8 +34,6 @@ use dexter::vault::SwapType;
 const CONTRACT_NAME: &str = "dexter::stable3swap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// A `reply` call code ID of sub-message.
-const INSTANTIATE_TOKEN_REPLY_ID: u64 = 1;
 
 /// An LP token precision.
 const LP_TOKEN_PRECISION: u8 = 6;
@@ -66,9 +56,6 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
-    // check valid token info
-    msg.validate()?;
 
     // Validate number of assets
     if msg.asset_infos.len() > 5 || msg.asset_infos.len() < 2 {
@@ -132,67 +119,7 @@ pub fn instantiate(
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-    // LP Token Name
-    let token_name = get_lp_token_name(msg.pool_id.clone(), msg.lp_token_name.clone());
-
-    // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(msg.lp_token_symbol.clone());
-
-    // Create LP token
-    let sub_msg: Vec<SubMsg> = vec![SubMsg {
-        msg: WasmMsg::Instantiate {
-            code_id: msg.lp_token_code_id.clone(),
-            msg: to_binary(&TokenInstantiateMsg {
-                name: token_name,
-                symbol: token_symbol,
-                decimals: 6,
-                initial_balances: vec![],
-                mint: Some(MinterResponse {
-                    minter: msg.vault_addr.clone().to_string(),
-                    cap: None,
-                }),
-                marketing: None,
-            })?,
-            funds: vec![],
-            admin: None,
-            label: String::from("Dexter LP token"),
-        }
-        .into(),
-        id: INSTANTIATE_TOKEN_REPLY_ID,
-        gas_limit: None,
-        reply_on: ReplyOn::Success,
-    }];
-    Ok(Response::new().add_submessages(sub_msg))
-}
-
-/// # Description
-/// The entry point to the contract for processing the reply from the submessage
-///
-/// # Params
-/// * **msg** is the object of type [`Reply`].
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
-    // Get config
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    // Validation check
-    if config.lp_token_addr.is_some() {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // get lp token address from reply
-    let data = msg.result.unwrap().data.unwrap();
-    let res: MsgInstantiateContractResponse =
-        Message::parse_from_bytes(data.as_slice()).map_err(|_| {
-            StdError::parse_err("MsgInstantiateContractResponse", "failed to parse data")
-        })?;
-    config.lp_token_addr = Some(addr_validate_to_lower(
-        deps.api,
-        res.get_contract_address(),
-    )?);
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new().add_attribute("liquidity_token_addr", config.lp_token_addr.unwrap()))
+    Ok(Response::new())
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -215,11 +142,41 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::SetLpToken { lp_token_addr } => set_lp_token(deps, env, info, lp_token_addr),
         ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
+}
+
+/// ## Description
+/// Admin Access by Vault :: Callable only by Dexter::Vault --> Sets LP token address once it is instiantiated.
+///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
+///
+/// ## Params
+/// * **lp_token_addr** is a field of type [`Addr`]. It is the address of the LP token.
+pub fn set_lp_token(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token_addr: Addr,
+) -> Result<Response, ContractError> {
+    // Get config
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // Acess Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Update state
+    config.lp_token_addr = Some(lp_token_addr);
+    CONFIG.save(deps.storage, &config)?;
+
+    let event = Event::new("dexter-pool::set-lp-token")
+        .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
+    Ok(Response::new().add_event(event))
 }
 
 /// ## Description

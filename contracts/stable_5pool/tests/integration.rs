@@ -3,11 +3,12 @@ use cosmwasm_std::{attr, from_binary, to_binary, Addr, Coin, Decimal, Timestamp,
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
-use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
+use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, ExecuteMsg, FeeResponse, FeeStructs,
-    QueryMsg, ResponseType, SwapResponse, CumulativePriceResponse, CumulativePricesResponse
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
+    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
+    SwapResponse,
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -45,14 +46,11 @@ fn store_vault_code(app: &mut App) -> u64 {
 }
 
 fn store_stable_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            stable5pool::contract::execute,
-            stable5pool::contract::instantiate,
-            stable5pool::contract::query,
-        )
-        .with_reply_empty(stable5pool::contract::reply),
-    );
+    let pool_contract = Box::new(ContractWrapper::new_with_empty(
+        stable5pool::contract::execute,
+        stable5pool::contract::instantiate,
+        stable5pool::contract::query,
+    ));
     app.store_code(pool_contract)
 }
 
@@ -877,7 +875,6 @@ fn test_query_on_join_pool() {
     //     },
     //     pool_twap_res_t2.exchange_info
     // );
-
 
     // assert_eq!(Uint128::from(3000u128), pool_twap_res.total_share);
     // assert_eq!(
