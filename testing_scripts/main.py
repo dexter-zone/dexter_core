@@ -1,4 +1,4 @@
-from model import DexterModel
+# from model import DexterModel
 import asyncio
 from cosmos_sdk.client.lcd import LCDClient
 from cosmos_sdk.key.mnemonic import MnemonicKey
@@ -24,8 +24,21 @@ class DexterModel(dexter_helpers_mixin):
         self.wallet_addr = self.wallet.key.acc_address
         print(f"Wallet address = {self.wallet_addr} || Block number = {block_num}")
 
+
+
         res = self.query_pool_config("persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s")
-        print(res)
+        id_res = self.query_pool_id("persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s")
+        print(id_res)
+        # pool_assets = res['assets']
+        # print("Pool Assets")
+        # for asset in pool_assets:
+        #     print(asset["info"])
+            # if asset["info"].get("native_token"):
+            #     print("Native Token")
+
+        # self.execute_vault_JoinPool()
+        
+
 
 
 
@@ -46,14 +59,16 @@ def execute_simulation():
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
+    execute_simulation()
+    loop.close()
 
-    while(1):
-        try:
-            loop.run_until_complete(execute_simulation())
-        except Exception as e:
-            print(e)  
-            if e == KeyboardInterrupt:
-                break
-            # pass
+    # while(1):
+    #     try:
+    #         loop.run_until_complete(execute_simulation())
+    #     except Exception as e:
+    #         print(e)  
+    #         if e == KeyboardInterrupt:
+    #             break
+    #         # pass
 
     # asyncio.sleep(59*59)

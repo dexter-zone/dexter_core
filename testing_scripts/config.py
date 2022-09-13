@@ -31,32 +31,78 @@ addresses = {
 }
 
 POOLS = {
-    "xyk_1": {
+    "pool1": {
+        "id": 1,
+        "type" : "xyk",
         "pool_addr": addresses["xyk_pool_addr"],
         "lp_token_addr": addresses["xyk_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}},
+            {'native_token': {'denom': 'uxprt'}}
+        ]
     },
-    "xyk_2": {
+    "pool2": {
+        "id": 2,
+        "type" : "xyk",
         "pool_addr": addresses["xyk_2_pool_addr"],
         "lp_token_addr": addresses["xyk_2_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}}
+        ]        
     },
-    "stableswap_1": {
+    "pool3": {
+        "id": 3,
+        "type" : "stableswap",
         "pool_addr": addresses["stableswap_pool_addr"],
         "lp_token_addr": addresses["stableswap_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}}
+        ]           
     },
-    "stableswap_2": {
+    "pool4": {
+        "id": 4,
+        "type" : "stableswap",
         "pool_addr": addresses["stableswap_2_pool_addr"],
         "lp_token_addr": addresses["stableswap_2_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}},
+            {'native_token': {'denom': 'uxprt'}}
+        ]           
     },
-    "stable5swap_1": {
+    "pool5": {
+        "id": 5,
+        "type" : "stable5swap",
         "pool_addr": addresses["stable5swap_pool_addr"],
         "lp_token_addr": addresses["stable5swap_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}}
+        ]           
     },
-    "stable5swap_2": {
+    "pool6": {
+        "id": 6,
+        "type" : "stable5swap",
         "pool_addr": addresses["stable5swap_2_pool_addr"],
         "lp_token_addr": addresses["stable5swap_2_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}},
+            {'token': {'contract_addr': 'persistence1vhjnzk9ly03dugffvzfcwgry4dgc8x0sv0nqqtfxj3ajn7rn5ghqtpaner'}},
+            {'native_token': {'denom': 'uxprt'}}
+        ]           
     },
-    "weighted_1": {
+    "pool7": {
+        "id": 7,
+        "type" : "weighted",
         "pool_addr": addresses["weighted_pool_addr"],
         "lp_token_addr": addresses["weighted_lp_token_addr"],
+        "assets" : [
+            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
+            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}},
+            {'token': {'contract_addr': 'persistence1vhjnzk9ly03dugffvzfcwgry4dgc8x0sv0nqqtfxj3ajn7rn5ghqtpaner'}},
+            {'native_token': {'denom': 'uxprt'}}
+        ]           
     },
 }
