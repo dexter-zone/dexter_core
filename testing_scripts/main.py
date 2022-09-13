@@ -24,11 +24,21 @@ class DexterModel(dexter_helpers_mixin):
         self.wallet_addr = self.wallet.key.acc_address
         print(f"Wallet address = {self.wallet_addr} || Block number = {block_num}")
 
+        VAULT_ADDR = "persistence1jyhyqjxf3pc7vzwyqhwe53up5pj0e53zw3xu2589uqgkvqngswnqgrmstf"
+
 
 
         res = self.query_pool_config("persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s")
-        id_res = self.query_pool_id("persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s")
-        print(id_res)
+        # id_res = self.query_pool_id("persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s")
+        # print(id_res)
+
+        token_balance = self.query_balance("persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng", self.wallet_addr)
+        print(token_balance)
+
+        increase_allowance_tx = self.execute_increase_allowance("persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng", VAULT_ADDR, 1000000000)
+        print(increase_allowance_tx)
+
+
         # pool_assets = res['assets']
         # print("Pool Assets")
         # for asset in pool_assets:
@@ -36,7 +46,7 @@ class DexterModel(dexter_helpers_mixin):
             # if asset["info"].get("native_token"):
             #     print("Native Token")
 
-        # self.execute_vault_JoinPool()
+        # self.execute_vault_JoinPool(1, None, )
         
 
 

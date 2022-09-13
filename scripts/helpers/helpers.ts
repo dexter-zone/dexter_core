@@ -1,10 +1,9 @@
 import { CosmosChainClient, cosmos, cosmwasm, osmosis } from "cosmoschainsjs";
 import { coins, Coin } from "@cosmjs/stargate";
 import { Any } from "cosmjs-types/google/protobuf/any.js";
-import Long  from "long";
+import Long from "long";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
-
 
 export const ARTIFACTS_PATH = "../artifacts";
 
@@ -30,7 +29,6 @@ export function writeArtifact(data: object, name: string = "artifact") {
   );
 }
 
-
 // --------x-------------x-------------x----- -----x-----------------x-----------
 // --------x----- OSMOSIS BLOCKCHAIN :::: QUERIES :: Helpers Functions -----x-----------
 // --------x-------------x-------------x----- -----x-----------------x-----------
@@ -38,80 +36,119 @@ export function writeArtifact(data: object, name: string = "artifact") {
 // EPOCHES MODULE
 // --------------
 
-export async function query_osmosis_epoch_epochInfos(client: CosmosChainClient) {
+export async function query_osmosis_epoch_epochInfos(
+  client: CosmosChainClient
+) {
   let response = await client.query.osmosis.epoches.v1.epochInfos(
     osmosis.epochs.v1beta1.QueryEpochsInfoRequest.fromPartial({})
-  )
+  );
   return response;
 }
 
-export async function query_osmosis_epoch_currentEpoch(client: CosmosChainClient, identifier: string) {
+export async function query_osmosis_epoch_currentEpoch(
+  client: CosmosChainClient,
+  identifier: string
+) {
   let response = await client.query.osmosis.epoches.v1.currentEpoch(
-    osmosis.epochs.v1beta1.QueryCurrentEpochRequest.fromPartial({ identifier: identifier })
-  )
+    osmosis.epochs.v1beta1.QueryCurrentEpochRequest.fromPartial({
+      identifier: identifier,
+    })
+  );
   return response;
 }
-
 
 // GAMM MODULE
 // --------------
 
-export async function query_osmosis_gamm_pools(client: CosmosChainClient,   offset?: number,
-  limit?: number) {
+export async function query_osmosis_gamm_pools(
+  client: CosmosChainClient,
+  offset?: number,
+  limit?: number
+) {
   let response = await client.query.osmosis.gamm.v1.pools(
     osmosis.gamm.v1beta1.QueryPoolsRequest.fromPartial({
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
     })
-  )
+  );
   return response;
 }
 
 export async function query_osmosis_gamm_numpools(client: CosmosChainClient) {
   let response = await client.query.osmosis.gamm.v1.numPools(
     osmosis.gamm.v1beta1.QueryNumPoolsRequest.fromPartial({})
-  )
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_totalLiquidity(client: CosmosChainClient) {
+export async function query_osmosis_gamm_totalLiquidity(
+  client: CosmosChainClient
+) {
   let response = await client.query.osmosis.gamm.v1.totalLiquidity(
     osmosis.gamm.v1beta1.QueryTotalLiquidityRequest.fromPartial({})
-  )
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_pool(client: CosmosChainClient, poolId: number) {
+export async function query_osmosis_gamm_pool(
+  client: CosmosChainClient,
+  poolId: number
+) {
   let response = await client.query.osmosis.gamm.v1.pool(
     osmosis.gamm.v1beta1.QueryPoolRequest.fromPartial({ poolId: poolId })
-  )
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_poolParams(client: CosmosChainClient,  poolId: number) {
+export async function query_osmosis_gamm_poolParams(
+  client: CosmosChainClient,
+  poolId: number
+) {
   let response = await client.query.osmosis.gamm.v1.poolParams(
     osmosis.gamm.v1beta1.QueryPoolParamsRequest.fromPartial({ poolId: poolId })
-  )
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_totalPoolLiquidity(client: CosmosChainClient,  poolId: number) {
+export async function query_osmosis_gamm_totalPoolLiquidity(
+  client: CosmosChainClient,
+  poolId: number
+) {
   let response = await client.query.osmosis.gamm.v1.totalPoolLiquidity(
-    osmosis.gamm.v1beta1.QueryTotalPoolLiquidityRequest.fromPartial({ poolId: poolId })
-  )
+    osmosis.gamm.v1beta1.QueryTotalPoolLiquidityRequest.fromPartial({
+      poolId: poolId,
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_totalShares(client: CosmosChainClient,  poolId: number) {
+export async function query_osmosis_gamm_totalShares(
+  client: CosmosChainClient,
+  poolId: number
+) {
   let response = await client.query.osmosis.gamm.v1.totalShares(
-    osmosis.gamm.v1beta1.QueryTotalPoolLiquidityRequest.fromPartial({ poolId: poolId })
-  )
+    osmosis.gamm.v1beta1.QueryTotalPoolLiquidityRequest.fromPartial({
+      poolId: poolId,
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_spotPrice(client: CosmosChainClient, poolId: number, baseAssetDenom: string, quoteAssetDenom: string ) {
+export async function query_osmosis_gamm_spotPrice(
+  client: CosmosChainClient,
+  poolId: number,
+  baseAssetDenom: string,
+  quoteAssetDenom: string
+) {
   let response = await client.query.osmosis.gamm.v1.spotPrice(
-    osmosis.gamm.v1beta1.QuerySpotPriceRequest.fromPartial({ poolId: poolId, baseAssetDenom:baseAssetDenom, quoteAssetDenom:quoteAssetDenom })
-  )
+    osmosis.gamm.v1beta1.QuerySpotPriceRequest.fromPartial({
+      poolId: poolId,
+      baseAssetDenom: baseAssetDenom,
+      quoteAssetDenom: quoteAssetDenom,
+    })
+  );
   return response;
 }
 
@@ -119,284 +156,389 @@ export async function query_osmosis_gamm_spotPrice(client: CosmosChainClient, po
 //   poolId: Long;
 //   tokenOutDenom: string;
 // }
-export async function query_osmosis_gamm_estimateSwapExactAmountIn(client: CosmosChainClient,sender:string, poolId:number, tokenIn: string, routes:any) {
+export async function query_osmosis_gamm_estimateSwapExactAmountIn(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  tokenIn: string,
+  routes: any
+) {
   let response = await client.query.osmosis.gamm.v1.estimateSwapExactAmountIn(
-    osmosis.gamm.v1beta1.QuerySwapExactAmountInRequest.fromPartial({ sender: sender, poolId: poolId, tokenIn:tokenIn, routes })
-  )
+    osmosis.gamm.v1beta1.QuerySwapExactAmountInRequest.fromPartial({
+      sender: sender,
+      poolId: poolId,
+      tokenIn: tokenIn,
+      routes,
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_gamm_estimateSwapExactAmountOut(client: CosmosChainClient,sender:string, poolId:number, tokenOut: string, routes:any) {
+export async function query_osmosis_gamm_estimateSwapExactAmountOut(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  tokenOut: string,
+  routes: any
+) {
   let response = await client.query.osmosis.gamm.v1.estimateSwapExactAmountOut(
-    osmosis.gamm.v1beta1.QuerySwapExactAmountOutRequest.fromPartial({ sender: sender, poolId: poolId, tokenOut:tokenOut, routes })
-  )
+    osmosis.gamm.v1beta1.QuerySwapExactAmountOutRequest.fromPartial({
+      sender: sender,
+      poolId: poolId,
+      tokenOut: tokenOut,
+      routes,
+    })
+  );
   return response;
 }
-
 
 // INCENTIVES MODULE
 // --------------
 
-export async function query_osmosis_incentives_moduleToDistributeCoins(client: CosmosChainClient) {
-  console.log(osmosis.incentives)
-  let response = await client.query.osmosis.incentives.v1.moduleToDistributeCoins(
-    osmosis.incentives.ModuleToDistributeCoinsRequest.fromPartial({ })
-  )
+export async function query_osmosis_incentives_moduleToDistributeCoins(
+  client: CosmosChainClient
+) {
+  console.log(osmosis.incentives);
+  let response =
+    await client.query.osmosis.incentives.v1.moduleToDistributeCoins(
+      osmosis.incentives.ModuleToDistributeCoinsRequest.fromPartial({})
+    );
   return response;
 }
 
-export async function query_osmosis_incentives_moduleDistributedCoins(client: CosmosChainClient) {
-  let response = await client.query.osmosis.incentives.v1.moduleDistributedCoins(
-    osmosis.incentives.ModuleDistributedCoinsRequest.fromPartial({ })
-  )
+export async function query_osmosis_incentives_moduleDistributedCoins(
+  client: CosmosChainClient
+) {
+  let response =
+    await client.query.osmosis.incentives.v1.moduleDistributedCoins(
+      osmosis.incentives.ModuleDistributedCoinsRequest.fromPartial({})
+    );
   return response;
 }
 
-export async function query_osmosis_incentives_gaugeByID(client: CosmosChainClient, id: number) {
+export async function query_osmosis_incentives_gaugeByID(
+  client: CosmosChainClient,
+  id: number
+) {
   let response = await client.query.osmosis.incentives.v1.gaugeByID(
-    osmosis.incentives.GaugeByIDRequest.fromPartial({ id:id })
-  )
+    osmosis.incentives.GaugeByIDRequest.fromPartial({ id: id })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_gauges(client: CosmosChainClient,   offset?: number,
-  limit?: number) {
+export async function query_osmosis_incentives_gauges(
+  client: CosmosChainClient,
+  offset?: number,
+  limit?: number
+) {
   let response = await client.query.osmosis.incentives.v1.gauges(
     osmosis.incentives.GaugesRequest.fromPartial({
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
-     })
-  )
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_activeGauges(client: CosmosChainClient,   offset?: number,
-  limit?: number) {
+export async function query_osmosis_incentives_activeGauges(
+  client: CosmosChainClient,
+  offset?: number,
+  limit?: number
+) {
   let response = await client.query.osmosis.incentives.v1.activeGauges(
     osmosis.incentives.ActiveGaugesRequest.fromPartial({
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
-     })
-  )
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_activeGaugesPerDenom(client: CosmosChainClient,denom: string, offset?: number,
-  limit?: number  ) {
+export async function query_osmosis_incentives_activeGaugesPerDenom(
+  client: CosmosChainClient,
+  denom: string,
+  offset?: number,
+  limit?: number
+) {
   let response = await client.query.osmosis.incentives.v1.activeGaugesPerDenom(
-    osmosis.incentives.ActiveGaugesPerDenomRequest.fromPartial({ denom:denom, 
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
-  )
+    osmosis.incentives.ActiveGaugesPerDenomRequest.fromPartial({
+      denom: denom,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_upcomingGauges(client: CosmosChainClient,  offset?: number,
-  limit?: number  ) {
+export async function query_osmosis_incentives_upcomingGauges(
+  client: CosmosChainClient,
+  offset?: number,
+  limit?: number
+) {
   let response = await client.query.osmosis.incentives.v1.upcomingGauges(
-    osmosis.incentives.UpcomingGaugesRequest.fromPartial({ 
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
-     })
-  )
+    osmosis.incentives.UpcomingGaugesRequest.fromPartial({
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_upcomingGaugesPerDenom(client: CosmosChainClient, denom: string,  offset?: number,
-  limit?: number  ) {
-  let response = await client.query.osmosis.incentives.v1.upcomingGaugesPerDenom(
-    osmosis.incentives.UpcomingGaugesPerDenomRequest.fromPartial({ denom: denom,
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
-  )
+export async function query_osmosis_incentives_upcomingGaugesPerDenom(
+  client: CosmosChainClient,
+  denom: string,
+  offset?: number,
+  limit?: number
+) {
+  let response =
+    await client.query.osmosis.incentives.v1.upcomingGaugesPerDenom(
+      osmosis.incentives.UpcomingGaugesPerDenomRequest.fromPartial({
+        denom: denom,
+        pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+          offset: offset,
+          limit: limit,
+        }),
+      })
+    );
   return response;
 }
 
-export async function query_osmosis_incentives_rewardsEst(client: CosmosChainClient, owner: string, lockIds: number[], endEpoch:number  ) {
+export async function query_osmosis_incentives_rewardsEst(
+  client: CosmosChainClient,
+  owner: string,
+  lockIds: number[],
+  endEpoch: number
+) {
   let response = await client.query.osmosis.incentives.v1.rewardsEst(
-    osmosis.incentives.RewardsEstRequest.fromPartial({owner:owner, lockIds:lockIds, endEpoch:endEpoch  })
-  )
+    osmosis.incentives.RewardsEstRequest.fromPartial({
+      owner: owner,
+      lockIds: lockIds,
+      endEpoch: endEpoch,
+    })
+  );
   return response;
 }
 
-export async function query_osmosis_incentives_lockableDurations(client: CosmosChainClient) {
+export async function query_osmosis_incentives_lockableDurations(
+  client: CosmosChainClient
+) {
   let response = await client.query.osmosis.incentives.v1.lockableDurations(
-    osmosis.incentives.QueryLockableDurationsRequest.fromPartial({ })
-  )
+    osmosis.incentives.QueryLockableDurationsRequest.fromPartial({})
+  );
   return response;
 }
-
 
 // --------x-------------x-------------x----- -----x-----------------x-----------
 // --------x----- OSMOSIS BLOCKCHAIN :::: TRANSACTIONS :: Helpers Functions -----x-----------
 // --------x-------------x-------------x----- -----x-----------------x-----------
 
-export async function execute_osmosis_gamm_JoinPool(client: CosmosChainClient, sender:string,
-  poolId:number, shareOutAmount: string, tokenInMaxs: any ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.joinPool(
-        osmosis.gamm.v1beta1.MsgJoinPool.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          shareOutAmount: shareOutAmount,
-          tokenInMaxs: tokenInMaxs
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_JoinPool(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  shareOutAmount: string,
+  tokenInMaxs: any
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.joinPool(
+      osmosis.gamm.v1beta1.MsgJoinPool.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        shareOutAmount: shareOutAmount,
+        tokenInMaxs: tokenInMaxs,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-export async function execute_osmosis_gamm_ExitPool(client: CosmosChainClient, sender:string,
-  poolId:number, shareInAmount: string, tokenOutMins: any ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.exitPool(
-        osmosis.gamm.v1beta1.MsgExitPool.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          shareInAmount: shareInAmount,
-          tokenOutMins: tokenOutMins
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_ExitPool(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  shareInAmount: string,
+  tokenOutMins: any
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.exitPool(
+      osmosis.gamm.v1beta1.MsgExitPool.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        shareInAmount: shareInAmount,
+        tokenOutMins: tokenOutMins,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-export async function execute_osmosis_gamm_swapExactAmountIn(client: CosmosChainClient, sender:string, routes: any,
-        tokenIn:Coin, tokenOutMinAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.swapExactAmountIn(
-        osmosis.gamm.v1beta1.MsgSwapExactAmountIn.fromPartial({
-          sender: sender,
-          routes: routes,
-          tokenIn: tokenIn,
-          tokenOutMinAmount: tokenOutMinAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_swapExactAmountIn(
+  client: CosmosChainClient,
+  sender: string,
+  routes: any,
+  tokenIn: Coin,
+  tokenOutMinAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.swapExactAmountIn(
+      osmosis.gamm.v1beta1.MsgSwapExactAmountIn.fromPartial({
+        sender: sender,
+        routes: routes,
+        tokenIn: tokenIn,
+        tokenOutMinAmount: tokenOutMinAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-export async function execute_osmosis_gamm_swapExactAmountOut(client: CosmosChainClient, sender:string, routes: any,
-  tokenOut:Coin, tokenInMaxAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.swapExactAmountOut(
-        osmosis.gamm.v1beta1.MsgSwapExactAmountOut.fromPartial({
-          sender: sender,
-          routes: routes,
-          tokenOut: tokenOut,
-          tokenInMaxAmount: tokenInMaxAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_swapExactAmountOut(
+  client: CosmosChainClient,
+  sender: string,
+  routes: any,
+  tokenOut: Coin,
+  tokenInMaxAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.swapExactAmountOut(
+      osmosis.gamm.v1beta1.MsgSwapExactAmountOut.fromPartial({
+        sender: sender,
+        routes: routes,
+        tokenOut: tokenOut,
+        tokenInMaxAmount: tokenInMaxAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-export async function execute_osmosis_gamm_joinSwapExternAmountIn(client: CosmosChainClient, sender:string, poolId: number,
-  tokenIn:Coin, shareOutMinAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.joinSwapExternAmountIn(
-        osmosis.gamm.v1beta1.MsgJoinSwapExternAmountIn.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          tokenIn: tokenIn,
-          shareOutMinAmount: shareOutMinAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_joinSwapExternAmountIn(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  tokenIn: Coin,
+  shareOutMinAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.joinSwapExternAmountIn(
+      osmosis.gamm.v1beta1.MsgJoinSwapExternAmountIn.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        tokenIn: tokenIn,
+        shareOutMinAmount: shareOutMinAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-
-export async function execute_osmosis_gamm_joinSwapShareAmountOut(client: CosmosChainClient, sender:string,  poolId: number,
-  tokenInDenom: string, tokenInMaxAmount:string, shareOutAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.joinSwapShareAmountOut(
-        osmosis.gamm.v1beta1.MsgJoinSwapShareAmountOut.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          tokenInDenom: tokenInDenom,
-          shareOutAmount: shareOutAmount,
-          tokenInMaxAmount: tokenInMaxAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_joinSwapShareAmountOut(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  tokenInDenom: string,
+  tokenInMaxAmount: string,
+  shareOutAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.joinSwapShareAmountOut(
+      osmosis.gamm.v1beta1.MsgJoinSwapShareAmountOut.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        tokenInDenom: tokenInDenom,
+        shareOutAmount: shareOutAmount,
+        tokenInMaxAmount: tokenInMaxAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-
-export async function execute_osmosis_gamm_exitSwapExternAmountOut(client: CosmosChainClient, sender:string, poolId: number,
-  tokenOut:Coin, shareInMaxAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.exitSwapExternAmountOut(
-        osmosis.gamm.v1beta1.MsgExitSwapExternAmountOut.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          tokenOut: tokenOut,
-          shareInMaxAmount: shareInMaxAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_exitSwapExternAmountOut(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: number,
+  tokenOut: Coin,
+  shareInMaxAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.exitSwapExternAmountOut(
+      osmosis.gamm.v1beta1.MsgExitSwapExternAmountOut.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        tokenOut: tokenOut,
+        shareInMaxAmount: shareInMaxAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
 
-
-export async function execute_osmosis_gamm_exitSwapShareAmountIn(client: CosmosChainClient, sender:string, poolId: any,
-  tokenOutDenom: string,  shareInAmount:string, tokenOutMinAmount: string ) {
-    try {
-      let res = await client.query.osmosis.gamm.v1beta1.exitSwapShareAmountIn(
-        osmosis.gamm.v1beta1.MsgExitSwapShareAmountIn.fromPartial({
-          sender: sender,
-          poolId: poolId,
-          tokenOutDenom: tokenOutDenom,
-          shareInAmount: shareInAmount,
-          tokenOutMinAmount: tokenOutMinAmount
-        })
-      );
-      let txhash = res["transactionHash"];
-      console.log(`Tx executed -- ${txhash}`);
-      return res;    
-    }
-    catch (e) {
-      console.log("Error has occoured => ", e);
-    }
+export async function execute_osmosis_gamm_exitSwapShareAmountIn(
+  client: CosmosChainClient,
+  sender: string,
+  poolId: any,
+  tokenOutDenom: string,
+  shareInAmount: string,
+  tokenOutMinAmount: string
+) {
+  try {
+    let res = await client.query.osmosis.gamm.v1beta1.exitSwapShareAmountIn(
+      osmosis.gamm.v1beta1.MsgExitSwapShareAmountIn.fromPartial({
+        sender: sender,
+        poolId: poolId,
+        tokenOutDenom: tokenOutDenom,
+        shareInAmount: shareInAmount,
+        tokenOutMinAmount: tokenOutMinAmount,
+      })
+    );
+    let txhash = res["transactionHash"];
+    console.log(`Tx executed -- ${txhash}`);
+    return res;
+  } catch (e) {
+    console.log("Error has occoured => ", e);
+  }
 }
-
-
 
 // --------x-------------x-------------x----- -----x-----------------x-----------
 // --------x----- WASM MODULE :::: QUERIES :: Helpers Functions -----x-----------
 // --------x-------------x-------------x----- -----x-----------------x-----------
-
 
 // ContractHistory gets the contract code history
 export async function query_wasm_contractHistory(
@@ -406,8 +548,13 @@ export async function query_wasm_contractHistory(
   limit?: number
 ) {
   let response = await client.query.cosmwasm.wasm.v1.contractHistory(
-    cosmwasm.wasm.v1.QueryContractHistoryRequest.fromPartial({ address: contract_addr,
-    pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
+    cosmwasm.wasm.v1.QueryContractHistoryRequest.fromPartial({
+      address: contract_addr,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -417,11 +564,16 @@ export async function query_wasm_contractsByCode(
   client: CosmosChainClient,
   codeId: number,
   offset?: number,
-  limit?: number,
+  limit?: number
 ) {
   let codes = await client.query.cosmwasm.wasm.v1.contractsByCode(
-    cosmwasm.wasm.v1.QueryContractsByCodeRequest.fromPartial({ codeId: codeId ,
-    pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})} )
+    cosmwasm.wasm.v1.QueryContractsByCodeRequest.fromPartial({
+      codeId: codeId,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return codes;
 }
@@ -431,11 +583,16 @@ export async function query_wasm_allContractState(
   client: CosmosChainClient,
   address: string,
   offset?: number,
-  limit?: number,
+  limit?: number
 ) {
   let response = await client.query.cosmwasm.wasm.v1.allContractState(
-    cosmwasm.wasm.v1.QueryAllContractStateRequest.fromPartial({ address: address,
-    pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})} )
+    cosmwasm.wasm.v1.QueryAllContractStateRequest.fromPartial({
+      address: address,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -447,7 +604,10 @@ export async function query_wasm_rawContractState(
   queryData: Uint8Array
 ) {
   let response = await client.query.cosmwasm.wasm.v1.rawContractState(
-    cosmwasm.wasm.v1.QueryRawContractStateRequest.fromPartial({ address: address, queryData: queryData })
+    cosmwasm.wasm.v1.QueryRawContractStateRequest.fromPartial({
+      address: address,
+      queryData: queryData,
+    })
   );
   return response;
 }
@@ -459,7 +619,10 @@ export async function query_wasm_smartContractState(
   queryData: Uint8Array
 ) {
   let response = await client.query.cosmwasm.wasm.v1.smartContractState(
-    cosmwasm.wasm.v1.QuerySmartContractStateRequest.fromPartial({ address: address, queryData: queryData })
+    cosmwasm.wasm.v1.QuerySmartContractStateRequest.fromPartial({
+      address: address,
+      queryData: queryData,
+    })
   );
   return response;
 }
@@ -482,7 +645,12 @@ export async function query_wasm_codes(
   limit?: number
 ) {
   let response = await client.query.cosmwasm.wasm.v1.codes(
-    cosmwasm.wasm.v1.QueryCodesRequest.fromPartial({ pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
+    cosmwasm.wasm.v1.QueryCodesRequest.fromPartial({
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -494,11 +662,15 @@ export async function query_wasm_pinnedCodes(
   limit?: number
 ) {
   let response = await client.query.cosmwasm.wasm.v1.pinnedCodes(
-    cosmwasm.wasm.v1.QueryPinnedCodesRequest.fromPartial({ pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
+    cosmwasm.wasm.v1.QueryPinnedCodesRequest.fromPartial({
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
-
 
 // Return list of codeIds with codeInfos having datahash for the contract
 export async function find_code_id_from_contract_hash(
@@ -517,30 +689,29 @@ export async function find_code_id_from_contract_hash(
     if (hash == hex) {
       return code_id;
     }
-
   }
   return 0;
 }
-
 
 // --------x-------------x-------------x----- -----x-----------------x-----------
 // --------x----- GOV MODULE :::: QUERIES :: Helpers Functions -----x-----------
 // --------x-------------x-------------x----- -----x-----------------x-----------
 
-
 // Proposal queries proposal details based on ProposalID
-  // PROPOSAL_STATUS_UNSPECIFIED = 0
-  // PROPOSAL_STATUS_DEPOSIT_PERIOD = 1
-  // PROPOSAL_STATUS_VOTING_PERIOD = 2
-  // PROPOSAL_STATUS_PASSED = 3
-  // PROPOSAL_STATUS_REJECTED = 4
-  // PROPOSAL_STATUS_FAILED = 5
+// PROPOSAL_STATUS_UNSPECIFIED = 0
+// PROPOSAL_STATUS_DEPOSIT_PERIOD = 1
+// PROPOSAL_STATUS_VOTING_PERIOD = 2
+// PROPOSAL_STATUS_PASSED = 3
+// PROPOSAL_STATUS_REJECTED = 4
+// PROPOSAL_STATUS_FAILED = 5
 export async function query_gov_proposal(
   client: CosmosChainClient,
   proposalId: number
 ) {
   let response = await client.query.cosmos.gov.v1beta1.proposal(
-    cosmos.gov.v1beta1.QueryProposalRequest.fromPartial({proposalId: proposalId}) 
+    cosmos.gov.v1beta1.QueryProposalRequest.fromPartial({
+      proposalId: proposalId,
+    })
   );
   return response;
 }
@@ -552,15 +723,18 @@ export async function query_gov_proposals(
   voter: string,
   depositor: string,
   limit?: number,
-  offset?:number 
+  offset?: number
 ) {
   let response = await client.query.cosmos.gov.v1beta1.proposals(
-    cosmos.gov.v1beta1.QueryProposalsRequest.fromPartial({ 
+    cosmos.gov.v1beta1.QueryProposalsRequest.fromPartial({
       proposalStatus: cosmos.gov.v1beta1.proposalStatusFromJSON(proposalStatus),
       voter: voter,
       depositor: depositor,
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
-     })
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -572,7 +746,10 @@ export async function query_gov_vote(
   voter: string
 ) {
   let response = await client.query.cosmos.gov.v1beta1.vote(
-    cosmos.gov.v1beta1.QueryVoteRequest.fromPartial({ proposalId: proposalId, voter: voter })
+    cosmos.gov.v1beta1.QueryVoteRequest.fromPartial({
+      proposalId: proposalId,
+      voter: voter,
+    })
   );
   return response;
 }
@@ -585,9 +762,13 @@ export async function query_gov_votes(
   limit?: number
 ) {
   let response = await client.query.cosmos.gov.v1beta1.votes(
-    cosmos.gov.v1beta1.QueryVotesRequest.fromPartial({ proposalId: proposalId, 
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit})
-     })
+    cosmos.gov.v1beta1.QueryVotesRequest.fromPartial({
+      proposalId: proposalId,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -599,7 +780,9 @@ export async function query_gov_params(
   paramsType: string
 ) {
   let response = await client.query.cosmos.gov.v1beta1.params(
-    cosmos.gov.v1beta1.QueryParamsRequest.fromPartial({ paramsType: paramsType })
+    cosmos.gov.v1beta1.QueryParamsRequest.fromPartial({
+      paramsType: paramsType,
+    })
   );
   return response;
 }
@@ -611,7 +794,10 @@ export async function query_gov_deposit(
   depositor: string
 ) {
   let response = await client.query.cosmos.gov.v1beta1.deposit(
-    cosmos.gov.v1beta1.QueryDepositRequest.fromPartial({ proposalId: proposalId, depositor: depositor })
+    cosmos.gov.v1beta1.QueryDepositRequest.fromPartial({
+      proposalId: proposalId,
+      depositor: depositor,
+    })
   );
   return response;
 }
@@ -624,8 +810,13 @@ export async function query_gov_deposits(
   limit?: number
 ) {
   let response = await client.query.cosmos.gov.v1beta1.deposits(
-    cosmos.gov.v1beta1.QueryDepositsRequest.fromPartial({  proposalId: proposalId, 
-      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({offset: offset, limit: limit}) })
+    cosmos.gov.v1beta1.QueryDepositsRequest.fromPartial({
+      proposalId: proposalId,
+      pagination: cosmos.base.query.v1beta1.PageRequest.fromPartial({
+        offset: offset,
+        limit: limit,
+      }),
+    })
   );
   return response;
 }
@@ -633,10 +824,12 @@ export async function query_gov_deposits(
 // TallyResult queries the tally of a proposal vote.
 export async function query_gov_tallyresult(
   client: CosmosChainClient,
-  proposalId: number,
+  proposalId: number
 ) {
   let response = await client.query.cosmos.gov.v1beta1.tallyResult(
-    cosmos.gov.v1beta1.QueryTallyResultRequest.fromPartial({ proposalId: proposalId })
+    cosmos.gov.v1beta1.QueryTallyResultRequest.fromPartial({
+      proposalId: proposalId,
+    })
   );
   return response;
 }
@@ -645,18 +838,18 @@ export async function query_gov_tallyresult(
 // --------x----- OSMOSIS BLOCKCHAIN :::: QUERIES :: Helpers Functions -----x-----------
 // --------x-------------x-------------x----- -----x-----------------x-----------
 
-
 // ContractInfo gets the contract meta data
 export async function query_wasm_contractInfo(
   client: CosmosChainClient,
   contract_addr: string
 ) {
   let response = await client.query.cosmwasm.wasm.v1.contractInfo(
-    cosmwasm.wasm.v1.QueryContractInfoRequest.fromPartial({ address: contract_addr })
+    cosmwasm.wasm.v1.QueryContractInfoRequest.fromPartial({
+      address: contract_addr,
+    })
   );
   return response;
 }
-
 
 // --------x-------------x-------------x----- -----x--------------x-----------
 // --------x----- EXECUTE CONTRACT :: Helpers Functions      -----x-----------
@@ -783,11 +976,10 @@ export async function voteOnProposal(
     },
   };
   // sign & broadcast the transaction
-  const res = await client.core.signAndBroadcast(
-    account.address,
-    [sendMsg],
-    { amount: coins(10_000_000, denom), gas: "2000000" }
-  );
+  const res = await client.core.signAndBroadcast(account.address, [sendMsg], {
+    amount: coins(10_000_000, denom),
+    gas: "2000000",
+  });
   if (res.code === 0) {
     return res;
   } else {
@@ -867,8 +1059,6 @@ export async function MultiSend(
   console.log(res);
 }
 
-
-
 export function toEncodedBinary(object: any) {
   return Buffer.from(JSON.stringify(object)).toString("base64");
 }
@@ -877,23 +1067,19 @@ export function index_dexter_create_pool_tx(events: any) {
   let pool_addr = "";
   let lp_token_addr = "";
   // loop on events
-  for (let i=0;i<events.length;i++) {
-    if (events[i].type == 'wasm-dexter-vault::add_pool_reply') {
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].type == "wasm-dexter-vault::add_pool_reply") {
       let attributes = events[i].attributes;
       // loop on attributes
-      for (let j=0;j<attributes.length;j++) {
-        if (attributes[j].key == "pool_addr" ) {
+      for (let j = 0; j < attributes.length; j++) {
+        if (attributes[j].key == "pool_addr") {
           pool_addr = attributes[j].value;
         }
-        if (attributes[j].key == "lp_token_addr" ) {
+        if (attributes[j].key == "lp_token_addr") {
           lp_token_addr = attributes[j].value;
         }
       }
     }
   }
-  return {pool_addr: pool_addr, lp_token_addr: lp_token_addr};
+  return { pool_addr: pool_addr, lp_token_addr: lp_token_addr };
 }
-
-
-
-

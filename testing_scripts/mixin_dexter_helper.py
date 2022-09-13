@@ -4,6 +4,7 @@ from cosmos_sdk.key.mnemonic import MnemonicKey
 from cosmos_sdk.core.wasm import  MsgExecuteContract 
 from cosmos_sdk.core.fee import Fee
 from cosmos_sdk.core import Coins, Coin
+from cosmos_sdk.client.lcd.api.tx import CreateTxOptions
 import base64
 import json
 
@@ -127,13 +128,32 @@ class dexter_helpers_mixin():
 
 
     ###############################################
+    ########### CW20 TRANSACTIONS & QUERIES ################
+    ###############################################
+
+    def execute_increase_allowance(self,token_addr,recepient,amount):
+        msg = { "increase_allowance": {'recepient': recepient,  "amount": amount }}
+        convertMsgPrep = MsgExecuteContract(self.wallet.key.acc_address, token_addr, msg)
+        tx = self.wallet.create_and_sign_tx( CreateTxOptions(msgs=[convertMsgPrep], fee=Fee(5000000, Coins(uxprt=6250000)),))
+        res = self.client.tx.broadcast(tx)
+        return res
+
+
+    def query_balance(self,  contract_addr, address):
+        try:
+            sim_response = self.client.wasm.contract_query(contract_addr , {"balance":{ "address": address}})
+            return sim_response         
+        except:
+            return None
+
+    ###############################################
     ########### VAULT TRANSACTIONS ################
     ###############################################
 
     def execute_vault_UpdateConfig(self,vault_addr,lp_token_code_id=None,fee_collector=None,generator_address=None ):
         msg = { "update_config": {'lp_token_code_id': lp_token_code_id,  "fee_collector": fee_collector, "generator_address":generator_address  }}
         convertMsgPrep = MsgExecuteContract(self.wallet.key.acc_address, vault_addr, msg)
-        tx = self.wallet.create_and_sign_tx(msgs=[convertMsgPrep], fee=Fee(5000000, Coins(uxprt=6250000)),)
+        tx = self.wallet.create_and_sign_tx( msgs=[convertMsgPrep], fee=Fee(5000000, Coins(uxprt=6250000)),)
         res = self.client.tx.broadcast(tx)
         return res
 

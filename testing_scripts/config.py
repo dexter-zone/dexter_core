@@ -5,20 +5,17 @@ CHAIN_ID = "test-core-1"
 
 addresses = {
   "test_tokens_addresses": [
-    "persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng",
-    "persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr",
-    "persistence1vhjnzk9ly03dugffvzfcwgry4dgc8x0sv0nqqtfxj3ajn7rn5ghqtpaner",
     "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27",
     "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45",
     "persistence13hwj6afyxgue26f966hd5jkcvvjeruv7f9cdtd5d9mrtyrnn73ysyxvc8c",
     "persistence1gd54cnu80s8qdqcyhyvn06m87vlmch2uf4wvz4z08svawvc2rhysgvav55"
   ],
-  "xyk_pool_addr": "persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s",
-  "xyk_lp_token_addr": "persistence186k0cp83c3wyvapgh8fxf66ededemzrfujvjfsx0xw3vr0u9g8sqmtm0ly",
-  "xyk_2_pool_addr": "persistence1xx35wwa2nhfvfm50lj3ukv077mjxuy9pefxxnctxe9kczk6tz3hq8j7lt0",
-  "xyk_2_lp_token_addr": "persistence1s3pk90ccfl6ueehnj8s9pdgyjjlspmr3m5rv46arjh5v4g08dd0qjhajs5",
-  "stableswap_pool_addr": "persistence1kkwp7pd4ts6gukm3e820kyftz4vv5jqtmal8pwqezrnq2ddycqas9nk2dh",
-  "stableswap_lp_token_addr": "persistence1h4qltxx7tcdye2kkwj8ksedad0xr3frdusrdga97wf3mjcpx6qwqa6ayuz",
+  "xyk_pool_addr": "persistence1ut5qjunqrj6pnmg9vjlm8eufulquzdgqfw4xtg02kez0fdmzn9sqv804rp",
+  "xyk_lp_token_addr": "persistence1xk0s8xgktn9x5vwcgtjdxqzadg88fgn33p8u9cnpdxwemvxscvasejtgv7",
+  "xyk_2_pool_addr": "persistence1xvcthy3yrjaeg4y29c5zd2ckefgx99h2ge5ppxtwslnvyqwar7aq2lzgpz",
+  "xyk_2_lp_token_addr": "persistence15ul08t80lm6kp6fs424e3c9gg6eys7wcvkyl6lud45ulfl0fxrnsjdek2u",
+  "stableswap_pool_addr": "persistence1k528kg8h3q56j5yazshv39fafmhjzl4540u7w36g6q2amgyrpwpsvexl2d",
+  "stableswap_lp_token_addr": "persistence1jdsm42szlkrsnht95w4xesk5yluud2rge9vr4vuv84sxd9w32uwsvv0lvh",
   "stableswap_2_pool_addr": "persistence1acrmqqyqq9gwcy2upegzncahqwnzjzy89pssyt0s3ghwsrrqy94srfsw6r",
   "stableswap_2_lp_token_addr": "persistence1kj45m8j2pqrqlw67tqde8lduzla7me38fps8tzzjl2emgp90f0gqjjf5sk",
   "stable5swap_pool_addr": "persistence1a7pjjyvng22a8msatp4zj6ut9tmsd9qvp26gaj7tnrjrqtx7yafqm7ezny",
@@ -32,33 +29,33 @@ addresses = {
 
 POOLS = {
     "pool1": {
-        "id": 1,
+        "id": 15,
         "type" : "xyk",
         "pool_addr": addresses["xyk_pool_addr"],
         "lp_token_addr": addresses["xyk_lp_token_addr"],
         "assets" : [
-            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}},
+            {'token': {'contract_addr': 'persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27'}},
             {'native_token': {'denom': 'uxprt'}}
         ]
     },
     "pool2": {
-        "id": 2,
+        "id": 19,
         "type" : "xyk",
         "pool_addr": addresses["xyk_2_pool_addr"],
         "lp_token_addr": addresses["xyk_2_lp_token_addr"],
         "assets" : [
-            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
-            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}}
+            {'token': {'contract_addr': 'persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27'}},
+            {'token': {'contract_addr': 'persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45'}}
         ]        
     },
     "pool3": {
-        "id": 3,
+        "id": 20,
         "type" : "stableswap",
         "pool_addr": addresses["stableswap_pool_addr"],
         "lp_token_addr": addresses["stableswap_lp_token_addr"],
         "assets" : [
-            {'token': {'contract_addr': 'persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr'}},
-            {'token': {'contract_addr': 'persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng'}}
+            {'token': {'contract_addr': 'persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27'}},
+            {'token': {'contract_addr': 'persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45'}}
         ]           
     },
     "pool4": {
