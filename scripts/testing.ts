@@ -168,7 +168,7 @@ async function Demo() {
   // return;
 
   let POOL_ADDR =
-    'persistence1trl2qjy2wqzx79n9gwfhq50c2ylvpxhjecap9e5ytlyy9sq4t8yqhf6het';
+    'persistence199eg3lhq70cgq5r6w9tw6gw7d3fctwdl84thy55rrp5h9ejz2w3qmzsmcj';
 
   // Query the pool Id for the pool
   let quer_pool_id = await client.wasm.queryContractSmart(POOL_ADDR, {
@@ -201,11 +201,11 @@ async function Demo() {
   console.log(current_pool_confg);
 
   network.dexter_pools.push(current_pool_confg);
-  // writeArtifact(network, CHAIN_ID);
+  writeArtifact(network, CHAIN_ID);
 
   // let pool_id = query['pool_id'];
 
-  // return;
+  return;
 
   // Add Liquidity to 1st XYK Pool
   let join_pool_msg = {
