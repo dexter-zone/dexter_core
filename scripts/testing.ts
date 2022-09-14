@@ -150,12 +150,12 @@ async function Demo() {
   // }
 
   // Add Liquidity to 1st XYK Pool
-  let mint_msg = {
-    mint: {
-      amount: "1000000000000",
-      recipient: wallet_address,
-    },
-  };
+  // let mint_msg = {
+  //   mint: {
+  //     amount: "1000000000000",
+  //     recipient: wallet_address,
+  //   },
+  // };
 
   // let res_ = await executeContract(
   //   client,
@@ -168,19 +168,59 @@ async function Demo() {
   // return;
 
   let POOL_ADDR =
-    "persistence1ut5qjunqrj6pnmg9vjlm8eufulquzdgqfw4xtg02kez0fdmzn9sqv804rp";
+    "persistence1k528kg8h3q56j5yazshv39fafmhjzl4540u7w36g6q2amgyrpwpsvexl2d";
 
-  let query = await client.wasm.queryContractSmart(POOL_ADDR, { pool_id: {} });
-  console.log(`Pool Id = ${JSON.stringify(query)}`);
-  let pool_id = query["pool_id"];
-  // return;
+  // Query the pool Id for the pool
+  let quer_pool_id = await client.wasm.queryContractSmart(POOL_ADDR, {
+    pool_id: {},
+  });
+  // console.log(`Pool Id = ${JSON.stringify(quer_pool_id)}`);
+  let pool_id = quer_pool_id;
+  console.log(`Pool Id = ${pool_id}`);
+
+  // Query the pool's configuration for the pool
+  let query_pool_config = await client.wasm.queryContractSmart(POOL_ADDR, {
+    config: {},
+  });
+  let pool_assets = query_pool_config["assets"];
+  let pool_lp_token = query_pool_config["lp_token_addr"];
+  let pool_type = query_pool_config["pool_type"];
+
+  console.log(`Pool Assets = ${JSON.stringify(pool_assets)}`);
+  console.log(`Pool LP pool = ${JSON.stringify(pool_lp_token)}`);
+  console.log(`Pool Type = ${JSON.stringify(pool_type)}`);
+
+  // Get pool info
+  let current_pool_confg = {
+    pool_id: pool_id,
+    pool_addr: POOL_ADDR,
+    assets: pool_assets,
+    lp_token_addr: pool_lp_token,
+    pool_type: pool_type,
+  };
+  console.log(current_pool_confg);
+
+  network.dexter_pools.push(current_pool_confg);
+  writeArtifact(network, CHAIN_ID);
+
+  // let pool_id = query["pool_id"];
+
+  return;
 
   // Add Liquidity to 1st XYK Pool
   let join_pool_msg = {
     join_pool: {
       pool_id: pool_id,
       assets: [
-        { info: { native_token: { denom: "uxprt" } }, amount: "1000000000" },
+        {
+          info: {
+            token: {
+              contract_addr:
+                "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45",
+            },
+          },
+          amount: "1000000000",
+        },
         {
           info: {
             token: {
@@ -193,13 +233,14 @@ async function Demo() {
       ],
     },
   };
+  console.log(join_pool_msg);
   let res = await executeContract(
     client,
     wallet_address,
     network.vault_contract_address,
     join_pool_msg,
-    "",
-    coins(1000000000, "uxprt")
+    ""
+    // coins(1000000000, "uxprt")
   );
   let txhash = res["transactionHash"];
   console.log(`1st XYK Pool  JOIN POOL txhash = ${txhash}`);
