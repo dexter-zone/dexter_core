@@ -105,6 +105,142 @@
       "pool_type": {
         "stable2_pool": {}
       }
+    },
+    {
+      "pool_id": "23",
+      "pool_addr": "persistence1trl2qjy2wqzx79n9gwfhq50c2ylvpxhjecap9e5ytlyy9sq4t8yqhf6het",
+      "assets": [
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "native_token": {
+              "denom": "uxprt"
+            }
+          },
+          "amount": "0"
+        }
+      ],
+      "lp_token_addr": "persistence1fatu7d26wzmjmc7crf88kl935e4y4azdllugps07qq5zmwupkw8qp38vzq",
+      "pool_type": {
+        "stable2_pool": {}
+      }
+    },
+    {
+      "pool_id": "25",
+      "pool_addr": "persistence13k6g4ch5lj40ku9lvxceam9gakqwy7te49scvcyj4tvdmserp0vsj4gl7d",
+      "assets": [
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45"
+            }
+          },
+          "amount": "2000000000"
+        },
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27"
+            }
+          },
+          "amount": "2000000000"
+        }
+      ],
+      "lp_token_addr": "persistence13plna8yp9t45qsm275lhlzlldaay6hfar7gne89nng0xdcftwjjsc8kkwd",
+      "pool_type": {
+        "stable5_pool": {}
+      }
+    },
+    {
+      "pool_id": "27",
+      "pool_addr": "persistence199eg3lhq70cgq5r6w9tw6gw7d3fctwdl84thy55rrp5h9ejz2w3qmzsmcj",
+      "assets": [
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence13hwj6afyxgue26f966hd5jkcvvjeruv7f9cdtd5d9mrtyrnn73ysyxvc8c"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "native_token": {
+              "denom": "uxprt"
+            }
+          },
+          "amount": "0"
+        }
+      ],
+      "lp_token_addr": "persistence1fk9ludjswsyh6tqe0tv3sagftgyuh23wdwe7wlgvd2fd6d9v2z3qx25gss",
+      "pool_type": {
+        "stable5_pool": {}
+      }
+    },
+    {
+      "pool_id": "27",
+      "pool_addr": "persistence199eg3lhq70cgq5r6w9tw6gw7d3fctwdl84thy55rrp5h9ejz2w3qmzsmcj",
+      "assets": [
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence13hwj6afyxgue26f966hd5jkcvvjeruv7f9cdtd5d9mrtyrnn73ysyxvc8c"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "token": {
+              "contract_addr": "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27"
+            }
+          },
+          "amount": "0"
+        },
+        {
+          "info": {
+            "native_token": {
+              "denom": "uxprt"
+            }
+          },
+          "amount": "0"
+        }
+      ],
+      "lp_token_addr": "persistence1fk9ludjswsyh6tqe0tv3sagftgyuh23wdwe7wlgvd2fd6d9v2z3qx25gss",
+      "pool_type": {
+        "stable5_pool": {}
+      }
     }
   ]
 }
