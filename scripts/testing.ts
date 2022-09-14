@@ -201,7 +201,7 @@ async function Demo() {
   console.log(current_pool_confg);
 
   network.dexter_pools.push(current_pool_confg);
-  writeArtifact(network, CHAIN_ID);
+  // writeArtifact(network, CHAIN_ID);
 
   // let pool_id = query['pool_id'];
 
@@ -234,6 +234,30 @@ async function Demo() {
     },
   };
   console.log(join_pool_msg);
+
+  let swap_msg = {
+    swap: {
+      offer_asset: {
+        info: {
+          native_token: {
+            denom: 'uusd',
+          },
+        },
+        amount: '1000000000',
+      },
+      max_spread: '0.01',
+      belief_price: '0.01',
+      to: wallet_address,
+    },
+  };
+  console.log(swap_msg);
+
+  // Swap
+  let res_ = await executeContract(client, wallet_address, POOL_ADDR, swap_msg);
+  let txhash_ = res_['transactionHash'];
+  console.log(`Swap txhash = ${txhash_}`);
+  await delay(1000);
+
   let res = await executeContract(
     client,
     wallet_address,
