@@ -34,6 +34,7 @@ serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
 itertools = "0.10"
+serde-json-wasm = "0.4.1"
 
 [dev-dependencies]
 anyhow = "1.0"

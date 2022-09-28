@@ -4,7 +4,7 @@ use cosmwasm_std::{
     Uint128, WasmMsg, WasmQuery,
 };
 use protobuf::Message;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
@@ -454,8 +454,9 @@ pub fn execute_create_pool_instance(
             info: asset.to_owned(),
             amount: Uint128::zero(),
         });
-        event = event.add_attribute("pool_asset", asset.as_string()); // For indexing purpose
     }
+    
+    event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
     if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
         return Err(ContractError::InvalidLpTokenName {});
@@ -642,6 +643,11 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 "lp_token_addr",
                 tmp_pool_info.clone().lp_token_addr.unwrap(),
             );
+
+            event = event.add_attribute(
+                "pool_id",
+                tmp_pool_info.pool_id
+            );
         }
         _ => {
             return Err(ContractError::InvalidSubMsgId {});
@@ -728,7 +734,6 @@ pub fn execute_join_pool(
             "pool_addr",
             pool_info.pool_addr.clone().unwrap().to_string(),
         )
-        .add_attribute("lp_to_mint", new_shares.to_string())
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
     // Fee Calculation
@@ -821,11 +826,13 @@ pub fn execute_join_pool(
                     });
                 }
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_join_res.provided_assets[index].info.as_string(),
-                to_transfer.to_string(),
-            );
+
+            let mut asset_data = vec![];
+            for asset in &after_join_res.provided_assets {
+                asset_data.push((asset.clone(), to_transfer.to_string()));
+            }
+            
+            event = event.add_attribute("provided_assets", serde_json_wasm::to_string(&asset_data).unwrap())
         }
         // Increment Index
         index = index + 1;

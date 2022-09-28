@@ -625,7 +625,7 @@ async function Demo() {
       client,
       network.vault_contract_code_id
     );
-    if (res.length > 0) {
+    if (res["contracts"].length > 0) {
       network.vault_contract_address =
         res["contracts"][res["contracts"].length - 1];
     } else {
