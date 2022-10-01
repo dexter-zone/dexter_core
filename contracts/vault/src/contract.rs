@@ -4,7 +4,7 @@ use cosmwasm_std::{
     Uint128, WasmMsg, WasmQuery,
 };
 use protobuf::Message;
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
@@ -606,6 +606,12 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 attr("action", "reply"),
                 attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
             ]);
+
+            event = event.add_attribute(
+                "pool_id",
+                tmp_pool_info.pool_id
+            );
+            
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
             event = event.add_attribute("pool_addr", tmp_pool_info.clone().pool_addr.unwrap());
@@ -827,16 +833,13 @@ pub fn execute_join_pool(
                 }
             }
 
-            let mut asset_data = vec![];
-            for asset in &after_join_res.provided_assets {
-                asset_data.push((asset.clone(), to_transfer.to_string()));
-            }
             
-            event = event.add_attribute("provided_assets", serde_json_wasm::to_string(&asset_data).unwrap())
+            
         }
         // Increment Index
         index = index + 1;
     }
+    event = event.add_attribute("provided_assets", serde_json_wasm::to_string(&after_join_res.provided_assets).unwrap());
 
     let config = CONFIG.load(deps.storage)?;
 
