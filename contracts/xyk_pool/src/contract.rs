@@ -138,7 +138,7 @@ pub fn set_lp_token(
     config.lp_token_addr = Some(lp_token_addr);
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::set-lp-token")
+    let event = Event::new("dexter-pool::set_lp_token")
         .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
     Ok(Response::new().add_event(event))
 }
@@ -185,7 +185,7 @@ pub fn execute_update_pool_liquidity(
     let event = Event::new("dexter-pool::update-liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
-        .add_attribute("asset_amounts", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))

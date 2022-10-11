@@ -230,8 +230,9 @@ pub fn receive_cw20(
             }
 
             let act_recepient = recipient.unwrap_or(sender.clone());
+            let sender = sender.clone();
 
-            execute_exit_pool(deps, env, info, pool_id, act_recepient, assets, burn_amount)
+            execute_exit_pool(deps, env, info, pool_id, act_recepient,  sender, assets, burn_amount)
         }
     }
 }
@@ -749,7 +750,7 @@ pub fn execute_join_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_join_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_join_res.fee.clone().unwrap().info.to_string()).unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -918,10 +919,11 @@ pub fn execute_join_pool(
 /// * **burn_amount** Optional parameter. The number of LP tokens the user wants to burn for the underlying assets.
 pub fn execute_exit_pool(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     pool_id: Uint128,
     recipient: String,
+    sender: String,
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
@@ -983,7 +985,7 @@ pub fn execute_exit_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_burn_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_burn_res.fee.clone().unwrap().info.to_string()).unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -1002,6 +1004,8 @@ pub fn execute_exit_pool(
 
     // recipient address
     let recipient_addr = addr_validate_to_lower(deps.api, &recipient)?;
+
+    let mut assets_out = vec![];
 
     // Update asset balances & transfer tokens WasmMsgs
     let mut index = 0;
@@ -1047,16 +1051,18 @@ pub fn execute_exit_pool(
                     to_transfer,
                 )?);
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_burn_res.assets_out[index].info.as_string(),
-                to_transfer.to_string(),
-            );
+
+            let asset_out = after_burn_res.assets_out[index].clone();
+            assets_out.push(asset_out);
         }
         // Increment Index
         index = index + 1;
     }
 
+    let assets_out_json = serde_json_wasm::to_string(&assets_out).unwrap();
+    event = event.add_attribute("assets_out", assets_out_json);
+    event = event.add_attribute("sender", sender);
+    event = event.add_attribute("vault_contract_address", env.contract.address);
     // Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
@@ -1192,7 +1198,7 @@ pub fn execute_swap(
     if swap_response.fee.clone().is_some() && !swap_response.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute(
             "fee_asset",
-            swap_response.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&swap_response.fee.clone().unwrap().info).unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -1216,9 +1222,9 @@ pub fn execute_swap(
 
     // Event for indexing support
     event = event
-        .add_attribute("offer_asset", offer_asset.info.to_string())
+        .add_attribute("offer_asset", serde_json_wasm::to_string(&offer_asset.info).unwrap())
         .add_attribute("offer_amount", offer_asset.amount.to_string())
-        .add_attribute("ask_asset", ask_asset.info.to_string())
+        .add_attribute("ask_asset", serde_json_wasm::to_string(&ask_asset.info).unwrap())
         .add_attribute("ask_amount", ask_asset.amount.to_string());
 
     // recipient address
@@ -1233,6 +1239,7 @@ pub fn execute_swap(
     }
 
     event = event.add_attribute("recipient", recipient.to_string());
+    event = event.add_attribute("sender", info.sender.clone());
 
     // Update asset balances
     let mut index = 0;
