@@ -8,7 +8,9 @@ use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{ACTIVE_POOLS, CONFIG, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO};
+use crate::state::{
+    ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO,
+};
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 use dexter::helper::{
@@ -115,7 +117,15 @@ pub fn execute(
             pool_type,
             is_disabled,
             new_fee_info,
-        } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
+            is_generator_disabled,
+        } => execute_update_pool_config(
+            deps,
+            info,
+            pool_type,
+            is_disabled,
+            new_fee_info,
+            is_generator_disabled,
+        ),
         ExecuteMsg::AddToRegistry { new_pool_config } => {
             execute_add_to_registry(deps, env, info, new_pool_config)
         }
@@ -297,6 +307,7 @@ pub fn execute_update_pool_config(
     pool_type: PoolType,
     is_disabled: Option<bool>,
     new_fee_info: Option<FeeInfo>,
+    is_generator_disabled: Option<bool>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool_config = REGISTRY
@@ -319,6 +330,11 @@ pub fn execute_update_pool_config(
     // Disable or enable pool instances creation
     if let Some(is_disabled) = is_disabled {
         pool_config.is_disabled = is_disabled;
+    }
+
+    // Disable or enable integration with dexter generator
+    if let Some(is_generator_disabled) = is_generator_disabled {
+        pool_config.is_generator_disabled = is_generator_disabled;
     }
 
     // Update fee info
@@ -612,6 +628,12 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             }));
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+            // Store LP token addr _> Pool Id mapping in the LP token map
+            LP_TOKEN_TO_POOL_ID.save(
+                deps.storage,
+                &tmp_pool_info.lp_token_addr.clone().unwrap().as_bytes(),
+                &tmp_pool_info.pool_id.clone(),
+            )?;
             event = event.add_attribute(
                 "lp_token_addr",
                 tmp_pool_info.clone().lp_token_addr.unwrap(),
@@ -635,11 +657,6 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     CONFIG.save(deps.storage, &config)?;
 
     Ok(response.add_event(event))
-    // Ok(Response::new().add_attributes(vec![
-    //     attr("action", "register"),
-    //     attr("pool_contract_addr", pool_contract.clone()),
-    //     // attr("lp_token_addr", pool_res.lp_token_addr.unwrap()),
-    // ]))
 }
 
 //--------x---------------x--------------x-----x-----
@@ -1340,9 +1357,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::QueryRigistery { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
-        // TO-DO
+        QueryMsg::IsGeneratorDisabled { lp_token_addr } => {
+            to_binary(&query_is_generator_disabled(deps, lp_token_addr)?)
+        }
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
-        // TO-DO
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
         }
@@ -1370,6 +1388,25 @@ pub fn query_rigistery(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigR
         .load(deps.storage, pool_type.to_string())
         .unwrap_or_default();
     Ok(pool_config)
+}
+
+/// ## Description - Returns boolean value indicating if the genarator is disabled or not for the pool
+///
+/// ## Params
+/// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
+pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResult<bool> {
+    let pool_id = LP_TOKEN_TO_POOL_ID
+        .may_load(deps.storage, lp_token_addr.as_bytes())?
+        .expect("The LP token address does not belong to any pool");
+
+    let pool_info = ACTIVE_POOLS
+        .load(deps.storage, &pool_id.to_string().as_bytes())
+        .expect("Invalid Pool Id");
+
+    let pool_config = REGISTRY
+        .load(deps.storage, pool_info.pool_type.to_string())
+        .unwrap_or_default();
+    Ok(pool_config.is_generator_disabled)
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure

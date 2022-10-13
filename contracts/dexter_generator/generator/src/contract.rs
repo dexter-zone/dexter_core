@@ -302,7 +302,7 @@ fn receive_cw20(
     let cfg = CONFIG.load(deps.storage)?;
 
     if !POOL_INFO.has(deps.storage, &lp_token) {
-        create_pool(deps.branch(), &env, &lp_token, &cfg)?;
+        create_pool(deps.branch(), &env, lp_token.clone(), &cfg)?;
     }
 
     match from_binary(&cw20_msg.msg)? {
@@ -443,7 +443,7 @@ pub fn execute_setup_pools(
     // Add new pools to the list of active pools after checking if its not already supported
     for (lp_token, _) in &setup_pools {
         if !POOL_INFO.has(deps.storage, lp_token) {
-            create_pool(deps.branch(), &env, lp_token, &cfg)?;
+            create_pool(deps.branch(), &env, lp_token.to_owned(), &cfg)?;
         }
     }
 
@@ -959,7 +959,7 @@ pub fn claim_rewards(
 
     let mut send_rewards_msg: Vec<WasmMsg> = vec![];
     for lp_token in &lp_tokens {
-        let  pool = POOL_INFO.load(deps.storage, lp_token)?;
+        let pool = POOL_INFO.load(deps.storage, lp_token)?;
         let user = USER_INFO.load(deps.storage, (lp_token, &account))?;
 
         // ExecuteMsg to send rewards to the user
@@ -1595,13 +1595,25 @@ pub fn get_alloc_point(pools: &[(Addr, Uint128)], lp_token: &Addr) -> Uint128 {
 pub fn create_pool(
     deps: DepsMut,
     env: &Env,
-    lp_token: &Addr,
+    lp_token: Addr,
     cfg: &Config,
 ) -> Result<PoolInfo, ContractError> {
+    // Check if the pool is allowed in the vault
+    let is_generator_disabled: bool = deps.querier.query_wasm_smart(
+        cfg.vault.clone(),
+        &dexter::vault::QueryMsg::IsGeneratorDisabled {
+            lp_token_addr: lp_token.clone().into_string(),
+        },
+    )?;
+
+    if is_generator_disabled {
+        return Err(ContractError::GeneratorDisabled {});
+    }
+
     // Create Pool
     POOL_INFO.save(
         deps.storage,
-        lp_token,
+        &lp_token,
         &PoolInfo {
             last_reward_block: cfg.start_block.max(Uint64::from(env.block.height)),
             reward_proxy: None,
@@ -1612,7 +1624,7 @@ pub fn create_pool(
         },
     )?;
 
-    Ok(POOL_INFO.load(deps.storage, lp_token)?)
+    Ok(POOL_INFO.load(deps.storage, &lp_token)?)
 }
 
 /// ## Description

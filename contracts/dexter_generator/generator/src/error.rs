@@ -19,6 +19,9 @@ pub enum ContractError {
     #[error("Vesting contract already set")]
     VestingContractAlreadySet {},
 
+    #[error("Generator is disabled for this pool type")]
+    GeneratorDisabled {},
+
     #[error("Insufficient balance in contract to process claim")]
     BalanceTooSmall {},
 
