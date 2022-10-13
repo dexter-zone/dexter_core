@@ -45,6 +45,12 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
+    if msg.asset_infos.len() != 2 {
+        return Err(ContractError::InvalidNumberOfAssets {
+            max_assets: Uint128::from(2u128),
+        });
+    }
+
     // Create [`Asset`] from [`AssetInfo`]
     let assets = msg
         .asset_infos

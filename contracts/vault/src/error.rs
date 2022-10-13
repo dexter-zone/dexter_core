@@ -9,6 +9,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("CodeId cannot be 0")]
+    InvalidCodeId {},
+
     #[error("InvalidSubMsgId")]
     InvalidSubMsgId {},
 

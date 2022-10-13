@@ -379,6 +379,10 @@ pub fn execute_add_to_registry(
         return Err(ContractError::Unauthorized {});
     }
 
+    if new_pool_config.code_id == 0 {
+        return Err(ContractError::InvalidCodeId {});
+    }
+
     // Check :: If pool type is already registered
     let mut pool_config = REGISTRY
         .load(deps.storage, new_pool_config.pool_type.to_string())

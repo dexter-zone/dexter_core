@@ -12,6 +12,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Maximum {max_assets} assets can be supported by this pool type")]
+    InvalidNumberOfAssets { max_assets: Uint128 },
+
     #[error("Operation non supported")]
     NonSupported {},
 

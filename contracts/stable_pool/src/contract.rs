@@ -52,6 +52,12 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
+    if msg.asset_infos.len() != 2 {
+        return Err(ContractError::InvalidNumberOfAssets {
+            max_assets: Uint128::from(2u128),
+        });
+    }
+
     // Stableswap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
