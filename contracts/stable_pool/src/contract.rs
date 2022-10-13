@@ -180,20 +180,23 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-    config.block_time_last = env.block.time.seconds();
-    CONFIG.save(deps.storage, &config)?;
-
     // Accumulate prices for the assets in the pool
-    if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) =
-        accumulate_prices(env, &twap, config.assets[0].amount, config.assets[1].amount)?
-    {
+    if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) = accumulate_prices(
+        env.clone(),
+        &twap,
+        config.assets[0].amount,
+        config.assets[1].amount,
+    )? {
         twap.price0_cumulative_last = price0_cumulative_new;
         twap.price1_cumulative_last = price1_cumulative_new;
         twap.block_time_last = block_time;
         TWAPINFO.save(deps.storage, &twap)?;
     }
+
+    // Update state
+    config.assets = assets;
+    config.block_time_last = env.block.time.seconds();
+    CONFIG.save(deps.storage, &config)?;
 
     let event = Event::new("dexter-pool::update-liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())

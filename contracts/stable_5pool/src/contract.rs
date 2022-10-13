@@ -201,9 +201,6 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
@@ -221,6 +218,9 @@ pub fn execute_update_pool_liquidity(
     {
         return Err(ContractError::PricesUpdateFailed {});
     }
+
+    // Update state
+    config.assets = assets;
 
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;

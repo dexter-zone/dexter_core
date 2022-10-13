@@ -219,11 +219,6 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-    config.block_time_last = env.block.time.seconds();
-    CONFIG.save(deps.storage, &config)?;
-
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_decimal_asset(deps.as_ref(), &config.assets);
@@ -231,7 +226,7 @@ pub fn execute_update_pool_liquidity(
     // Accumulate prices for the assets in the pool
     if !accumulate_prices(
         deps.as_ref(),
-        env,
+        env.clone(),
         &mut config,
         math_config,
         &mut twap,
@@ -242,6 +237,11 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::PricesUpdateFailed {});
     }
     TWAPINFO.save(deps.storage, &twap)?;
+
+    // Update state
+    config.assets = assets;
+    config.block_time_last = env.block.time.seconds();
+    CONFIG.save(deps.storage, &config)?;
 
     let event = Event::new("dexter-pool::update-liquidity")
         .add_attribute("pool_id", config.pool_id.to_string());
