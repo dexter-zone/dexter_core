@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{ACTIVE_POOLS, CONFIG, OWNERSHIP_PROPOSAL, REGISTERY, TMP_POOL_INFO};
+use crate::state::{ACTIVE_POOLS, CONFIG, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO};
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 use dexter::helper::{
@@ -79,7 +79,7 @@ pub fn instantiate(
         if !pc.fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
-        REGISTERY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
+        REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
     CONFIG.save(deps.storage, &config)?;
 
@@ -116,8 +116,8 @@ pub fn execute(
             is_disabled,
             new_fee_info,
         } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
-        ExecuteMsg::AddToRegistery { new_pool_config } => {
-            execute_add_to_registery(deps, env, info, new_pool_config)
+        ExecuteMsg::AddToRegistry { new_pool_config } => {
+            execute_add_to_registry(deps, env, info, new_pool_config)
         }
         ExecuteMsg::CreatePoolInstance {
             pool_type,
@@ -299,7 +299,7 @@ pub fn execute_update_pool_config(
     new_fee_info: Option<FeeInfo>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_config = REGISTERY
+    let mut pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -330,7 +330,7 @@ pub fn execute_update_pool_config(
     }
 
     // Save pool config
-    REGISTERY.save(
+    REGISTRY.save(
         deps.storage,
         pool_config.pool_type.to_string(),
         &pool_config,
@@ -350,7 +350,7 @@ pub fn execute_update_pool_config(
 /// * **new_pool_config** is the object of type [`PoolConfig`]. Contains configuration parameters for the new pool.
 ///
 /// * Executor** Only owner can execute this function
-pub fn execute_add_to_registery(
+pub fn execute_add_to_registry(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -364,7 +364,7 @@ pub fn execute_add_to_registery(
     }
 
     // Check :: If pool type is already registered
-    let mut pool_config = REGISTERY
+    let mut pool_config = REGISTRY
         .load(deps.storage, new_pool_config.pool_type.to_string())
         .unwrap_or_default();
     if pool_config.code_id != 0u64 {
@@ -380,7 +380,7 @@ pub fn execute_add_to_registery(
     }
 
     // Save pool config
-    REGISTERY.save(
+    REGISTRY.save(
         deps.storage,
         pool_config.pool_type.to_string(),
         &pool_config,
@@ -447,7 +447,7 @@ pub fn execute_create_pool_instance(
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
-    let pool_config = REGISTERY
+    let pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -723,7 +723,7 @@ pub fn execute_join_pool(
             "total_fee",
             after_join_res.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(after_join_res.fee.clone().unwrap().amount.clone());
@@ -958,7 +958,7 @@ pub fn execute_exit_pool(
             "total_fee",
             after_burn_res.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(after_burn_res.fee.clone().unwrap().amount.clone());
@@ -1167,7 +1167,7 @@ pub fn execute_swap(
             "total_fee",
             swap_response.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(swap_response.fee.clone().unwrap().amount);
@@ -1366,7 +1366,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
 pub fn query_rigistery(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = REGISTERY
+    let pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .unwrap_or_default();
     Ok(pool_config)

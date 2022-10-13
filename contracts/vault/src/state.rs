@@ -6,7 +6,7 @@ use dexter::vault::{Config, PoolConfig, PoolInfo};
 pub const CONFIG: Item<Config> = Item::new("config");
 
 // Stores configuration data associated with each [`PoolType`] supported by the Vault in a [`PoolConfig`] struct
-pub const REGISTERY: Map<String, PoolConfig> = Map::new("pool_configs");
+pub const REGISTRY: Map<String, PoolConfig> = Map::new("pool_configs");
 
 // Stores current state of each Pool instance identified by its ID supported by the Vault in a [`PoolInfo`] struc
 pub const ACTIVE_POOLS: Map<&[u8], PoolInfo> = Map::new("pool_info");

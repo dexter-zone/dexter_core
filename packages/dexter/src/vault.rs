@@ -240,7 +240,7 @@ pub enum ExecuteMsg {
         new_fee_info: Option<FeeInfo>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
-    AddToRegistery {
+    AddToRegistry {
         new_pool_config: PoolConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
