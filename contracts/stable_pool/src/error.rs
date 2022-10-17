@@ -1,5 +1,5 @@
 use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use cosmwasm_std::{Decimal, OverflowError, StdError};
+use cosmwasm_std::{Decimal, OverflowError, StdError, Uint128};
 use thiserror::Error;
 
 /// ## Description
