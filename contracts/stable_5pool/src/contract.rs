@@ -31,7 +31,7 @@ use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::SwapType;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter::stable3swap_pool";
+const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -62,7 +62,7 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    // Stable3swap parameters
+    // Stable5swap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -387,8 +387,8 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// _mint_amount - Of type [`Option<Uint128>`], optional parameter which tells the number of LP tokens to be minted
-/// STABLE-3-SWAP POOL -::- MATH LOGIC
-/// -- Implementation - For Stable-3-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
+/// STABLE-5-SWAP POOL -::- MATH LOGIC
+/// -- Implementation - For STABLE-5-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
@@ -572,7 +572,7 @@ pub fn query_on_join_pool(
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
 /// * **deps** is the object of type [`Deps`].
-/// STABLE-3-SWAP POOL -::- MATH LOGIC
+/// STABLE-5-SWAP POOL -::- MATH LOGIC
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,

@@ -67,7 +67,6 @@ pub fn instantiate(
     let mut config = Config {
         owner: addr_validate_to_lower(deps.api, &msg.owner)?,
         vault: addr_validate_to_lower(deps.api, &msg.vault)?,
-        guardian: None,
         dex_token: None,
         tokens_per_block: msg.tokens_per_block,
         total_alloc_point: Uint128::zero(),
@@ -78,10 +77,6 @@ pub fn instantiate(
         checkpoint_generator_limit: None,
         unbonding_period: msg.unbonding_period,
     };
-
-    if let Some(guardian) = msg.guardian {
-        config.guardian = Some(addr_validate_to_lower(deps.api, &guardian)?);
-    }
 
     // Save the config to the storage.
     CONFIG.save(deps.storage, &config)?;
@@ -108,9 +103,8 @@ pub fn instantiate(
 /// ## Queries
 /// * **ExecuteMsg::UpdateConfig {
 ///             vesting_contract,
-///             guardian,
 ///             checkpoint_generator_limit,
-///         }** Changes the address of the Generator vesting or Generator guardian contract, or updates the generator limit.
+///         }** Changes the address of the Generator vesting, or updates the generator limit.
 ///
 /// * **ExecuteMsg::SetupPools { pools }** Setting up a new list of pools with allocation points.
 ///
@@ -161,7 +155,6 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             dex_token,
             vesting_contract,
-            guardian,
             checkpoint_generator_limit,
             unbonding_period,
         } => execute_update_config(
@@ -169,7 +162,6 @@ pub fn execute(
             info,
             dex_token,
             vesting_contract,
-            guardian,
             checkpoint_generator_limit,
             unbonding_period,
         ),
@@ -339,7 +331,6 @@ fn receive_cw20(
 ///
 /// ## Params
 /// * **vesting_contract** is an [`Option`] field object of type [`String`]. This is the new vesting contract address.
-/// * **guardian** is an [`Option`] field object of type [`String`]. This is the new generator guardian address.
 /// * **checkpoint_generator_limit** is an [`Option`] field object of type [`u32`]. This are the max number of generators allowed
 ///
 /// ##Executor
@@ -349,7 +340,6 @@ pub fn execute_update_config(
     info: MessageInfo,
     dex_token: Option<String>,
     vesting_contract: Option<String>,
-    guardian: Option<String>,
     checkpoint_generator_limit: Option<u32>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
@@ -376,16 +366,6 @@ pub fn execute_update_config(
         }
         config.vesting_contract =
             Some(addr_validate_to_lower(deps.api, vesting_contract.as_str())?);
-    }
-
-    // Update Guardian
-    if let Some(guardian) = guardian {
-        config.guardian = Some(addr_validate_to_lower(deps.api, guardian.as_str())?);
-    }
-
-    // Update checkpoint_generator_limit
-    if let Some(generator_limit) = checkpoint_generator_limit {
-        config.checkpoint_generator_limit = Some(generator_limit);
     }
 
     // Update unbonding_period
@@ -1243,7 +1223,6 @@ fn query_config(deps: Deps) -> Result<ConfigResponse, ContractError> {
         allowed_reward_proxies: config.allowed_reward_proxies,
         vesting_contract: config.vesting_contract,
         active_pools: config.active_pools,
-        guardian: config.guardian,
         checkpoint_generator_limit: config.checkpoint_generator_limit,
     })
 }
