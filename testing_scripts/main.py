@@ -16,7 +16,6 @@ class DexterModel(dexter_helpers_mixin):
 
         mnemonic = "toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm"
 
-
         self.client = LCDClient(chain_id=CHAIN_ID, url=LCD_URL)
         self.wallet = self.client.wallet(MnemonicKey(mnemonic,"persistence"))
 
@@ -35,6 +34,7 @@ class DexterModel(dexter_helpers_mixin):
         token_balance = self.query_balance("persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng", self.wallet_addr)
         print(token_balance)
 
+        # return
         increase_allowance_tx = self.execute_increase_allowance("persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng", VAULT_ADDR, 1000000000)
         print(increase_allowance_tx)
 

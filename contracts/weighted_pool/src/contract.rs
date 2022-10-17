@@ -432,6 +432,13 @@ pub fn query_on_join_pool(
 
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
+        if total_share.is_zero() {
+            // If the pool is empty, then return a `Failure` response
+            return Ok(return_join_failure(
+                "Single asset cannot be provided to empty pool".to_string(),
+            ));
+        }
+
         let in_asset = act_assets_in[0].to_owned();
         let weighted_in_asset = pool_assets_weighted
             .iter()

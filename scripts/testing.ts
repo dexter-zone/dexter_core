@@ -1,5 +1,5 @@
-import * as Pako from 'pako';
-import * as fs from 'fs';
+import * as Pako from "pako";
+import * as fs from "fs";
 import {
   Gov_MsgSubmitProposal,
   voteOnProposal,
@@ -13,11 +13,11 @@ import {
   toEncodedBinary,
   index_dexter_create_pool_tx,
   query_wasm_code,
-} from './helpers/helpers.js';
-import { toBinary } from '@cosmjs/cosmwasm-stargate';
-import { Slip10RawIndex, pathToString, stringToPath } from '@cosmjs/crypto';
-import { CosmosChainClient, cosmwasm } from 'cosmossdkjs';
-import { coins, Coin } from '@cosmjs/stargate';
+} from "./helpers/helpers.js";
+import { toBinary } from "@cosmjs/cosmwasm-stargate";
+import { Slip10RawIndex, pathToString, stringToPath } from "@cosmjs/crypto";
+import { CosmosChainClient, cosmwasm } from "cosmossdkjs";
+import { coins, Coin } from "@cosmjs/stargate";
 
 // ----------- PERSISTENCE END-POINTS -------------
 // testnet: https://rpc.testnet.persistence.one:443     :: test-core-1
@@ -28,7 +28,7 @@ import { coins, Coin } from '@cosmjs/stargate';
 // DEVNET = "https://rpc.devnet.core.dexter.zone/"
 // TESTNET =  "https://rpc.testnet.persistence.one:443"
 // LOCALNET = "http://localhost:26657"
-const rpcEndpoint = 'https://rpc.testnet.persistence.one:443';
+const rpcEndpoint = "https://rpc.testnet.persistence.one:443";
 
 // Make HD path used during wallet creation
 export function makeHdPath(coinType = 118, account = 0) {
@@ -45,11 +45,11 @@ async function Demo() {
   // Using a random generated mnemonic
   // const devnet_mnemonic = "opinion knife other balcony surge more bamboo canoe romance ask argue teach anxiety adjust spike mystery wolf alone torch tail six decide wash alley";
   const testnet_mnemonic =
-    'toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm';
+    "toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm";
   // const localnet_mnemonic = "gravity bus kingdom auto limit gate humble abstract reopen resemble awkward cannon maximum bread balance insane banana maple screen mimic cluster pigeon badge walnut";
   const deposit_amount = 512_000_000;
-  const fee_denom = 'uxprt';
-  const CHAIN_ID = 'test-core-1'; // "persistencecore" "test-core-1" ; // "testing";
+  const fee_denom = "uxprt";
+  const CHAIN_ID = "test-core-1"; // "persistencecore" "test-core-1" ; // "testing";
 
   // network : stores contract addresses
   let network = readArtifact(CHAIN_ID);
@@ -62,14 +62,14 @@ async function Demo() {
       chainId: CHAIN_ID,
       gasPrices: {
         denom: fee_denom,
-        amount: '2000000',
+        amount: "2000000",
       },
-      gasAdjustment: '1.5',
+      gasAdjustment: "1.5",
     },
     {
-      bip39Password: '',
+      bip39Password: "",
       hdPaths: [stringToPath("m/44'/118'/0'/0/0")],
-      prefix: 'persistence',
+      prefix: "persistence",
     }
   );
 
@@ -79,29 +79,29 @@ async function Demo() {
 
   // Create Persistence Validators
   const validator_1 = await CosmosChainClient.init(
-    'logic help only text door wealth hurt always remove glory viable income agent olive trial female couch old offer crash menu zero pencil thrive',
+    "logic help only text door wealth hurt always remove glory viable income agent olive trial female couch old offer crash menu zero pencil thrive",
     {
       // const validator_1 = await CosmosChainClient.init("flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer" , {
       rpc: rpcEndpoint,
-      chainId: 'test-core-1',
+      chainId: "test-core-1",
       gasPrices: {
         denom: fee_denom,
-        amount: '2000000',
+        amount: "2000000",
       },
-      gasAdjustment: '1.5',
+      gasAdjustment: "1.5",
     }
   );
   const validator_2 = await CosmosChainClient.init(
-    'middle weather hip ghost quick oxygen awful library broken chicken tackle animal crunch appear fee indoor fitness enough orphan trend tackle faint eyebrow all',
+    "middle weather hip ghost quick oxygen awful library broken chicken tackle animal crunch appear fee indoor fitness enough orphan trend tackle faint eyebrow all",
     {
       // const validator_2 = await CosmosChainClient.init("horse end velvet train canoe walnut lottery security sure right rigid busy either sand bar palace choice extend august mystery action surround coconut online" , {
       rpc: rpcEndpoint,
-      chainId: 'testing',
+      chainId: "testing",
       gasPrices: {
         denom: fee_denom,
-        amount: '2000000',
+        amount: "2000000",
       },
-      gasAdjustment: '1.5',
+      gasAdjustment: "1.5",
     }
   );
 
@@ -117,7 +117,7 @@ async function Demo() {
 
   // Get xprt balance
   const balance_res = await client.wasm.getBalance(wallet_address, fee_denom);
-  let wallet_balance = Number(balance_res['amount']) / 10 ** 6;
+  let wallet_balance = Number(balance_res["amount"]) / 10 ** 6;
   console.log(`Wallet's XPRT balance = ${wallet_balance}`);
 
   // let codes = await getContractsByCodeId(client, 1);
@@ -168,7 +168,7 @@ async function Demo() {
   // return;
 
   let POOL_ADDR =
-    'persistence199eg3lhq70cgq5r6w9tw6gw7d3fctwdl84thy55rrp5h9ejz2w3qmzsmcj';
+    "persistence199eg3lhq70cgq5r6w9tw6gw7d3fctwdl84thy55rrp5h9ejz2w3qmzsmcj";
 
   // Query the pool Id for the pool
   let quer_pool_id = await client.wasm.queryContractSmart(POOL_ADDR, {
@@ -182,9 +182,9 @@ async function Demo() {
   let query_pool_config = await client.wasm.queryContractSmart(POOL_ADDR, {
     config: {},
   });
-  let pool_assets = query_pool_config['assets'];
-  let pool_lp_token = query_pool_config['lp_token_addr'];
-  let pool_type = query_pool_config['pool_type'];
+  let pool_assets = query_pool_config["assets"];
+  let pool_lp_token = query_pool_config["lp_token_addr"];
+  let pool_type = query_pool_config["pool_type"];
 
   console.log(`Pool Assets = ${JSON.stringify(pool_assets)}`);
   console.log(`Pool LP pool = ${JSON.stringify(pool_lp_token)}`);
@@ -205,7 +205,7 @@ async function Demo() {
 
   // let pool_id = query['pool_id'];
 
-  return;
+  // return;
 
   // Add Liquidity to 1st XYK Pool
   let join_pool_msg = {
@@ -216,45 +216,62 @@ async function Demo() {
           info: {
             token: {
               contract_addr:
-                'persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45',
+                "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45",
             },
           },
-          amount: '1000000000',
+          amount: "1000000000",
         },
         {
           info: {
             token: {
               contract_addr:
-                'persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27',
+                "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27",
             },
           },
-          amount: '1000000000',
+          amount: "1000000000",
         },
       ],
     },
   };
   console.log(join_pool_msg);
 
+  // SWAP MSG via Vault
+  let asset_in = {
+    token: {
+      contract_addr:
+        "persistence1rtdulljz3dntzpu085c7mzre9dg4trgdddu4tqk7uuuvu6xrfu8s8wcs45",
+    },
+  };
+  let asset_out = {
+    token: {
+      contract_addr:
+        "persistence1u2zdjcczjrenwmf57fmrpensk4the84azdm05m3unm387rm8asdsh0yf27",
+    },
+  };
+  let amount = "1000000";
+  let swap_type = { give_in: {} }; // { give_in: {} } or { give_out: {} }
+  let max_spread = undefined;
+  let belief_price = undefined;
+
+  let single_swap_request = {
+    pool_id: pool_id,
+    asset_in: asset_in,
+    asset_out: asset_out,
+    swap_type: swap_type,
+    amount: amount,
+    max_spread: max_spread,
+    belief_price: belief_price,
+  };
   let swap_msg = {
     swap: {
-      offer_asset: {
-        info: {
-          native_token: {
-            denom: 'uusd',
-          },
-        },
-        amount: '1000000000',
-      },
-      max_spread: '0.01',
-      belief_price: '0.01',
-      to: wallet_address,
+      swap_request: single_swap_request,
     },
   };
   console.log(swap_msg);
 
   // Swap
   let res_ = await executeContract(client, wallet_address, POOL_ADDR, swap_msg);
-  let txhash_ = res_['transactionHash'];
+  let txhash_ = res_["transactionHash"];
   console.log(`Swap txhash = ${txhash_}`);
   await delay(1000);
 
@@ -263,10 +280,10 @@ async function Demo() {
     wallet_address,
     network.vault_contract_address,
     join_pool_msg,
-    ''
+    ""
     // coins(1000000000, "uxprt")
   );
-  let txhash = res['transactionHash'];
+  let txhash = res["transactionHash"];
   console.log(`1st XYK Pool  JOIN POOL txhash = ${txhash}`);
 }
 
