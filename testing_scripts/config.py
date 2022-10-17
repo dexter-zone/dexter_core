@@ -1,5 +1,5 @@
 
-LCD_URL = "https://rest.testnet.persistence.one"
+LCD_URL = "http://rest.testnet.persistence.one"
 CHAIN_ID = "test-core-1"
 
 
