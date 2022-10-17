@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint64, WasmMsg,
+    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64, WasmMsg,
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
@@ -463,34 +463,13 @@ pub fn query_on_join_pool(
         ));
     }
 
-    // Adjust for precision
+    // We cannot put a zero amount into an empty pool.
     for (deposit, pool) in assets_collection.iter_mut() {
-        // We cannot put a zero amount into an empty pool.
         if deposit.amount.is_zero() && pool.is_zero() {
             return Ok(return_join_failure(
                 "Cannot deposit zero into an empty pool".to_string(),
             ));
         }
-
-        // Adjusting to the greatest precision
-        let coin_precision = get_precision(deps.storage, &deposit.info)?;
-        deposit.amount = adjust_precision(
-            deposit.amount,
-            coin_precision,
-            math_config.greatest_precision,
-        )?;
-        *pool = adjust_precision(*pool, coin_precision, math_config.greatest_precision)?;
-    }
-
-    // Compute amp parameter
-    let n_coins = config.assets.len() as u8;
-    let amp = compute_current_amp(&math_config, &env)?
-        .checked_mul(n_coins.into())
-        .unwrap_or_else(|| 0u64.into());
-
-    // If AMP value is invalid, then return a `Failure` response
-    if amp == 0u64 {
-        return Ok(return_join_failure("Invalid amp value".to_string()));
     }
 
     // Convert to Decimal types
@@ -505,6 +484,16 @@ pub fn query_on_join_pool(
             ))
         })
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
+
+    // Compute amp parameter
+    let amp = compute_current_amp(&math_config, &env)?;
+
+    // If AMP value is invalid, then return a `Failure` response
+    if amp == 0u64 {
+        return Ok(return_join_failure("Invalid amp value".to_string()));
+    }
+
+    let n_coins = config.assets.len() as u8;
 
     // Initial invariant (D)
     let old_balances = assets_collection
@@ -1055,9 +1044,7 @@ fn imbalanced_withdraw(
 
     let n_coins = config.assets.len() as u8;
 
-    let amp = compute_current_amp(math_config, env)?
-        .checked_mul(n_coins.into())
-        .unwrap();
+    let amp = compute_current_amp(math_config, env)?;
 
     // Initial invariant (D)
     let old_balances = assets_collection
@@ -1104,23 +1091,20 @@ fn imbalanced_withdraw(
         math_config.greatest_precision,
     )?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
+    let total_share = Uint256::from(query_supply(
+        &deps.querier,
+        config.lp_token_addr.clone().unwrap(),
+    )?);
 
     // How many tokens do we need to burn to withdraw asked assets?
     let burn_amount = total_share
         .checked_multiply_ratio(
-            init_d
-                .to_uint128_with_precision(18u8)?
-                .checked_sub(after_fee_d.to_uint128_with_precision(18u8)?)?,
-            init_d.to_uint128_with_precision(18u8)?,
+            init_d.atomics().checked_sub(after_fee_d.atomics())?,
+            init_d.atomics(),
         )?
-        .checked_add(Uint128::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
+        .checked_add(Uint256::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
 
-    let burn_amount = adjust_precision(
-        burn_amount,
-        math_config.greatest_precision,
-        LP_TOKEN_PRECISION,
-    )?;
+    let burn_amount = burn_amount.try_into()?;
 
     if burn_amount > provided_amount {
         return Err(StdError::generic_err(format!(
