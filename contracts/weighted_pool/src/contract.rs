@@ -618,6 +618,12 @@ pub fn query_on_exit_pool(
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
     let act_burn_shares = burn_amount.unwrap();
 
+    if act_burn_shares > total_share {
+        return Ok(return_exit_failure(
+            "Burn amount is greater than total share".to_string(),
+        ));
+    }
+
     // refundedShares = act_burn_shares * (1 - exit fee)
     // with 0 exit fee optimization
 
