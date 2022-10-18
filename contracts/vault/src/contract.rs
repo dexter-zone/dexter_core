@@ -230,8 +230,18 @@ pub fn receive_cw20(
             }
 
             let act_recepient = recipient.unwrap_or(sender.clone());
+            let sender = sender.clone();
 
-            execute_exit_pool(deps, env, info, pool_id, act_recepient, assets, burn_amount)
+            execute_exit_pool(
+                deps,
+                env,
+                info,
+                pool_id,
+                act_recepient,
+                sender,
+                assets,
+                burn_amount,
+            )
         }
     }
 }
@@ -454,8 +464,9 @@ pub fn execute_create_pool_instance(
             info: asset.to_owned(),
             amount: Uint128::zero(),
         });
-        event = event.add_attribute("pool_asset", asset.as_string()); // For indexing purpose
     }
+
+    event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
     if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
         return Err(ContractError::InvalidLpTokenName {});
@@ -605,6 +616,9 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 attr("action", "reply"),
                 attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
             ]);
+
+            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
+
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
             event = event.add_attribute("pool_addr", tmp_pool_info.clone().pool_addr.unwrap());
@@ -728,7 +742,6 @@ pub fn execute_join_pool(
             "pool_addr",
             pool_info.pool_addr.clone().unwrap().to_string(),
         )
-        .add_attribute("lp_to_mint", new_shares.to_string())
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
     // Fee Calculation
@@ -738,7 +751,8 @@ pub fn execute_join_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_join_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_join_res.fee.clone().unwrap().info.to_string())
+                .unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -821,15 +835,14 @@ pub fn execute_join_pool(
                     });
                 }
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_join_res.provided_assets[index].info.as_string(),
-                to_transfer.to_string(),
-            );
         }
         // Increment Index
         index = index + 1;
     }
+    event = event.add_attribute(
+        "provided_assets",
+        serde_json_wasm::to_string(&after_join_res.provided_assets).unwrap(),
+    );
 
     let config = CONFIG.load(deps.storage)?;
 
@@ -908,10 +921,11 @@ pub fn execute_join_pool(
 /// * **burn_amount** Optional parameter. The number of LP tokens the user wants to burn for the underlying assets.
 pub fn execute_exit_pool(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     pool_id: Uint128,
     recipient: String,
+    sender: String,
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
@@ -973,7 +987,8 @@ pub fn execute_exit_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_burn_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_burn_res.fee.clone().unwrap().info.to_string())
+                .unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -992,6 +1007,8 @@ pub fn execute_exit_pool(
 
     // recipient address
     let recipient_addr = addr_validate_to_lower(deps.api, &recipient)?;
+
+    let mut assets_out = vec![];
 
     // Update asset balances & transfer tokens WasmMsgs
     let mut index = 0;
@@ -1037,16 +1054,18 @@ pub fn execute_exit_pool(
                     to_transfer,
                 )?);
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_burn_res.assets_out[index].info.as_string(),
-                to_transfer.to_string(),
-            );
+
+            let asset_out = after_burn_res.assets_out[index].clone();
+            assets_out.push(asset_out);
         }
         // Increment Index
         index = index + 1;
     }
 
+    let assets_out_json = serde_json_wasm::to_string(&assets_out).unwrap();
+    event = event.add_attribute("assets_out", assets_out_json);
+    event = event.add_attribute("sender", sender);
+    event = event.add_attribute("vault_contract_address", env.contract.address);
     // Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
@@ -1182,7 +1201,7 @@ pub fn execute_swap(
     if swap_response.fee.clone().is_some() && !swap_response.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute(
             "fee_asset",
-            swap_response.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&swap_response.fee.clone().unwrap().info).unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
@@ -1206,9 +1225,15 @@ pub fn execute_swap(
 
     // Event for indexing support
     event = event
-        .add_attribute("offer_asset", offer_asset.info.to_string())
+        .add_attribute(
+            "offer_asset",
+            serde_json_wasm::to_string(&offer_asset.info).unwrap(),
+        )
         .add_attribute("offer_amount", offer_asset.amount.to_string())
-        .add_attribute("ask_asset", ask_asset.info.to_string())
+        .add_attribute(
+            "ask_asset",
+            serde_json_wasm::to_string(&ask_asset.info).unwrap(),
+        )
         .add_attribute("ask_amount", ask_asset.amount.to_string());
 
     // recipient address
@@ -1223,6 +1248,7 @@ pub fn execute_swap(
     }
 
     event = event.add_attribute("recipient", recipient.to_string());
+    event = event.add_attribute("sender", info.sender.clone());
 
     // Update asset balances
     let mut index = 0;
