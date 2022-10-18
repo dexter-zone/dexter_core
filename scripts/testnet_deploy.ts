@@ -1,6 +1,7 @@
 // import { CosmosChainClient, cosmwasm } from "cosmoschainsjs";
 import * as Pako from "pako";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import {
   Gov_MsgSubmitProposal,
   voteOnProposal,
@@ -73,6 +74,15 @@ export function makeHdPath(coinType = 118, account = 0) {
     Slip10RawIndex.normal(0),
     Slip10RawIndex.normal(account),
   ];
+}
+
+function calculateCheckSum(filePath: string): string {
+  const fileBuffer = fs.readFileSync(filePath);
+  const hashSum = crypto.createHash('sha256');
+  hashSum.update(fileBuffer);
+
+  const hex = hashSum.digest('hex');
+  return hex
 }
 
 async function Demo() {
@@ -161,74 +171,70 @@ async function Demo() {
   // -----------x-------------x-------------x------------------------------
 
   // // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
-  let contracts = [
+  let contracts: any[] = [
     {
       name: "Dexter Vault",
       path: "../artifacts/dexter_vault.wasm",
       proposal_id: 0,
-      hash: "7491d419533f35372c58562a3dfc8a9cf8252c4874aa113eb3d78ae6cb4935df",
     },
     {
       name: "Dexter Keeper",
       path: "../artifacts/dexter_keeper.wasm",
       proposal_id: 0,
-      hash: "067206f9dde2ff38d9a3164c13412c1b2f480a7010cdc8b6bec2a88cb8d188d1",
     },
     {
       name: "LP Token",
       path: "../artifacts/lp_token.wasm",
       proposal_id: 0,
-      hash: "48ac9688ad68b66c36184b47682c061ae2763c769e458ef190064d2013563418",
     },
     {
       name: "XYK Pool",
       path: "../artifacts/xyk_pool.wasm",
       proposal_id: 0,
-      hash: "0a04a3d2bf62f9b12f2adba2835235d2c393aa5ca07c269709d64234457f1154",
     },
     {
       name: "Weighted Pool",
       path: "../artifacts/weighted_pool.wasm",
       proposal_id: 0,
-      hash: "92bea1ade0540596895486a545d8b8292dbe0233126d1a70bc6ff91af14760dd",
     },
     {
       name: "Stableswap Pool",
       path: "../artifacts/stableswap_pool.wasm",
       proposal_id: 0,
-      hash: "db8669b1781cc0595c841a0412d4c1175d881d99caa4516340545c9558344c15",
     },
     {
       name: "Stable5Swap Pool",
       path: "../artifacts/stable5pool.wasm",
       proposal_id: 0,
-      hash: "6eb9df53c21e5de40bc4a647393e99c3815e642b95ad39cdb1c06f5b52e1751b",
     },
     {
       name: "Dexter Vesting",
       path: "../artifacts/dexter_vesting.wasm",
       proposal_id: 0,
-      hash: "9fed0b82283c3881c242cc51d80c1d9b73fb8fd038da726d6f850de2736a253f",
     },
     {
       name: "Dexter Generator",
       path: "../artifacts/dexter_generator.wasm",
       proposal_id: 0,
-      hash: "b34ed02bf7d57a69c90946d9503f4a58f730d8fc2772dcead2106f35bab45acd",
     },
     {
       name: "Dexter Generator : Proxy",
       path: "../artifacts/dexter_generator_proxy.wasm",
       proposal_id: 0,
-      hash: "9764f035f5daa0215c7fcbcf4774403732c432077cddb34566156d17ff9dd8e2",
     },
     {
       name: "Staking contract",
       path: "../artifacts/anchor_staking.wasm",
       proposal_id: 0,
-      hash: "5be7457d88f0e4c264a75ea89ae7bff16dd821cfd7f74736c5828a6d6e7f625c",
     },
   ];
+
+  for (let contract of contracts) {
+    let hash = calculateCheckSum(contract.path);
+    contract.hash = hash;
+  }
+
+  console.log('contracts', contracts);
 
   // UPLOAD CODE OF ALL CONTRACTS
   if (
@@ -625,7 +631,7 @@ async function Demo() {
       client,
       network.vault_contract_code_id
     );
-    if (res.length > 0) {
+    if (res["contracts"].length > 0) {
       network.vault_contract_address =
         res["contracts"][res["contracts"].length - 1];
     } else {
