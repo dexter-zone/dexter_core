@@ -1386,7 +1386,7 @@ pub fn execute_swap(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::QueryRigistery { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
+        QueryMsg::QueryRegistry { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
         QueryMsg::IsGeneratorDisabled { lp_token_addr } => {
             to_binary(&query_is_generator_disabled(deps, lp_token_addr)?)
         }

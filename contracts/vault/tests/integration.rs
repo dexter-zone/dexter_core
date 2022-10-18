@@ -136,7 +136,7 @@ fn proper_initialization() {
     );
     assert_eq!(None, config_res.generator_address);
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Xyk {},
     };
     let registery_res: PoolConfigResponse =
@@ -329,7 +329,7 @@ fn test_add_to_registery() {
         )
         .unwrap();
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Xyk {},
     };
     let registery_res: PoolConfigResponse =
@@ -432,7 +432,7 @@ fn test_add_to_registery() {
     )
     .unwrap();
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Stable2Pool {},
     };
     let registery_res: PoolConfigResponse =
