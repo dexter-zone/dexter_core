@@ -642,6 +642,11 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 "lp_token_addr",
                 tmp_pool_info.clone().lp_token_addr.unwrap(),
             );
+
+            // Update the next pool id in the config and save it
+            let mut config = CONFIG.load(deps.storage)?;
+            config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
+            CONFIG.save(deps.storage, &config)?;
         }
         _ => {
             return Err(ContractError::InvalidSubMsgId {});
@@ -654,11 +659,6 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         &tmp_pool_info.pool_id.to_string().as_bytes(),
         &tmp_pool_info,
     )?;
-
-    // Update the next pool id in the config and save it
-    let mut config = CONFIG.load(deps.storage)?;
-    config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
-    CONFIG.save(deps.storage, &config)?;
 
     Ok(response.add_event(event))
 }
