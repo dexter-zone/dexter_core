@@ -8,7 +8,9 @@ use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
-use crate::state::{ACTIVE_POOLS, CONFIG, OWNERSHIP_PROPOSAL, REGISTERY, TMP_POOL_INFO};
+use crate::state::{
+    ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO,
+};
 
 use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
 use dexter::helper::{
@@ -79,7 +81,7 @@ pub fn instantiate(
         if !pc.fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
-        REGISTERY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
+        REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
     CONFIG.save(deps.storage, &config)?;
 
@@ -115,9 +117,17 @@ pub fn execute(
             pool_type,
             is_disabled,
             new_fee_info,
-        } => execute_update_pool_config(deps, info, pool_type, is_disabled, new_fee_info),
-        ExecuteMsg::AddToRegistery { new_pool_config } => {
-            execute_add_to_registery(deps, env, info, new_pool_config)
+            is_generator_disabled,
+        } => execute_update_pool_config(
+            deps,
+            info,
+            pool_type,
+            is_disabled,
+            new_fee_info,
+            is_generator_disabled,
+        ),
+        ExecuteMsg::AddToRegistry { new_pool_config } => {
+            execute_add_to_registry(deps, env, info, new_pool_config)
         }
         ExecuteMsg::CreatePoolInstance {
             pool_type,
@@ -220,8 +230,18 @@ pub fn receive_cw20(
             }
 
             let act_recepient = recipient.unwrap_or(sender.clone());
+            let sender = sender.clone();
 
-            execute_exit_pool(deps, env, info, pool_id, act_recepient, assets, burn_amount)
+            execute_exit_pool(
+                deps,
+                env,
+                info,
+                pool_id,
+                act_recepient,
+                sender,
+                assets,
+                burn_amount,
+            )
         }
     }
 }
@@ -297,9 +317,10 @@ pub fn execute_update_pool_config(
     pool_type: PoolType,
     is_disabled: Option<bool>,
     new_fee_info: Option<FeeInfo>,
+    is_generator_disabled: Option<bool>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_config = REGISTERY
+    let mut pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -321,6 +342,11 @@ pub fn execute_update_pool_config(
         pool_config.is_disabled = is_disabled;
     }
 
+    // Disable or enable integration with dexter generator
+    if let Some(is_generator_disabled) = is_generator_disabled {
+        pool_config.is_generator_disabled = is_generator_disabled;
+    }
+
     // Update fee info
     if let Some(new_fee_info) = new_fee_info {
         if !new_fee_info.valid_fee_info() {
@@ -330,7 +356,7 @@ pub fn execute_update_pool_config(
     }
 
     // Save pool config
-    REGISTERY.save(
+    REGISTRY.save(
         deps.storage,
         pool_config.pool_type.to_string(),
         &pool_config,
@@ -350,7 +376,7 @@ pub fn execute_update_pool_config(
 /// * **new_pool_config** is the object of type [`PoolConfig`]. Contains configuration parameters for the new pool.
 ///
 /// * Executor** Only owner can execute this function
-pub fn execute_add_to_registery(
+pub fn execute_add_to_registry(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
@@ -363,8 +389,12 @@ pub fn execute_add_to_registery(
         return Err(ContractError::Unauthorized {});
     }
 
+    if new_pool_config.code_id == 0 {
+        return Err(ContractError::InvalidCodeId {});
+    }
+
     // Check :: If pool type is already registered
-    let mut pool_config = REGISTERY
+    let mut pool_config = REGISTRY
         .load(deps.storage, new_pool_config.pool_type.to_string())
         .unwrap_or_default();
     if pool_config.code_id != 0u64 {
@@ -380,7 +410,7 @@ pub fn execute_add_to_registery(
     }
 
     // Save pool config
-    REGISTERY.save(
+    REGISTRY.save(
         deps.storage,
         pool_config.pool_type.to_string(),
         &pool_config,
@@ -434,8 +464,9 @@ pub fn execute_create_pool_instance(
             info: asset.to_owned(),
             amount: Uint128::zero(),
         });
-        event = event.add_attribute("pool_asset", asset.as_string()); // For indexing purpose
     }
+
+    event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
     if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
         return Err(ContractError::InvalidLpTokenName {});
@@ -447,7 +478,7 @@ pub fn execute_create_pool_instance(
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
-    let pool_config = REGISTERY
+    let pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
@@ -585,6 +616,9 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 attr("action", "reply"),
                 attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
             ]);
+
+            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
+
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
             event = event.add_attribute("pool_addr", tmp_pool_info.clone().pool_addr.unwrap());
@@ -612,10 +646,21 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             }));
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+            // Store LP token addr _> Pool Id mapping in the LP token map
+            LP_TOKEN_TO_POOL_ID.save(
+                deps.storage,
+                &tmp_pool_info.lp_token_addr.clone().unwrap().as_bytes(),
+                &tmp_pool_info.pool_id.clone(),
+            )?;
             event = event.add_attribute(
                 "lp_token_addr",
                 tmp_pool_info.clone().lp_token_addr.unwrap(),
             );
+
+            // Update the next pool id in the config and save it
+            let mut config = CONFIG.load(deps.storage)?;
+            config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
+            CONFIG.save(deps.storage, &config)?;
         }
         _ => {
             return Err(ContractError::InvalidSubMsgId {});
@@ -629,17 +674,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         &tmp_pool_info,
     )?;
 
-    // Update the next pool id in the config and save it
-    let mut config = CONFIG.load(deps.storage)?;
-    config.next_pool_id = config.next_pool_id.checked_add(Uint128::from(1u128))?;
-    CONFIG.save(deps.storage, &config)?;
-
     Ok(response.add_event(event))
-    // Ok(Response::new().add_attributes(vec![
-    //     attr("action", "register"),
-    //     attr("pool_contract_addr", pool_contract.clone()),
-    //     // attr("lp_token_addr", pool_res.lp_token_addr.unwrap()),
-    // ]))
 }
 
 //--------x---------------x--------------x-----x-----
@@ -707,7 +742,6 @@ pub fn execute_join_pool(
             "pool_addr",
             pool_info.pool_addr.clone().unwrap().to_string(),
         )
-        .add_attribute("lp_to_mint", new_shares.to_string())
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
     // Fee Calculation
@@ -717,13 +751,14 @@ pub fn execute_join_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_join_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_join_res.fee.clone().unwrap().info.to_string())
+                .unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
             after_join_res.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(after_join_res.fee.clone().unwrap().amount.clone());
@@ -800,15 +835,14 @@ pub fn execute_join_pool(
                     });
                 }
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_join_res.provided_assets[index].info.as_string(),
-                to_transfer.to_string(),
-            );
         }
         // Increment Index
         index = index + 1;
     }
+    event = event.add_attribute(
+        "provided_assets",
+        serde_json_wasm::to_string(&after_join_res.provided_assets).unwrap(),
+    );
 
     let config = CONFIG.load(deps.storage)?;
 
@@ -887,10 +921,11 @@ pub fn execute_join_pool(
 /// * **burn_amount** Optional parameter. The number of LP tokens the user wants to burn for the underlying assets.
 pub fn execute_exit_pool(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     pool_id: Uint128,
     recipient: String,
+    sender: String,
     assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
@@ -952,13 +987,14 @@ pub fn execute_exit_pool(
     {
         event = event.add_attribute(
             "fee_asset",
-            after_burn_res.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&after_burn_res.fee.clone().unwrap().info.to_string())
+                .unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
             after_burn_res.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(after_burn_res.fee.clone().unwrap().amount.clone());
@@ -971,6 +1007,8 @@ pub fn execute_exit_pool(
 
     // recipient address
     let recipient_addr = addr_validate_to_lower(deps.api, &recipient)?;
+
+    let mut assets_out = vec![];
 
     // Update asset balances & transfer tokens WasmMsgs
     let mut index = 0;
@@ -1016,16 +1054,18 @@ pub fn execute_exit_pool(
                     to_transfer,
                 )?);
             }
-            // Add attribute to event for indexing support
-            event = event.add_attribute(
-                after_burn_res.assets_out[index].info.as_string(),
-                to_transfer.to_string(),
-            );
+
+            let asset_out = after_burn_res.assets_out[index].clone();
+            assets_out.push(asset_out);
         }
         // Increment Index
         index = index + 1;
     }
 
+    let assets_out_json = serde_json_wasm::to_string(&assets_out).unwrap();
+    event = event.add_attribute("assets_out", assets_out_json);
+    event = event.add_attribute("sender", sender);
+    event = event.add_attribute("vault_contract_address", env.contract.address);
     // Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
@@ -1161,13 +1201,13 @@ pub fn execute_swap(
     if swap_response.fee.clone().is_some() && !swap_response.fee.clone().unwrap().amount.is_zero() {
         event = event.add_attribute(
             "fee_asset",
-            swap_response.fee.clone().unwrap().info.to_string(),
+            serde_json_wasm::to_string(&swap_response.fee.clone().unwrap().info).unwrap(),
         );
         event = event.add_attribute(
             "total_fee",
             swap_response.fee.clone().unwrap().amount.to_string(),
         );
-        let pool_config = REGISTERY.load(deps.storage, pool_info.pool_type.to_string())?;
+        let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
         (protocol_fee, dev_fee) = pool_config
             .fee_info
             .calculate_total_fee_breakup(swap_response.fee.clone().unwrap().amount);
@@ -1185,9 +1225,15 @@ pub fn execute_swap(
 
     // Event for indexing support
     event = event
-        .add_attribute("offer_asset", offer_asset.info.to_string())
+        .add_attribute(
+            "offer_asset",
+            serde_json_wasm::to_string(&offer_asset.info).unwrap(),
+        )
         .add_attribute("offer_amount", offer_asset.amount.to_string())
-        .add_attribute("ask_asset", ask_asset.info.to_string())
+        .add_attribute(
+            "ask_asset",
+            serde_json_wasm::to_string(&ask_asset.info).unwrap(),
+        )
         .add_attribute("ask_amount", ask_asset.amount.to_string());
 
     // recipient address
@@ -1202,6 +1248,7 @@ pub fn execute_swap(
     }
 
     event = event.add_attribute("recipient", recipient.to_string());
+    event = event.add_attribute("sender", info.sender.clone());
 
     // Update asset balances
     let mut index = 0;
@@ -1339,10 +1386,11 @@ pub fn execute_swap(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::QueryRigistery { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
-        // TO-DO
+        QueryMsg::QueryRegistry { pool_type } => to_binary(&query_rigistery(deps, pool_type)?),
+        QueryMsg::IsGeneratorDisabled { lp_token_addr } => {
+            to_binary(&query_is_generator_disabled(deps, lp_token_addr)?)
+        }
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
-        // TO-DO
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
         }
@@ -1366,10 +1414,29 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
 pub fn query_rigistery(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = REGISTERY
+    let pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .unwrap_or_default();
     Ok(pool_config)
+}
+
+/// ## Description - Returns boolean value indicating if the genarator is disabled or not for the pool
+///
+/// ## Params
+/// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
+pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResult<bool> {
+    let pool_id = LP_TOKEN_TO_POOL_ID
+        .may_load(deps.storage, lp_token_addr.as_bytes())?
+        .expect("The LP token address does not belong to any pool");
+
+    let pool_info = ACTIVE_POOLS
+        .load(deps.storage, &pool_id.to_string().as_bytes())
+        .expect("Invalid Pool Id");
+
+    let pool_config = REGISTRY
+        .load(deps.storage, pool_info.pool_type.to_string())
+        .unwrap_or_default();
+    Ok(pool_config.is_generator_disabled)
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure

@@ -1,5 +1,5 @@
 use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use cosmwasm_std::{Decimal, OverflowError, StdError};
+use cosmwasm_std::{Decimal, OverflowError, StdError, Uint128};
 use thiserror::Error;
 
 /// ## Description
@@ -11,6 +11,9 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized {},
+
+    #[error("Maximum {max_assets} assets can be supported by this pool type")]
+    InvalidNumberOfAssets { max_assets: Uint128 },
 
     #[error("Operation non supported")]
     NonSupported {},

@@ -5,7 +5,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::asset::{Asset, AssetInfo};
 use crate::DecimalCheckedOps;
 
 /// This structure stores the core parameters for the Generator contract.
@@ -29,8 +28,6 @@ pub struct Config {
     pub vesting_contract: Option<Addr>,
     /// The list of active pools (LP Token Addresses) with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
-    /// The guardian address which can add or remove tokens from blacklist
-    pub guardian: Option<Addr>,
     /// The amount of generators
     pub checkpoint_generator_limit: Option<u32>,
     /// Number of seconds to wait before a user can withdraw his LP tokens once they are in unbonding phase
@@ -48,8 +45,6 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// Address of vault contract
     pub vault: String,
-    /// Address of guardian : who has permission to blacklist tokens
-    pub guardian: Option<String>,
     /// DEX token contract address
     pub dex_token: Option<String>,
     /// Amount of DEX distributed per block among all pairs
@@ -70,8 +65,6 @@ pub enum ExecuteMsg {
         dex_token: Option<String>,
         /// The DEX Vesting contract address
         vesting_contract: Option<String>,
-        /// The new generator guardian
-        guardian: Option<String>,
         /// Max numbrt of generators which can be supported by the contract
         checkpoint_generator_limit: Option<u32>,
         /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update
@@ -349,8 +342,6 @@ pub struct ConfigResponse {
     pub vesting_contract: Option<Addr>,
     /// The list of active pools with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
-    /// The guardian address
-    pub guardian: Option<Addr>,
     /// The amount of generators
     pub checkpoint_generator_limit: Option<u32>,
 }

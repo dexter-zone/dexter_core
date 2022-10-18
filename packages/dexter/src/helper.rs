@@ -165,7 +165,7 @@ pub fn build_transfer_cw20_from_user_msg(
         funds: vec![],
         msg: to_binary(&cw20::Cw20ExecuteMsg::TransferFrom {
             owner,
-            recipient: recipient,
+            recipient,
             amount,
         })?,
     }))

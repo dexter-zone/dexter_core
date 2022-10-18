@@ -52,6 +52,12 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
+    if msg.asset_infos.len() != 2 {
+        return Err(ContractError::InvalidNumberOfAssets {
+            max_assets: Uint128::from(2u128),
+        });
+    }
+
     // Stableswap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
@@ -154,7 +160,7 @@ pub fn set_lp_token(
     config.lp_token_addr = Some(lp_token_addr);
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::set-lp-token")
+    let event = Event::new("dexter-pool::set_lp_token")
         .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
     Ok(Response::new().add_event(event))
 }
@@ -180,31 +186,28 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-    config.block_time_last = env.block.time.seconds();
-    CONFIG.save(deps.storage, &config)?;
-
     // Accumulate prices for the assets in the pool
-    if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) =
-        accumulate_prices(env, &twap, config.assets[0].amount, config.assets[1].amount)?
-    {
+    if let Some((price0_cumulative_new, price1_cumulative_new, block_time)) = accumulate_prices(
+        env.clone(),
+        &twap,
+        config.assets[0].amount,
+        config.assets[1].amount,
+    )? {
         twap.price0_cumulative_last = price0_cumulative_new;
         twap.price1_cumulative_last = price1_cumulative_new;
         twap.block_time_last = block_time;
         TWAPINFO.save(deps.storage, &twap)?;
     }
 
+    // Update state
+    config.assets = assets;
+    config.block_time_last = env.block.time.seconds();
+    CONFIG.save(deps.storage, &config)?;
+
     let event = Event::new("dexter-pool::update-liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
-        .add_attribute(
-            config.assets[0].info.as_string(),
-            twap.price0_cumulative_last.to_string(),
-        )
-        .add_attribute(
-            config.assets[1].info.as_string(),
-            twap.price1_cumulative_last.to_string(),
-        )
+        .add_attribute("vault_address", config.vault_addr)
+        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))

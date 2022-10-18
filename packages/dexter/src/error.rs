@@ -1,6 +1,6 @@
 // use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::{
-    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError,
+    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError, Uint128,
 };
 use thiserror::Error;
 
@@ -10,6 +10,9 @@ use thiserror::Error;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("Maximum {max_assets} assets can be supported by this pool type")]
+    InvalidNumberOfAssets { max_assets: Uint128 },
 
     #[error("{0}")]
     CheckedMultiplyRatioError(#[from] CheckedMultiplyRatioError),

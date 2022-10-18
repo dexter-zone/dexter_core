@@ -136,7 +136,7 @@ fn proper_initialization() {
     );
     assert_eq!(None, config_res.generator_address);
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Xyk {},
     };
     let registery_res: PoolConfigResponse =
@@ -329,7 +329,7 @@ fn test_add_to_registery() {
         )
         .unwrap();
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Xyk {},
     };
     let registery_res: PoolConfigResponse =
@@ -345,7 +345,7 @@ fn test_add_to_registery() {
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
-    let msg = ExecuteMsg::AddToRegistery {
+    let msg = ExecuteMsg::AddToRegistry {
         new_pool_config: PoolConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
@@ -382,7 +382,7 @@ fn test_add_to_registery() {
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
-    let msg = ExecuteMsg::AddToRegistery {
+    let msg = ExecuteMsg::AddToRegistry {
         new_pool_config: PoolConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
@@ -409,7 +409,7 @@ fn test_add_to_registery() {
 
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let stable_pool_code_id = 2u64;
-    let msg = ExecuteMsg::AddToRegistery {
+    let msg = ExecuteMsg::AddToRegistry {
         new_pool_config: PoolConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
@@ -432,7 +432,7 @@ fn test_add_to_registery() {
     )
     .unwrap();
 
-    let msg = QueryMsg::QueryRigistery {
+    let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Stable2Pool {},
     };
     let registery_res: PoolConfigResponse =

@@ -1,18 +1,18 @@
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Attribute, Binary, CosmosMsg, Decimal, Deps,
-    DepsMut, Env, MessageInfo, Order, QuerierWrapper, Reply, ReplyOn, Response, StdError,
-    StdResult, SubMsg, Uint128, Uint64, WasmMsg,
+    attr, entry_point, from_binary, to_binary, Addr, Attribute, Binary, Decimal, Deps, DepsMut,
+    Env, MessageInfo, QuerierWrapper, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    Uint128, Uint64, WasmMsg,
 };
-use protobuf::Message;
-use std::collections::{HashMap, HashSet};
+
+use std::collections::HashSet;
 
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20ReceiveMsg};
 
-use dexter::asset::{addr_validate_to_lower, token_asset_info, Asset, AssetInfo};
-use dexter::generator::{PoolInfo, RestrictedVector, UnbondingInfo, UserInfo};
+use dexter::asset::{addr_validate_to_lower, AssetInfo};
+use dexter::generator::{PoolInfo, UnbondingInfo, UserInfo};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
-use dexter::querier::{config_info_by_pool, query_token_balance};
+use dexter::querier::query_token_balance;
 use dexter::DecimalCheckedOps;
 use dexter::{
     generator::{
@@ -28,15 +28,14 @@ use dexter::{
 
 use crate::error::ContractError;
 use crate::state::{
-    update_proxy_asset, update_user_balance, CONFIG, OWNERSHIP_PROPOSAL, POOL_INFO,
-    PROXY_REWARD_ASSET, TMP_USER_ACTION, USER_INFO,
+    update_user_balance, CONFIG, OWNERSHIP_PROPOSAL, POOL_INFO, PROXY_REWARD_ASSET,
+    TMP_USER_ACTION, USER_INFO,
 };
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-generator";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const INIT_REWARDS_HOLDER_ID: u64 = 1;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -64,10 +63,9 @@ pub fn instantiate(
 
     let allowed_reward_proxies: Vec<Addr> = vec![];
 
-    let mut config = Config {
+    let config = Config {
         owner: addr_validate_to_lower(deps.api, &msg.owner)?,
         vault: addr_validate_to_lower(deps.api, &msg.vault)?,
-        guardian: None,
         dex_token: None,
         tokens_per_block: msg.tokens_per_block,
         total_alloc_point: Uint128::zero(),
@@ -78,10 +76,6 @@ pub fn instantiate(
         checkpoint_generator_limit: None,
         unbonding_period: msg.unbonding_period,
     };
-
-    if let Some(guardian) = msg.guardian {
-        config.guardian = Some(addr_validate_to_lower(deps.api, &guardian)?);
-    }
 
     // Save the config to the storage.
     CONFIG.save(deps.storage, &config)?;
@@ -108,9 +102,8 @@ pub fn instantiate(
 /// ## Queries
 /// * **ExecuteMsg::UpdateConfig {
 ///             vesting_contract,
-///             guardian,
 ///             checkpoint_generator_limit,
-///         }** Changes the address of the Generator vesting or Generator guardian contract, or updates the generator limit.
+///         }** Changes the address of the Generator vesting, or updates the generator limit.
 ///
 /// * **ExecuteMsg::SetupPools { pools }** Setting up a new list of pools with allocation points.
 ///
@@ -161,7 +154,6 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             dex_token,
             vesting_contract,
-            guardian,
             checkpoint_generator_limit,
             unbonding_period,
         } => execute_update_config(
@@ -169,7 +161,6 @@ pub fn execute(
             info,
             dex_token,
             vesting_contract,
-            guardian,
             checkpoint_generator_limit,
             unbonding_period,
         ),
@@ -302,7 +293,7 @@ fn receive_cw20(
     let cfg = CONFIG.load(deps.storage)?;
 
     if !POOL_INFO.has(deps.storage, &lp_token) {
-        create_pool(deps.branch(), &env, &lp_token, &cfg)?;
+        create_pool(deps.branch(), &env, lp_token.clone(), &cfg)?;
     }
 
     match from_binary(&cw20_msg.msg)? {
@@ -339,7 +330,6 @@ fn receive_cw20(
 ///
 /// ## Params
 /// * **vesting_contract** is an [`Option`] field object of type [`String`]. This is the new vesting contract address.
-/// * **guardian** is an [`Option`] field object of type [`String`]. This is the new generator guardian address.
 /// * **checkpoint_generator_limit** is an [`Option`] field object of type [`u32`]. This are the max number of generators allowed
 ///
 /// ##Executor
@@ -349,8 +339,7 @@ pub fn execute_update_config(
     info: MessageInfo,
     dex_token: Option<String>,
     vesting_contract: Option<String>,
-    guardian: Option<String>,
-    checkpoint_generator_limit: Option<u32>,
+    _checkpoint_generator_limit: Option<u32>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
     // Load Config
@@ -376,16 +365,6 @@ pub fn execute_update_config(
         }
         config.vesting_contract =
             Some(addr_validate_to_lower(deps.api, vesting_contract.as_str())?);
-    }
-
-    // Update Guardian
-    if let Some(guardian) = guardian {
-        config.guardian = Some(addr_validate_to_lower(deps.api, guardian.as_str())?);
-    }
-
-    // Update checkpoint_generator_limit
-    if let Some(generator_limit) = checkpoint_generator_limit {
-        config.checkpoint_generator_limit = Some(generator_limit);
     }
 
     // Update unbonding_period
@@ -443,7 +422,7 @@ pub fn execute_setup_pools(
     // Add new pools to the list of active pools after checking if its not already supported
     for (lp_token, _) in &setup_pools {
         if !POOL_INFO.has(deps.storage, lp_token) {
-            create_pool(deps.branch(), &env, lp_token, &cfg)?;
+            create_pool(deps.branch(), &env, lp_token.to_owned(), &cfg)?;
         }
     }
 
@@ -465,7 +444,7 @@ pub fn execute_setup_pools(
 /// ##Executor
 /// Can only be called by the owner
 pub fn execute_set_proxy_for_pool(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     lp_token: String,
@@ -646,7 +625,7 @@ fn update_allowed_proxies(
 ///
 /// * **amount** is the object of type [`Uint128`]. Sets a new count of tokens per block.
 fn add_proxy(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     lp_token: Addr,
     proxy: Addr,
@@ -959,7 +938,7 @@ pub fn claim_rewards(
 
     let mut send_rewards_msg: Vec<WasmMsg> = vec![];
     for lp_token in &lp_tokens {
-        let  pool = POOL_INFO.load(deps.storage, lp_token)?;
+        let pool = POOL_INFO.load(deps.storage, lp_token)?;
         let user = USER_INFO.load(deps.storage, (lp_token, &account))?;
 
         // ExecuteMsg to send rewards to the user
@@ -1002,7 +981,7 @@ pub fn unlock(
     let mut rem_unbonding_sessions: Vec<UnbondingInfo> = vec![];
     for session in unbonding_sessions.iter() {
         // Check if session can be unlocked
-        if session.unlock_timstamp < env.block.time.seconds() {
+        if session.unlock_timstamp <= env.block.time.seconds() {
             // ExecuteMsg to send LP Tokens to the user
             unlock_msgs.push(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
@@ -1076,16 +1055,6 @@ pub fn emergency_unstake(
             funds: vec![],
         });
     }
-    // else {
-    //     transfer_msg = WasmMsg::Execute {
-    //         contract_addr: lp_token.to_string(),
-    //         msg: to_binary(&Cw20ExecuteMsg::Transfer {
-    //             recipient: info.sender.to_string(),
-    //             amount: user.amount,
-    //         })?,
-    //         funds: vec![],
-    //     };
-    // }
 
     // Update user's balance
     let mut user = update_user_balance(user, &pool, Uint128::zero())?;
@@ -1243,7 +1212,6 @@ fn query_config(deps: Deps) -> Result<ConfigResponse, ContractError> {
         allowed_reward_proxies: config.allowed_reward_proxies,
         vesting_contract: config.vesting_contract,
         active_pools: config.active_pools,
-        guardian: config.guardian,
         checkpoint_generator_limit: config.checkpoint_generator_limit,
     })
 }
@@ -1498,7 +1466,7 @@ fn query_pool_info(
 
 pub fn query_user_info(
     deps: Deps,
-    env: Env,
+    _env: Env,
     lp_token: String,
     user: String,
 ) -> Result<UserInfoResponse, ContractError> {
@@ -1595,13 +1563,25 @@ pub fn get_alloc_point(pools: &[(Addr, Uint128)], lp_token: &Addr) -> Uint128 {
 pub fn create_pool(
     deps: DepsMut,
     env: &Env,
-    lp_token: &Addr,
+    lp_token: Addr,
     cfg: &Config,
 ) -> Result<PoolInfo, ContractError> {
+    // Check if the pool is allowed in the vault
+    let is_generator_disabled: bool = deps.querier.query_wasm_smart(
+        cfg.vault.clone(),
+        &dexter::vault::QueryMsg::IsGeneratorDisabled {
+            lp_token_addr: lp_token.clone().into_string(),
+        },
+    )?;
+
+    if is_generator_disabled {
+        return Err(ContractError::GeneratorDisabled {});
+    }
+
     // Create Pool
     POOL_INFO.save(
         deps.storage,
-        lp_token,
+        &lp_token,
         &PoolInfo {
             last_reward_block: cfg.start_block.max(Uint64::from(env.block.height)),
             reward_proxy: None,
@@ -1612,7 +1592,7 @@ pub fn create_pool(
         },
     )?;
 
-    Ok(POOL_INFO.load(deps.storage, lp_token)?)
+    Ok(POOL_INFO.load(deps.storage, &lp_token)?)
 }
 
 /// ## Description
@@ -1691,7 +1671,7 @@ pub fn accumulate_rewards_per_share(
     cfg: &Config,
     deposited: Option<Uint128>,
 ) -> StdResult<()> {
-    let mut lp_supply: Uint128 = Uint128::zero();
+    let lp_supply: Uint128;
 
     // Update reward share for proxy rewards : In case proxy is set and LP tokens are staked
     match &pool.reward_proxy {
@@ -1814,11 +1794,11 @@ pub fn send_pending_rewards(
 /// ## Params
 /// * **msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(mut deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let contract_version = get_contract_version(deps.storage)?;
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let mut response = Response::new();
+    let response = Response::new();
     Ok(response
         .add_attribute("previous_contract_name", &contract_version.contract)
         .add_attribute("previous_contract_version", &contract_version.version)

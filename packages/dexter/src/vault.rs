@@ -238,9 +238,10 @@ pub enum ExecuteMsg {
         pool_type: PoolType,
         is_disabled: Option<bool>,
         new_fee_info: Option<FeeInfo>,
+        is_generator_disabled: Option<bool>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
-    AddToRegistery {
+    AddToRegistry {
         new_pool_config: PoolConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
@@ -304,6 +305,8 @@ pub enum QueryMsg {
     Config {},
     /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
     QueryRigistery { pool_type: PoolType },
+    /// Returns boolean value indicating if the genarator is disabled or not for the pool
+    IsGeneratorDisabled { lp_token_addr: String },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     GetPoolById { pool_id: Uint128 },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct

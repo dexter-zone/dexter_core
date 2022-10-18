@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint64, WasmMsg,
+    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
@@ -24,19 +24,14 @@ use dexter::pool::{
 };
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::helper::{
-    adjust_precision, calculate_underlying_fees, get_share_in_assets, select_pools,
-};
+use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
 use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::SwapType;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter::stable3swap_pool";
+const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// An LP token precision.
-const LP_TOKEN_PRECISION: u8 = 6;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -62,7 +57,7 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    // Stable3swap parameters
+    // Stable5swap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -174,7 +169,8 @@ pub fn set_lp_token(
     config.lp_token_addr = Some(lp_token_addr);
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::set-lp-token")
+    let event = Event::new("dexter-pool::set_lp_token")
+        .add_attribute("pool_id", config.pool_id)
         .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
     Ok(Response::new().add_event(event))
 }
@@ -201,9 +197,6 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
@@ -222,12 +215,18 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::PricesUpdateFailed {});
     }
 
+    // Update state
+    config.assets = assets;
+
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
     TWAPINFO.save(deps.storage, &twap)?;
-
-    let event = Event::new("dexter-pool::update-liquidity")
-        .add_attribute("pool_id", config.pool_id.to_string());
+            
+    let event = Event::new("dexter-pool::update_liquidity")
+        .add_attribute("pool_id", config.pool_id.to_string())
+        .add_attribute("vault_address", config.vault_addr)
+        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
 }
@@ -387,8 +386,8 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 /// ## Params
 /// assets_in - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances to be supplied as liquidity to the pool
 /// _mint_amount - Of type [`Option<Uint128>`], optional parameter which tells the number of LP tokens to be minted
-/// STABLE-3-SWAP POOL -::- MATH LOGIC
-/// -- Implementation - For Stable-3-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
+/// STABLE-5-SWAP POOL -::- MATH LOGIC
+/// -- Implementation - For STABLE-5-swap, user provides the exact number of assets he/she wants to supply as liquidity to the pool. We simply calculate the number of LP shares to be minted and return it to the user.
 /// T.B.A
 pub fn query_on_join_pool(
     deps: Deps,
@@ -463,34 +462,13 @@ pub fn query_on_join_pool(
         ));
     }
 
-    // Adjust for precision
+    // We cannot put a zero amount into an empty pool.
     for (deposit, pool) in assets_collection.iter_mut() {
-        // We cannot put a zero amount into an empty pool.
         if deposit.amount.is_zero() && pool.is_zero() {
             return Ok(return_join_failure(
                 "Cannot deposit zero into an empty pool".to_string(),
             ));
         }
-
-        // Adjusting to the greatest precision
-        let coin_precision = get_precision(deps.storage, &deposit.info)?;
-        deposit.amount = adjust_precision(
-            deposit.amount,
-            coin_precision,
-            math_config.greatest_precision,
-        )?;
-        *pool = adjust_precision(*pool, coin_precision, math_config.greatest_precision)?;
-    }
-
-    // Compute amp parameter
-    let n_coins = config.assets.len() as u8;
-    let amp = compute_current_amp(&math_config, &env)?
-        .checked_mul(n_coins.into())
-        .unwrap_or_else(|| 0u64.into());
-
-    // If AMP value is invalid, then return a `Failure` response
-    if amp == 0u64 {
-        return Ok(return_join_failure("Invalid amp value".to_string()));
     }
 
     // Convert to Decimal types
@@ -505,6 +483,16 @@ pub fn query_on_join_pool(
             ))
         })
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
+
+    // Compute amp parameter
+    let amp = compute_current_amp(&math_config, &env)?;
+
+    // If AMP value is invalid, then return a `Failure` response
+    if amp == 0u64 {
+        return Ok(return_join_failure("Invalid amp value".to_string()));
+    }
+
+    let n_coins = config.assets.len() as u8;
 
     // Initial invariant (D)
     let old_balances = assets_collection
@@ -583,7 +571,7 @@ pub fn query_on_join_pool(
 /// ## Params
 /// assets_out - Of type [`Vec<Asset>`], a sorted list containing amount / info of token balances user wants against the LP tokens transferred by the user to the Vault contract
 /// * **deps** is the object of type [`Deps`].
-/// STABLE-3-SWAP POOL -::- MATH LOGIC
+/// STABLE-5-SWAP POOL -::- MATH LOGIC
 /// T.B.A
 pub fn query_on_exit_pool(
     deps: Deps,
@@ -1055,9 +1043,7 @@ fn imbalanced_withdraw(
 
     let n_coins = config.assets.len() as u8;
 
-    let amp = compute_current_amp(math_config, env)?
-        .checked_mul(n_coins.into())
-        .unwrap();
+    let amp = compute_current_amp(math_config, env)?;
 
     // Initial invariant (D)
     let old_balances = assets_collection
@@ -1104,23 +1090,20 @@ fn imbalanced_withdraw(
         math_config.greatest_precision,
     )?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
+    let total_share = Uint256::from(query_supply(
+        &deps.querier,
+        config.lp_token_addr.clone().unwrap(),
+    )?);
 
     // How many tokens do we need to burn to withdraw asked assets?
     let burn_amount = total_share
         .checked_multiply_ratio(
-            init_d
-                .to_uint128_with_precision(18u8)?
-                .checked_sub(after_fee_d.to_uint128_with_precision(18u8)?)?,
-            init_d.to_uint128_with_precision(18u8)?,
+            init_d.atomics().checked_sub(after_fee_d.atomics())?,
+            init_d.atomics(),
         )?
-        .checked_add(Uint128::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
+        .checked_add(Uint256::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
 
-    let burn_amount = adjust_precision(
-        burn_amount,
-        math_config.greatest_precision,
-        LP_TOKEN_PRECISION,
-    )?;
+    let burn_amount = burn_amount.try_into()?;
 
     if burn_amount > provided_amount {
         return Err(StdError::generic_err(format!(

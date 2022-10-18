@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::str::FromStr;
 
 use cosmwasm_std::{
@@ -17,7 +16,7 @@ use dexter::pool::{
     Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::SwapType;
 
 use crate::error::ContractError;
 use crate::math::{calculate_invariant, get_normalized_weight};
@@ -30,7 +29,6 @@ use crate::utils::{
     maximal_exact_ratio_join,
 };
 
-use protobuf::Message;
 use std::vec;
 
 /// Contract name that is used for migration.
@@ -192,7 +190,7 @@ pub fn set_lp_token(
     config.lp_token_addr = Some(lp_token_addr);
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::set-lp-token")
+    let event = Event::new("dexter-pool::set_lp_token")
         .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
     Ok(Response::new().add_event(event))
 }
@@ -219,11 +217,6 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update state
-    config.assets = assets;
-    config.block_time_last = env.block.time.seconds();
-    CONFIG.save(deps.storage, &config)?;
-
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_decimal_asset(deps.as_ref(), &config.assets);
@@ -231,7 +224,7 @@ pub fn execute_update_pool_liquidity(
     // Accumulate prices for the assets in the pool
     if !accumulate_prices(
         deps.as_ref(),
-        env,
+        env.clone(),
         &mut config,
         math_config,
         &mut twap,
@@ -243,8 +236,16 @@ pub fn execute_update_pool_liquidity(
     }
     TWAPINFO.save(deps.storage, &twap)?;
 
+    // Update state
+    config.assets = assets;
+    config.block_time_last = env.block.time.seconds();
+    CONFIG.save(deps.storage, &config)?;
+
     let event = Event::new("dexter-pool::update-liquidity")
-        .add_attribute("pool_id", config.pool_id.to_string());
+        .add_attribute("pool_id", config.pool_id.to_string())
+        .add_attribute("vault_address", config.vault_addr)
+        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
 }
@@ -432,6 +433,13 @@ pub fn query_on_join_pool(
 
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
+        // If the pool is empty, then return a `Failure` response
+        if total_share.is_zero() {
+            return Ok(return_join_failure(
+                "Single asset cannot be provided to empty pool".to_string(),
+            ));
+        }
+
         let in_asset = act_assets_in[0].to_owned();
         let weighted_in_asset = pool_assets_weighted
             .iter()
@@ -610,6 +618,12 @@ pub fn query_on_exit_pool(
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
     let act_burn_shares = burn_amount.unwrap();
+
+    if act_burn_shares > total_share {
+        return Ok(return_exit_failure(
+            "Burn amount is greater than total share".to_string(),
+        ));
+    }
 
     // refundedShares = act_burn_shares * (1 - exit fee)
     // with 0 exit fee optimization
@@ -848,7 +862,7 @@ pub fn query_cumulative_price(
     let res_exchange_rate = twap
         .cumulative_prices
         .into_iter()
-        .find(|(offer_asset, ask_asset, rate)| {
+        .find(|(offer_asset, ask_asset, _rate)| {
             offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)
         })
         .unwrap();

@@ -191,7 +191,6 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
     let generator_init_msg = InstantiateMsg {
         owner: owner.to_string(),
         vault: vault_instance.clone().to_string(),
-        guardian: None,
         dex_token: None,
         tokens_per_block: Uint128::zero(),
         start_block: Uint64::from(current_block.height),
@@ -477,7 +476,6 @@ fn test_update_config() {
     assert_eq!(vault_instance, after_init_config_res.vault);
     assert_eq!(None, after_init_config_res.dex_token);
     assert_eq!(None, after_init_config_res.vesting_contract);
-    assert_eq!(None, after_init_config_res.guardian);
     assert_eq!(None, after_init_config_res.checkpoint_generator_limit);
 
     //// -----x----- Success :: update config -----x----- ////
@@ -485,7 +483,6 @@ fn test_update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: Some("dex_token".to_string()),
         vesting_contract: Some("vesting_contract".to_string()),
-        guardian: Some("guardian".to_string()),
         checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };
@@ -514,10 +511,6 @@ fn test_update_config() {
         Addr::unchecked("vesting_contract".to_string()),
         config_res.vesting_contract.unwrap()
     );
-    assert_eq!(
-        Addr::unchecked("guardian".to_string()),
-        config_res.guardian.unwrap()
-    );
     assert_eq!(Some(10u32), config_res.checkpoint_generator_limit);
 
     //// -----x----- Error :: Permission Checks -----x----- ////
@@ -525,7 +518,6 @@ fn test_update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: Some("dex_token".to_string()),
         vesting_contract: Some("vesting_contract".to_string()),
-        guardian: Some("guardian".to_string()),
         checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };
@@ -553,7 +545,6 @@ fn test_update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: None,
         vesting_contract: Some("vesting_contract".to_string()),
-        guardian: Some("guardian".to_string()),
         checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };

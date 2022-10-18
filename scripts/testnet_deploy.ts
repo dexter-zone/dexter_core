@@ -1,6 +1,7 @@
 // import { CosmosChainClient, cosmwasm } from "cosmoschainsjs";
 import * as Pako from "pako";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import {
   Gov_MsgSubmitProposal,
   voteOnProposal,
@@ -28,7 +29,41 @@ import { CosmosChainClient, cosmwasm } from "cosmossdkjs";
 // DEVNET = "https://rpc.devnet.core.dexter.zone/"
 // TESTNET =  "https://rpc.testnet.persistence.one:443"
 // LOCALNET = "http://localhost:26657"
-const rpcEndpoint = "https://rpc.testnet.persistence.one:443";
+
+let CONFIGS = {
+  // MAIN-NET CONFIG
+  "core-1": {
+    chain_id: "core-1",
+    rpc_endpoint: "https://rpc.persistence.one:443",
+    validator_mnemonic: "",
+    validator_mnemonic_2: "",
+  },
+  // TEST-NET CONFIG
+  "test-core-1": {
+    chain_id: "test-core-1",
+    rpc_endpoint: "https://rpc.testnet.persistence.one:443",
+    validator_mnemonic: "",
+    validator_mnemonic_2: "",
+  },
+  // DEV-NET CONFIG
+  persistencecore: {
+    chain_id: "persistencecore",
+    rpc_endpoint: "https://rpc.devnet.core.dexter.zone/",
+    validator_mnemonic:
+      "logic help only text door wealth hurt always remove glory viable income agent olive trial female couch old offer crash menu zero pencil thrive",
+    validator_mnemonic_2:
+      "middle weather hip ghost quick oxygen awful library broken chicken tackle animal crunch appear fee indoor fitness enough orphan trend tackle faint eyebrow all",
+  },
+  // LOCAL-NET CONFIG
+  testing: {
+    chain_id: "testing",
+    rpc_endpoint: "http://localhost:26657",
+    validator_mnemonic:
+      "flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer",
+    validator_mnemonic_2:
+      "horse end velvet train canoe walnut lottery security sure right rigid busy either sand bar palace choice extend august mystery action surround coconut online",
+  },
+};
 
 // Make HD path used during wallet creation
 export function makeHdPath(coinType = 118, account = 0) {
@@ -41,30 +76,42 @@ export function makeHdPath(coinType = 118, account = 0) {
   ];
 }
 
+function calculateCheckSum(filePath: string): string {
+  const fileBuffer = fs.readFileSync(filePath);
+  const hashSum = crypto.createHash('sha256');
+  hashSum.update(fileBuffer);
+
+  const hex = hashSum.digest('hex');
+  return hex
+}
+
 async function Demo() {
+  const mnemonic = process.env.WALLET_MNEMONIC;
+  const chain_id = process.env.CHAIN_ID;
+
+  // Incase the mnemonic / chain ID is not set in the environment variables
+  if (!mnemonic || !chain_id) {
+    throw new Error("WALLET_MNEMONIC / CHAIN_ID is not set");
+  }
+
   // Using a random generated mnemonic
   // const devnet_mnemonic = "opinion knife other balcony surge more bamboo canoe romance ask argue teach anxiety adjust spike mystery wolf alone torch tail six decide wash alley";
-  const testnet_mnemonic =
-    "toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm";
+  // const testnet_mnemonic =
+  //   "toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm";
   // const localnet_mnemonic = "gravity bus kingdom auto limit gate humble abstract reopen resemble awkward cannon maximum bread balance insane banana maple screen mimic cluster pigeon badge walnut";
   const deposit_amount = 512_000_000;
   const fee_denom = "uxprt";
-  const CHAIN_ID = "test-core-1"; // "persistencecore" "test-core-1" ; // "testing";
+  const CHAIN_ID = chain_id;
 
   // network : stores contract addresses
   let network = readArtifact(CHAIN_ID);
-  // let testnetWalletOptions = {
-  //   bip39Password: "",
-  //   hdPaths: [stringToPath("m/44'/118'/0'/0/0")],
-  //   prefix: "persistence",
-  // };
 
   // Create a new persistence client
   const client = await CosmosChainClient.init(
-    testnet_mnemonic,
+    mnemonic,
     {
-      rpc: rpcEndpoint,
-      chainId: CHAIN_ID,
+      rpc: CONFIGS[CHAIN_ID].rpc_endpoint,
+      chainId: CONFIGS[CHAIN_ID].chain_id,
       gasPrices: {
         denom: fee_denom,
         amount: "2000000",
@@ -78,17 +125,12 @@ async function Demo() {
     }
   );
 
-  // console.log(client.config);
-  // let params_ = await query_gov_params(client, "deposit");
-  // console.log(params_.depositParams.minDeposit );
-
   // Create Persistence Validators
   const validator_1 = await CosmosChainClient.init(
-    "logic help only text door wealth hurt always remove glory viable income agent olive trial female couch old offer crash menu zero pencil thrive",
+    CONFIGS[CHAIN_ID].validator_mnemonic,
     {
-      // const validator_1 = await CosmosChainClient.init("flash tuna music boat sign image judge engage pistol reason love reform defy game ceiling basket roof clay keen hint flash buyer fancy buyer" , {
-      rpc: rpcEndpoint,
-      chainId: "test-core-1",
+      rpc: CONFIGS[CHAIN_ID].rpc_endpoint,
+      chainId: CONFIGS[CHAIN_ID].chain_id,
       gasPrices: {
         denom: fee_denom,
         amount: "2000000",
@@ -97,11 +139,10 @@ async function Demo() {
     }
   );
   const validator_2 = await CosmosChainClient.init(
-    "middle weather hip ghost quick oxygen awful library broken chicken tackle animal crunch appear fee indoor fitness enough orphan trend tackle faint eyebrow all",
+    CONFIGS[CHAIN_ID].validator_mnemonic_2,
     {
-      // const validator_2 = await CosmosChainClient.init("horse end velvet train canoe walnut lottery security sure right rigid busy either sand bar palace choice extend august mystery action surround coconut online" , {
-      rpc: rpcEndpoint,
-      chainId: "testing",
+      rpc: CONFIGS[CHAIN_ID].rpc_endpoint,
+      chainId: CONFIGS[CHAIN_ID].chain_id,
       gasPrices: {
         denom: fee_denom,
         amount: "2000000",
@@ -125,88 +166,75 @@ async function Demo() {
   let wallet_balance = Number(balance_res["amount"]) / 10 ** 6;
   console.log(`Wallet's XPRT balance = ${wallet_balance}`);
 
-  // let codes = await getContractsByCodeId(client, 1);
-  // console.log(`CODES = ${JSON.stringify(codes)}`);
-  // let res = await query_gov_proposal(
-  //   client,
-  //   network.lp_token_instantiate_permissions_proposal_id
-  // );
-  // console.log(res);
-  // return
-
   // -----------x-------------x-------------x------------------------------
   // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------
   // -----------x-------------x-------------x------------------------------
 
   // // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
-  let contracts = [
+  let contracts: any[] = [
     {
       name: "Dexter Vault",
       path: "../artifacts/dexter_vault.wasm",
       proposal_id: 0,
-      hash: "7491d419533f35372c58562a3dfc8a9cf8252c4874aa113eb3d78ae6cb4935df",
     },
     {
       name: "Dexter Keeper",
       path: "../artifacts/dexter_keeper.wasm",
       proposal_id: 0,
-      hash: "067206f9dde2ff38d9a3164c13412c1b2f480a7010cdc8b6bec2a88cb8d188d1",
     },
     {
       name: "LP Token",
       path: "../artifacts/lp_token.wasm",
       proposal_id: 0,
-      hash: "48ac9688ad68b66c36184b47682c061ae2763c769e458ef190064d2013563418",
     },
     {
       name: "XYK Pool",
       path: "../artifacts/xyk_pool.wasm",
       proposal_id: 0,
-      hash: "0a04a3d2bf62f9b12f2adba2835235d2c393aa5ca07c269709d64234457f1154",
     },
     {
       name: "Weighted Pool",
       path: "../artifacts/weighted_pool.wasm",
       proposal_id: 0,
-      hash: "92bea1ade0540596895486a545d8b8292dbe0233126d1a70bc6ff91af14760dd",
     },
     {
       name: "Stableswap Pool",
       path: "../artifacts/stableswap_pool.wasm",
       proposal_id: 0,
-      hash: "db8669b1781cc0595c841a0412d4c1175d881d99caa4516340545c9558344c15",
     },
     {
       name: "Stable5Swap Pool",
       path: "../artifacts/stable5pool.wasm",
       proposal_id: 0,
-      hash: "6eb9df53c21e5de40bc4a647393e99c3815e642b95ad39cdb1c06f5b52e1751b",
     },
     {
       name: "Dexter Vesting",
       path: "../artifacts/dexter_vesting.wasm",
       proposal_id: 0,
-      hash: "9fed0b82283c3881c242cc51d80c1d9b73fb8fd038da726d6f850de2736a253f",
     },
     {
       name: "Dexter Generator",
       path: "../artifacts/dexter_generator.wasm",
       proposal_id: 0,
-      hash: "b34ed02bf7d57a69c90946d9503f4a58f730d8fc2772dcead2106f35bab45acd",
     },
     {
       name: "Dexter Generator : Proxy",
       path: "../artifacts/dexter_generator_proxy.wasm",
       proposal_id: 0,
-      hash: "9764f035f5daa0215c7fcbcf4774403732c432077cddb34566156d17ff9dd8e2",
     },
     {
       name: "Staking contract",
       path: "../artifacts/anchor_staking.wasm",
       proposal_id: 0,
-      hash: "5be7457d88f0e4c264a75ea89ae7bff16dd821cfd7f74736c5828a6d6e7f625c",
     },
   ];
+
+  for (let contract of contracts) {
+    let hash = calculateCheckSum(contract.path);
+    contract.hash = hash;
+  }
+
+  console.log('contracts', contracts);
 
   // UPLOAD CODE OF ALL CONTRACTS
   if (
@@ -253,8 +281,11 @@ async function Demo() {
         console.log("Proposal Error has occoured => ", e);
       }
       // TRANSACTION 2. --> Vote on proposal
-      if (contracts[i]["proposal_id"] > 0) {
-        // && CHAIN_ID == "testing" ) {
+      if (
+        contracts[i]["proposal_id"] > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
         try {
           await voteOnProposal(
             client,
@@ -297,6 +328,13 @@ async function Demo() {
       contracts[9]["proposal_id"];
     network.eq_staking_store_code_proposal_id = contracts[10]["proposal_id"];
     writeArtifact(network, CHAIN_ID);
+    console.log(
+      "Proposals for storing code for dexter contracts executed successfully"
+    );
+  } else {
+    console.log(
+      "Proposals for storing code for dexter contracts have already been executed"
+    );
   }
 
   // GET CODE-IDs FOR ALL CONTRACTS
@@ -410,11 +448,40 @@ async function Demo() {
   }
   writeArtifact(network, CHAIN_ID);
 
-  // return;
-
   // -----------x-------------x---------x---------------
   // ----------- INSTANTIATE DEXTER VAULT  -------------
   // -----------x-------------x---------x---------------
+
+  // Check if vault contract code has been stored on chain
+  if (network.vault_contract_code_id == 0) {
+    console.log("Vault contract code id not found. Exiting...");
+    return;
+  }
+  // Check if XYK pool code has been stored on chain
+  if (network.xyk_pool_contract_code_id == 0) {
+    console.log("XYK pool code id not found. Exiting...");
+    return;
+  }
+  // Check if Stableswap pool code has been stored on chain
+  if (network.stableswap_contract_code_id == 0) {
+    console.log("Stableswap pool code id not found. Exiting...");
+    return;
+  }
+  // Check if Stable-5-swap pool code has been stored on chain
+  if (network.stable5swap_pool_contract_code_id == 0) {
+    console.log("Stable-5-swap pool code id not found. Exiting...");
+    return;
+  }
+  // Check if Weighted pool code has been stored on chain
+  if (network.weighted_pool_contract_code_id == 0) {
+    console.log("Weighted pool code id not found. Exiting...");
+    return;
+  }
+  // Check if LP Token code has been stored on chain
+  if (network.lp_token_contract_code_id == 0) {
+    console.log(" LP Token code id not found. Exiting...");
+    return;
+  }
 
   // INSTANTIATE DEXTER VAULT CONTRACT --> If vault contract has not been instantiated yet
   if (
@@ -425,6 +492,7 @@ async function Demo() {
     console.log(
       `\nSubmitting Proposal to instantiate Dexter VAULT Contract ...`
     );
+
     // Make proposal to instantiate Vault contract
     if (network.vault_contract_code_id > 0) {
       let init_vault_msg = {
@@ -519,8 +587,11 @@ async function Demo() {
         console.log("Proposal Error has occoured => ", e);
       }
       // Vote on Proposal
-      if (network.vault_instantiate_proposal_id > 0) {
-        //  && CHAIN_ID == "testing"
+      if (
+        network.vault_instantiate_proposal_id > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
         try {
           console.log(
             `Voting on Proposal # ${network.vault_instantiate_proposal_id}`
@@ -552,22 +623,29 @@ async function Demo() {
   }
 
   // Get VAULT Contract Address if the proposal has passed
-  if (!network.vault_contract_address || network.vault_contract_address == "") {
+  if (
+    (!network.vault_contract_address || network.vault_contract_address == "") &&
+    network.vault_instantiate_proposal_id > 0
+  ) {
     let res = await query_wasm_contractsByCode(
       client,
       network.vault_contract_code_id
     );
-    // console.log(res);
-    network.vault_contract_address =
-      res["contracts"][res["contracts"].length - 1];
+    if (res["contracts"].length > 0) {
+      network.vault_contract_address =
+        res["contracts"][res["contracts"].length - 1];
+    } else {
+      console.log("Vault Contract Address not found. Exiting...");
+      return;
+    }
     writeArtifact(network, CHAIN_ID);
   }
 
-  // return;
   // -----------x-------------x-------------x---------x---------------
   // ----------- CONTRACT INSTIANTIATION :: TEST TOKENS --------------
   // -----------x-------------x-------------x---------x---------------
 
+  // INSTANTIATE TEST TOKEN CONTRACT --> If test token contract has not been instantiated yet
   if (!network.dummy_tokens_instantiated) {
     let tokens_ = [
       { name: "C-LUNC", symbol: "LUNC", decimals: 6 },
@@ -618,14 +696,25 @@ async function Demo() {
         console.log(
           `Proposal Id for dummy token ${tokens_[i]["name"]} = ${proposalId}`
         );
-        // await delay(3000);
-        // await voteOnProposal(client, proposalId, 1, fee_denom);
-        // await delay(3000);
-        // await voteOnProposal(validator_1, proposalId, 1, fee_denom);
-        // await delay(3000);
-        // await voteOnProposal(validator_2, proposalId, 1, fee_denom);
-        // await delay(3000);
-        // console.log(res);
+        // Vote on Proposal
+        if (
+          network.vault_instantiate_proposal_id > 0 &&
+          CHAIN_ID != "core-1" &&
+          CHAIN_ID != "test-core-1"
+        ) {
+          try {
+            await voteOnProposal(client, proposalId, 1, fee_denom);
+            await delay(3000);
+            await voteOnProposal(validator_1, proposalId, 1, fee_denom);
+            await delay(3000);
+            await voteOnProposal(validator_2, proposalId, 1, fee_denom);
+            await delay(3000);
+          } catch (e) {
+            console.log(
+              `Error has occoured while voting on proposal ${proposalId} => ${e}`
+            );
+          }
+        }
       } catch (e) {
         console.log("Proposal Error has occoured => ", e);
       }
@@ -633,15 +722,19 @@ async function Demo() {
   }
 
   // Get test tokens Contract Addresses if the proposal has passed
-  // if (!network.test_tokens_addresses || network.test_tokens_addresses.length < 3 ) {
-  //   let res = await query_wasm_contractsByCode(client, network.lp_token_contract_code_id );
-  //   if (res["contracts"].length > 0) {
-  //     network.test_tokens_addresses = res["contracts"];
-  //     writeArtifact(network, CHAIN_ID);
-  //   }
-  // }
-
-  // return;
+  if (
+    !network.test_tokens_addresses ||
+    network.test_tokens_addresses.length < 3
+  ) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.lp_token_contract_code_id
+    );
+    if (res["contracts"].length > 0) {
+      network.test_tokens_addresses = res["contracts"];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
 
   // -----------x-------------x--------------x---------------x---------------x-----------------------
   // ----------- MAKE PROPOSALS TO UPDATE INSTANTIATION PERMISSIONS FOR POOL CONTRACTS  -------------
@@ -719,17 +812,38 @@ async function Demo() {
         console.log("Proposal Error has occoured => ", e);
       }
       // TRANSACTION 2. --> Vote on proposal
-      // if (contracts_to_be_updated[i]["proposal_id"] > 0 && CHAIN_ID == "testing") {
-      //   try {
-      //     console.log(`Voting on Proposal # ${contracts_to_be_updated[i]["proposal_id"]}`);
-      //     await voteOnProposal(client, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
-      //     await voteOnProposal(validator_1, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
-      //     await voteOnProposal(validator_2, contracts_to_be_updated[i]["proposal_id"], 1, fee_denom);
-      //     console.log("Voted successfully")
-      //   } catch (e) {
-      //     console.log("Error has occoured while voting => ", e);
-      //   }
-      // }
+      if (
+        contracts_to_be_updated[i]["proposal_id"] > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
+        try {
+          console.log(
+            `Voting on Proposal # ${contracts_to_be_updated[i]["proposal_id"]}`
+          );
+          await voteOnProposal(
+            client,
+            contracts_to_be_updated[i]["proposal_id"],
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_1,
+            contracts_to_be_updated[i]["proposal_id"],
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_2,
+            contracts_to_be_updated[i]["proposal_id"],
+            1,
+            fee_denom
+          );
+          console.log("Voted successfully");
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
     }
     network.proposals_to_update_permissions = true;
 
@@ -748,7 +862,7 @@ async function Demo() {
   }
 
   // -----------x-------------x-------------x---------x---------------
-  // ----------- CONTRACT INSTIANTIATION :: KEEPER CONTRACT --------------
+  // ----------- CONTRACT INSTIANTIATION :: KEEPER CONTRACT ----------
   // -----------x-------------x-------------x---------x---------------
 
   if (!network.keeper_contract_instantiate_proposal) {
@@ -785,16 +899,41 @@ async function Demo() {
       console.log(
         `Proposal Id for instantiating Keeper contract ${proposalId}`
       );
-      // await delay(3000);
-      // await voteOnProposal(client, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // await voteOnProposal(validator_1, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // await voteOnProposal(validator_2, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // console.log(res);
     } catch (e) {
       console.log("Proposal Error has occoured => ", e);
+    }
+    // TRANSACTION 2. --> Vote on proposal
+    if (
+      network.keeper_contract_instantiate_proposal > 0 &&
+      CHAIN_ID != "core-1" &&
+      CHAIN_ID != "test-core-1"
+    ) {
+      try {
+        console.log(
+          `Voting on Proposal # ${network.keeper_contract_instantiate_proposal}`
+        );
+        await voteOnProposal(
+          client,
+          network.keeper_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        await voteOnProposal(
+          validator_1,
+          network.keeper_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        await voteOnProposal(
+          validator_2,
+          network.keeper_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        console.log("Voted successfully");
+      } catch (e) {
+        console.log("Error has occoured while voting => ", e);
+      }
     }
   }
 
@@ -835,7 +974,7 @@ async function Demo() {
         fee_denom,
         deposit_amount
       );
-      console.log(res);
+      // console.log(res);
       let proposalId = res[0].events[3].attributes[1].value;
       if (proposalId > 0) {
         network.generator_contract_instantiate_proposal = proposalId;
@@ -844,19 +983,240 @@ async function Demo() {
       console.log(
         `Proposal Id for instantiating Generator contract ${proposalId}`
       );
-      // await delay(3000);
-      // await voteOnProposal(client, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // await voteOnProposal(validator_1, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // await voteOnProposal(validator_2, proposalId, 1, fee_denom);
-      // await delay(3000);
-      // console.log(res);
     } catch (e) {
       console.log("Proposal Error has occoured => ", e);
     }
+    // TRANSACTION 2. --> Vote on proposal
+    if (
+      network.generator_contract_instantiate_proposal > 0 &&
+      CHAIN_ID != "core-1" &&
+      CHAIN_ID != "test-core-1"
+    ) {
+      try {
+        console.log(
+          `Voting on Proposal # ${network.generator_contract_instantiate_proposal}`
+        );
+        await voteOnProposal(
+          client,
+          network.generator_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        await voteOnProposal(
+          validator_1,
+          network.generator_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        await voteOnProposal(
+          validator_2,
+          network.generator_contract_instantiate_proposal,
+          1,
+          fee_denom
+        );
+        console.log("Voted successfully");
+      } catch (e) {
+        console.log("Error has occoured while voting => ", e);
+      }
+    }
   }
-  // return;
+
+  // Get Keeper Contract Addresses if the proposal has passed
+  if (!network.keeper_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.keeper_contract_code_id
+    );
+    if (res["contracts"].length > 0) {
+      network.keeper_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+
+  // Get Generator Contract Addresses if the proposal has passed
+  if (!network.generator_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.generator_contract_code_id
+    );
+    if (res["contracts"].length > 0) {
+      network.generator_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+
+  // ---------------------------
+  // CREATE XYK POOL (XPRT - T1)
+  // ---------------------------
+  if (!network.xyk_pool_address) {
+    let create_pool_exec_msg = {
+      create_pool_instance: {
+        pool_type: { xyk: {} },
+        asset_infos: [
+          { native_token: { denom: fee_denom } },
+          { token: { contract_addr: network.test_tokens_addresses[0] } },
+        ],
+      },
+    };
+    // TRANSACTION 1. --> Create Pool
+    try {
+      let ex = await executeContract(
+        client,
+        wallet_address,
+        network.vault_contract_address,
+        create_pool_exec_msg
+      );
+      let events = ex?.logs[0].events;
+      let addresses = index_dexter_create_pool_tx(events);
+      // console.log(addresses);
+      network.xyk_pool_address = addresses.pool_addr;
+      network.xyk_pool_lp_token_address = addresses.lp_token_addr;
+      network.xyk_pool_asset_infos =
+        create_pool_exec_msg.create_pool_instance.asset_infos;
+      console.log(`\nXYK Pool created! \nXYK Pool Address: ${network.xyk_pool_address}\nXYK LP token Address: ${network.xyk_pool_address}\
+      \nXYK Pool : asset 1 - ${network.xyk_pool_asset_infos[0]} \nXYK Pool : asset 2 - ${network.xyk_pool_asset_infos[1]}`);
+      writeArtifact(network, CHAIN_ID);
+    } catch (e) {
+      console.log("Error has occoured while creating XYK pool => ", e);
+    }
+  }
+
+  // ---------------------------
+  // CREATE STABLESWAP POOL (T0 - T1)
+  // ---------------------------
+  if (!network.stableswap_pool_address) {
+    let create_pool_exec_msg = {
+      create_pool_instance: {
+        pool_type: { stable2_pool: {} },
+        asset_infos: [
+          { token: { contract_addr: network.test_tokens_addresses[1] } },
+          { token: { contract_addr: network.test_tokens_addresses[0] } },
+        ],
+        init_params: toEncodedBinary({ amp: 10 }),
+      },
+    };
+    // TRANSACTION 1. --> Create Pool
+    try {
+      let ex = await executeContract(
+        client,
+        wallet_address,
+        network.vault_contract_address,
+        create_pool_exec_msg
+      );
+      let events = ex?.logs[0].events;
+      let addresses = index_dexter_create_pool_tx(events);
+      // console.log(addresses);
+      network.stableswap_pool_address = addresses.pool_addr;
+      network.stableswap_pool_lp_token_address = addresses.lp_token_addr;
+      network.stableswap_pool_asset_infos =
+        create_pool_exec_msg.create_pool_instance.asset_infos;
+      console.log(`\nStableswap Pool created! \nStableswap Pool Address: ${network.stableswap_pool_address}\nStableswap LP token Address: ${network.stableswap_pool_address}\
+      \nStableswap Pool : asset 1 - ${network.stableswap_pool_asset_infos[0]} \nStableswap Pool : asset 2 - ${network.stableswap_pool_asset_infos[1]}`);
+      writeArtifact(network, CHAIN_ID);
+    } catch (e) {
+      console.log("Error has occoured while creating Stableswap pool => ", e);
+    }
+  }
+
+  // ---------------------------
+  // CREATE STABLE-5-SWAP POOL (T0 - T1)
+  // ---------------------------
+  if (!network.stable5swap_pool_address) {
+    let create_pool_exec_msg = {
+      create_pool_instance: {
+        pool_type: { stable5_pool: {} },
+        asset_infos: [
+          { token: { contract_addr: network.test_tokens_addresses[1] } },
+          { token: { contract_addr: network.test_tokens_addresses[0] } },
+          { token: { contract_addr: network.test_tokens_addresses[2] } },
+        ],
+        init_params: toEncodedBinary({ amp: 10 }),
+      },
+    };
+    // TRANSACTION 1. --> Create Pool
+    try {
+      let ex = await executeContract(
+        client,
+        wallet_address,
+        network.vault_contract_address,
+        create_pool_exec_msg
+      );
+      let events = ex?.logs[0].events;
+      let addresses = index_dexter_create_pool_tx(events);
+      // console.log(addresses);
+      network.stable5swap_pool_address = addresses.pool_addr;
+      network.stable5swap_pool_lp_token_address = addresses.lp_token_addr;
+      network.stable5swap_pool_asset_infos =
+        create_pool_exec_msg.create_pool_instance.asset_infos;
+      console.log(`\nStable-5-swap Pool created! \nStable-5-swap Pool Address: ${network.stable5swap_pool_address}\nStable-5-swap LP token Address: ${network.stable5swap_pool_address}\
+      \nStable-5-swap Pool : asset 1 - ${network.stable5swap_pool_asset_infos[0]} \nStable-5-swap Pool : asset 2 - ${network.stable5swap_pool_asset_infos[1]} \nStable-5-swap Pool : asset 3 - ${network.stable5swap_pool_asset_infos[2]}`);
+      writeArtifact(network, CHAIN_ID);
+    } catch (e) {
+      console.log(
+        "Error has occoured while creating Stable-5-swap pool => ",
+        e
+      );
+    }
+  }
+
+  // ---------------------------
+  // CREATE WEIGHTED POOL
+  // ---------------------------
+
+  if (!network.weighted_pool_address) {
+    let weights = [
+      { info: { native_token: { denom: fee_denom } }, amount: "10" },
+      {
+        info: { token: { contract_addr: network.test_tokens_addresses[0] } },
+        amount: "20",
+      },
+      {
+        info: { token: { contract_addr: network.test_tokens_addresses[1] } },
+        amount: "30",
+      },
+      {
+        info: { token: { contract_addr: network.test_tokens_addresses[2] } },
+        amount: "40",
+      },
+    ];
+    let params = toEncodedBinary({
+      weights: weights,
+      exit_fee: "0.01",
+    });
+    let create_pool_exec_msg = {
+      create_pool_instance: {
+        pool_type: { weighted: {} },
+        init_params: params,
+        asset_infos: [
+          { native_token: { denom: fee_denom } },
+          { token: { contract_addr: network.test_tokens_addresses[0] } },
+          { token: { contract_addr: network.test_tokens_addresses[1] } },
+          { token: { contract_addr: network.test_tokens_addresses[2] } },
+        ],
+      },
+    };
+    // TRANSACTION 1. --> Create Pool
+    try {
+      let ex = await executeContract(
+        client,
+        wallet_address,
+        network.vault_contract_address,
+        create_pool_exec_msg
+      );
+      let events = ex?.logs[0].events;
+      let addresses = index_dexter_create_pool_tx(events);
+      // console.log(addresses);
+      network.weighted_pool_address = addresses.pool_addr;
+      network.weighted_pool_lp_token_address = addresses.lp_token_addr;
+      network.weighted_pool_asset_infos =
+        create_pool_exec_msg.create_pool_instance.asset_infos;
+      console.log(`\nWeighted Pool created! \nWeighted Pool Address: ${network.weighted_pool_address}\nWeighted LP token Address: ${network.weighted_pool_address}\
+      \nWeighted Pool : asset 1 - ${network.weighted_pool_asset_infos[0]} \nWeighted Pool : asset 2 - ${network.weighted_pool_asset_infos[1]} \nWeighted Pool : asset 3 - ${network.weighted_pool_asset_infos[2]} \nWeighted Pool : asset 4 - ${network.weighted_pool_asset_infos[3]}`);
+      writeArtifact(network, CHAIN_ID);
+    } catch (e) {
+      console.log("Error has occoured while creating Weighted pool => ", e);
+    }
+  }
 
   // -----------x-------------x-------------x---------x---------------
   // ----------- CONTRACT INSTIANTIATION :: GENERATOR PROXY CONTRACT -------
@@ -962,234 +1322,6 @@ async function Demo() {
   // console.log(res.codeInfo.instantiatePermission);
 
   // return
-
-  // ---------------------------
-  // CREATE XYK POOL (XPRT - T1)
-  // ---------------------------
-  // let create_pool_exec_msg = {
-  //   create_pool_instance: {
-  //     pool_type: { xyk: {} },
-  //     asset_infos: [
-  //       { native_token: { denom: fee_denom } },
-  //       { token: { contract_addr: network.test_tokens_addresses[0] } },
-  //     ],
-  //   },
-  // };
-  // let ex = await executeContract(
-  //   client,
-  //   wallet_address,
-  //   network.vault_contract_address,
-  //   create_pool_exec_msg
-  // );
-  // let events = ex?.logs[0].events;
-
-  // for (let i = 0; i < events?.length; i++) {
-  //   console.log(events[i]);
-  // }
-
-  // let addresses = index_dexter_create_pool_tx(events);
-  // console.log(addresses);
-
-  // ---------------------------
-  // CREATE XYK POOL (T0 - T1)
-  // ---------------------------
-  // let create_pool_exec_msg2 = {
-  //   create_pool_instance: {
-  //     pool_type: { xyk: {} },
-  //     asset_infos: [
-  //       { token: { contract_addr: network.test_tokens_addresses[1] } },
-  //       { token: { contract_addr: network.test_tokens_addresses[0] } },
-  //     ],
-  //   },
-  // };
-  // let ex = await executeContract(
-  //   client,
-  //   wallet_address,
-  //   network.vault_contract_address,
-  //   create_pool_exec_msg2
-  // );
-  // console.log(ex);
-
-  // let events = ex?.logs[0].events;
-  // console.log(events);
-
-  // let addresses = index_dexter_create_pool_tx(events);
-  // console.log(addresses);
-
-  // ---------------------------
-  // CREATE STABLESWAP POOL (T0 - T1)
-  // ---------------------------
-  // let create_sb_pool_exec_msg = {
-  //   create_pool_instance: {
-  //     pool_type: { stable2_pool: {} },
-  //     asset_infos: [
-  //       { token: { contract_addr: network.test_tokens_addresses[1] } },
-  //       { token: { contract_addr: network.test_tokens_addresses[0] } },
-  //     ],
-  //     init_params: toEncodedBinary({ amp: 10 }),
-  //   },
-  // };
-  // let ex_st_1 = await executeContract(
-  //   client,
-  //   wallet_address,
-  //   network.vault_contract_address,
-  //   create_sb_pool_exec_msg
-  // );
-  // console.log(ex_st_1);
-
-  // let events_st_1 = ex_st_1?.logs[0].events;
-  // let addresses_st_1 = index_dexter_create_pool_tx(events_st_1);
-  // console.log(addresses_st_1);
-  // network.stableswap_pool_addr = addresses_st_1["pool_addr"];
-  // network.stableswap_lp_token_addr = addresses_st_1["lp_token_addr"];
-  // network.stableswap_lp_asset_infos =
-  //   create_sb_pool_exec_msg["create_pool_instance"]["asset_infos"];
-  // writeArtifact(network, CHAIN_ID);
-  // return;
-
-  // ---------------------------
-  // CREATE STABLESWAP POOL (XPRT - T1)
-  // ---------------------------
-  let create_sb_pool_exec_msg2 = {
-    create_pool_instance: {
-      pool_type: { stable2_pool: {} },
-      asset_infos: [
-        { native_token: { denom: fee_denom } },
-        { token: { contract_addr: network.test_tokens_addresses[0] } },
-      ],
-      init_params: toEncodedBinary({ amp: 10 }),
-    },
-  };
-  let ex_st_2 = await executeContract(
-    client,
-    wallet_address,
-    network.vault_contract_address,
-    create_sb_pool_exec_msg2
-  );
-  // console.log(ex_st_2);
-
-  let events = ex_st_2?.logs[0].events;
-  // console.log(events);
-
-  let addresses_st_2 = index_dexter_create_pool_tx(events);
-  console.log(addresses_st_2);
-  network.stableswap_2_pool_addr = addresses_st_2["pool_addr"];
-  network.stableswap_2_lp_token_addr = addresses_st_2["lp_token_addr"];
-  network.stableswap_2_asset_infos =
-    create_sb_pool_exec_msg2["create_pool_instance"]["asset_infos"];
-  writeArtifact(network, CHAIN_ID);
-
-  // return;
-  // ---------------------------
-  // CREATE STABLE-5-SWAP POOL (T0 - T1)
-  // ---------------------------
-  let create_sb5_pool_exec_msg = {
-    create_pool_instance: {
-      pool_type: { stable5_pool: {} },
-      asset_infos: [
-        { token: { contract_addr: network.test_tokens_addresses[1] } },
-        { token: { contract_addr: network.test_tokens_addresses[0] } },
-      ],
-      init_params: toEncodedBinary({ amp: 10 }),
-    },
-  };
-  let ex = await executeContract(
-    client,
-    wallet_address,
-    network.vault_contract_address,
-    create_sb5_pool_exec_msg
-  );
-  console.log(ex);
-
-  let events_s5_ = ex?.logs[0].events;
-  let addresses_s5_ = index_dexter_create_pool_tx(events_s5_);
-  console.log(addresses_s5_);
-  network.stable5swap_pool_addr = addresses_s5_["pool_addr"];
-  network.stable5swap_lp_token_addr = addresses_s5_["lp_token_addr"];
-  network.stable5swap_asset_infos =
-    create_sb5_pool_exec_msg["create_pool_instance"]["asset_infos"];
-  writeArtifact(network, CHAIN_ID);
-  // return;
-  // ---------------------------
-  // CREATE STABLE-5-SWAP POOL (XPRT - T1)
-  // ---------------------------
-  let create_sb5_pool_exec_msg2 = {
-    create_pool_instance: {
-      pool_type: { stable5_pool: {} },
-      asset_infos: [
-        { native_token: { denom: fee_denom } },
-        { token: { contract_addr: network.test_tokens_addresses[0] } },
-        { token: { contract_addr: network.test_tokens_addresses[1] } },
-        { token: { contract_addr: network.test_tokens_addresses[2] } },
-      ],
-      init_params: toEncodedBinary({ amp: 10 }),
-    },
-  };
-  let ex_s5b_2 = await executeContract(
-    client,
-    wallet_address,
-    network.vault_contract_address,
-    create_sb5_pool_exec_msg2
-  );
-  let events_s5b_2 = ex_s5b_2?.logs[0].events;
-  let addresses_s5b_2 = index_dexter_create_pool_tx(events_s5b_2);
-  console.log(addresses_s5b_2);
-  network.stable5swap_2_pool_addr = addresses_s5b_2["pool_addr"];
-  network.stable5swap_2_lp_token_addr = addresses_s5b_2["lp_token_addr"];
-  network.stable5swap_2_asset_infos =
-    create_sb5_pool_exec_msg2["create_pool_instance"]["asset_infos"];
-  writeArtifact(network, CHAIN_ID);
-  // return;
-  // ---------------------------
-  // CREATE WEIGHTED POOL
-  // ---------------------------
-  let weights = [
-    { info: { native_token: { denom: fee_denom } }, amount: "10" },
-    {
-      info: { token: { contract_addr: network.test_tokens_addresses[0] } },
-      amount: "20",
-    },
-    {
-      info: { token: { contract_addr: network.test_tokens_addresses[1] } },
-      amount: "30",
-    },
-    {
-      info: { token: { contract_addr: network.test_tokens_addresses[2] } },
-      amount: "40",
-    },
-  ];
-  // console.log(weights)
-  let params = toEncodedBinary({
-    weights: weights,
-    exit_fee: "0.01",
-  });
-
-  let create_weighted_pool_exec_msg1 = {
-    create_pool_instance: {
-      pool_type: { weighted: {} },
-      init_params: params,
-      asset_infos: [
-        { native_token: { denom: fee_denom } },
-        { token: { contract_addr: network.test_tokens_addresses[0] } },
-        { token: { contract_addr: network.test_tokens_addresses[1] } },
-        { token: { contract_addr: network.test_tokens_addresses[2] } },
-      ],
-    },
-  };
-  let ex_w = await executeContract(
-    client,
-    wallet_address,
-    network.vault_contract_address,
-    create_weighted_pool_exec_msg1
-  );
-  let events_w = ex_w?.logs[0].events;
-  let addresses_w = index_dexter_create_pool_tx(events_w);
-  console.log(addresses_w);
-  network.weighted_pool_addr = addresses_s5b_2["pool_addr"];
-  network.weighted_lp_token_addr = addresses_s5b_2["lp_token_addr"];
-  network.weighted_asset_infos =
-    create_weighted_pool_exec_msg1["create_pool_instance"]["asset_infos"];
-  writeArtifact(network, CHAIN_ID);
 }
 
 function delay(ms: number) {
