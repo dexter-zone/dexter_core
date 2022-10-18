@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64, WasmMsg,
+    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
@@ -24,9 +24,7 @@ use dexter::pool::{
 };
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::helper::{
-    adjust_precision, calculate_underlying_fees, get_share_in_assets, select_pools,
-};
+use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
 use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::SwapType;
 
@@ -34,9 +32,6 @@ use dexter::vault::SwapType;
 const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// An LP token precision.
-const LP_TOKEN_PRECISION: u8 = 6;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------

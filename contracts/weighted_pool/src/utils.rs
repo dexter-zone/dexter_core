@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128, Uint256};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128};
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{Config, ResponseType};

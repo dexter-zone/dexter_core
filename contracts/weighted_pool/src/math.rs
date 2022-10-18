@@ -1,4 +1,4 @@
-use cosmwasm_std::{Decimal, Decimal256, StdResult, Storage, Uint128, Uint256};
+use cosmwasm_std::{Decimal, Decimal256, StdResult, Uint128};
 use std::str::FromStr;
 
 use dexter::{

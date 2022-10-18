@@ -1,13 +1,12 @@
-use dexter::asset::{addr_validate_to_lower, AssetInfo};
+use dexter::asset::AssetInfo;
 use dexter::helper::OwnershipProposal;
 use dexter::{
-    generator::{Config, ExecuteOnReply, PoolInfo, RestrictedVector, UserInfo},
+    generator::{Config, ExecuteOnReply, PoolInfo, UserInfo},
     DecimalCheckedOps,
 };
 
-use cosmwasm_std::{Addr, Decimal, DepsMut, StdResult, Storage, Uint128, Uint64};
+use cosmwasm_std::{Addr, DepsMut, StdResult, Uint128};
 use cw_storage_plus::{Item, Map};
-use std::collections::HashMap;
 
 // ----------------x----------------x--------------x----------------
 // ----------------x     :: CONTRACT STORAGE ::    x------

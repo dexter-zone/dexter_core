@@ -1,18 +1,18 @@
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Attribute, Binary, CosmosMsg, Decimal, Deps,
-    DepsMut, Env, MessageInfo, Order, QuerierWrapper, Reply, ReplyOn, Response, StdError,
-    StdResult, SubMsg, Uint128, Uint64, WasmMsg,
+    attr, entry_point, from_binary, to_binary, Addr, Attribute, Binary, Decimal, Deps, DepsMut,
+    Env, MessageInfo, QuerierWrapper, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
+    Uint128, Uint64, WasmMsg,
 };
-use protobuf::Message;
-use std::collections::{HashMap, HashSet};
+
+use std::collections::HashSet;
 
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20ReceiveMsg};
 
-use dexter::asset::{addr_validate_to_lower, token_asset_info, Asset, AssetInfo};
-use dexter::generator::{PoolInfo, RestrictedVector, UnbondingInfo, UserInfo};
+use dexter::asset::{addr_validate_to_lower, AssetInfo};
+use dexter::generator::{PoolInfo, UnbondingInfo, UserInfo};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
-use dexter::querier::{config_info_by_pool, query_token_balance};
+use dexter::querier::query_token_balance;
 use dexter::DecimalCheckedOps;
 use dexter::{
     generator::{
@@ -28,15 +28,14 @@ use dexter::{
 
 use crate::error::ContractError;
 use crate::state::{
-    update_proxy_asset, update_user_balance, CONFIG, OWNERSHIP_PROPOSAL, POOL_INFO,
-    PROXY_REWARD_ASSET, TMP_USER_ACTION, USER_INFO,
+    update_user_balance, CONFIG, OWNERSHIP_PROPOSAL, POOL_INFO, PROXY_REWARD_ASSET,
+    TMP_USER_ACTION, USER_INFO,
 };
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-generator";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const INIT_REWARDS_HOLDER_ID: u64 = 1;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -64,7 +63,7 @@ pub fn instantiate(
 
     let allowed_reward_proxies: Vec<Addr> = vec![];
 
-    let mut config = Config {
+    let config = Config {
         owner: addr_validate_to_lower(deps.api, &msg.owner)?,
         vault: addr_validate_to_lower(deps.api, &msg.vault)?,
         dex_token: None,
@@ -340,7 +339,7 @@ pub fn execute_update_config(
     info: MessageInfo,
     dex_token: Option<String>,
     vesting_contract: Option<String>,
-    checkpoint_generator_limit: Option<u32>,
+    _checkpoint_generator_limit: Option<u32>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
     // Load Config
@@ -445,7 +444,7 @@ pub fn execute_setup_pools(
 /// ##Executor
 /// Can only be called by the owner
 pub fn execute_set_proxy_for_pool(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     lp_token: String,
@@ -626,7 +625,7 @@ fn update_allowed_proxies(
 ///
 /// * **amount** is the object of type [`Uint128`]. Sets a new count of tokens per block.
 fn add_proxy(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     lp_token: Addr,
     proxy: Addr,
@@ -982,7 +981,7 @@ pub fn unlock(
     let mut rem_unbonding_sessions: Vec<UnbondingInfo> = vec![];
     for session in unbonding_sessions.iter() {
         // Check if session can be unlocked
-        if session.unlock_timstamp < env.block.time.seconds() {
+        if session.unlock_timstamp <= env.block.time.seconds() {
             // ExecuteMsg to send LP Tokens to the user
             unlock_msgs.push(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
@@ -1056,16 +1055,6 @@ pub fn emergency_unstake(
             funds: vec![],
         });
     }
-    // else {
-    //     transfer_msg = WasmMsg::Execute {
-    //         contract_addr: lp_token.to_string(),
-    //         msg: to_binary(&Cw20ExecuteMsg::Transfer {
-    //             recipient: info.sender.to_string(),
-    //             amount: user.amount,
-    //         })?,
-    //         funds: vec![],
-    //     };
-    // }
 
     // Update user's balance
     let mut user = update_user_balance(user, &pool, Uint128::zero())?;
@@ -1477,7 +1466,7 @@ fn query_pool_info(
 
 pub fn query_user_info(
     deps: Deps,
-    env: Env,
+    _env: Env,
     lp_token: String,
     user: String,
 ) -> Result<UserInfoResponse, ContractError> {
@@ -1682,7 +1671,7 @@ pub fn accumulate_rewards_per_share(
     cfg: &Config,
     deposited: Option<Uint128>,
 ) -> StdResult<()> {
-    let mut lp_supply: Uint128 = Uint128::zero();
+    let lp_supply: Uint128;
 
     // Update reward share for proxy rewards : In case proxy is set and LP tokens are staked
     match &pool.reward_proxy {
@@ -1805,11 +1794,11 @@ pub fn send_pending_rewards(
 /// ## Params
 /// * **msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(mut deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     let contract_version = get_contract_version(deps.storage)?;
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let mut response = Response::new();
+    let response = Response::new();
     Ok(response
         .add_attribute("previous_contract_name", &contract_version.contract)
         .add_attribute("previous_contract_version", &contract_version.version)

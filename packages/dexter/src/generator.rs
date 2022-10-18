@@ -5,7 +5,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::asset::{Asset, AssetInfo};
 use crate::DecimalCheckedOps;
 
 /// This structure stores the core parameters for the Generator contract.

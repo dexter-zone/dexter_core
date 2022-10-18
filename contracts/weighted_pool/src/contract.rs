@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::str::FromStr;
 
 use cosmwasm_std::{
@@ -17,7 +16,7 @@ use dexter::pool::{
     Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::SwapType;
 
 use crate::error::ContractError;
 use crate::math::{calculate_invariant, get_normalized_weight};
@@ -30,7 +29,6 @@ use crate::utils::{
     maximal_exact_ratio_join,
 };
 
-use protobuf::Message;
 use std::vec;
 
 /// Contract name that is used for migration.
@@ -861,7 +859,7 @@ pub fn query_cumulative_price(
     let res_exchange_rate = twap
         .cumulative_prices
         .into_iter()
-        .find(|(offer_asset, ask_asset, rate)| {
+        .find(|(offer_asset, ask_asset, _rate)| {
             offer_asset.eq(&offer_asset_info) && ask_asset.eq(&ask_asset_info)
         })
         .unwrap();
