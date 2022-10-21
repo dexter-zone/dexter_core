@@ -78,11 +78,11 @@ export function makeHdPath(coinType = 118, account = 0) {
 
 function calculateCheckSum(filePath: string): string {
   const fileBuffer = fs.readFileSync(filePath);
-  const hashSum = crypto.createHash('sha256');
+  const hashSum = crypto.createHash("sha256");
   hashSum.update(fileBuffer);
 
-  const hex = hashSum.digest('hex');
-  return hex
+  const hex = hashSum.digest("hex");
+  return hex;
 }
 
 async function Demo() {
@@ -99,7 +99,7 @@ async function Demo() {
   // const testnet_mnemonic =
   //   "toss hammer lazy dish they ritual suggest favorite sword alcohol enact enforce mechanic spoon gather knock giggle indicate indicate nose actor brand basket confirm";
   // const localnet_mnemonic = "gravity bus kingdom auto limit gate humble abstract reopen resemble awkward cannon maximum bread balance insane banana maple screen mimic cluster pigeon badge walnut";
-  const deposit_amount = 512_000_000;
+  const deposit_amount = 10_000_000; // 512_000_000;
   const fee_denom = "uxprt";
   const CHAIN_ID = chain_id;
 
@@ -165,6 +165,22 @@ async function Demo() {
   const balance_res = await client.wasm.getBalance(wallet_address, fee_denom);
   let wallet_balance = Number(balance_res["amount"]) / 10 ** 6;
   console.log(`Wallet's XPRT balance = ${wallet_balance}`);
+
+  console.log(CHAIN_ID);
+
+  // let res = await query_gov_params(client, "voting");
+  // console.log(res);
+  // console.log(res["votingParams"]["votingPeriod"]);
+  // console.log(res["depositParams"]["minDeposit"]);
+  // console.log(res["depositParams"]["maxDepositPeriod"]);
+
+  // let res = await query_gov_proposal(
+  //   client,
+  //   network.vault_store_code_proposal_id
+  // );
+  // console.log(res);
+
+  // return;
 
   // -----------x-------------x-------------x------------------------------
   // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------
@@ -234,7 +250,7 @@ async function Demo() {
     contract.hash = hash;
   }
 
-  console.log('contracts', contracts);
+  console.log("contracts", contracts);
 
   // UPLOAD CODE OF ALL CONTRACTS
   if (
@@ -339,6 +355,7 @@ async function Demo() {
 
   // GET CODE-IDs FOR ALL CONTRACTS
   if (!network.vault_contract_code_id || network.vault_contract_code_id == 0) {
+    console.log(contracts[0]["hash"]);
     let code_id_res = await find_code_id_from_contract_hash(
       client,
       contracts[0]["hash"]
@@ -447,6 +464,8 @@ async function Demo() {
     network.staking_contract_contract_code_id = Number(code_id_res);
   }
   writeArtifact(network, CHAIN_ID);
+
+  return;
 
   // -----------x-------------x---------x---------------
   // ----------- INSTANTIATE DEXTER VAULT  -------------

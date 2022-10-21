@@ -160,8 +160,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
     let pool_res: PoolInfo = app
         .wrap()
         .query_wasm_smart(
@@ -530,29 +528,6 @@ fn test_query_on_join_pool() {
         .unwrap();
 
     assert_eq!(Uint128::from(100u128), pool_twap_res.total_share);
-    assert_eq!(
-        vec![
-            AssetExchangeRate {
-                offer_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                ask_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                rate: Uint128::from(1000000000000000u128),
-            },
-            AssetExchangeRate {
-                offer_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                rate: Uint128::from(1000000000000000u128),
-            },
-        ],
-        pool_twap_res.exchange_infos
-    );
 
     assert_eq!(Uint128::from(100u128), pool_twap_res_t1.total_share);
     assert_eq!(
@@ -563,7 +538,7 @@ fn test_query_on_join_pool() {
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            rate: Uint128::from(1000000000000000u128),
+            rate: Uint128::from(0u128),
         },
         pool_twap_res_t1.exchange_info
     );
@@ -577,7 +552,7 @@ fn test_query_on_join_pool() {
             ask_info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
-            rate: Uint128::from(1000000000000000u128),
+            rate: Uint128::from(0u128),
         },
         pool_twap_res_t2.exchange_info
     );
@@ -808,7 +783,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                rate: Uint128::from(1089146919431279u128),
+                rate: Uint128::from(90000000000000u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -817,7 +792,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                rate: Uint128::from(1090861244019138u128),
+                rate: Uint128::from(90000000000000u128),
             },
         ],
         pool_twap_res.exchange_infos
@@ -832,7 +807,7 @@ fn test_query_on_join_pool() {
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            rate: Uint128::from(1090861244019138u128),
+            rate: Uint128::from(90000000000000u128),
         },
         pool_twap_res_t1.exchange_info
     );
@@ -846,7 +821,7 @@ fn test_query_on_join_pool() {
             ask_info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
-            rate: Uint128::from(1089146919431279u128),
+            rate: Uint128::from(90000000000000u128),
         },
         pool_twap_res_t2.exchange_info
     );
@@ -1170,29 +1145,6 @@ fn test_on_exit_pool() {
         .unwrap();
 
     assert_eq!(Uint128::from(5000u128), pool_twap_res.total_share);
-    assert_eq!(
-        vec![
-            AssetExchangeRate {
-                offer_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                ask_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                rate: Uint128::from(1000000000000000u128),
-            },
-            AssetExchangeRate {
-                offer_info: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_info: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-                rate: Uint128::from(1000000000000000u128),
-            },
-        ],
-        pool_twap_res.exchange_infos
-    );
 
     assert_eq!(Uint128::from(5000u128), pool_twap_res_t1.total_share);
     assert_eq!(
@@ -1203,7 +1155,7 @@ fn test_on_exit_pool() {
             ask_info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            rate: Uint128::from(1000000000000000u128),
+            rate: Uint128::from(0u128),
         },
         pool_twap_res_t1.exchange_info
     );
@@ -1217,7 +1169,7 @@ fn test_on_exit_pool() {
             ask_info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
-            rate: Uint128::from(1000000000000000u128),
+            rate: Uint128::from(00u128),
         },
         pool_twap_res_t2.exchange_info
     );

@@ -304,7 +304,7 @@ pub enum QueryMsg {
     /// Config returns controls settings that specified in custom [`ConfigResponse`] struct
     Config {},
     /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
-    QueryRigistery { pool_type: PoolType },
+    QueryRegistry { pool_type: PoolType },
     /// Returns boolean value indicating if the genarator is disabled or not for the pool
     IsGeneratorDisabled { lp_token_addr: String },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct

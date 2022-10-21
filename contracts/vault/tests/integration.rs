@@ -526,9 +526,6 @@ fn test_create_pool_instance() {
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
-
     let pool_res: PoolInfo = app
         .wrap()
         .query_wasm_smart(

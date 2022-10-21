@@ -1,0 +1,42 @@
+[package]
+name = "dexter-router"
+version = "1.0.0"
+authors = ["AstroTechLabs"]
+edition = "2021"
+description = "Persistence DEX Router contract - Facilitates multi-pool swaps via Dexter"
+license = "MIT"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for quicker tests, cargo test --lib
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+
+[dependencies]
+dexter = { path = "../../packages/dexter", default-features = false }
+cosmwasm-std = "1.0"
+cw-storage-plus = "0.13.2"
+cw2 = "0.13.2"
+cw20 = { version = "0.13.2" }
+schemars = "0.8.1"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.20" }
+protobuf = { version = "2", features = ["with-bytes"] }
+serde-json-wasm = "0.4.1"
+
+[dev-dependencies]
+xyk-pool = { path = "../xyk_pool"}
+lp-token = { path = "../lp_token"}
+cosmwasm-schema = "1.0.0"
+cw-multi-test = "0.13.2"
+cw20 = "0.13.2"
