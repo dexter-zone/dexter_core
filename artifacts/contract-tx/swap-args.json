@@ -1,7 +1,7 @@
 {
   "swap": {
     "swap_request": {
-      "amount": "100",
+      "amount": "1000000",
       "asset_out": {
         "token": {
           "contract_addr": "persistence1qg5ega6dykkxc307y25pecuufrjkxkaggkkxh7nad0vhyhtuhw3sa8s9dq"

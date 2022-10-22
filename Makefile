@@ -80,7 +80,7 @@ swap-asset:
 		--chain-id persistencecore \
 		-b block \
 		--gas 2000000 \
-		--amount 1000uxprt
+		--amount 1000000uxprt
 
 swap-asset-reverse:
 	persistenceCore tx wasm execute $(XYK_POOL_CW_ASSET_ADDRESS) \

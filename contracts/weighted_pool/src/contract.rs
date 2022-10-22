@@ -241,7 +241,7 @@ pub fn execute_update_pool_liquidity(
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::update-liquidity")
+    let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
         .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
