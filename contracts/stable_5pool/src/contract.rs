@@ -68,10 +68,10 @@ pub fn instantiate(
 
     // Initializing cumulative prices
     let mut cumulative_prices = vec![];
-    for from_pool in &msg.asset_infos {
-        for to_pool in &msg.asset_infos {
-            if !from_pool.eq(to_pool) {
-                cumulative_prices.push((from_pool.clone(), to_pool.clone(), Uint128::zero()))
+    for from_asset in &msg.asset_infos {
+        for to_asset in &msg.asset_infos {
+            if from_asset.as_string() != to_asset.as_string() {
+                cumulative_prices.push((from_asset.clone(), to_asset.clone(), Uint128::zero()))
             }
         }
     }
@@ -202,7 +202,7 @@ pub fn execute_update_pool_liquidity(
         transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
 
     // Accumulate prices for the assets in the pool
-    if !accumulate_prices(
+    if accumulate_prices(
         deps.as_ref(),
         env.clone(),
         &mut config,
@@ -212,7 +212,7 @@ pub fn execute_update_pool_liquidity(
     )
     .is_ok()
     {
-        return Err(ContractError::PricesUpdateFailed {});
+        TWAPINFO.save(deps.storage, &twap)?;
     }
 
     // Update state
@@ -220,7 +220,6 @@ pub fn execute_update_pool_liquidity(
 
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
-    TWAPINFO.save(deps.storage, &twap)?;
             
     let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())

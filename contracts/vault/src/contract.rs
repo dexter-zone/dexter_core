@@ -721,10 +721,13 @@ pub fn execute_join_pool(
         }))?;
 
     // If the response is failure
-    if !after_join_res.response.is_success() || after_join_res.new_shares.is_zero() {
+    if !after_join_res.response.is_success()  {
         return Err(ContractError::PoolQueryFailed {
             error: after_join_res.response.to_string(),
         });
+    }
+    else if after_join_res.new_shares.is_zero() {
+        return Err(ContractError::PoolQueryFailed { error: "LP tokens to mint cannot be 0".to_string() });
     }
 
     // Number of Assets should match
