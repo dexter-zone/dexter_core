@@ -3,14 +3,14 @@
     "pool_id": "1",
     "assets": [
       {
-        "amount": "10000",
+        "amount": "10000000",
         "info": {
           "token": {
             "contract_addr": "persistence1qg5ega6dykkxc307y25pecuufrjkxkaggkkxh7nad0vhyhtuhw3sa8s9dq"
           }
         }
       },
-      { "amount": "10000", "info": { "native_token": { "denom": "uxprt" } } }
+      { "amount": "10000000", "info": { "native_token": { "denom": "uxprt" } } }
     ],
     "auto_stake": false,
     "lp_to_mint": null,

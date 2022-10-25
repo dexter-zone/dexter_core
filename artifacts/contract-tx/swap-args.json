@@ -10,7 +10,7 @@
       "asset_in": { "native_token": { "denom": "uxprt" } },
       "pool_id": "1",
       "swap_type": { "give_in": {} },
-      "max_spread": "0.02"
+      "max_spread": "0.1"
     },
     "recipient": null
   }
