@@ -45,7 +45,7 @@ The Vault charges swap fee on swaps that take place in Dexter pools and the fee 
 | Message                                  | Description                                                                                            |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `QueryMsg::Config()`                     | Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure                 |
-| `QueryMsg::QueryRigistery([`PoolType`])` | Returns the provided [`PoolType`]'s Configuration settings in custom [`PoolConfigResponse`] structure  |
+| `QueryMsg::QueryRegistry([`PoolType`])` | Returns the provided [`PoolType`]'s Configuration settings in custom [`PoolConfigResponse`] structure  |
 | `QueryMsg::GetPoolById([`Uint128`])`     | Returns the current stored state of pool with the provided ID in custom [`PoolInfoResponse`] structure |
 | `QueryMsg::GetPoolByAddress([`String`])` | Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure                  |
 

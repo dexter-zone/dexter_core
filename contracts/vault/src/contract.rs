@@ -652,6 +652,8 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 &tmp_pool_info.lp_token_addr.clone().unwrap().as_bytes(),
                 &tmp_pool_info.pool_id.clone(),
             )?;
+
+            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
             event = event.add_attribute(
                 "lp_token_addr",
                 tmp_pool_info.clone().lp_token_addr.unwrap(),
