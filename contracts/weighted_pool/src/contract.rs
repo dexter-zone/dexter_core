@@ -1,8 +1,6 @@
-use std::str::FromStr;
-
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128,
+    Event, MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
 use cw2::set_contract_version;
@@ -13,20 +11,20 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, WeightedParams, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
+    Trade, WeightedParams,
 };
 use dexter::querier::query_supply;
 use dexter::vault::SwapType;
 
 use crate::error::ContractError;
-use crate::math::{get_normalized_weight};
+use crate::math::get_normalized_weight;
 use crate::state::{
     get_precision, get_weight, store_precisions, store_weights, MathConfig, Twap, WeightedAsset,
     CONFIG, MATHCONFIG, TWAPINFO,
 };
 use crate::utils::{
     accumulate_prices, calc_single_asset_join, compute_offer_amount, compute_swap,
-    maximal_exact_ratio_join,
+    maximal_exact_ratio_join, transform_to_decimal_asset, update_pool_state_for_joins,
 };
 
 use std::vec;
@@ -36,8 +34,8 @@ const CONTRACT_NAME: &str = "dexter::fixed_weighted_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// Number of LP tokens to mint when liquidiity is provided for the first time to the pool
 const INIT_LP_TOKENS: u128 = 100_000000;
-
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -66,7 +64,10 @@ pub fn instantiate(
     }
 
     // Weights assigned to assets
-    let WeightedParams { mut weights, exit_fee } = from_binary(&msg.init_params.unwrap())?;
+    let WeightedParams {
+        mut weights,
+        exit_fee,
+    } = from_binary(&msg.init_params.unwrap())?;
 
     // Exit fee cannot be set more than 1%
     if exit_fee.is_some() {
@@ -82,16 +83,19 @@ pub fn instantiate(
 
     // Sort Assets List (Weights)
     weights.sort_by(|a, b| {
-        a.info.as_string()
+        a.info
+            .as_string()
             .to_lowercase()
             .cmp(&b.info.as_string().to_lowercase())
-    });    
+    });
 
     // Make sure asset list in AssetInfos and WeightsList is same
-    let mut index = 0;    
+    let mut index = 0;
     for asset in msg.asset_infos.iter() {
         if asset.as_string() != weights[index].info.as_string() {
-            return Err(ContractError::WeightedAssetAndAssetMismatch { asset: asset.as_string() });
+            return Err(ContractError::WeightedAssetAndAssetMismatch {
+                asset: asset.as_string(),
+            });
         }
         index += 1;
     }
@@ -236,13 +240,9 @@ pub fn execute_update_pool_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    println!("\n Weighted Contract -- UpdateLiquidity - State transition function");
-
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_decimal_asset(deps.as_ref(), &config.assets);
-    
-    println!("- Decimal Assets Created");
 
     // Accumulate prices for the assets in the pool
     if accumulate_prices(
@@ -255,10 +255,9 @@ pub fn execute_update_pool_liquidity(
     )
     .is_ok()
     {
-        println!("- Prices Accumulated Successful, twap updated");
         TWAPINFO.save(deps.storage, &twap)?;
     }
-    
+
     // Update state
     config.assets = assets;
     config.block_time_last = env.block.time.seconds();
@@ -267,14 +266,17 @@ pub fn execute_update_pool_liquidity(
     let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
-        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute(
+            "pool_assets",
+            serde_json_wasm::to_string(&config.assets).unwrap(),
+        )
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: WEIGHTED POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 /// ## Description
@@ -404,8 +406,6 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 // - a single token
 // - contain exactly the same tokens as the pool contains
 // ------------------------------------------------------------
-/// WEIGHTED POOL -::- MATH LOGIC
-/// T.B.A -- User needs to provide the assets that he wants to use to Join the pool
 pub fn query_on_join_pool(
     deps: Deps,
     _env: Env,
@@ -423,11 +423,6 @@ pub fn query_on_join_pool(
     //
     //   Note that all single asset joins do incur swap fee.
 
-    println!("\n\n\nWeighted Contract - Query :: OnJoinPool {:?}", assets_in);
-    println!("Param :: _mint_amount {:?}", _mint_amount);
-    println!("Param :: _slippage_tolerance {:?}", _slippage_tolerance);
-
-
     // If the user has not provided any assets to be provided, then return a `Failure` response
     if assets_in.is_none() {
         return Ok(return_join_failure("No assets provided".to_string()));
@@ -441,16 +436,11 @@ pub fn query_on_join_pool(
             .cmp(&b.info.to_string().to_lowercase())
     });
 
-    println!("Assets sorted");
-
-
     // 1) get all 'pool assets' (aka current pool liquidity + balancer weight)
-
     let config: Config = CONFIG.load(deps.storage)?;
-    // let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
-    println!("Existing shares supply {:?}", total_share);
 
     //  1) Get pool current liquidity + and token weights : Convert assets to WeightedAssets
     let mut pool_assets_weighted: Vec<WeightedAsset> = config
@@ -464,14 +454,11 @@ pub fn query_on_join_pool(
             })
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
-    // println!("\nPool Assets Weighted {:?}\n", pool_assets_weighted);
 
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
-        println!("--- Single Asset Join");
         // If the pool is empty, then return a `Failure` response
         if total_share.is_zero() {
-            println!("Failure - Single token cannot be provided when Pool is empty");
             return Ok(return_join_failure(
                 "Single asset cannot be provided to empty pool".to_string(),
             ));
@@ -482,7 +469,7 @@ pub fn query_on_join_pool(
             .iter()
             .find(|asset| asset.asset.info.equal(&in_asset.info))
             .unwrap();
-        println!("Weighted In Asset {:?}", weighted_in_asset);
+
         let num_shares: Uint128 = calc_single_asset_join(
             deps,
             &in_asset,
@@ -490,7 +477,6 @@ pub fn query_on_join_pool(
             weighted_in_asset,
             total_share,
         )?;
-        println!("Num Shares (Single asset join) {:?}", num_shares);
 
         // Add assets which are omitted with 0 deposit
         for pool_asset in pool_assets_weighted.iter() {
@@ -509,9 +495,6 @@ pub fn query_on_join_pool(
                 .cmp(&b.info.to_string().to_lowercase())
         });
 
-        println!("-QueryResponse New shares to be minted : {}", num_shares.to_string());
-        println!("-QueryResponse Response : success");
-        println!("-QueryResponse Fee : None");        
         // Return the response
         if !num_shares.is_zero() {
             return Ok(AfterJoinResponse {
@@ -529,7 +512,6 @@ pub fn query_on_join_pool(
             "If more than one asset, all should be provided".to_string(),
         ));
     }
-    println!("--- All Asset Join");
 
     // 3) JoinPoolNoSwap with as many tokens as we can. (What is in perfect ratio)
     // * numShares is how many shares are perfectly matched.
@@ -537,24 +519,17 @@ pub fn query_on_join_pool(
     // if remaining coins is empty, logic is done (we joined all tokensIn)
     let (mut num_shares, remaining_tokens_in, err): (Uint128, Vec<Asset>, ResponseType) =
         if total_share.is_zero() {
-            println!("--- Pool is empty");
             let num_shares = Uint128::from(INIT_LP_TOKENS);
-            (
-                num_shares,
-                vec![],
-                ResponseType::Success {},
-            )
+            (num_shares, vec![], ResponseType::Success {})
         } else {
-            println!("--- Pool NOT empty - maximal_exact_ratio_join");
             maximal_exact_ratio_join(act_assets_in.clone(), &pool_assets_weighted, total_share)?
         };
-        println!("Num Shares {:?}", num_shares);
-        println!("Remaining Tokens {:?}", remaining_tokens_in);
-        println!("Error {:?}", err);
 
     if !err.is_success() {
         return Ok(return_join_failure(err.to_string()));
     }
+
+    // return response if no remaining tokens to join
     if remaining_tokens_in.is_empty() {
         return Ok(AfterJoinResponse {
             provided_assets: act_assets_in,
@@ -567,21 +542,16 @@ pub fn query_on_join_pool(
     // 4) Still more coins to join, so we update the effective pool state here to account for join that just happened.
     // * We add the joined coins to our "current pool liquidity" object (poolAssetsByDenom)
     // * We increment a variable for our "newTotalShares" to add in the shares that've been added.
-    println!("\nMaking tokens_joined()");
     let mut tokens_joined: Vec<Asset> = act_assets_in.clone();
 
     // Token balances that have already joined the pool
     for rem_asset in remaining_tokens_in.iter() {
-        for asset_in in tokens_joined.iter_mut() {
-            if asset_in.info.to_string() == rem_asset.info.to_string() {
-                asset_in.amount = asset_in.amount.checked_sub(rem_asset.amount)?;
+        for asset_joined in tokens_joined.iter_mut() {
+            if asset_joined.info.equal(&rem_asset.info) {
+                asset_joined.amount = asset_joined.amount.checked_sub(rem_asset.amount)?;
             }
         }
     }
-    // Logging
-    for asset in tokens_joined.iter() {
-        println!( "tokens_joined : {} {}", asset.amount.to_string(), asset.info.to_string());
-    }    
 
     update_pool_state_for_joins(&tokens_joined, &mut pool_assets_weighted);
     let mut new_total_shares = total_share.checked_add(num_shares)?;
@@ -621,34 +591,7 @@ pub fn query_on_join_pool(
         fee: None,
     };
 
-    // Logging
-    for asset in res.provided_assets.iter() {
-        println!(
-            "JoinPool-QueryResponse - Tokens to provide : {} {}",
-            asset.amount.to_string(),
-            asset.info.to_string()
-        );
-    }
-    println!("JoinPool-QueryResponse New shares to be minted : {}", res.new_shares.to_string());
-    println!("JoinPool-QueryResponse Response : {}", res.response.to_string());
-    println!("JoinPool-QueryResponse Fee : {:?}", res.fee);
-
-
-
     Ok(res)
-}
-
-fn update_pool_state_for_joins(
-    tokens_joined: &[Asset],
-    pool_assets_weighted: &mut Vec<WeightedAsset>,
-) {
-    for asset in tokens_joined {
-        for pool_asset in pool_assets_weighted.iter_mut() {
-            if asset.info.equal(&pool_asset.asset.info) {
-                pool_asset.asset.amount += asset.amount;
-            }
-        }
-    }
 }
 
 /// ## Description
@@ -668,7 +611,6 @@ pub fn query_on_exit_pool(
     _assets_out: Option<Vec<Asset>>,
     burn_amount: Option<Uint128>,
 ) -> StdResult<AfterExitResponse> {
-
     // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
     if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
         return Ok(return_exit_failure("Burn amount is zero".to_string()));
@@ -676,8 +618,6 @@ pub fn query_on_exit_pool(
 
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
-
-    println!("\n\n\nExitPool-QueryParams Burn amount : {}", burn_amount.unwrap().to_string());
 
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.unwrap().clone())?;
@@ -696,14 +636,11 @@ pub fn query_on_exit_pool(
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
         let one_sub_exit_fee = Decimal::one() - math_config.exit_fee.unwrap();
-        println!("One sub exit fee : {}", one_sub_exit_fee.to_string());
         refunded_shares = act_burn_shares * one_sub_exit_fee;
-        println!("refunded_shares : {}", refunded_shares.to_string());
     }
 
     // % of share to be burnt from the pool
     let share_out_ratio = Decimal::from_ratio(refunded_shares, total_share);
-    println!("share_out_ratio : {}", share_out_ratio.to_string());
 
     // Vector of assets to be transferred to the user from the Vault contract
     let mut refund_assets: Vec<Asset> = vec![];
@@ -713,13 +650,6 @@ pub fn query_on_exit_pool(
         if asset_out > asset.amount {
             return Ok(return_exit_failure("Invalid asset out".to_string()));
         }
-        println!(
-            "Asset out : {} pool liquidity: {} refund asset: {}",
-            asset.info.to_string(),
-            asset.amount.to_string(),
-            asset_out.to_string(),
-            
-        );
         // Add the asset to the vector of assets to be transferred to the user from the Vault contract
         refund_assets.push(Asset {
             info: asset.info.clone(),
@@ -760,11 +690,6 @@ pub fn query_on_swap(
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
 
-    println!("\n\n\nquery_on_swap FUNCTION -::- SwapType : {:?}", swap_type.to_string());
-    println!("offer_asset_info : {}", offer_asset_info.to_string());
-    println!("ask_asset_info : {}", ask_asset_info.to_string());
-    println!("amount : {}", amount.to_string());
-
     // Convert Asset to DecimalAsset types
     let pools = config
         .assets
@@ -796,17 +721,12 @@ pub fn query_on_swap(
             },
         )
     });
-    println!(
-        "offer_pool : {} {} \nask_pool : {} {}",
-        offer_pool.info.to_string(),
-        offer_pool.amount.to_string(),
-        ask_pool.info.to_string(),
-        ask_pool.amount.to_string()
-    );
 
     // if there's 0 assets balance return failure response
     if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
-        return Ok(return_swap_failure("Any of the offer / ask pools cannot be 0".to_string()));
+        return Ok(return_swap_failure(
+            "Any of the offer / ask pools cannot be 0".to_string(),
+        ));
     }
 
     // Offer and ask asset precisions
@@ -816,11 +736,6 @@ pub fn query_on_swap(
     // Get the weights of offer and ask assets
     let offer_weight = get_weight(deps.storage, &offer_pool.info)?;
     let ask_weight = get_weight(deps.storage, &ask_pool.info)?;
-    println!(
-        "offer_weight : {} ask_weight : {}",
-        offer_weight.to_string(),
-        ask_weight.to_string()
-    );
 
     let offer_asset: Asset;
     let ask_asset: Asset;
@@ -830,12 +745,11 @@ pub fn query_on_swap(
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
         SwapType::GiveIn {} => {
-            println!("---------- SwapType::GiveIn");
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount,
             };
-            println!("offer_asset : {} || amount = {}", offer_asset.to_string(), offer_asset.amount.to_string());
+
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount) = compute_swap(
                 deps.storage,
@@ -847,24 +761,20 @@ pub fn query_on_swap(
                 ask_weight,
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
-            println!("calc_amount : {} || spread_amount = {}", calc_amount.to_string(), spread_amount.to_string());
+
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
-            println!("total_fee : {}", total_fee.to_string());
 
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
                 amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
             };
-            println!("ask_asset : {} amount: {}", ask_asset.to_string(), ask_asset.amount.to_string());
         }
         SwapType::GiveOut {} => {
-            println!("---------- SwapType::GiveOut");
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
                 amount,
             };
-            println!("ask_asset : {} || amount = {}", ask_asset.to_string(), ask_asset.amount.to_string());
             // Calculate the number of offer_asset tokens to be transferred from the trader to the Vault contract
             let before_commission_deduction: Uint128;
             (calc_amount, spread_amount, before_commission_deduction) = compute_offer_amount(
@@ -878,27 +788,21 @@ pub fn query_on_swap(
                 config.fee_info.total_fee_bps,
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
-            println!("calc_amount : {:?} || spread_amount = {:?} before_commission_deduction:{:?}", calc_amount.to_string(), spread_amount.to_string(), before_commission_deduction.to_string());
 
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(
                 before_commission_deduction,
                 config.fee_info.total_fee_bps,
             );
-            println!("total_fee : {}", total_fee.to_string());
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
             };
-            println!("ask_asset : {} amount: {}", ask_asset.to_string(), ask_asset.amount.to_string());
         }
         SwapType::Custom(_) => {
             return Ok(return_swap_failure("SwapType not supported".to_string()))
         }
     }
-
-    println!("offer_asset:{} amount_in : {} || ask_asset:{} amount_out = {}", offer_asset.info.as_string(), offer_asset.amount.to_string(), ask_asset.info.as_string(), ask_asset.amount.to_string());
-    println!("total_fee : {} {}", total_fee.to_string(), ask_asset_info.to_string());
 
     Ok(SwapResponse {
         trade_params: Trade {
@@ -1027,22 +931,3 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::default())
 }
-
-// --------x--------x--------x--------x--------x--------x---
-// --------x--------x Helper Functions   x--------x---------
-// --------x--------x--------x--------x--------x--------x---
-
-/// ## Description
-/// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
-pub fn transform_to_decimal_asset(deps: Deps, assets: &Vec<Asset>) -> Vec<DecimalAsset> {
-    let decimal_assets = assets
-        .iter()
-        .map(|asset| {
-            let precision = get_precision(deps.storage, &asset.info)?;
-            asset.to_decimal_asset(precision)
-        })
-        .collect::<StdResult<Vec<DecimalAsset>>>()
-        .unwrap();
-    decimal_assets
-}
-

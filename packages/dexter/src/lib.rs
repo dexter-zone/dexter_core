@@ -1,4 +1,3 @@
-pub mod approx_pow;
 pub mod asset;
 pub mod error;
 pub mod generator;

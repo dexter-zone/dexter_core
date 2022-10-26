@@ -272,6 +272,8 @@ pub enum ExecuteMsg {
     Swap {
         swap_request: SingleSwapRequest,
         recipient: Option<String>,
+        min_receive: Option<Uint128>,
+        max_spend: Option<Uint128>,
     },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {

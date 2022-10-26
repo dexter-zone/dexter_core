@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal,StdError, Decimal256, Deps, Env, StdResult, Storage, Uint128};
-use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128};
+use dexter::asset::{Asset, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{Config, ResponseType};
 
@@ -35,8 +35,16 @@ pub(crate) fn compute_swap(
     let token_precision = get_precision(storage, &ask_pool.info)?;
 
     let pool_post_swap_in_balance = offer_pool.amount + offer_asset.amount;
-    println!("pool_post_swap_in_balance: {}", pool_post_swap_in_balance);
 
+    //         /**********************************************************************************************
+    //         // outGivenIn                                                                                //
+    //         // aO = amountOut                                                                            //
+    //         // bO = balanceOut                                                                           //
+    //         // bI = balanceIn              /      /            bI             \    (wI / wO) \           //
+    //         // aI = amountIn    aO = bO * |  1 - | --------------------------  | ^            |          //
+    //         // wI = weightIn               \      \       ( bI + aI )         /              /           //
+    //         // wO = weightOut                                                                            //
+    //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
     let return_amount = solve_constant_function_invariant(
@@ -46,7 +54,6 @@ pub(crate) fn compute_swap(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         ask_weight,
     )?;
-    println!("return_amount: {}", return_amount);
 
     // adjust return amount to correct precision
     let return_amount = adjust_precision(
@@ -54,8 +61,6 @@ pub(crate) fn compute_swap(
         return_amount.decimal_places() as u8,
         token_precision,
     )?;
-    println!("return_amount (adjusted to correct precision): {}", return_amount);
-
 
     // difference in return amount compared to "ideal" swap.
     Ok((return_amount, Uint128::zero()))
@@ -95,6 +100,15 @@ pub(crate) fn compute_offer_amount(
     let pool_post_swap_out_balance =
         Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
 
+    //         /**********************************************************************************************
+    //         // inGivenOut                                                                                //
+    //         // aO = amountOut                                                                            //
+    //         // bO = balanceOut                                                                           //
+    //         // bI = balanceIn              /  /            bO             \    (wO / wI)      \          //
+    //         // aI = amountIn    aI = bI * |  | --------------------------  | ^            - 1  |         //
+    //         // wI = weightIn               \  \       ( bO - aO )         /                   /          //
+    //         // wO = weightOut                                                                            //
+    //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
     let real_offer = solve_constant_function_invariant(
@@ -147,7 +161,6 @@ pub fn accumulate_prices(
         return Ok(());
     }
     let time_elapsed = Uint128::from(block_time - config.block_time_last);
-    println!("\n Accumulate prices fn,\nTime elapsed: {}", time_elapsed);
 
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
@@ -155,16 +168,12 @@ pub fn accumulate_prices(
             info: from.clone(),
             amount: Decimal256::one(),
         };
-        println!("-- offer_asset: {:?}", offer_asset);
-        println!("-- to: {:?}", to);
 
         let from_weight = get_weight(deps.storage, from)?;
         let to_weight = get_weight(deps.storage, to)?;
-        println!("from_weight: {:?}, to_weight: {:?}", from_weight, to_weight);
 
         // retrive the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
-        println!("(latest balances) : offer_pool: {:?}, ask_pool: {:?}", offer_pool, ask_pool);
 
         // Compute the current price of ask asset in base asset
         let (return_amount, _) = compute_swap(
@@ -176,7 +185,7 @@ pub fn accumulate_prices(
             &ask_pool,
             to_weight,
         )?;
-        println!("return_amount: {:?}", return_amount);
+
         // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
@@ -204,40 +213,36 @@ pub fn maximal_exact_ratio_join(
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
-    println!("\n-maximal_exact_ratio_join FN CALLED");
-
     let mut min_share = Decimal::one();
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
 
-
-    for (asset_in, weighted_pool_in) in act_assets_in.clone().into_iter().zip(pool_assets_weighted.into_iter()) {
-        println!("{:?} asset_in.amount: {:?}, weighted_pool_in amount: {:?} ", asset_in.info.as_string(), asset_in.amount, weighted_pool_in.asset.amount);
-        // for asset in &act_assets_in {
-        //     for weighted_asset in pool_assets_weighted {
+    for (asset_in, weighted_pool_in) in act_assets_in
+        .clone()
+        .into_iter()
+        .zip(pool_assets_weighted.into_iter())
+    {
         if !weighted_pool_in.asset.info.equal(&asset_in.info) {
-            return Err(StdError::generic_err(    "Assets not sorted in order",));
+            return Err(StdError::generic_err("Assets not sorted in order"));
         }
         // denom will never be 0 as long as total_share > 0
         let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
         min_share = min_share.min(share_ratio);
         max_share = max_share.max(share_ratio);
         asset_shares.push(share_ratio);
-        println!("share ratio: {:?} , , min_share: {:?}, max_share: {:?}", share_ratio, min_share, max_share);
-        // }
-    // }
     }
 
     let new_shares = min_share * total_share;
-    println!("new_shares: {:?}", new_shares);
-
     let mut rem_assets = vec![];
 
     if min_share.ne(&max_share) {
         // assets aren't balanced and we have to calculate remCoins
         let mut i = 0;
-        for (asset_in, weighted_pool_in) in act_assets_in.clone().into_iter().zip(pool_assets_weighted.into_iter()) {
-
+        for (asset_in, weighted_pool_in) in act_assets_in
+            .clone()
+            .into_iter()
+            .zip(pool_assets_weighted.into_iter())
+        {
             // if coinShareRatios[i] == minShareRatio, no remainder
             if asset_shares[i].eq(&min_share) {
                 i += 1;
@@ -248,7 +253,6 @@ pub fn maximal_exact_ratio_join(
             // account for unused amounts
             let used_amount = min_share * weighted_pool_in.asset.amount;
             let new_amount = asset_in.amount - used_amount;
-            println!("{:?}  used_amount: {:?} new_amount: {:?}",asset_in.info.as_string(), used_amount, new_amount);
 
             // if coinShareRatios[i] == minShareRatio, no remainder
             if !new_amount.is_zero() {
@@ -256,16 +260,15 @@ pub fn maximal_exact_ratio_join(
                     info: asset_in.info.clone(),
                     amount: new_amount,
                 });
-                }
+            }
         }
     }
 
     Ok((new_shares, rem_assets, ResponseType::Success {}))
 }
 
-
-/// Calculate the amount of LP tokens that should be minted for single asset deposit. 
-/// Returns the amount of LP tokens to be minted 
+/// Calculate the amount of LP tokens that should be minted for single asset deposit.
+/// Returns the amount of LP tokens to be minted
 pub fn calc_single_asset_join(
     deps: Deps,
     asset_in: &Asset,
@@ -274,7 +277,7 @@ pub fn calc_single_asset_join(
     total_shares: Uint128,
 ) -> StdResult<Uint128> {
     let in_precision = get_precision(deps.storage, &asset_in.info)?;
-    println!("\n-calc_single_asset_join FN CALLED - :: asset_in: {:?}, pool_asset_weighted: {:?} ({:?}) , in_precision: {:?}", asset_in.amount, pool_asset_weighted.asset.amount, pool_asset_weighted.weight, in_precision);
+
     // Asset weights already normalized
     calc_minted_shares_given_single_asset_in(
         asset_in.amount,
@@ -283,4 +286,36 @@ pub fn calc_single_asset_join(
         total_shares,
         Decimal::from_ratio(total_fee_bps, 10_000u16),
     )
+}
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+/// ## Description
+/// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
+pub fn transform_to_decimal_asset(deps: Deps, assets: &Vec<Asset>) -> Vec<DecimalAsset> {
+    let decimal_assets = assets
+        .iter()
+        .map(|asset| {
+            let precision = get_precision(deps.storage, &asset.info)?;
+            asset.to_decimal_asset(precision)
+        })
+        .collect::<StdResult<Vec<DecimalAsset>>>()
+        .unwrap();
+    decimal_assets
+}
+
+// Update pool liquidity balances after joins
+pub fn update_pool_state_for_joins(
+    tokens_joined: &[Asset],
+    pool_assets_weighted: &mut Vec<WeightedAsset>,
+) {
+    for asset in tokens_joined {
+        for pool_asset in pool_assets_weighted.iter_mut() {
+            if asset.info.equal(&pool_asset.asset.info) {
+                pool_asset.asset.amount += asset.amount;
+            }
+        }
+    }
 }

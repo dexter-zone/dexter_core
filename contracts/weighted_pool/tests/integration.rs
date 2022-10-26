@@ -6,9 +6,8 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
-    SwapResponse, WeightedParams,
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg,
+    FeeResponse, FeeStructs, QueryMsg, ResponseType, SwapResponse, WeightedParams,
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -213,8 +212,7 @@ fn instantiate_contracts_instance(
         lp_token_name: None,
         lp_token_symbol: None,
     };
-    let res = app
-        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
+    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
     let pool_res: PoolInfo = app
@@ -226,14 +224,6 @@ fn instantiate_contracts_instance(
             },
         )
         .unwrap();
-
-    // Query Cumulative Prices
-    let cumulative_prices :  CumulativePricesResponse = app.wrap().query_wasm_smart(
-        pool_res.pool_addr.clone().unwrap(),
-        &QueryMsg::CumulativePrices {},
-     ).unwrap();
-
-     // println!("Cumulative Prices: {:?}", cumulative_prices);
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(PoolType::Weighted {}, pool_res.pool_type);
@@ -382,7 +372,7 @@ fn test_update_config() {
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnJoinPool for XYK Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnJoinPool for Weighted Pool and the returned  [`AfterJoinResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::JoinPool - Token transfer from user to vault and LP token minting to user are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -484,7 +474,10 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(100_000000u128), join_pool_query_res.new_shares);
+    assert_eq!(
+        Uint128::from(100_000000u128),
+        join_pool_query_res.new_shares
+    );
     // // Returned assets are in sorted order
     assert_eq!(
         vec![
@@ -581,7 +574,6 @@ fn test_query_on_join_pool() {
     )
     .unwrap();
 
-
     // Checks -
     // 1. LP tokens minted & transferred to Alice
     // 2. Liquidity Pool balance updated
@@ -661,7 +653,7 @@ fn test_query_on_join_pool() {
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 900_00)
-    });    
+    });
 
     let pool_twap_res: CumulativePricesResponse = app
         .wrap()
@@ -670,19 +662,67 @@ fn test_query_on_join_pool() {
     assert_eq!(Uint128::from(100_000000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, ask_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, rate:  Uint128::from(44296110000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, ask_info: AssetInfo::NativeToken { denom: "xprt".to_string()}, rate: Uint128::from(74138940000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, ask_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, rate: Uint128::from(182850660000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, ask_info: AssetInfo::NativeToken { denom: "xprt".to_string()}, rate: Uint128::from(150628950000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::NativeToken { denom: "xprt".to_string()}, ask_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, rate: Uint128::from(109249920000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::NativeToken { denom: "xprt".to_string()}, ask_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, rate: Uint128::from(53771400000u128) }
-            ],
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                rate: Uint128::from(44296110000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                ask_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                rate: Uint128::from(74138940000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                rate: Uint128::from(182850660000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                ask_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                rate: Uint128::from(150628950000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                rate: Uint128::from(109249920000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                rate: Uint128::from(53771400000u128)
+            }
+        ],
         pool_twap_res.exchange_infos
     );
 
     //// -----x----- Check #2 :: Success ::: Single Asset Join Check -----x----- ////
-    // We will join the pool with a single asset = 25774 tokens, 
-    // here, we solve constant function invariant with the calcs mentioned below, 
+    // We will join the pool with a single asset = 25774 tokens,
+    // here, we solve constant function invariant with the calcs mentioned below,
     //  fee_ratio : 0.980200000000000000
     // token_amount_in_after_fee: 25263.674800 ,
     // weight_ratio = (weightX/weightY): 0.34
@@ -691,14 +731,12 @@ fn test_query_on_join_pool() {
     // paranthetical: 0.238958556548818616
     // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 23.8958556548818616
     // Num Shares (Single asset join) to be minted = 23.895855
-    let single_asset_msg = vec![
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::from(25774_000000u128),
+    let single_asset_msg = vec![Asset {
+        info: AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
         },
-    ];
+        amount: Uint128::from(25774_000000u128),
+    }];
     // Check Query Response
     let join_pool_query_res: AfterJoinResponse = app
         .wrap()
@@ -758,23 +796,20 @@ fn test_query_on_join_pool() {
     )
     .unwrap();
 
-
     //// -----x----- Check #2 :: Success ::: Single Asset Join Check -----x----- ////
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 1200_00)
-    });  
-    let single_asset_msg = vec![
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            amount: Uint128::from(2577_000000u128),
+    });
+    let single_asset_msg = vec![Asset {
+        info: AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
         },
-    ];    
-    
-    // We will join the pool with a single asset = 2577 tokens, 
-    // here, we solve constant function invariant with the calcs mentioned below, 
+        amount: Uint128::from(2577_000000u128),
+    }];
+
+    // We will join the pool with a single asset = 2577 tokens,
+    // here, we solve constant function invariant with the calcs mentioned below,
     //  fee_ratio : 0.979900000000000000
     // token_amount_in_after_fee: 2525.202300
     // weight_ratio = (weightX/weightY): 0.33
@@ -797,7 +832,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from( 2169955u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(2169955u128), join_pool_query_res.new_shares);
     // // Returned assets are in sorted order
     assert_eq!(
         vec![
@@ -843,13 +878,13 @@ fn test_query_on_join_pool() {
             amount: Uint128::new(100_000_000_000u128),
         }],
     )
-    .unwrap();    
+    .unwrap();
 
     //// -----x----- Check #3 :: Success ::: Multi Asset Join Check -----x----- ////
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 1500_00)
-    });  
+    });
     let multi_asset_msg = vec![
         Asset {
             info: AssetInfo::Token {
@@ -862,18 +897,17 @@ fn test_query_on_join_pool() {
                 contract_addr: token_instance1.clone(),
             },
             amount: Uint128::from(3177_000000u128),
-        },        
+        },
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
             amount: Uint128::from(3477_000000u128),
         },
-    ];    
-
+    ];
 
     // We will join the pool with all assets = 2977, 3177, 3477 tokens,
-    // here, we first execute -maximal_exact_ratio_join() 
+    // here, we first execute -maximal_exact_ratio_join()
     // contract1 - provided assets = 2977, pool liquidity = 56742 || share ratio: 0.52465545803813753
     // contract2 - provided assets = 3177, pool liquidity = 54548 || share ratio: 0.58242282026838747
     // xprt - provided assets = 3477, pool liquidity = 49320 || share ratio: 0.070498783454987834
@@ -883,7 +917,7 @@ fn test_query_on_join_pool() {
     // ------------------------------------------------------------
     // For remaining assets, we execute -calc_single_asset_join()
     // ------ contract2 - remaining assets = 315.109408 | pool balance = 57409.890592 (34%)
-    // token_amount_in_after_fee: 308.870241 , fee_ratio :0.980200000000000000    
+    // token_amount_in_after_fee: 308.870241 , fee_ratio :0.980200000000000000
     // weight_ratio = (weightX/weightY): 0.34
     // y = balanceXBefore/balanceXAfter : 1.005380087608859521
     // Calculated pow for 1.005434450187780727^0.34: 1.001825991787810573
@@ -894,7 +928,7 @@ fn test_query_on_join_pool() {
     // ------- xprt - remaining assets = 889.399281 | pool balance = 51907.600719 (33%)
     // token_amount_in_after_fee: 871.522355 , fee_ratio :0.979900000000000000
     // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.017670769566098945    
+    // y = balanceXBefore/balanceXAfter : 1.017670769566098945
     // Calculated pow for 1.016789879380439024^0.33: 1.005509784151347131
     // y_to_weight_ratio: 1.005509784151347131
     // paranthetical: 0.005509784151347131
@@ -923,7 +957,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from( 7588755u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(7588755u128), join_pool_query_res.new_shares);
     // // Returned assets are in sorted order
     assert_eq!(
         vec![
@@ -967,14 +1001,14 @@ fn test_query_on_join_pool() {
             denom: "xprt".to_string(),
             amount: Uint128::new(3477000000u128),
         }],
-    ) .unwrap();    
-
+    )
+    .unwrap();
 
     // Lets test for TWAP
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 1700_00)
-    });    
+    });
     let pool_twap_res: CumulativePricesResponse = app
         .wrap()
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
@@ -982,22 +1016,69 @@ fn test_query_on_join_pool() {
     // assert_eq!(Uint128::from(100_000000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, ask_info: AssetInfo::Token { contract_addr:token_instance1.clone() }, rate: Uint128::from(119041990000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, ask_info: AssetInfo::NativeToken { denom: "xprt".to_string() }, rate: Uint128::from(142608880000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, ask_info: AssetInfo::Token { contract_addr: token_instance0.clone() }, rate: Uint128::from(268471520000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::Token { contract_addr: token_instance1.clone() }, ask_info: AssetInfo::NativeToken { denom: "xprt".to_string() }, rate: Uint128::from(223907650000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::NativeToken { denom: "xprt".to_string() }, ask_info:  AssetInfo::Token { contract_addr: token_instance0.clone() }, rate: Uint128::from(202802130000u128) }, 
-            AssetExchangeRate { offer_info: AssetInfo::NativeToken { denom: "xprt".to_string() }, ask_info:  AssetInfo::Token { contract_addr: token_instance1.clone() }, rate: Uint128::from(141177020000u128) }
-            ],
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                rate: Uint128::from(119041990000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                ask_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                rate: Uint128::from(142608880000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                rate: Uint128::from(268471520000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                ask_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                rate: Uint128::from(223907650000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone()
+                },
+                rate: Uint128::from(202802130000u128)
+            },
+            AssetExchangeRate {
+                offer_info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string()
+                },
+                ask_info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                rate: Uint128::from(141177020000u128)
+            }
+        ],
         pool_twap_res.exchange_infos
     );
-
 
     //// -----x----- Check #4 :: Success ::: Multi Asset Join Check -----x----- ////
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 2100_00)
-    });  
+    });
     let multi_asset_msg = vec![
         Asset {
             info: AssetInfo::Token {
@@ -1010,18 +1091,17 @@ fn test_query_on_join_pool() {
                 contract_addr: token_instance1.clone(),
             },
             amount: Uint128::from(63770_000000u128),
-        },        
+        },
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
             amount: Uint128::from(54670_000000u128),
         },
-    ];    
+    ];
 
-
-    // We will join the pool with all assets = 
-    // here, we first execute -maximal_exact_ratio_join() 
+    // We will join the pool with all assets =
+    // here, we first execute -maximal_exact_ratio_join()
     // contract1 - provided assets = 63770, pool liquidity = 59719 || share ratio: 1.067834357574641236
     // contract2 - provided assets = 63770, pool liquidity = 57725 || share ratio: 1.104720658293633607
     // xprt - provided assets = 54670, pool liquidity = 52797 || share ratio: 1.035475500501922457
@@ -1034,17 +1114,17 @@ fn test_query_on_join_pool() {
     // ------ contract1 - remaining assets = 4051 | pool balance = 119438 (33%)
     // token_amount_in_after_fee: 3969.574900 , fee_ratio : 0.979900000000000000
     // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.033235443493695473    
+    // y = balanceXBefore/balanceXAfter : 1.033235443493695473
     // Calculated pow for 1.033235443493695473^0.33: 1.010847793730373128
     // y_to_weight_ratio: 1.010847793730373128
     // paranthetical: 0.010847793730373128
     // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 2.899714304485495421
     // number of shares to mint for remaining assets of contract2 = 2.899714
     // ------ contract2 - remaining assets = 6045 | pool balance = 11545 (34%)
-    // token_amount_in_after_fee: 5925.309000 , fee_ratio : 0.980200000000000000    
+    // token_amount_in_after_fee: 5925.309000 , fee_ratio : 0.980200000000000000
     // weight_ratio = (weightX/weightY): 0.34
-    // y = balanceXBefore/balanceXAfter : 1.051323594629709831    
-    // Calculated pow for 1.051323594629709831^0.34: 1.017162592012389691    
+    // y = balanceXBefore/balanceXAfter : 1.051323594629709831
+    // Calculated pow for 1.051323594629709831^0.34: 1.017162592012389691
     // y_to_weight_ratio: 1.017162592012389691
     // paranthetical: 0.017162592012389691
     // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 4.637484147711452082
@@ -1053,7 +1133,7 @@ fn test_query_on_join_pool() {
     // ------- xprt - remaining assets = 1873 | pool balance = 105594 (33%)
     // token_amount_in_after_fee: 1835.352700 , fee_ratio :0.979900000000000000
     // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.017381221470916908  
+    // y = balanceXBefore/balanceXAfter : 1.017381221470916908
     // Calculated pow for 1.017381221470916908^0.33: 1.005702724566022314
     // y_to_weight_ratio: 1.005702724566022314
     // paranthetical: 0.005702724566022314
@@ -1065,7 +1145,6 @@ fn test_query_on_join_pool() {
     // JoinPool-QueryResponse - Tokens to provide : 63770000000 contract2
     // JoinPool-QueryResponse - Tokens to provide : 54670000000 xprt
     // JoinPool-QueryResponse New shares to be minted : 142.759135
-
 
     // Check Query Response
     let join_pool_query_res: AfterJoinResponse = app
@@ -1081,7 +1160,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(None, join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from( 142759135u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(142759135u128), join_pool_query_res.new_shares);
     // // Returned assets are in sorted order
     assert_eq!(
         vec![
@@ -1125,11 +1204,12 @@ fn test_query_on_join_pool() {
             denom: "xprt".to_string(),
             amount: Uint128::new(54670_000000u128),
         }],
-    ) .unwrap();    
+    )
+    .unwrap();
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnExitPool for Weighted Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -1299,12 +1379,11 @@ fn test_on_exit_pool() {
 
     //// -----x----- Check #2 :: Success ::: Successfully exit the pool -----x----- ////
 
-
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 900_00)
-    });    
-    
+    });
+
     let exit_pool_query_res: AfterExitResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1443,7 +1522,7 @@ fn test_swap() {
     )
     .unwrap();
 
-    let (vault_instance, pool_addr, lp_token_addr, token_instance0, token_instance1, _) =
+    let (vault_instance, pool_addr, _lp_token_addr, token_instance0, token_instance1, _) =
         instantiate_contracts_instance(&mut app, &owner);
     mint_some_tokens(
         &mut app,
@@ -1523,7 +1602,6 @@ fn test_swap() {
     )
     .unwrap();
 
-
     //// -----x----- Check #1 :: Error ::: assets mismatch || SwapType not supported -----x----- ////
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
@@ -1574,14 +1652,14 @@ fn test_swap() {
     //// -----x----- Check #1 :: QUERY Success :::  -----x----- ////
     // SwapType::GiveIn {}, XPRT --> Token0
     // offer_asset_info : xprt, ask_asset_info : contract1, amount : 1000
-    // offer_pool : xprt 46743 
+    // offer_pool : xprt 46743
     // ask_pool : contract1 56742
     // offer_weight : 0.33 ask_weight : 0.33
     // ---------- SwapType::GiveIn
     // offer_asset : 1000xprt || amount = 1000
-    // pool_post_swap_in_balance: 46743.001    
+    // pool_post_swap_in_balance: 46743.001
     // weight_ratio = (weightX/weightY): 1
-    // y = balanceXBefore/balanceXAfter : 0.999999978606422809    
+    // y = balanceXBefore/balanceXAfter : 0.999999978606422809
     // y_to_weight_ratio: 0.999999978606422809
     // paranthetical: 0.000000021393577191
     // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.001213914356971722
@@ -1591,7 +1669,7 @@ fn test_swap() {
     // total_fee : 36
     // ask_asset : 1177, contract1 amount: 1177
     // offer_asset:xprt , amount_in : 1000 || ask_asset:contract1 , amount_out = 1177
-    // total_fee : 36 contract1    
+    // total_fee : 36 contract1
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1632,7 +1710,7 @@ fn test_swap() {
 
     // SwapType::GiveOut {},  XPRT --> Token0
     // offer_asset_info : xprt  ask_asset_info : contract1  amount : 1000
-    // offer_pool : xprt 46743 
+    // offer_pool : xprt 46743
     // ask_pool : contract1 56742
     // offer_weight : 0.33 ask_weight : 0.33
     // ---------- SwapType::GiveOut
@@ -1701,6 +1779,8 @@ fn test_swap() {
             belief_price: None,
         },
         recipient: None,
+        min_receive: None,
+        max_spend: None,
     };
     app.execute_contract(
         alice_address.clone(),
@@ -1713,11 +1793,10 @@ fn test_swap() {
     )
     .unwrap();
 
-
     app.update_block(|b| {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 900_00)
-    });  
+    });
 
     // ----- Execute GiveOut Swap----- //
     let swap_msg = VaultExecuteMsg::Swap {
@@ -1735,6 +1814,9 @@ fn test_swap() {
             belief_price: None,
         },
         recipient: None,
+        min_receive: None,
+        max_spend: None,
+
     };
     app.execute_contract(
         alice_address.clone(),
@@ -1746,6 +1828,4 @@ fn test_swap() {
         }],
     )
     .unwrap();
-
-
 }
