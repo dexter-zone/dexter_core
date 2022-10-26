@@ -43,7 +43,7 @@ impl Display for PoolType {
             PoolType::Xyk {} => fmt.write_str("xyk"),
             PoolType::Stable2Pool {} => fmt.write_str("stable-2-pool"),
             PoolType::Weighted {} => fmt.write_str("weighted"),
-            PoolType::Stable5Pool {} => fmt.write_str("stable-3-pool"),
+            PoolType::Stable5Pool {} => fmt.write_str("stable-5-pool"),
             PoolType::Custom(pool_type) => fmt.write_str(format!("custom-{}", pool_type).as_str()),
         }
     }

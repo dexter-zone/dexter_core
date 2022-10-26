@@ -2,41 +2,41 @@ use cosmwasm_std::{Decimal, Decimal256, StdResult, Uint128};
 use std::str::FromStr;
 
 use dexter::{
-    approx_pow::pow_approx,
+    approx_pow::calculate_pow,
     asset::DecimalAsset,
     helper::{adjust_precision, decimal2decimal256},
 };
 
 use crate::state::WeightedAsset;
 
-// https://github.com/officialnico/balancerv2cad/blob/main/src/balancerv2cad/WeightedMath.py
-
-pub fn calculate_invariant(
-    normalized_weights: Vec<Decimal>,
-    balances: Vec<DecimalAsset>,
-) -> StdResult<Decimal256> {
-    //  /**********************************************************************************************
-    // invariant               _____                                                             //
-    // wi = weight index i      | |      wi                                                      //
-    // bi = balance index i     | |  bi ^   = i                                                  //
-    // i = invariant                                                                             //
-    // **********************************************************************************************/
-    let mut invariant: Decimal256 = Decimal256::one();
-    for (wi, bi) in normalized_weights.into_iter().zip(balances.into_iter()) {
-        invariant = invariant
-            * decimal2decimal256(pow_approx(
-                Decimal::from_str(&bi.amount.to_string())?,
-                wi,
-                None,
-            )?)?;
-    }
-    Ok(invariant)
-}
+// // https://github.com/officialnico/balancerv2cad/blob/main/src/balancerv2cad/WeightedMath.py
+// pub fn calculate_invariant(
+//     normalized_weights: Vec<Decimal>,
+//     balances: Vec<DecimalAsset>,
+// ) -> StdResult<Decimal256> {
+//     println!("\n--- calculate_invariant() FN CALLED ---");
+//     //  /**********************************************************************************************
+//     // invariant               _____                                                             //
+//     // wi = weight index i      | |      wi                                                      //
+//     // bi = balance index i     | |  bi ^   = i                                                  //
+//     // i = invariant                                                                             //
+//     // **********************************************************************************************/
+//     let mut invariant: Decimal256 = Decimal256::one();
+//     for (wi, bi) in normalized_weights.into_iter().zip(balances.into_iter()) {
+//         println!("asset: {}, balance: {}, weight:{}", bi.info.as_string(), bi.amount, wi);
+//         let pow_calc = calculate_pow( Decimal::from_str(&bi.amount.to_string())?,  wi,  None,)?;
+//         println!("pow_calc: {}", pow_calc);
+//         invariant = invariant * decimal2decimal256(pow_calc)?;
+//         println!("invariant: {}", invariant);
+//     }
+//     Ok(invariant)
+// }
 
 // Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
 // solveConstantFunctionInvariant solves the constant function of an AMM
 // that determines the relationship between the differences of two sides
 // of assets inside the pool.
+// --------------------------
 // For fixed balanceXBefore, balanceXAfter, weightX, balanceY, weightY,
 // we could deduce the balanceYDelta, calculated by:
 // balanceYDelta = balanceY * (1 - (balanceXBefore/balanceXAfter)^(weightX/weightY))
@@ -49,13 +49,18 @@ pub fn solve_constant_function_invariant(
     token_balance_unknown_before: Decimal,
     token_weight_unknown: Decimal,
 ) -> StdResult<Decimal> {
+    println!("\n-solve_constant_function_invariant FN CALLED-");
     // weight_ratio = (weightX/weightY)
     let weight_ratio = token_weight_fixed / token_weight_unknown;
+    println!("weight_ratio = (weightX/weightY): {}", weight_ratio);
 
     // y = balanceXBefore/balanceXAfter
     let y = token_balance_fixed_before / token_balance_fixed_after;
+    println!("y = balanceXBefore/balanceXAfter : {}", y);
+
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
-    let y_to_weight_ratio = pow_approx(y, weight_ratio, None)?;
+    let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
+    println!("y_to_weight_ratio: {}", y_to_weight_ratio);
 
     // Decimal is an unsigned so always return abs value
     let paranthetical = if y_to_weight_ratio <= Decimal::one() {
@@ -63,7 +68,11 @@ pub fn solve_constant_function_invariant(
     } else {
         y_to_weight_ratio - Decimal::one()
     };
+    println!("paranthetical: {}", paranthetical);
+
     let amount_y = token_balance_unknown_before * paranthetical;
+    println!("amount_y = (balanceY * (1 - (y ^ weight_ratio))): {}", amount_y);
+
     return Ok(amount_y);
 }
 
@@ -151,6 +160,8 @@ pub fn solve_constant_function_invariant(
 
 //     }
 
+
+
 pub fn calc_minted_shares_given_single_asset_in(
     token_amount_in: Uint128,
     in_precision: u32,
@@ -158,24 +169,26 @@ pub fn calc_minted_shares_given_single_asset_in(
     total_shares: Uint128,
     swap_fee: Decimal,
 ) -> StdResult<Uint128> {
+
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
-    // So effective_swapfee = swapfee * (1 - normalized_token_weight)
-    let token_amount_in_after_fee =
-        token_amount_in * (fee_ratio(asset_weight_and_balance.weight, swap_fee));
+    // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
+    let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee);
+    let token_amount_in_after_fee = token_amount_in * fee_ratio;
+    println!("token_amount_in_after_fee: {:?} , fee_ratio : {:?}", token_amount_in_after_fee, fee_ratio);
+
     let in_decimal = Decimal::from_atomics(token_amount_in_after_fee, in_precision).unwrap();
-    let balance_decimal =
-        Decimal::from_atomics(asset_weight_and_balance.asset.amount, in_precision).unwrap();
-    // To figure out the number of shares we add, first notice that in balancer we can treat
+    let balance_decimal = Decimal::from_atomics(asset_weight_and_balance.asset.amount, in_precision).unwrap();
+    println!("in_decimal: {:?} , balance_decimal : {:?}", in_decimal, balance_decimal);
+
+    // To figure out the number of shares we add, first notice that we can treat
     // the number of shares as linearly related to the `k` value function. This is due to the normalization.
-    // e.g.
-    // if x^.5 y^.5 = k, then we `n` x the liquidity to `(nx)^.5 (ny)^.5 = nk = k'`
+    // e.g, if x^.5 y^.5 = k, then we `n` x the liquidity to `(nx)^.5 (ny)^.5 = nk = k'`
+    // ---------
     // We generalize this linear relation to do the liquidity add for the not-all-asset case.
     // Suppose we increase the supply of x by x', so we want to solve for `k'/k`.
     // This is `(x + x')^{weight} * old_terms / (x^{weight} * old_terms) = (x + x')^{weight} / (x^{weight})`
     // The number of new shares we need to make is then `old_shares * ((k'/k) - 1)`
-    // Whats very cool, is that this turns out to be the exact same `solveConstantFunctionInvariant` code
-    // with the answer's sign reversed.
     let pool_amount_out = solve_constant_function_invariant(
         balance_decimal + in_decimal,
         balance_decimal,
@@ -183,11 +196,14 @@ pub fn calc_minted_shares_given_single_asset_in(
         Decimal::from_atomics(total_shares, 6).unwrap(),
         Decimal::one(),
     )?;
-    return adjust_precision(
+    let pool_amount_out_adj = adjust_precision(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
         6.into(),
     );
+    println!("pool_amount_out: {:?} , pool_amount_out_adj : {:?}", pool_amount_out, pool_amount_out_adj);
+
+    return pool_amount_out_adj;
 }
 
 // feeRatio returns the fee ratio that is defined as follows:

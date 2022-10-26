@@ -17,6 +17,9 @@ pub enum ContractError {
     #[error("Number of assets and weights provided do not match")]
     NumberOfAssetsAndWeightsMismatch {},
 
+    #[error("{asset} weight list and asset list mismatch")]
+    WeightedAssetAndAssetMismatch { asset: String },
+
     #[error(
         "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
     )]
