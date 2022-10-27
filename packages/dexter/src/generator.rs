@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Decimal, StdError, StdResult, Uint128, Uint64};
+use cosmwasm_std::{Addr, Decimal, Uint128, Uint64};
 
 use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
@@ -27,8 +27,6 @@ pub struct Config {
     pub vesting_contract: Option<Addr>,
     /// The list of active pools (LP Token Addresses) with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
-    /// The amount of generators
-    pub checkpoint_generator_limit: Option<u32>,
     /// Number of seconds to wait before a user can withdraw his LP tokens once they are in unbonding phase
     pub unbonding_period: u64,
 }
@@ -64,8 +62,6 @@ pub enum ExecuteMsg {
         dex_token: Option<String>,
         /// The DEX Vesting contract address
         vesting_contract: Option<String>,
-        /// Max numbrt of generators which can be supported by the contract
-        checkpoint_generator_limit: Option<u32>,
         /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update
         /// period for existing unbonding positions
         unbonding_period: Option<u64>,
@@ -82,18 +78,18 @@ pub enum ExecuteMsg {
         /// The list of pools with allocation point.
         pools: Vec<(String, Uint128)>,
     },
+    /// Allowed reward proxy contracts that can interact with the Generator
+    /// ## Executor - Only the owner can execute this.
+    SetAllowedRewardProxies {
+        /// The full list of allowed proxy contracts
+        proxies: Vec<String>,
+    },
     /// Setup proxies (should be whitelisted) for a generator.
     /// ## Executor - Only the owner can execute this.
     SetupProxyForPool {
         /// The list of pools with allocation point.
         lp_token: String,
         proxy_addr: String,
-    },
-    /// Allowed reward proxy contracts that can interact with the Generator
-    /// ## Executor - Only the owner can execute this.
-    SetAllowedRewardProxies {
-        /// The full list of allowed proxy contracts
-        proxies: Vec<String>,
     },
     /// Sends orphan proxy rewards (which were left behind after emergency withdrawals) to another address
     /// ## Executor - Only the owner can execute this.
@@ -165,8 +161,10 @@ pub enum ExecuteMsg {
 pub enum Cw20HookMsg {
     /// Deposit performs a token deposit on behalf of the message sender.
     Deposit {},
-    /// DepositFor performs a token deposit on behalf of another address that's not the message sender.
-    DepositFor(Addr),
+    DepositFor {
+        /// The address to which the tokens will be deposited
+        beneficiary: Addr,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -271,7 +269,7 @@ pub struct PoolInfo {
     /// for calculation of new proxy rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// the orphan proxy rewards which are left by emergency withdrawals. Vector of pools (reward_proxy, index).
-    pub orphan_proxy_rewards: Uint128,
+    pub orphan_proxy_rewards: Uint128
 }
 
 /// This structure stores the outstanding amount of token rewards that a user accrued.
@@ -341,8 +339,8 @@ pub struct ConfigResponse {
     pub vesting_contract: Option<Addr>,
     /// The list of active pools with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
-    /// The amount of generators
-    pub checkpoint_generator_limit: Option<u32>,
+    /// Unbonding period 
+    pub unbonding_period: u64,
 }
 
 /// This structure holds the response returned when querying for a pool's information
@@ -380,75 +378,5 @@ pub struct RewardInfoResponse {
     /// The address of the base reward token
     pub base_reward_token: Option<Addr>,
     /// The address of the 3rd party reward token
-    pub proxy_reward_token: Option<Addr>,
-}
-
-// ----------------x----------------x--------------x--------------
-// ----------------     RestrictedVector       x--------------
-// ----------------x----------------x--------------x--------------
-
-/// Vec wrapper for internal use.
-/// Some business logic relies on an order of this vector, thus it is forbidden to sort it
-/// or remove elements. New values can be added using .update() ONLY.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
-pub struct RestrictedVector<T>(Vec<(Addr, T)>);
-
-pub trait Increaseable
-where
-    Self: Sized,
-{
-    fn increase(self, new: Self) -> StdResult<Self>;
-}
-
-impl<T> RestrictedVector<T>
-where
-    T: Copy + Increaseable,
-{
-    pub fn new(first_proxy: Addr, first_reward_index: T) -> Self {
-        Self(vec![(first_proxy, first_reward_index)])
-    }
-
-    pub fn get_last(&self, proxy: &Addr) -> StdResult<T> {
-        self.0
-            .last()
-            .filter(|(p, _)| p.as_str() == proxy.as_str())
-            .map(|(_, v)| v)
-            .cloned()
-            .ok_or_else(|| StdError::generic_err(format!("Proxy {} not found", proxy)))
-    }
-
-    pub fn update(&mut self, key: &Addr, value: T) -> StdResult<()> {
-        let proxy_ref = self
-            .0
-            .iter_mut()
-            .find(|(proxy_addr, _)| proxy_addr.as_str() == key.as_str());
-        match proxy_ref {
-            Some((_, index)) => *index = index.increase(value)?,
-            _ => self.0.push((key.clone(), value)),
-        }
-
-        Ok(())
-    }
-
-    pub fn inner_ref(&self) -> &Vec<(Addr, T)> {
-        &self.0
-    }
-}
-
-impl Increaseable for Decimal {
-    fn increase(self, new: Decimal) -> StdResult<Decimal> {
-        self.checked_add(new).map_err(Into::into)
-    }
-}
-
-impl Increaseable for Uint128 {
-    fn increase(self, new: Uint128) -> StdResult<Uint128> {
-        self.checked_add(new).map_err(Into::into)
-    }
-}
-
-impl<T> From<Vec<(Addr, T)>> for RestrictedVector<T> {
-    fn from(v: Vec<(Addr, T)>) -> Self {
-        Self(v)
-    }
+    pub proxy_reward_token: Option<Addr>
 }

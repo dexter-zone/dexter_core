@@ -1550,7 +1550,7 @@ fn build_mint_lp_token_msg(
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: generator.unwrap().to_string(),
                 amount,
-                msg: to_binary(&dexter::generator::Cw20HookMsg::DepositFor(recipient))?,
+                msg: to_binary(&dexter::generator::Cw20HookMsg::DepositFor { beneficiary: recipient } )?,
             })?,
             funds: vec![],
         }),

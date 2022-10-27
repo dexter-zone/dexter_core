@@ -21,10 +21,10 @@ pub fn solve_constant_function_invariant(
     token_weight_unknown: Decimal,
 ) -> StdResult<Decimal> {
     // weight_ratio = (weightX/weightY)
-    let weight_ratio = token_weight_fixed.checked_div(token_weight_unknown).map_err(|e| StdError::generic_err(e.to_string()))?;;
+    let weight_ratio = token_weight_fixed.checked_div(token_weight_unknown).map_err(|e| StdError::generic_err(e.to_string()))?;
 
     // y = balanceXBefore/balanceXAfter
-    let y = token_balance_fixed_before.checked_div(token_balance_fixed_after).map_err(|e| StdError::generic_err(e.to_string()))?;;
+    let y = token_balance_fixed_before.checked_div(token_balance_fixed_after).map_err(|e| StdError::generic_err(e.to_string()))?;
 
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;

@@ -3,6 +3,43 @@
   "title": "ExecuteMsg",
   "oneOf": [
     {
+      "description": "Failitates updating some of the configuration param of the Dexter Generator Contract ## Executor -  Only the owner can execute it.",
+      "type": "object",
+      "required": [
+        "update_config"
+      ],
+      "properties": {
+        "update_config": {
+          "type": "object",
+          "properties": {
+            "dex_token": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "unbonding_period": {
+              "description": "Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update period for existing unbonding positions",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "vesting_contract": {
+              "description": "The DEX Vesting contract address",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "Set a new amount of DEX tokens to distribute per block ## Executor - Only the owner can execute this.",
       "type": "object",
       "required": [
@@ -21,53 +58,6 @@
                 {
                   "$ref": "#/definitions/Uint128"
                 }
-              ]
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Failitates updating some of the configuration param of the Dexter Generator Contract ## Executor -  Only the owner can execute it.",
-      "type": "object",
-      "required": [
-        "update_config"
-      ],
-      "properties": {
-        "update_config": {
-          "type": "object",
-          "properties": {
-            "checkpoint_generator_limit": {
-              "description": "Max numbrt of generators which can be supported by the contract",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "guardian": {
-              "description": "The new generator guardian",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "unbonding_period": {
-              "description": "Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update period for existing unbonding positions",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "vesting_contract": {
-              "description": "The new vesting contract address",
-              "type": [
-                "string",
-                "null"
               ]
             }
           }
@@ -129,6 +119,32 @@
               "items": {
                 "type": "string"
               }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Setup proxies (should be whitelisted) for a generator. ## Executor - Only the owner can execute this.",
+      "type": "object",
+      "required": [
+        "setup_proxy_for_pool"
+      ],
+      "properties": {
+        "setup_proxy_for_pool": {
+          "type": "object",
+          "required": [
+            "lp_token",
+            "proxy_addr"
+          ],
+          "properties": {
+            "lp_token": {
+              "description": "The list of pools with allocation point.",
+              "type": "string"
+            },
+            "proxy_addr": {
+              "type": "string"
             }
           }
         }
@@ -389,7 +405,7 @@
   ],
   "definitions": {
     "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
     },
     "Cw20ReceiveMsg": {

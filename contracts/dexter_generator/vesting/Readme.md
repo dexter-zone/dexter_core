@@ -29,7 +29,7 @@ CW20 receive msg.
 
 #### RegisterVestingAccounts
 
-Creates vesting schedules for the DEX token. Each vesting token should have the Generator contract address as the VestingContractAddress. Also, each schedule will unlock tokens at a different rate according to its time duration.
+Creates vesting schedules for the DEX token. Also, each schedule will unlock tokens at a different rate according to its time duration.
 
 Execute this message by calling the DEX token contract address.
 

@@ -3,6 +3,7 @@ use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, Uin
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
+use dexter::generator;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::{
     generator::{
@@ -13,14 +14,19 @@ use dexter::{
     generator_proxy::{
         Cw20HookMsg as ProxyCw20HookMsg, ExecuteMsg as ProxyExecuteMsg, QueryMsg as ProxyQueryMsg,
     },
-    vault::{
-        ConfigResponse as VaultConfigResponse, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
-        PoolConfig, PoolType, QueryMsg as VaultQueryMsg,
+    vault::{ 
+        ConfigResponse as VaultConfigResponse, FeeInfo, InstantiateMsg as VaultInstantiateMsg, ExecuteMsg as VaultExecuteMsg,
+        PoolConfig, PoolType, QueryMsg as VaultQueryMsg, PoolInfo as VaultPoolInfo,
     },
-    vesting::ExecuteMsg as VestingExecuteMsg,
+    pool::{
+        AfterJoinResponse, QueryMsg as PoolQueryMsg
+    },
+    vesting::{ InstantiateMsg as VestingInstantiateMsg, ExecuteMsg as VestingExecuteMsg,  QueryMsg as VestingQueryMsg,
+        VestingAccount, VestingSchedule, VestingSchedulePoint, Cw20HookMsg as VestingCw20HookMsg, VestingAccountResponse },
 };
 
 const EPOCH_START: u64 = 1_000_000;
+const TOKEN_INITIAL_AMOUNT: u128 = 1000_000_000_000000;
 
 fn mock_app(owner: String, coins: Vec<Coin>) -> App {
     let mut env = mock_env();
@@ -194,7 +200,7 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
         dex_token: None,
         tokens_per_block: Uint128::zero(),
         start_block: Uint64::from(current_block.height),
-        unbonding_period: 86400u64,
+        unbonding_period: 8640u64,
     };
 
     let generator_instance = app
@@ -211,29 +217,117 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
     (generator_instance, vault_instance)
 }
 
+
+// Initializes a Dexter XYK Pool
+fn create_pool_instance(app: &mut App, owner: Addr, vault_instance:Addr, token_addr:Addr, pool_id: Uint128) -> (Addr, Addr) {
+    let asset_infos = vec![
+        AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
+        },
+        AssetInfo::Token {
+            contract_addr: token_addr.clone(),
+        },
+    ];
+    // Initialize XYK Pool contract instance
+    let msg = VaultExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Xyk {},
+        asset_infos: asset_infos.to_vec(),
+        init_params: None,
+        lp_token_name: None,
+        lp_token_symbol: None,
+    };
+    app
+        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
+        .unwrap();
+    let pool_res: VaultPoolInfo = app
+        .wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &VaultQueryMsg::GetPoolById {
+                pool_id: pool_id,
+            },
+        )
+        .unwrap();
+
+    (pool_res.lp_token_addr.unwrap(), pool_res.pool_addr.unwrap())
+}
+
+
+// Setup DEX token vesting for generator contract
+// Initialize vesting contract --> Set vesting contract addr in generator --> Set vesting schedule for generator --> Set tokens per block in generator
+fn create_vesting_schedule_for_generator(app: &mut App, owner: Addr, generator_instance:Addr, dex_token_addr:Addr, init_block_time: u64) -> Addr  {
+
+    // Initialize Vesting contract instance
+    let vesting_contract = Box::new(ContractWrapper::new_with_empty(
+        dexter_vesting::contract::execute,
+        dexter_vesting::contract::instantiate,
+        dexter_vesting::contract::query,
+    ));
+    let vesting_code_id = app.store_code(vesting_contract);
+    let init_msg = VestingInstantiateMsg {
+        owner: owner.clone().to_string(),
+        token_addr: dex_token_addr.to_string(),
+    };
+    let vesting_instance = app
+        .instantiate_contract(
+            vesting_code_id,
+            owner.clone(),
+            &init_msg,
+            &[],
+            "Vesting",
+            None,
+        )
+        .unwrap();
+
+
+    // Initialize vesting schedule for generator
+    let msg = Cw20ExecuteMsg::Send {
+            contract: vesting_instance.to_string(),
+            msg: to_binary(&VestingCw20HookMsg::RegisterVestingAccounts {
+                vesting_accounts: vec![VestingAccount {
+                    address: generator_instance.to_string(),
+                    schedules: vec![VestingSchedule {
+                        start_point: VestingSchedulePoint {
+                            time: Timestamp::from_seconds(init_block_time).seconds(),
+                            amount: Uint128::zero(),
+                        },
+                        end_point: Some(VestingSchedulePoint {
+                            time: Timestamp::from_seconds(init_block_time + 86400*12).seconds(),
+                            amount: Uint128::new(1000_000_000000u128),
+                        }),
+                    }],
+                }],
+            })
+            .unwrap(),
+            amount: Uint128::from(1000_000_000000u128),
+        };
+    let _res = app
+        .execute_contract(owner.clone(), dex_token_addr.clone(), &msg, &[])
+        .unwrap();
+
+    (vesting_instance)
+}
+
+
+
+
+
+
 // Initializes the following -
-// 1. Dexter Vault
-// 2. Dexter Generator
+// 1. Proxy rewards and staking contracts
 fn setup_proxy_with_staking(
     app: &mut App,
     owner: Addr,
     generator_addr: Addr,
-) -> (Addr, Addr, Addr, Addr) {
+    lp_token_addr: Addr,
+    pair_addr: Addr,
+    reward_token: Addr,
+) -> (Addr, Addr) {
     let staking_code_id = store_staking_code(app);
     let proxy_code_id = store_proxy_code(app);
 
-    let reward_token = create_token(
-        app,
-        &owner.clone().to_string(),
-        &"anc_token".to_string(),
-        &"anc".to_string(),
-    );
-    let lp_token = create_token(
-        app,
-        &owner.clone().to_string(),
-        &"anc_token".to_string(),
-        &"anc".to_string(),
-    );
+    let current_block = app.block_info();
+    let cur_timestamp = current_block.time.seconds();
 
     // Setup Staking Contract
     let staking_instance = app
@@ -242,11 +336,11 @@ fn setup_proxy_with_staking(
             owner.to_owned(),
             &dexter::ref_staking::InstantiateMsg {
                 anchor_token: reward_token.clone().to_string(),
-                staking_token: lp_token.clone().to_string(),
+                staking_token: lp_token_addr.clone().to_string(),
                 distribution_schedule: vec![(
-                    EPOCH_START,
-                    EPOCH_START + (86400 * 30),
-                    Uint128::from(1000000000000u128),
+                    cur_timestamp,
+                    cur_timestamp + (86400 * 30),
+                    Uint128::from(1000000_000000u128),
                 )],
             },
             &[],
@@ -259,7 +353,7 @@ fn setup_proxy_with_staking(
         app,
         owner.clone(),
         reward_token.clone(),
-        Uint128::new(1000000000000),
+        Uint128::new(1000000_000000),
         staking_instance.to_string(),
     );
 
@@ -270,8 +364,8 @@ fn setup_proxy_with_staking(
             owner.to_owned(),
             &dexter::generator_proxy::InstantiateMsg {
                 generator_contract_addr: generator_addr.clone().to_string(),
-                pair_addr: "pair_addr".to_string(),
-                lp_token_addr: lp_token.clone().to_string(),
+                pair_addr: pair_addr.to_string(),
+                lp_token_addr: lp_token_addr.clone().to_string(),
                 reward_contract_addr: staking_instance.clone().to_string(),
                 reward_token: AssetInfo::Token {
                     contract_addr: reward_token.clone(),
@@ -283,43 +377,9 @@ fn setup_proxy_with_staking(
         )
         .unwrap();
 
-    (staking_instance, proxy_instance, lp_token, reward_token)
+    (staking_instance, proxy_instance)
 }
 
-// #[test]
-// fn test_set_tokens_per_block() {
-
-// }
-
-// #[test]
-// fn test_send_orphan_proxy_reward() {
-
-// }
-
-// #[test]
-// fn test_cw20_hook_deposit() {
-
-// }
-
-// #[test]
-// fn test_cw20_hook_deposit_for() {
-
-// }
-
-// #[test]
-// fn test_unstake() {
-
-// }
-
-// #[test]
-// fn test_emergency_unstake() {
-
-// }
-
-// #[test]
-// fn test_unlock() {
-
-// }
 
 // Tests the following -
 //  ExecuteMsg::ProposeNewOwner
@@ -335,8 +395,7 @@ fn test_update_owner() {
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
-    let (generator_instance, _) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
-
+    let (generator_instance, _ ) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
     let new_owner = String::from("new_owner");
 
     // New owner
@@ -476,14 +535,12 @@ fn test_update_config() {
     assert_eq!(vault_instance, after_init_config_res.vault);
     assert_eq!(None, after_init_config_res.dex_token);
     assert_eq!(None, after_init_config_res.vesting_contract);
-    assert_eq!(None, after_init_config_res.checkpoint_generator_limit);
 
     //// -----x----- Success :: update config -----x----- ////
 
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: Some("dex_token".to_string()),
         vesting_contract: Some("vesting_contract".to_string()),
-        checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };
 
@@ -511,14 +568,12 @@ fn test_update_config() {
         Addr::unchecked("vesting_contract".to_string()),
         config_res.vesting_contract.unwrap()
     );
-    assert_eq!(Some(10u32), config_res.checkpoint_generator_limit);
 
     //// -----x----- Error :: Permission Checks -----x----- ////
 
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: Some("dex_token".to_string()),
         vesting_contract: Some("vesting_contract".to_string()),
-        checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };
 
@@ -545,7 +600,6 @@ fn test_update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         dex_token: None,
         vesting_contract: Some("vesting_contract".to_string()),
-        checkpoint_generator_limit: Some(10u32),
         unbonding_period: Some(86400u64),
     };
 
@@ -576,14 +630,18 @@ fn test_setup_pool_deactivate_pool() {
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
-    let (generator_instance, _) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
+    let (generator_instance, vault_instance) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
+    let token_addr = create_token(&mut app, &owner.clone().to_string(),  &"OSMO".to_string(),  &"OSMO".to_string());
+    let (lp_token_addr1, pool_addr1) = create_pool_instance(&mut app, Addr::unchecked(owner.clone()), vault_instance.clone(), token_addr.clone(), Uint128::one());
+    let (lp_token_addr2, pool_addr2 ) = create_pool_instance(&mut app, Addr::unchecked(owner.clone()), vault_instance, token_addr, Uint128::from(2u128));
+
 
     //// -----x----- Error :: Permission Check -----x----- ////
 
     let msg = ExecuteMsg::SetupPools {
         pools: vec![
-            ("lp_token1".to_string(), Uint128::from(100u128)),
-            ("lp_token2".to_string(), Uint128::from(200u128)),
+            (lp_token_addr1.clone().to_string(), Uint128::from(100u128)),
+            (lp_token_addr2.clone().to_string(), Uint128::from(200u128)),
         ],
     };
 
@@ -601,8 +659,8 @@ fn test_setup_pool_deactivate_pool() {
 
     let msg = ExecuteMsg::SetupPools {
         pools: vec![
-            ("lp_token1".to_string(), Uint128::from(100u128)),
-            ("lp_token1".to_string(), Uint128::from(200u128)),
+            (lp_token_addr1.clone().to_string(), Uint128::from(100u128)),
+            (lp_token_addr1.clone().to_string(), Uint128::from(200u128)),
         ],
     };
 
@@ -617,22 +675,10 @@ fn test_setup_pool_deactivate_pool() {
     assert_eq!(err_res.root_cause().to_string(), "Duplicate of pool");
 
     //// -----x----- Success :: Setup 2 pools -----x----- ////
-    let lp_token1 = create_token(
-        &mut app,
-        &owner.clone(),
-        &"lp_token1".to_string(),
-        &"lpt".to_string(),
-    );
-    let lp_token2 = create_token(
-        &mut app,
-        &owner.clone(),
-        &"lp_token2".to_string(),
-        &"lpt".to_string(),
-    );
 
     let pools = vec![
-        (lp_token1.clone().to_string(), Uint128::from(100u128)),
-        (lp_token2.to_string(), Uint128::from(200u128)),
+        (lp_token_addr1.to_string(), Uint128::from(100u128)),
+        (lp_token_addr2.to_string(), Uint128::from(200u128)),
     ];
     let msg = ExecuteMsg::SetupPools {
         pools: pools.clone(),
@@ -654,8 +700,8 @@ fn test_setup_pool_deactivate_pool() {
         .unwrap();
     assert_eq!(
         vec![
-            (lp_token1.clone(), Uint128::from(100u128)),
-            (lp_token2.clone(), Uint128::from(200u128))
+            (lp_token_addr1.clone(), Uint128::from(100u128)),
+            (lp_token_addr2.clone(), Uint128::from(200u128))
         ],
         config_res.active_pools
     );
@@ -682,7 +728,7 @@ fn test_setup_pool_deactivate_pool() {
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PoolInfo {
-                lp_token: lp_token2.clone().to_string(),
+                lp_token: lp_token_addr2.clone().to_string(),
             },
         )
         .unwrap();
@@ -710,7 +756,7 @@ fn test_setup_pool_deactivate_pool() {
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
         &ExecuteMsg::DeactivatePool {
-            lp_token: lp_token1.clone().to_string(),
+            lp_token: lp_token_addr1.clone().to_string(),
         },
         &[],
     )
@@ -723,8 +769,8 @@ fn test_setup_pool_deactivate_pool() {
         .unwrap();
     assert_eq!(
         vec![
-            (lp_token1.clone(), Uint128::from(0u128)),
-            (lp_token2.clone(), Uint128::from(200u128))
+            (lp_token_addr1.clone(), Uint128::from(0u128)),
+            (lp_token_addr2.clone(), Uint128::from(200u128))
         ],
         config_res.active_pools
     );
@@ -744,15 +790,13 @@ fn test_setup_pool_deactivate_pool() {
         .unwrap();
     assert_eq!(2, pool_length_res.length);
 
-    // Setup 1 new pool and remove existing pool
+    // Remove existing pool
     app.execute_contract(
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
         &ExecuteMsg::SetupPools {
             pools: vec![
-                (lp_token1.to_string(), Uint128::from(0u128)),
-                (lp_token2.to_string(), Uint128::from(200u128)),
-                ("lp_token3".to_string(), Uint128::from(300u128)),
+                (lp_token_addr2.to_string(), Uint128::from(200u128)),
             ],
         },
         &[],
@@ -766,31 +810,27 @@ fn test_setup_pool_deactivate_pool() {
         .unwrap();
     assert_eq!(
         vec![
-            (lp_token1.clone(), Uint128::from(0u128)),
-            (lp_token2.clone(), Uint128::from(200u128)),
-            (
-                Addr::unchecked("lp_token3".to_string()),
-                Uint128::from(300u128)
-            )
+            (lp_token_addr2.clone(), Uint128::from(200u128)),
         ],
         config_res.active_pools
     );
-    assert_eq!(Uint128::from(500u128), config_res.total_alloc_point);
+    assert_eq!(Uint128::from(200u128), config_res.total_alloc_point);
 
     // Query::ActivePoolLength Check
     let pool_length_res: PoolLengthResponse = app
         .wrap()
         .query_wasm_smart(&generator_instance, &QueryMsg::ActivePoolLength {})
         .unwrap();
-    assert_eq!(3, pool_length_res.length);
+    assert_eq!(1, pool_length_res.length);
 
     // Query::PoolLength Check
     let pool_length_res: PoolLengthResponse = app
         .wrap()
         .query_wasm_smart(&generator_instance, &QueryMsg::PoolLength {})
         .unwrap();
-    assert_eq!(3, pool_length_res.length);
+    assert_eq!(2, pool_length_res.length);
 }
+
 
 // Tests the following -
 //  ExecuteMsg::SetAllowedRewardProxies
@@ -895,7 +935,7 @@ fn test_set_update_allowed_proxies() {
 //  ExecuteMsg::EmergencyUnstake
 //  ExecuteMsg::Unlock
 #[test]
-fn test_generator_with_no_dex_rewards() {
+fn test_generator_with_no_rewards() {
     let owner = "owner".to_string();
     let mut app = mock_app(
         owner.clone(),
@@ -904,20 +944,26 @@ fn test_generator_with_no_dex_rewards() {
             amount: Uint128::new(100_000_000_000u128),
         }],
     );
-    let (generator_instance, _) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
+    let (generator_instance, vault_instance) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
 
-    let (staking_instance, proxy_instance, lp_token, reward_token) = setup_proxy_with_staking(
+    let token_addr = create_token(&mut app, &owner.clone().to_string(),  &"OSMO".to_string(),  &"OSMO".to_string());
+    mint_some_tokens(
+        &mut app, 
+        Addr::unchecked(owner.clone()),
+        token_addr.clone(),
+        Uint128::new(100000000_000000),
+        owner.clone().to_string(),
+    );
+    let (lp_token_addr, pool_addr) = create_pool_instance(&mut app, Addr::unchecked(owner.clone()), vault_instance.clone(), token_addr.clone(), Uint128::one());
+
+    let (staking_instance, proxy_instance) = setup_proxy_with_staking(
         &mut app,
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
+        lp_token_addr.clone(),
+        pool_addr.clone(),
+        token_addr.clone()
     );
-
-    let msg = ExecuteMsg::SetupPools {
-        pools: vec![
-            ("lp_token1".to_string(), Uint128::from(100u128)),
-            ("lp_token2".to_string(), Uint128::from(200u128)),
-        ],
-    };
 
     // Error Check ::: set proxy for lp token generator
     let err_res = app
@@ -925,7 +971,7 @@ fn test_generator_with_no_dex_rewards() {
             Addr::unchecked("notowner".to_string().clone()),
             generator_instance.clone(),
             &ExecuteMsg::SetupProxyForPool {
-                lp_token: lp_token.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
                 proxy_addr: proxy_instance.clone().to_string(),
             },
             &[],
@@ -939,7 +985,7 @@ fn test_generator_with_no_dex_rewards() {
             Addr::unchecked(owner.clone()),
             generator_instance.clone(),
             &ExecuteMsg::SetupProxyForPool {
-                lp_token: lp_token.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
                 proxy_addr: proxy_instance.clone().to_string(),
             },
             &[],
@@ -955,7 +1001,7 @@ fn test_generator_with_no_dex_rewards() {
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
         &ExecuteMsg::SetupPools {
-            pools: vec![(lp_token.to_string(), Uint128::from(0u128))],
+            pools: vec![(lp_token_addr.to_string(), Uint128::from(0u128))],
         },
         &[],
     )
@@ -977,7 +1023,7 @@ fn test_generator_with_no_dex_rewards() {
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
         &ExecuteMsg::SetupProxyForPool {
-            lp_token: lp_token.clone().to_string(),
+            lp_token: lp_token_addr.clone().to_string(),
             proxy_addr: proxy_instance.clone().to_string(),
         },
         &[],
@@ -991,7 +1037,7 @@ fn test_generator_with_no_dex_rewards() {
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PoolInfo {
-                lp_token: lp_token.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
             },
         )
         .unwrap();
@@ -1014,20 +1060,71 @@ fn test_generator_with_no_dex_rewards() {
     assert_eq!(Uint128::from(0u128), pool_info_res.orphan_proxy_rewards);
     assert_eq!(Uint128::from(0u128), pool_info_res.lp_supply);
 
-    // Mint LP tokens to user so he can deposit them
-    let user = "user".to_string();
-    mint_some_tokens(
-        &mut app,
-        Addr::unchecked(owner.clone()),
-        lp_token.clone(),
-        Uint128::new(9_000_000),
-        user.clone(),
-    );
-
-    // SUCCESS :::: ExecuteContract::Deposit
+    // Mint LP tokens via depositing in the pool so user can deposit them
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            amount: Uint128::from(10900_000000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_addr.clone(),
+            },
+            amount: Uint128::from(11100_000000u128),
+        },
+    ];    
+    let join_pool_query_res: AfterJoinResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &PoolQueryMsg::OnJoinPool {
+                assets_in: Some(assets_msg.clone()),
+                mint_amount: None,
+                slippage_tolerance:None,
+            },
+        )
+        .unwrap();    
+        // Increase allowance for Vault to spend LP tokens
+        app.execute_contract(
+            Addr::unchecked(owner.clone()),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::IncreaseAllowance {
+                spender: vault_instance.clone().to_string(),
+                amount: Uint128::from(11100_000000u128),
+                expires: None,
+            },
+            &[],
+        )
+        .unwrap();
+    // Execute AddLiquidity via the Vault contract
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id: Uint128::from(1u128),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
     app.execute_contract(
-        Addr::unchecked(user.clone()),
-        lp_token.clone(),
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::from(10900_000000u128),
+        }],
+    )
+    .unwrap();
+    
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Deposit
+    // ---------x------------x-------------x--------------
+
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        lp_token_addr.clone(),
         &Cw20ExecuteMsg::Send {
             contract: generator_instance.clone().to_string(),
             amount: Uint128::new(1_000_000),
@@ -1048,10 +1145,11 @@ fn test_generator_with_no_dex_rewards() {
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PoolInfo {
-                lp_token: lp_token.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
             },
         )
         .unwrap();
+
     assert_eq!(current_block.height, pool_info_res.current_block);
     assert_eq!(Some(proxy_instance.clone()), pool_info_res.reward_proxy);
     assert_eq!(
@@ -1074,8 +1172,8 @@ fn test_generator_with_no_dex_rewards() {
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PendingToken {
-                lp_token: lp_token.clone().to_string(),
-                user: user.clone(),
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone(),
             },
         )
         .unwrap();
@@ -1085,186 +1183,817 @@ fn test_generator_with_no_dex_rewards() {
         pending_token_res.pending_on_proxy.unwrap()
     );
 
+    // Get current reward token balance of the owner
     let prev_user_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &reward_token,
+            &token_addr,
             &Cw20QueryMsg::Balance {
-                address: user.clone(),
+                address: owner.clone(),
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(0u128), prev_user_balance.balance);
 
     // SUCCESS :::: ExecuteContract::Deposit
+    // ---------x------------x-------------x--------------
+    // ---accumulate_rewards_per_share() FUNCTION
+    // Existing p_supply deposited in proxy : 1000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 385802469
+    // token_rewards : 385802469
+    // share : 385.802469
+    // pool.accumulated_proxy_rewards_per_share : 385.802469
+   // ---------x------------x-------------x-------------- 
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 0
+    // pool.accumulated_proxy_rewards_per_share: 385.802469
+    // user.amount: 1000000
+    // user.reward_debt_proxy: 0
+    // Pending Proxy rewards: 385802469
+    // Sending LP tokens to the proxy contract
+    // ---------x------------x-------------x--------------
     app.execute_contract(
-        Addr::unchecked(user.clone()),
-        lp_token.clone(),
+        Addr::unchecked(owner.clone()),
+        lp_token_addr.clone(),
         &Cw20ExecuteMsg::Send {
             contract: generator_instance.clone().to_string(),
-            amount: Uint128::new(1_0000),
+            amount: Uint128::new(100_000000),
             msg: to_binary(&&Cw20HookMsg::Deposit {}).unwrap(),
         },
         &[],
     )
     .unwrap();
 
+    // Get new reward token balance of the owner
+    let new_user_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_addr,
+            &Cw20QueryMsg::Balance {
+                address: owner.clone(),
+            },
+        )
+        .unwrap();
+    let claimed_proxy_rewards = new_user_balance.balance - prev_user_balance.balance;
+    assert_eq!( Uint128::from(385802469u128),claimed_proxy_rewards);    
+    
+    // Update block and check pool info response 
     app.update_block(|b| {
         b.time = b.time.plus_seconds(10);
         b.height = b.height + 1;
     });
+    let current_block = app.block_info();
+
     let pool_info_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PoolInfo {
-                lp_token: lp_token.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
             },
         )
         .unwrap();
+
+    assert_eq!(current_block.height - 1, pool_info_res.last_reward_block);
+    assert_eq!(current_block.height, pool_info_res.current_block);
+    assert_eq!( Some(Uint128::from(3858023u128)),  pool_info_res.pending_proxy_rewards);
+    assert_eq!(Uint128::from(101000000u128), pool_info_res.lp_supply);
+    assert_eq!(Some(proxy_instance.clone()), pool_info_res.reward_proxy);
     assert_eq!(
-        Some(Uint128::from(3858024u128)),
+        Uint128::from(385802469u128),
+        pool_info_res.proxy_reward_balance_before_update
+    );
+
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::ClaimRewards
+    // ---------x------------x-------------x--------------
+
+    // Claim current rewards from the generator contract
+    // ---------x------------x-------------x--------------
+    // accumulate_rewards_per_share() FUNCTION
+    // Existing p_supply deposited in proxy : 101000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 3858023
+    // share : 0.038198247524752475
+    // pool.accumulated_proxy_rewards_per_share : 385.840667247524752475
+    // ---------x------------x-------------x--------------
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 0
+    // pool.accumulated_proxy_rewards_per_share: 385.840667247524752475
+    // user.amount: 101000000
+    // user.reward_debt_proxy: 38966049369
+    // Pending Proxy rewards: 3858022
+    // ---------x------------x-------------x--------------
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::ClaimRewards {
+            lp_tokens: vec![lp_token_addr.clone().to_string()],
+        },
+        &[],
+    ).unwrap();
+
+    // Get new reward token balance of the owner
+    let new_user_balance_2: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_addr,
+            &Cw20QueryMsg::Balance {
+                address: owner.clone(),
+            },
+        )
+        .unwrap();
+        let claimed_proxy_rewards = new_user_balance_2.balance - new_user_balance.balance;
+        assert_eq!( Uint128::from(3858022u128),claimed_proxy_rewards);    
+
+
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Unstake
+    // ---------x------------x-------------x--------------
+
+    // Update block and check pool info response 
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(10);
+        b.height = b.height + 10;
+    });
+
+    // Get current pending token reward balances 
+    let prev_pending_token_re: PendingTokenResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PendingToken {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    // SUCCESS :::: ExecuteContract::Unstake
+    // Rewards are accumulated and sent to the user, tokens to be unstaked enter the unbonding lockup period
+    // --------x--------x--------x--------x--------x--------
+    // Existing lp_supply deposited in proxy : 101000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 3858025
+    // token share per lp token (new) : 0.038198257425742574
+    // pool.accumulated_proxy_rewards_per_share (total) : 385.878865504950495049
+    // --------x--------x--------x--------x--------x--------
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 0
+    // pool.accumulated_proxy_rewards_per_share: 385.878865504950495049
+    // user.amount: 101000000
+    // user.reward_debt_proxy: 38969907391 (proxy rewards already claimed)
+    // Pending Proxy rewards: 3858024 (proxy rewards to be  claimed)
+    // --------x--------x--------x--------x--------x--------
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::Unstake {
+            lp_token: lp_token_addr.clone().to_string(),
+            amount: Uint128::new(1000000),
+        },
+        &[],
+    )
+    .unwrap();
+
+    // Get new reward token balance of the owner
+    let new_user_balance_3: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_addr,
+            &Cw20QueryMsg::Balance {
+                address: owner.clone(),
+            },
+        )
+        .unwrap();
+    
+    // Check rewards are claimed 
+    let claimed_proxy_rewards = new_user_balance_3.balance - new_user_balance_2.balance;
+    assert_eq!( Uint128::from(3858024u128),claimed_proxy_rewards);            
+
+    let new_pending_token_re: PendingTokenResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PendingToken {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!( Uint128::from(0u128),new_pending_token_re.pending_on_proxy.unwrap()); 
+
+
+    let new_user_info_re: UserInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::UserInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!( Uint128::from(100000000u128),new_user_info_re.amount); 
+    assert_eq!( Uint128::from(38587886550u128),new_user_info_re.reward_debt_proxy); 
+    assert_eq!( Uint128::from(1000000u128),new_user_info_re.unbonding_periods[0].amount); 
+    assert_eq!(1009660 ,new_user_info_re.unbonding_periods[0].unlock_timstamp); 
+
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Unlock
+    // ---------x------------x-------------x--------------
+    // Update block and check pool info response 
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(8641);
+        b.height = b.height + 86;
+    });
+    let current_block = app.block_info();
+
+    // SUCCESS :::: ExecuteContract::Unlock
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::Unlock {
+            lp_token: lp_token_addr.clone().to_string(),
+        },
+        &[],
+    ).unwrap();
+    
+    let new_user_info_re: UserInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::UserInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!( Uint128::from(100000000u128),new_user_info_re.amount); 
+    assert_eq!( Uint128::from(38587886550u128),new_user_info_re.reward_debt_proxy); 
+    let empty_vec: Vec<UnbondingInfo> = vec![];
+    assert_eq!( empty_vec , new_user_info_re.unbonding_periods); 
+}
+
+
+
+// We instantiate the staking and proxy contracts, setup DEX rewards and rewards via the proxy contract, then add the token to the generator and test the deposit --> claim --> umbond --> withdraw lifecycle
+// Tests the following -
+//  ExecuteMsg::Deposit
+//  ExecuteMsg::DepositFor
+//  ExecuteMsg::Unstake
+//  ExecuteMsg::EmergencyUnstake
+//  ExecuteMsg::Unlock
+#[test]
+fn test_generator_with_dex_rewards() {
+    let owner = "owner".to_string();
+    let mut app = mock_app(
+        owner.clone(),
+        vec![Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::new(100_000_000_000u128),
+        }],
+    );
+    let (generator_instance, vault_instance) = instantiate_contracts(&mut app, Addr::unchecked(owner.clone()));
+
+    // Initialize DEX token and setup the Vesting schedule for generator contract
+    let dex_token_addr = create_token(&mut app, &owner.clone().to_string(),  &"DEX".to_string(),  &"DEX".to_string());
+    mint_some_tokens(&mut app, Addr::unchecked(owner.clone()), dex_token_addr.clone(), Uint128::from(TOKEN_INITIAL_AMOUNT), owner.clone().to_string() );
+
+    let cur_block = app.block_info();
+    let vesting_instance = create_vesting_schedule_for_generator(&mut app, Addr::unchecked(owner.clone()), generator_instance.clone(), dex_token_addr.clone(), cur_block.time.seconds() );
+
+    // Set vesting contract addr in generator
+    let msg = ExecuteMsg::UpdateConfig {
+        dex_token: Some(dex_token_addr.clone().to_string()),
+        vesting_contract: Some(vesting_instance.to_string()),
+        unbonding_period: None
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &msg,
+        &[],
+    ).unwrap();
+
+    // Set tokens per block rewards in generator
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::SetTokensPerBlock { amount: Uint128::from(100u128) } ,
+        &[],
+    ).unwrap();
+
+    // Create pool instance 
+    let token_addr = create_token(&mut app, &owner.clone().to_string(),  &"OSMO".to_string(),  &"OSMO".to_string());
+    mint_some_tokens(
+        &mut app, 
+        Addr::unchecked(owner.clone()),
+        token_addr.clone(),
+        Uint128::new(100000000_000000),
+        owner.clone().to_string(),
+    );
+    let (lp_token_addr, pool_addr) = create_pool_instance(&mut app, Addr::unchecked(owner.clone()), vault_instance.clone(), token_addr.clone(), Uint128::one());
+
+    let (_, proxy_instance) = setup_proxy_with_staking(
+        &mut app,
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        lp_token_addr.clone(),
+        pool_addr.clone(),
+        token_addr.clone()
+    );
+
+
+//     // Error Check ::: set proxy for lp token generator
+    let err_res = app
+        .execute_contract(
+            Addr::unchecked("notowner".to_string().clone()),
+            generator_instance.clone(),
+            &ExecuteMsg::SetupProxyForPool {
+                lp_token: lp_token_addr.clone().to_string(),
+                proxy_addr: proxy_instance.clone().to_string(),
+            },
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(err_res.root_cause().to_string(), "Unauthorized");
+
+    // Error Check ::: set proxy for lp token generator
+    let err_res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            generator_instance.clone(),
+            &ExecuteMsg::SetupProxyForPool {
+                lp_token: lp_token_addr.clone().to_string(),
+                proxy_addr: proxy_instance.clone().to_string(),
+            },
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(
+        err_res.root_cause().to_string(),
+        "Generator pool doesn't exist"
+    );
+
+    // setup pool with 100 alloc in generator
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::SetupPools {
+            pools: vec![(lp_token_addr.to_string(), Uint128::from(100u128))],
+        },
+        &[],
+    )
+    .unwrap();
+
+    // set proxy as allowed in generator
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::SetAllowedRewardProxies {
+            proxies: vec![proxy_instance.to_string()],
+        },
+        &[],
+    )
+    .unwrap();
+
+    // set proxy for lp token generator
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::SetupProxyForPool {
+            lp_token: lp_token_addr.clone().to_string(),
+            proxy_addr: proxy_instance.clone().to_string(),
+        },
+        &[],
+    )
+    .unwrap();
+
+    let current_block = app.block_info();
+
+    // Query::PoolInfo Check
+    let pool_info_res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PoolInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(Uint128::from(100u128), pool_info_res.alloc_point);
+    assert_eq!(Uint128::from(100u128), pool_info_res.dex_tokens_per_block);
+    assert_eq!(current_block.height, pool_info_res.last_reward_block);
+    assert_eq!(current_block.height, pool_info_res.current_block);
+    assert_eq!(Decimal::zero(), pool_info_res.global_reward_index);
+    assert_eq!(Uint128::from(0u128), pool_info_res.pending_dex_rewards);
+    assert_eq!(Some(proxy_instance.clone()), pool_info_res.reward_proxy);
+    assert_eq!(None, pool_info_res.pending_proxy_rewards);
+    assert_eq!(
+        Decimal::zero(),
+        pool_info_res.accumulated_proxy_rewards_per_share
+    );
+    assert_eq!(
+        Uint128::from(0u128),
+        pool_info_res.proxy_reward_balance_before_update
+    );
+    assert_eq!(Uint128::from(0u128), pool_info_res.orphan_proxy_rewards);
+    assert_eq!(Uint128::from(0u128), pool_info_res.lp_supply);
+
+    // Mint LP tokens via depositing in the pool so user can deposit them
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "xprt".to_string(),
+            },
+            amount: Uint128::from(10900_000000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_addr.clone(),
+            },
+            amount: Uint128::from(11100_000000u128),
+        },
+    ];    
+    let join_pool_query_res: AfterJoinResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &PoolQueryMsg::OnJoinPool {
+                assets_in: Some(assets_msg.clone()),
+                mint_amount: None,
+                slippage_tolerance:None,
+            },
+        )
+        .unwrap();    
+        // Increase allowance for Vault to spend LP tokens
+        app.execute_contract(
+            Addr::unchecked(owner.clone()),
+            token_addr.clone(),
+            &Cw20ExecuteMsg::IncreaseAllowance {
+                spender: vault_instance.clone().to_string(),
+                amount: Uint128::from(11100_000000u128),
+                expires: None,
+            },
+            &[],
+        )
+        .unwrap();
+    // Execute AddLiquidity via the Vault contract
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id: Uint128::from(1u128),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[Coin {
+            denom: "xprt".to_string(),
+            amount: Uint128::from(10900_000000u128),
+        }],
+    )
+    .unwrap();
+    
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Deposit
+    // ---------x------------x-------------x--------------
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(10);
+        b.height = b.height + 1;
+    });
+
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        lp_token_addr.clone(),
+        &Cw20ExecuteMsg::Send {
+            contract: generator_instance.clone().to_string(),
+            amount: Uint128::new(1_000_000),
+            msg: to_binary(&Cw20HookMsg::Deposit {}).unwrap(),
+        },
+        &[],
+    )
+    .unwrap();
+
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(1000);
+        b.height = b.height + 100;
+    });
+    let current_block = app.block_info();
+
+    let pool_info_res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PoolInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!(12346, pool_info_res.last_reward_block);
+    assert_eq!(current_block.height, pool_info_res.current_block);
+    assert_eq!(Uint128::from(10000u128), pool_info_res.pending_dex_rewards);
+    assert_eq!(Some(proxy_instance.clone()), pool_info_res.reward_proxy);
+    assert_eq!(
+        Some(Uint128::from(385802469u128)),
         pool_info_res.pending_proxy_rewards
     );
     assert_eq!(
         Decimal::zero(),
         pool_info_res.accumulated_proxy_rewards_per_share
     );
-    assert_eq!(Uint128::from(1010000u128), pool_info_res.lp_supply);
+    assert_eq!(
+        Uint128::from(0u128),
+        pool_info_res.proxy_reward_balance_before_update
+    );
+    assert_eq!(Uint128::from(0u128), pool_info_res.orphan_proxy_rewards);
+    assert_eq!(Uint128::from(1000000u128), pool_info_res.lp_supply);
 
     let pending_token_res: PendingTokenResponse = app
         .wrap()
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::PendingToken {
-                lp_token: lp_token.clone().to_string(),
-                user: user.clone(),
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone(),
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(0u128), pending_token_res.pending);
+    assert_eq!(Uint128::from(10000u128), pending_token_res.pending);
     assert_eq!(
-        Uint128::from(3858023u128),
+        Uint128::from(385802469u128),
         pending_token_res.pending_on_proxy.unwrap()
     );
 
-    app.execute_contract(
-        Addr::unchecked(user.clone()),
-        generator_instance.clone(),
-        &ExecuteMsg::ClaimRewards {
-            lp_tokens: vec![lp_token.clone().to_string()],
-        },
-        &[],
-    )
-    .unwrap();
-
-    // SUCCESS :::: ExecuteContract::Unstake
-    app.execute_contract(
-        Addr::unchecked(user.clone()),
-        generator_instance.clone(),
-        &ExecuteMsg::Unstake {
-            lp_token: lp_token.clone().to_string(),
-            amount: Uint128::new(1),
-        },
-        &[],
-    )
-    .unwrap();
-
-    // let prev_user_balance: BalanceResponse = app.wrap().query_wasm_smart(&reward_token, &Cw20QueryMsg::Balance { address: user.clone()  }).unwrap();
-    // assert_eq!( Uint128::from(0u128), prev_user_balance.balance);
-
-    let user_info_re: UserInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &generator_instance,
-            &QueryMsg::UserInfo {
-                lp_token: lp_token.clone().to_string(),
-                user: user.clone().to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(Uint128::from(1009999u128), user_info_re.amount);
-    assert_eq!(Uint128::from(0u128), user_info_re.reward_debt);
-    assert_eq!(Uint128::from(0u128), user_info_re.reward_debt_proxy);
-    assert_eq!(
-        vec![UnbondingInfo {
-            amount: Uint128::from(1u128),
-            unlock_timstamp: 1087410u64
-        }],
-        user_info_re.unbonding_periods
-    );
-
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(1087410);
-        b.height = b.height + 1;
-    });
-
+    // Get current DEX reward token balance of the owner
     let prev_user_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &lp_token,
+            &dex_token_addr,
             &Cw20QueryMsg::Balance {
-                address: user.clone(),
+                address: owner.clone(),
             },
         )
         .unwrap();
 
-    // SUCCESS :::: ExecuteContract::UnLock
+    // SUCCESS :::: ExecuteContract::Deposit
+    // ---------x------------x-------------x--------------
+    // ---accumulate_rewards_per_share() FUNCTION
+    // Existing p_supply deposited in proxy : 1000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 385802469
+    // token_rewards : 385802469
+    // share : 385.802469
+    // pool.accumulated_proxy_rewards_per_share : 385.802469
+    // --- calculate_rewards() FN - Calculates DEX rewards based on alloc_points
+    // n_blocks: 100
+    // rewards : 10000
+    // token_rewards : 10000
+    // share : 0.01
+    // pool.accumulated_rewards_per_share : 0.01    
+   // ---------x------------x-------------x-------------- 
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 1000
+    // pool.accumulated_proxy_rewards_per_share: 385.802469
+    // user.amount: 1000000
+    // user.reward_debt_proxy: 0
+    // Pending Proxy rewards: 385802469
+    // Sending LP tokens to the proxy contract
+    // ---------x------------x-------------x--------------
     app.execute_contract(
-        Addr::unchecked(user.clone()),
-        generator_instance.clone(),
-        &ExecuteMsg::Unlock {
-            lp_token: lp_token.clone().to_string(),
+        Addr::unchecked(owner.clone()),
+        lp_token_addr.clone(),
+        &Cw20ExecuteMsg::Send {
+            contract: generator_instance.clone().to_string(),
+            amount: Uint128::new(100_000000),
+            msg: to_binary(&&Cw20HookMsg::Deposit {}).unwrap(),
         },
         &[],
     )
     .unwrap();
 
-    // Check if the user has received the LP Token
+    // Get new reward token balance of the owner
     let new_user_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &lp_token,
+            &dex_token_addr,
             &Cw20QueryMsg::Balance {
-                address: user.clone(),
+                address: owner.clone(),
             },
         )
         .unwrap();
+    let claimed_dex_rewards = new_user_balance.balance - prev_user_balance.balance;
+    assert_eq!( Uint128::from(10000u128),claimed_dex_rewards);    
+    
+    // Update block and check pool info response 
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(10);
+        b.height = b.height + 1;
+    });
+    let current_block = app.block_info();
+
+    let pool_info_res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PoolInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(current_block.height - 1, pool_info_res.last_reward_block);
+    assert_eq!(current_block.height, pool_info_res.current_block);
+    assert_eq!(Uint128::from(100u128), pool_info_res.pending_dex_rewards);
+    assert_eq!( Some(Uint128::from(3858023u128)),  pool_info_res.pending_proxy_rewards);
+    assert_eq!(Uint128::from(101000000u128), pool_info_res.lp_supply);
+    assert_eq!(Some(proxy_instance.clone()), pool_info_res.reward_proxy);
     assert_eq!(
-        prev_user_balance.balance + Uint128::from(1u128),
-        new_user_balance.balance
+        Uint128::from(385802469u128),
+        pool_info_res.proxy_reward_balance_before_update
     );
 
-    // SUCCESS :::: ExecuteContract::Unstake
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::ClaimRewards
+    // ---------x------------x-------------x--------------
+
+    // Claim current rewards from the generator contract
+    // ---------x------------x-------------x--------------
+    // accumulate_rewards_per_share() FUNCTION
+    // Existing p_supply deposited in proxy : 101000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 3858023
+    // share : 0.038198247524752475
+    // pool.accumulated_proxy_rewards_per_share : 385.840667247524752475
+    // --- calculate_rewards() FN - Calculates DEX rewards based on alloc_points
+    // n_blocks: 1
+    // rewards : 100
+    // token_rewards : 100
+    // share : 0.0000009900990099
+    // pool.accumulated_rewards_per_share : 0.0100009900990099    
+    // ---------x------------x-------------x--------------
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 99
+    // pool.accumulated_proxy_rewards_per_share: 385.840667247524752475
+    // user.amount: 101000000
+    // user.reward_debt_proxy: 38966049369
+    // Pending Proxy rewards: 3858022
+    // ---------x------------x-------------x--------------
     app.execute_contract(
-        Addr::unchecked(user.clone()),
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::ClaimRewards {
+            lp_tokens: vec![lp_token_addr.clone().to_string()],
+        },
+        &[],
+    ).unwrap();
+
+    // Get new reward token balance of the owner
+    let new_user_balance_2: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &dex_token_addr,
+            &Cw20QueryMsg::Balance {
+                address: owner.clone(),
+            },
+        )
+        .unwrap();
+        let claimed_dex_rewards = new_user_balance_2.balance - new_user_balance.balance;
+        assert_eq!( Uint128::from(99u128),claimed_dex_rewards);    
+
+
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Unstake
+    // ---------x------------x-------------x--------------
+
+    // Update block and check pool info response 
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(10);
+        b.height = b.height + 10;
+    });
+
+    // Get current pending token reward balances 
+    let prev_pending_token_re: PendingTokenResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PendingToken {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    // SUCCESS :::: ExecuteContract::Unstake
+    // Rewards are accumulated and sent to the user, tokens to be unstaked enter the unbonding lockup period
+    // --------x--------x--------x--------x--------x--------
+    // Existing lp_supply deposited in proxy : 101000000
+    // reward_amount (ProxyQueryMsg::Reward() response: ) : 3858025
+    // token share per lp token (new) : 0.038198257425742574
+    // pool.accumulated_proxy_rewards_per_share (total) : 385.878865504950495049
+    // --- calculate_rewards() FN - Calculates DEX rewards based on alloc_points
+    // n_blocks: 10
+    // rewards : 1000
+    // token_rewards : 1000
+    // share : 0.000009900990099009
+    // pool.accumulated_rewards_per_share : 0.010010891089108909    
+    // --------x--------x--------x--------x--------x--------
+    // ---send_pending_rewards() Function
+    // Pending DEX rewards: 0
+    // pool.accumulated_proxy_rewards_per_share: 385.878865504950495049
+    // user.amount: 101000000
+    // user.reward_debt_proxy: 38969907391 (proxy rewards already claimed)
+    // Pending Proxy rewards: 3858024 (proxy rewards to be  claimed)
+    // --------x--------x--------x--------x--------x--------
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
         generator_instance.clone(),
         &ExecuteMsg::Unstake {
-            lp_token: lp_token.clone().to_string(),
-            amount: Uint128::new(1),
+            lp_token: lp_token_addr.clone().to_string(),
+            amount: Uint128::new(1000000),
         },
         &[],
     )
     .unwrap();
 
-    let user_info_re: UserInfoResponse = app
+    // Get new reward token balance of the owner
+    let new_user_balance_3: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &dex_token_addr,
+            &Cw20QueryMsg::Balance {
+                address: owner.clone(),
+            },
+        )
+        .unwrap();
+    
+    // Check rewards are claimed 
+    let claimed_dex_rewards = new_user_balance_3.balance - new_user_balance_2.balance;
+    assert_eq!( Uint128::from(1000u128),claimed_dex_rewards);            
+
+    let new_pending_token_re: PendingTokenResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::PendingToken {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+        assert_eq!( Uint128::from(0u128),new_pending_token_re.pending); 
+        assert_eq!( Uint128::from(0u128),new_pending_token_re.pending_on_proxy.unwrap()); 
+
+
+    let new_user_info_re: UserInfoResponse = app
         .wrap()
         .query_wasm_smart(
             &generator_instance,
             &QueryMsg::UserInfo {
-                lp_token: lp_token.clone().to_string(),
-                user: user.clone().to_string(),
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(1009998u128), user_info_re.amount);
-    assert_eq!(Uint128::from(0u128), user_info_re.reward_debt);
-    assert_eq!(Uint128::from(0u128), user_info_re.reward_debt_proxy);
-    assert_eq!(
-        vec![UnbondingInfo {
-            amount: Uint128::from(1u128),
-            unlock_timstamp: 2174820u64
-        }],
-        user_info_re.unbonding_periods
-    );
+
+    assert_eq!( Uint128::from(100000000u128),new_user_info_re.amount); 
+    assert_eq!( Uint128::from(1001089u128),new_user_info_re.reward_debt); 
+    assert_eq!( Uint128::from(38587886550u128),new_user_info_re.reward_debt_proxy); 
+    assert_eq!( Uint128::from(1000000u128),new_user_info_re.unbonding_periods[0].amount); 
+    assert_eq!(1009670 ,new_user_info_re.unbonding_periods[0].unlock_timstamp); 
+
+    // ---------x------------x-------------x--------------
+    //      SUCCESS :::: ExecuteContract::Unlock
+    // ---------x------------x-------------x--------------
+    // Update block and check pool info response 
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(8641);
+        b.height = b.height + 86;
+    });
+    let current_block = app.block_info();
+
+    // SUCCESS :::: ExecuteContract::Unlock
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        generator_instance.clone(),
+        &ExecuteMsg::Unlock {
+            lp_token: lp_token_addr.clone().to_string(),
+        },
+        &[],
+    ).unwrap();
+    
+    let new_user_info_re: UserInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::UserInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+                user: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    assert_eq!( Uint128::from(100000000u128),new_user_info_re.amount); 
+    assert_eq!( Uint128::from(38587886550u128),new_user_info_re.reward_debt_proxy); 
+    let empty_vec: Vec<UnbondingInfo> = vec![];
+    assert_eq!( empty_vec , new_user_info_re.unbonding_periods); 
 }

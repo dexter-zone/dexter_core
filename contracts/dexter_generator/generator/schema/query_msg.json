@@ -155,6 +155,30 @@
       "additionalProperties": false
     },
     {
+      "type": "object",
+      "required": [
+        "user_info"
+      ],
+      "properties": {
+        "user_info": {
+          "type": "object",
+          "required": [
+            "lp_token",
+            "user"
+          ],
+          "properties": {
+            "lp_token": {
+              "type": "string"
+            },
+            "user": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "SimulateFutureReward returns the amount of DEX that will be distributed until a future block and for a specific generator",
       "type": "object",
       "required": [
