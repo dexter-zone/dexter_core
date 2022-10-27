@@ -78,11 +78,11 @@ export function makeHdPath(coinType = 118, account = 0) {
 
 function calculateCheckSum(filePath: string): string {
   const fileBuffer = fs.readFileSync(filePath);
-  const hashSum = crypto.createHash('sha256');
+  const hashSum = crypto.createHash("sha256");
   hashSum.update(fileBuffer);
 
-  const hex = hashSum.digest('hex');
-  return hex
+  const hex = hashSum.digest("hex");
+  return hex;
 }
 
 async function Demo() {
@@ -234,7 +234,7 @@ async function Demo() {
     contract.hash = hash;
   }
 
-  console.log('contracts', contracts);
+  console.log("contracts", contracts);
 
   // UPLOAD CODE OF ALL CONTRACTS
   if (
@@ -1118,6 +1118,26 @@ async function Demo() {
     }
   }
 
+  // "stable5swap_pool_address": "persistence1282cl8kk03jlg8r2y8ay8z46ag72juf2wr5nwelyt7wlptclqk9qt8rhrd",
+  // "stable5swap_pool_lp_token_address": "persistence1wgzzn83hhcc5asrtslqvaw2wuqqkfulgac7ze94dmqkrxu8nsensasdp76",
+  // "stable5swap_pool_asset_infos": [
+  //   {
+  //     "token": {
+  //       "contract_addr": "persistence10kkn698hpzm07kj0klhj3hrkxjsmngj9598esypm5kh9hfpealpqpjvhel"
+  //     }
+  //   },
+  //   {
+  //     "token": {
+  //       "contract_addr": "persistence1ekc95e6p7277t77ahxn2dhl5qz76r6egdlrdp2ehvewdraa97m7qfz2ydq"
+  //     }
+  //   },
+  //   {
+  //     "token": {
+  //       "contract_addr": "persistence1vqpc6fl6v6semp3yhml5mzw8pgcrafawjk5f6cq4723wc47y0l2qualxyh"
+  //     }
+  //   }
+  // ],
+
   // ---------------------------
   // CREATE STABLE-5-SWAP POOL (T0 - T1)
   // ---------------------------
@@ -1133,6 +1153,8 @@ async function Demo() {
         init_params: toEncodedBinary({ amp: 10 }),
       },
     };
+    console.log(create_pool_exec_msg);
+    // return;
     // TRANSACTION 1. --> Create Pool
     try {
       let ex = await executeContract(
@@ -1142,6 +1164,7 @@ async function Demo() {
         create_pool_exec_msg
       );
       let events = ex?.logs[0].events;
+      console.log(ex);
       let addresses = index_dexter_create_pool_tx(events);
       // console.log(addresses);
       network.stable5swap_pool_address = addresses.pool_addr;

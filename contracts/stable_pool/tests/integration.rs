@@ -1655,6 +1655,8 @@ fn test_swap() {
             belief_price: None,
         },
         recipient: None,
+        min_receive: None,
+        max_spend: None,
     };
     app.execute_contract(
         alice_address.clone(),
@@ -1749,6 +1751,8 @@ fn test_swap() {
             belief_price: None,
         },
         recipient: None,
+        min_receive: None,
+        max_spend: None,
     };
 
     let keeper_bal_before = app

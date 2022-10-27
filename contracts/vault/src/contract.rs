@@ -165,7 +165,9 @@ pub fn execute(
         ExecuteMsg::Swap {
             swap_request,
             recipient,
-        } => execute_swap(deps, env, info, swap_request, recipient),
+            min_receive,
+            max_spend
+        } => execute_swap(deps, env, info, swap_request, recipient, min_receive, max_spend),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -723,13 +725,14 @@ pub fn execute_join_pool(
         }))?;
 
     // If the response is failure
-    if !after_join_res.response.is_success()  {
+    if !after_join_res.response.is_success() {
         return Err(ContractError::PoolQueryFailed {
             error: after_join_res.response.to_string(),
         });
-    }
-    else if after_join_res.new_shares.is_zero() {
-        return Err(ContractError::PoolQueryFailed { error: "LP tokens to mint cannot be 0".to_string() });
+    } else if after_join_res.new_shares.is_zero() {
+        return Err(ContractError::PoolQueryFailed {
+            error: "LP tokens to mint cannot be 0".to_string(),
+        });
     }
 
     // Number of Assets should match
@@ -1142,6 +1145,8 @@ pub fn execute_swap(
     info: MessageInfo,
     swap_request: SingleSwapRequest,
     op_recipient: Option<String>,
+    min_receive: Option<Uint128>,
+    max_spend: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     // Load Pool Info from Storage
     let mut pool_info = ACTIVE_POOLS
@@ -1227,6 +1232,17 @@ pub fn execute_swap(
     if !pool_info.developer_addr.is_some() {
         dev_fee = Uint128::zero();
     }
+
+    // If the max spend amount is provided, then check if the offer asset amount is less than the max spend amount and if not then return error
+    if max_spend.is_some() &&  max_spend.unwrap() < offer_asset.amount.clone() {
+        return Err(ContractError::MaxSpendError { max_spend: max_spend.unwrap(), offer_amount: offer_asset.amount.clone()});
+    }
+
+    // If the min receive amount is provided, then check if the ask asset amount is greater than the min receive amount and if not then return error
+    if min_receive.is_some() &&  min_receive.unwrap() > ask_asset.amount.clone() {
+        return Err(ContractError::MinReceiveError { min_receive: min_receive.unwrap(), ask_amount: ask_asset.amount.clone()});
+    }
+
 
     // Event for indexing support
     event = event

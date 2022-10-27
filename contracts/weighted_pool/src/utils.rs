@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128};
-use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128};
+use dexter::asset::{Asset, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{Config, ResponseType};
 
@@ -36,6 +36,15 @@ pub(crate) fn compute_swap(
 
     let pool_post_swap_in_balance = offer_pool.amount + offer_asset.amount;
 
+    //         /**********************************************************************************************
+    //         // outGivenIn                                                                                //
+    //         // aO = amountOut                                                                            //
+    //         // bO = balanceOut                                                                           //
+    //         // bI = balanceIn              /      /            bI             \    (wI / wO) \           //
+    //         // aI = amountIn    aO = bO * |  1 - | --------------------------  | ^            |          //
+    //         // wI = weightIn               \      \       ( bI + aI )         /              /           //
+    //         // wO = weightOut                                                                            //
+    //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
     let return_amount = solve_constant_function_invariant(
@@ -45,17 +54,16 @@ pub(crate) fn compute_swap(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         ask_weight,
     )?;
+
     // adjust return amount to correct precision
     let return_amount = adjust_precision(
         return_amount.atomics(),
         return_amount.decimal_places() as u8,
         token_precision,
     )?;
-    let ideal_return = (offer_asset.amount * (ask_pool.amount / offer_pool.amount))
-        .to_uint128_with_precision(token_precision)?;
-    let spread_amount = ideal_return - return_amount;
+
     // difference in return amount compared to "ideal" swap.
-    Ok((return_amount, spread_amount))
+    Ok((return_amount, Uint128::zero()))
 }
 
 /// ## Description
@@ -92,6 +100,15 @@ pub(crate) fn compute_offer_amount(
     let pool_post_swap_out_balance =
         Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
 
+    //         /**********************************************************************************************
+    //         // inGivenOut                                                                                //
+    //         // aO = amountOut                                                                            //
+    //         // bO = balanceOut                                                                           //
+    //         // bI = balanceIn              /  /            bO             \    (wO / wI)      \          //
+    //         // aI = amountIn    aI = bI * |  | --------------------------  | ^            - 1  |         //
+    //         // wI = weightIn               \  \       ( bO - aO )         /                   /          //
+    //         // wO = weightOut                                                                            //
+    //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
     let real_offer = solve_constant_function_invariant(
@@ -101,16 +118,12 @@ pub(crate) fn compute_offer_amount(
         Decimal::from_str(&offer_pool.amount.to_string())?,
         offer_weight,
     )?;
-    // Spread is real_offer - offer_if_ideal
     // adjust return amount to correct precision
     let real_offer = adjust_precision(
         real_offer.atomics(),
         real_offer.decimal_places() as u8,
         token_precision,
     )?;
-    let ideal_offer = (ask_asset.amount * (offer_pool.amount / ask_pool.amount))
-        .to_uint128_with_precision(token_precision)?;
-    let spread_amount = real_offer - ideal_offer;
 
     let before_commission_deduction_ = adjust_precision(
         before_commission_deduction.atomics(),
@@ -118,7 +131,7 @@ pub(crate) fn compute_offer_amount(
         token_precision,
     )?;
 
-    Ok((real_offer, spread_amount, before_commission_deduction_))
+    Ok((real_offer, Uint128::zero(), before_commission_deduction_))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -155,10 +168,13 @@ pub fn accumulate_prices(
             info: from.clone(),
             amount: Decimal256::one(),
         };
+
         let from_weight = get_weight(deps.storage, from)?;
         let to_weight = get_weight(deps.storage, to)?;
+
         // retrive the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
+
         // Compute the current price of ask asset in base asset
         let (return_amount, _) = compute_swap(
             deps.storage,
@@ -169,6 +185,7 @@ pub fn accumulate_prices(
             &ask_pool,
             to_weight,
         )?;
+
         // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
@@ -178,53 +195,80 @@ pub fn accumulate_prices(
     Ok(())
 }
 
-/// Calculate the max price-matching asset basket and the left-over assets along with the amount of LP tokens that should be minted.
+/// --------- x --------- x --------- x --------- x --------- x --------- x --------- x --------- x --------- x ---------
+/// MaximalExactRatioJoin calculates the maximal amount of tokens that can be joined whilst maintaining pool asset's ratio
+/// returning the number of shares that'd be and how many coins would be left over.
+///
+///	e.g) suppose we have a pool of 10 foo tokens and 10 bar tokens, with the total amount of 100 shares.
+///		 if `tokensIn` provided is 1 foo token and 2 bar tokens, `MaximalExactRatioJoin`
+///		 would be returning (10 shares, 1 bar token, nil)
+///
+/// This can be used when `tokensIn` are not guaranteed the same ratio as assets in the pool.
+/// Calculation for this is done in the following steps.
+///  1. iterate through all the tokens provided as an argument, calculate how much ratio it accounts for the asset in the pool
+///  2. get the minimal share ratio that would work as the benchmark for all tokens.
+///  3. calculate the number of shares that could be joined (total share * min share ratio), return the remaining coins
 pub fn maximal_exact_ratio_join(
     act_assets_in: Vec<Asset>,
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
-    // Max price-matching asset basket is defined by the smallest share of some asset X.
     let mut min_share = Decimal::one();
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
-    for asset in &act_assets_in {
-        for weighted_asset in pool_assets_weighted {
-            // Would have been better with HashMap type.
-            if weighted_asset.asset.info.equal(&asset.info) {
-                // denom will never be 0 as long as total_share > 0
-                let share_ratio = Decimal::from_ratio(asset.amount, weighted_asset.asset.amount);
-                min_share = min_share.min(share_ratio);
-                max_share = max_share.max(share_ratio);
-                asset_shares.push(share_ratio);
-            }
-        }
-    }
-    let new_shares = min_share * total_share;
 
+    for (asset_in, weighted_pool_in) in act_assets_in
+        .clone()
+        .into_iter()
+        .zip(pool_assets_weighted.into_iter())
+    {
+        if !weighted_pool_in.asset.info.equal(&asset_in.info) {
+            return Err(StdError::generic_err("Assets not sorted in order"));
+        }
+        // denom will never be 0 as long as total_share > 0
+        let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
+        min_share = min_share.min(share_ratio);
+        max_share = max_share.max(share_ratio);
+        asset_shares.push(share_ratio);
+    }
+
+    let new_shares = min_share * total_share;
     let mut rem_assets = vec![];
 
     if min_share.ne(&max_share) {
-        // assets aren't balanced
-        for (i, _asset) in act_assets_in.iter().enumerate() {
+        // assets aren't balanced and we have to calculate remCoins
+        let mut i = 0;
+        for (asset_in, weighted_pool_in) in act_assets_in
+            .clone()
+            .into_iter()
+            .zip(pool_assets_weighted.into_iter())
+        {
+            // if coinShareRatios[i] == minShareRatio, no remainder
             if asset_shares[i].eq(&min_share) {
+                i += 1;
                 continue;
             }
+            i += 1;
+
             // account for unused amounts
-            let used_amount = act_assets_in[i].amount - min_share * act_assets_in[i].amount;
-            let new_amount = act_assets_in[i].amount - used_amount;
-            if new_amount.is_zero() {
-                continue;
+            let used_amount = min_share * weighted_pool_in.asset.amount;
+            let new_amount = asset_in.amount - used_amount;
+
+            // if coinShareRatios[i] == minShareRatio, no remainder
+            if !new_amount.is_zero() {
+                rem_assets.push(Asset {
+                    info: asset_in.info.clone(),
+                    amount: new_amount,
+                });
             }
-            rem_assets.push(Asset {
-                info: act_assets_in[i].info.clone(),
-                amount: new_amount,
-            });
         }
     }
+
     Ok((new_shares, rem_assets, ResponseType::Success {}))
 }
 
+/// Calculate the amount of LP tokens that should be minted for single asset deposit.
+/// Returns the amount of LP tokens to be minted
 pub fn calc_single_asset_join(
     deps: Deps,
     asset_in: &Asset,
@@ -233,6 +277,7 @@ pub fn calc_single_asset_join(
     total_shares: Uint128,
 ) -> StdResult<Uint128> {
     let in_precision = get_precision(deps.storage, &asset_in.info)?;
+
     // Asset weights already normalized
     calc_minted_shares_given_single_asset_in(
         asset_in.amount,
@@ -241,4 +286,36 @@ pub fn calc_single_asset_join(
         total_shares,
         Decimal::from_ratio(total_fee_bps, 10_000u16),
     )
+}
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Helper Functions   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+/// ## Description
+/// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
+pub fn transform_to_decimal_asset(deps: Deps, assets: &Vec<Asset>) -> Vec<DecimalAsset> {
+    let decimal_assets = assets
+        .iter()
+        .map(|asset| {
+            let precision = get_precision(deps.storage, &asset.info)?;
+            asset.to_decimal_asset(precision)
+        })
+        .collect::<StdResult<Vec<DecimalAsset>>>()
+        .unwrap();
+    decimal_assets
+}
+
+// Update pool liquidity balances after joins
+pub fn update_pool_state_for_joins(
+    tokens_joined: &[Asset],
+    pool_assets_weighted: &mut Vec<WeightedAsset>,
+) {
+    for asset in tokens_joined {
+        for pool_asset in pool_assets_weighted.iter_mut() {
+            if asset.info.equal(&pool_asset.asset.info) {
+                pool_asset.asset.amount += asset.amount;
+            }
+        }
+    }
 }

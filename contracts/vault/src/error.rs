@@ -24,6 +24,12 @@ pub enum ContractError {
     #[error("LP Token address not found")]
     LpTokenNotFound {},
 
+    #[error("MaxSpendError - offer amount {offer_amount} is more than manimum allowed spent amount {max_spend}")]
+    MaxSpendError { max_spend: Uint128, offer_amount: Uint128 },
+
+    #[error("MinReceiveError - return amount {ask_amount} is less than minimum requested amount {min_receive}")]
+    MinReceiveError { min_receive: Uint128, ask_amount: Uint128 },
+
     #[error("Pool Type already exists")]
     PoolTypeAlreadyExists {},
 
