@@ -48,12 +48,14 @@ pub fn update_user_balance(
 ) -> StdResult<UserInfo> {
     user.amount = amount;
 
+    // accumulate dex token rewards
     if !pool.accumulated_rewards_per_share.is_zero() {
         user.reward_debt = pool
             .accumulated_rewards_per_share
             .checked_mul_uint128(user.amount)?;
     };
 
+    // accumulate proxy token rewards
     if !pool.accumulated_proxy_rewards_per_share.is_zero() {
         user.reward_debt_proxy = pool
             .accumulated_proxy_rewards_per_share

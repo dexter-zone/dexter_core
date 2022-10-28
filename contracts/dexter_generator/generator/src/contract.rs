@@ -73,7 +73,6 @@ pub fn instantiate(
         allowed_reward_proxies,
         vesting_contract: None,
         active_pools: vec![],
-        checkpoint_generator_limit: None,
         unbonding_period: msg.unbonding_period,
     };
 
@@ -102,7 +101,6 @@ pub fn instantiate(
 /// ## Queries
 /// * **ExecuteMsg::UpdateConfig {
 ///             vesting_contract,
-///             checkpoint_generator_limit,
 ///         }** Changes the address of the Generator vesting, or updates the generator limit.
 ///
 /// * **ExecuteMsg::SetupPools { pools }** Setting up a new list of pools with allocation points.
@@ -154,14 +152,12 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             dex_token,
             vesting_contract,
-            checkpoint_generator_limit,
             unbonding_period,
         } => execute_update_config(
             deps,
             info,
             dex_token,
             vesting_contract,
-            checkpoint_generator_limit,
             unbonding_period,
         ),
         ExecuteMsg::SetupPools { pools } => execute_setup_pools(deps, env, info, pools),
@@ -290,13 +286,9 @@ fn receive_cw20(
 ) -> Result<Response, ContractError> {
     let amount = cw20_msg.amount;
     let lp_token = info.sender;
-    let cfg = CONFIG.load(deps.storage)?;
-
-    if !POOL_INFO.has(deps.storage, &lp_token) {
-        create_pool(deps.branch(), &env, lp_token.clone(), &cfg)?;
-    }
 
     match from_binary(&cw20_msg.msg)? {
+        // Update rewards that are accrued and then deposit the received amount
         Cw20HookMsg::Deposit {} => update_rewards_and_execute(
             deps,
             env,
@@ -307,7 +299,8 @@ fn receive_cw20(
                 amount,
             },
         ),
-        Cw20HookMsg::DepositFor(beneficiary) => update_rewards_and_execute(
+        // Update rewards that are accrued and then deposit the received amount
+        Cw20HookMsg::DepositFor { beneficiary } => update_rewards_and_execute(
             deps,
             env,
             Some(lp_token.clone()),
@@ -317,6 +310,8 @@ fn receive_cw20(
                 amount,
             },
         ),
+
+
     }
 }
 
@@ -329,8 +324,9 @@ fn receive_cw20(
 /// data will be updated with the new vesting contract address.
 ///
 /// ## Params
+/// * **dex_token** is an [`Option`] field object of type [`String`].This is the DEX token and can be only set once
 /// * **vesting_contract** is an [`Option`] field object of type [`String`]. This is the new vesting contract address.
-/// * **checkpoint_generator_limit** is an [`Option`] field object of type [`u32`]. This are the max number of generators allowed
+/// * **unbonding_period** is an [`Option`] field object of type [`u64`].This is the unbonding period in seconds.
 ///
 /// ##Executor
 /// Only the owner can execute this.
@@ -339,7 +335,6 @@ pub fn execute_update_config(
     info: MessageInfo,
     dex_token: Option<String>,
     vesting_contract: Option<String>,
-    _checkpoint_generator_limit: Option<u32>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
     // Load Config
@@ -408,8 +403,8 @@ pub fn execute_setup_pools(
         return Err(ContractError::PoolDuplicate {});
     }
 
-    let mut setup_pools: Vec<(Addr, Uint128)> = vec![];
     // Validation check on pools, add them to setup_poools if they are valid
+    let mut setup_pools: Vec<(Addr, Uint128)> = vec![];
     for (addr, alloc_point) in pools {
         let pool_addr = addr_validate_to_lower(deps.api, &addr)?;
         setup_pools.push((pool_addr, alloc_point));
@@ -493,7 +488,8 @@ pub fn deactivate_pool(deps: DepsMut, lp_token: Addr) -> Result<Response, Contra
     let old_alloc_point = get_alloc_point(&cfg.active_pools, &lp_token);
     cfg.total_alloc_point = cfg.total_alloc_point.checked_sub(old_alloc_point)?;
 
-    // Sets the pool allocation points to zero
+    // Sets the pool allocation points to zero and removes it from the list of active pools
+
     for pool in &mut cfg.active_pools {
         if pool.0 == lp_token {
             pool.1 = Uint128::zero();
@@ -692,6 +688,7 @@ fn update_rewards_and_execute(
     update_single_pool: Option<Addr>,
     on_reply: ExecuteOnReply,
 ) -> Result<Response, ContractError> {
+
     // Store temporary user action in the storage
     TMP_USER_ACTION.update(deps.storage, |v| {
         if v.is_some() {
@@ -873,6 +870,10 @@ pub fn unstake(
         .unwrap_or_default();
     if user.amount < amount {
         return Err(ContractError::BalanceTooSmall {});
+    }
+
+    if amount.is_zero() {
+        return  Err(ContractError::ZeroAmount {});
     }
 
     let cfg = CONFIG.load(deps.storage)?;
@@ -1212,7 +1213,7 @@ fn query_config(deps: Deps) -> Result<ConfigResponse, ContractError> {
         allowed_reward_proxies: config.allowed_reward_proxies,
         vesting_contract: config.vesting_contract,
         active_pools: config.active_pools,
-        checkpoint_generator_limit: config.checkpoint_generator_limit,
+        unbonding_period: config.unbonding_period,
     })
 }
 
@@ -1267,6 +1268,7 @@ pub fn pending_token(
     lp_token: String,
     user: String,
 ) -> Result<PendingTokenResponse, ContractError> {
+
     let cfg = CONFIG.load(deps.storage)?;
 
     let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
@@ -1460,7 +1462,7 @@ fn query_pool_info(
         proxy_reward_balance_before_update: pool.proxy_reward_balance_before_update,
         orphan_proxy_rewards: pool.orphan_proxy_rewards,
         lp_supply,
-        global_reward_index: pool.accumulated_rewards_per_share,
+        global_reward_index: pool.accumulated_rewards_per_share
     })
 }
 
@@ -1671,6 +1673,7 @@ pub fn accumulate_rewards_per_share(
     cfg: &Config,
     deposited: Option<Uint128>,
 ) -> StdResult<()> {
+
     let lp_supply: Uint128;
 
     // Update reward share for proxy rewards : In case proxy is set and LP tokens are staked
@@ -1680,11 +1683,11 @@ pub fn accumulate_rewards_per_share(
             if !lp_supply.is_zero() {
                 let reward_amount: Uint128 =
                     querier.query_wasm_smart(proxy, &ProxyQueryMsg::Reward {})?;
+
                 let token_rewards =
                     reward_amount.checked_sub(pool.proxy_reward_balance_before_update)?;
                 let share = Decimal::from_ratio(token_rewards, lp_supply);
-                pool.accumulated_proxy_rewards_per_share
-                    .checked_add(share)?;
+                pool.accumulated_proxy_rewards_per_share = pool.accumulated_proxy_rewards_per_share.checked_add(share)?;
                 pool.proxy_reward_balance_before_update = reward_amount;
             }
         }
@@ -1738,6 +1741,7 @@ pub fn send_pending_rewards(
     user: &UserInfo,
     to: &Addr,
 ) -> Result<Vec<WasmMsg>, ContractError> {
+
     if user.amount.is_zero() {
         return Ok(vec![]);
     }
@@ -1764,6 +1768,7 @@ pub fn send_pending_rewards(
 
     // Calculate pending proxy rewards
     if let Some(proxy) = &pool.reward_proxy {
+
         let pending_proxy_rewards = pool
             .accumulated_proxy_rewards_per_share
             .checked_mul_uint128(user.amount)?

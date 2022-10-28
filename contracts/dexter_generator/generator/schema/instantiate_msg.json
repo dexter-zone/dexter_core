@@ -8,19 +8,11 @@
     "start_block",
     "tokens_per_block",
     "unbonding_period",
-    "vault",
-    "vesting_contract"
+    "vault"
   ],
   "properties": {
     "dex_token": {
       "description": "DEX token contract address",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "guardian": {
-      "description": "Address of guardian : who has permission to blacklist tokens",
       "type": [
         "string",
         "null"
@@ -54,10 +46,6 @@
     },
     "vault": {
       "description": "Address of vault contract",
-      "type": "string"
-    },
-    "vesting_contract": {
-      "description": "The DEX vesting contract that drips DEX rewards",
       "type": "string"
     }
   },

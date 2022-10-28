@@ -17,14 +17,26 @@
       "additionalProperties": false
     },
     {
-      "description": "DepositFor performs a token deposit on behalf of another address that's not the message sender.",
       "type": "object",
       "required": [
         "deposit_for"
       ],
       "properties": {
         "deposit_for": {
-          "$ref": "#/definitions/Addr"
+          "type": "object",
+          "required": [
+            "beneficiary"
+          ],
+          "properties": {
+            "beneficiary": {
+              "description": "The address to which the tokens will be deposited",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Addr"
+                }
+              ]
+            }
+          }
         }
       },
       "additionalProperties": false

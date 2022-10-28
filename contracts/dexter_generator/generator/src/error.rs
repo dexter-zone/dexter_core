@@ -10,6 +10,10 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Zero amount provided")]
+    ZeroAmount {},
+
+
     #[error("Dex token already set")]
     DexTokenAlreadySet {},
 
