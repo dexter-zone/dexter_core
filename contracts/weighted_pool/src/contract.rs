@@ -436,6 +436,17 @@ pub fn query_on_join_pool(
             .cmp(&b.info.to_string().to_lowercase())
     });
 
+    // Check asset definations and make sure no asset is repeated
+    let mut previous_asset: String = "".to_string();
+    for asset in act_assets_in.iter() {
+        if previous_asset == asset.info.as_string() {
+            return Ok(return_join_failure(
+                "Repeated assets in asset_infos".to_string(),
+            ));
+        }
+        previous_asset = asset.info.as_string();
+    }
+
     // 1) get all 'pool assets' (aka current pool liquidity + balancer weight)
     let config: Config = CONFIG.load(deps.storage)?;
 
@@ -479,14 +490,18 @@ pub fn query_on_join_pool(
         )?;
 
         // Add assets which are omitted with 0 deposit
-        for pool_asset in pool_assets_weighted.iter() {
-            if in_asset.info.to_string() != pool_asset.asset.info.to_string() {
+        pool_assets_weighted.iter().for_each(|pool_asset| {
+            if !act_assets_in
+                .iter()
+                .any(|asset| asset.info.eq(&pool_asset.asset.info))
+            {
                 act_assets_in.push(Asset {
                     amount: Uint128::zero(),
                     info: pool_asset.asset.info.clone(),
                 });
             }
-        }
+        });
+
         // Sort the assets in the order of the assets in the config
         act_assets_in.sort_by(|a, b| {
             a.info
