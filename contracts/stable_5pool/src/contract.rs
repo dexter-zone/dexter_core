@@ -609,6 +609,19 @@ pub fn query_on_exit_pool(
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
+    // Check asset definations and make sure no asset is repeated
+    if assets_out.is_some() {
+        let mut previous_asset: String = "".to_string();
+        for asset in assets_out.unwrap().iter() {
+            if previous_asset == asset.info.as_string() {
+                return Ok(return_exit_failure(
+                    "Repeated assets in asset_in".to_string(),
+                ));
+            }
+            previous_asset = asset.info.as_string();
+        }
+    }
+
     let act_burn_amount;
     let mut refund_assets;
 
