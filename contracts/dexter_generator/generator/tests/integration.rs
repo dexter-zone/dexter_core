@@ -1432,7 +1432,7 @@ fn test_generator_with_no_rewards() {
     );
     assert_eq!(
         1009660,
-        new_user_info_re.unbonding_periods[0].unlock_timstamp
+        new_user_info_re.unbonding_periods[0].unlock_timestamp
     );
 
     // ---------x------------x-------------x--------------
@@ -2046,7 +2046,7 @@ fn test_generator_with_dex_rewards() {
     );
     assert_eq!(
         1009670,
-        new_user_info_re.unbonding_periods[0].unlock_timstamp
+        new_user_info_re.unbonding_periods[0].unlock_timestamp
     );
 
     // ---------x------------x-------------x--------------

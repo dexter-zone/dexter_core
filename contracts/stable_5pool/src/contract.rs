@@ -610,9 +610,10 @@ pub fn query_on_exit_pool(
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
     // Check asset definations and make sure no asset is repeated
-    if assets_out.is_some() {
+    if assets_out.clone().is_some() {
+        let assets_out_ = assets_out.clone().unwrap();
         let mut previous_asset: String = "".to_string();
-        for asset in assets_out.unwrap().iter() {
+        for asset in assets_out_.clone().iter() {
             if previous_asset == asset.info.as_string() {
                 return Ok(return_exit_failure(
                     "Repeated assets in asset_in".to_string(),
