@@ -160,7 +160,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[1], attr("action", "create_pool"));
     assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
     let pool_res: PoolInfo = app
         .wrap()
@@ -251,7 +250,7 @@ fn test_update_config() {
         owner.clone(),
         vec![Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     );
 
@@ -282,7 +281,7 @@ fn test_query_on_join_pool() {
         owner.clone(),
         vec![Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     );
 
@@ -292,7 +291,7 @@ fn test_query_on_join_pool() {
         alice_address.clone(),
         &[Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(1000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     )
     .unwrap();
@@ -317,7 +316,7 @@ fn test_query_on_join_pool() {
             pool_addr.clone(),
             &QueryMsg::OnJoinPool {
                 assets_in: None,
-                mint_amount: Some(Uint128::from(1000_000_000u128)),
+                mint_amount: Some(Uint128::from(1000000_000000u128)),
                 slippage_tolerance: None,
             },
         )
@@ -344,7 +343,14 @@ fn test_query_on_join_pool() {
             amount: Uint128::from(100u128),
         },
     ];
-    // Check Query Response
+
+    // Query :: OnJoinPool
+    // assets sorted
+    // deposit:100 contract1
+    // deposit:100 xprt
+    // Current total supply of LP tokens:0
+    // Liquidity provided for the first time, mint sqrt(deposit1 * deposit2) LP tokens
+    // New shares to be minted:100
     let join_pool_query_res: AfterJoinResponse = app
         .wrap()
         .query_wasm_smart(
@@ -377,6 +383,44 @@ fn test_query_on_join_pool() {
         ],
         join_pool_query_res.provided_assets
     );
+
+    // Query :: OnJoinPool
+    // assets sorted
+    // deposit:153000000 contract1
+    // deposit:9674000000 xprt
+    // Current total supply of LP tokens:0
+    // Liquidity provided for the first time, mint sqrt(deposit1 * deposit2) LP tokens
+    // New shares to be minted:1216602646
+    let join_pool_query_res_2: AfterJoinResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnJoinPool {
+                assets_in: Some(vec![
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: "xprt".to_string(),
+                        },
+                        amount: Uint128::from(9674_000000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: token_instance.clone(),
+                        },
+                        amount: Uint128::from(153_000000u128),
+                    },
+                ]),
+                mint_amount: None,
+                slippage_tolerance: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(ResponseType::Success {}, join_pool_query_res_2.response);
+    assert_eq!(
+        Uint128::from(1216602646u128),
+        join_pool_query_res_2.new_shares
+    );
+
     // Execute AddLiquidity via the Vault contract
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
@@ -420,7 +464,7 @@ fn test_query_on_join_pool() {
         token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
             spender: vault_instance.clone().to_string(),
-            amount: Uint128::from(1000000000u128),
+            amount: Uint128::from(1000000_00000u128),
             expires: None,
         },
         &[],
@@ -496,39 +540,16 @@ fn test_query_on_join_pool() {
         vault_pool_config_res.assets
     );
 
+    let _current_block = app.block_info();
+    app.update_block(|b| {
+        b.height += 10;
+        b.time = Timestamp::from_seconds(_current_block.time.seconds() + 90)
+    });
+
     let pool_twap_res: CumulativePricesResponse = app
         .wrap()
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
-    let pool_twap_res_t1: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-    let pool_twap_res_t2: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                offer_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-
     assert_eq!(Uint128::from(100u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
@@ -539,7 +560,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                rate: Uint128::from(1000000000000000u128),
+                rate: Uint128::from(90000000000u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -548,40 +569,11 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                rate: Uint128::from(1000000000000000u128),
+                rate: Uint128::from(90000000000u128),
             },
         ],
         pool_twap_res.exchange_infos
     );
-
-    assert_eq!(Uint128::from(100u128), pool_twap_res_t1.total_share);
-    assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            ask_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            rate: Uint128::from(1000000000000000u128),
-        },
-        pool_twap_res_t1.exchange_info
-    );
-
-    assert_eq!(Uint128::from(100u128), pool_twap_res_t2.total_share);
-    assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            rate: Uint128::from(1000000000000000u128),
-        },
-        pool_twap_res_t2.exchange_info
-    );
-    assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 
     //// -----x----- Check #3.1 :: Error ::: Provided spread amount exceeds allowed limit -----x----- ////
 
@@ -639,15 +631,24 @@ fn test_query_on_join_pool() {
             info: AssetInfo::NativeToken {
                 denom: "xprt".to_string(),
             },
-            amount: Uint128::from(109u128),
+            amount: Uint128::from(7525_000000u128),
         },
         Asset {
             info: AssetInfo::Token {
                 contract_addr: token_instance.clone(),
             },
-            amount: Uint128::from(111u128),
+            amount: Uint128::from(8452_000000u128),
         },
     ];
+
+    // Query :: OnJoinPool
+    // assets sorted
+    // deposit:8452000000 contract1
+    // deposit:7525000000 xprt
+    // Current total supply of LP tokens:100
+    // deposit:8452000000 current_pool_liq:100
+    // deposit:7525000000 current_pool_liq:100
+    // New shares to be minted:7525000000
     let join_pool_query_res: AfterJoinResponse = app
         .wrap()
         .query_wasm_smart(
@@ -660,7 +661,10 @@ fn test_query_on_join_pool() {
         )
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(109u128), join_pool_query_res.new_shares);
+    assert_eq!(
+        Uint128::from(7525000000u128),
+        join_pool_query_res.new_shares
+    );
     // Returned assets are in sorted order
     assert_eq!(
         vec![
@@ -668,13 +672,13 @@ fn test_query_on_join_pool() {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(111u128),
+                amount: Uint128::from(8452000000u128),
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(109u128),
+                amount: Uint128::from(7525000000u128),
             },
         ],
         join_pool_query_res.provided_assets
@@ -690,9 +694,10 @@ fn test_query_on_join_pool() {
         assets: Some(assets_msg.clone()),
     };
 
+    let _current_block = app.block_info();
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 900_00)
+        b.time = Timestamp::from_seconds(_current_block.time.seconds() + 90)
     });
 
     app.execute_contract(
@@ -701,7 +706,7 @@ fn test_query_on_join_pool() {
         &msg,
         &[Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(1100u128),
+            amount: Uint128::new(7525000000u128),
         }],
     )
     .unwrap();
@@ -720,7 +725,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(109u128), recepient_bal_res.balance);
+    assert_eq!(Uint128::from(7525000000u128), recepient_bal_res.balance);
 
     let vault_bal_res: BalanceResponse = app
         .wrap()
@@ -731,7 +736,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(211u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(8452000100u128), vault_bal_res.balance);
 
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
@@ -753,52 +758,29 @@ fn test_query_on_join_pool() {
                 info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                amount: Uint128::from(211u128),
+                amount: Uint128::from(8452000100u128),
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(209u128),
+                amount: Uint128::from(7525000100u128),
             },
         ],
         vault_pool_config_res.assets
     );
 
+    let _current_block = app.block_info();
+    app.update_block(|b| {
+        b.height += 10;
+        b.time = Timestamp::from_seconds(_current_block.time.seconds() + 90)
+    });
+
     let pool_twap_res: CumulativePricesResponse = app
         .wrap()
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
-    let pool_twap_res_t1: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-    let pool_twap_res_t2: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                offer_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-
-    assert_eq!(Uint128::from(209u128), pool_twap_res.total_share);
+    assert_eq!(Uint128::from(7525000100u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
             AssetExchangeRate {
@@ -808,7 +790,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                rate: Uint128::from(1089146919431279u128),
+                rate: Uint128::from(260128963675u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -817,38 +799,10 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                rate: Uint128::from(1090861244019138u128),
+                rate: Uint128::from(281087043042u128),
             },
         ],
         pool_twap_res.exchange_infos
-    );
-
-    assert_eq!(Uint128::from(209u128), pool_twap_res_t1.total_share);
-    assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            ask_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            rate: Uint128::from(1090861244019138u128),
-        },
-        pool_twap_res_t1.exchange_info
-    );
-
-    assert_eq!(Uint128::from(209u128), pool_twap_res_t2.total_share);
-    assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            rate: Uint128::from(1089146919431279u128),
-        },
-        pool_twap_res_t2.exchange_info
     );
 
     //// -----x----- Check #4 :: Error ::: Invalid tokens -----x----- ////
@@ -903,7 +857,7 @@ fn test_on_exit_pool() {
         owner.clone(),
         vec![Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     );
     // Set Alice's balances
@@ -912,7 +866,7 @@ fn test_on_exit_pool() {
         alice_address.clone(),
         &[Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(1000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     )
     .unwrap();
@@ -1080,7 +1034,6 @@ fn test_on_exit_pool() {
     };
     app.execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
-    let current_block = app.block_info();
 
     // Checks -
     // 1. LP tokens burnt
@@ -1136,39 +1089,16 @@ fn test_on_exit_pool() {
         vault_pool_config_res.assets
     );
 
+    let _current_block = app.block_info();
+    app.update_block(|b| {
+        b.height += 10;
+        b.time = Timestamp::from_seconds(_current_block.time.seconds() + 90)
+    });
+
     let pool_twap_res: CumulativePricesResponse = app
         .wrap()
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
-    let pool_twap_res_t1: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                offer_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                ask_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-    let pool_twap_res_t2: CumulativePriceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &pool_addr.clone(),
-            &QueryMsg::CumulativePrice {
-                ask_asset: AssetInfo::NativeToken {
-                    denom: "xprt".to_string(),
-                },
-                offer_asset: AssetInfo::Token {
-                    contract_addr: token_instance.clone(),
-                },
-            },
-        )
-        .unwrap();
-
     assert_eq!(Uint128::from(5000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
@@ -1179,7 +1109,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                rate: Uint128::from(1000000000000000u128),
+                rate: Uint128::from(90000000000u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -1188,40 +1118,48 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance.clone(),
                 },
-                rate: Uint128::from(1000000000000000u128),
+                rate: Uint128::from(90000000000u128),
             },
         ],
         pool_twap_res.exchange_infos
     );
 
-    assert_eq!(Uint128::from(5000u128), pool_twap_res_t1.total_share);
+    // Query :: OnExitPool
+    // Burn amount:573
+    // Current total supply of LP tokens:5000
+    // Share ratio: 0.1146
+    // pool liquidity: 5000 contract1
+    // pool liquidity: 5000 xprt
+    // Assets to be withdrawn:
+    // 573 contract1
+    // 573 xprt
+    let exit_pool_query_res: AfterExitResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnExitPool {
+                assets_out: None,
+                burn_amount: Some(Uint128::from(573u128)),
+            },
+        )
+        .unwrap();
     assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
+        vec![
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance.clone(),
+                },
+                amount: Uint128::from(573u128),
             },
-            ask_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(573u128),
             },
-            rate: Uint128::from(1000000000000000u128),
-        },
-        pool_twap_res_t1.exchange_info
+        ],
+        exit_pool_query_res.assets_out
     );
-
-    assert_eq!(Uint128::from(5000u128), pool_twap_res_t2.total_share);
-    assert_eq!(
-        AssetExchangeRate {
-            offer_info: AssetInfo::Token {
-                contract_addr: token_instance.clone(),
-            },
-            ask_info: AssetInfo::NativeToken {
-                denom: "xprt".to_string(),
-            },
-            rate: Uint128::from(1000000000000000u128),
-        },
-        pool_twap_res_t2.exchange_info
-    );
-    assert_eq!((current_block.time.seconds() as u128) as u128, 1000000u128);
 }
 
 /// Tests the following -
@@ -1236,7 +1174,7 @@ fn test_swap() {
         owner.clone(),
         vec![Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(100_000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     );
     // Set Alice's balances
@@ -1245,7 +1183,7 @@ fn test_swap() {
         alice_address.clone(),
         &[Coin {
             denom: "xprt".to_string(),
-            amount: Uint128::new(1000_000_000u128),
+            amount: Uint128::new(1000000_000000u128),
         }],
     )
     .unwrap();
@@ -1354,6 +1292,24 @@ fn test_swap() {
 
     //// -----x----- Check #1 :: QUERY Success :::  -----x----- ////
     // SwapType::GiveIn {},
+    // Query :: OnSwap :: give-in
+    // Offer asset info:xprt
+    // Ask asset info:contract1
+    // Amount:1000
+    // Current offer asset balance:10000
+    // Current ask asset balance:10000
+    // --- compute_swap()
+    // offer_pool: 10000
+    // ask_pool: 10000
+    // offer_amount: 1000
+    // cp: 100000000
+    // return_amount  = (ask_pool - cp / (offer_pool + offer_amount)): 909
+    // return amount:909
+    // Spread amount:91
+    // Total fee:27
+    // Swap success
+    // Offer asset:1000xprt
+    // Ask asset:882contract1
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1397,6 +1353,24 @@ fn test_swap() {
     );
 
     // SwapType::GiveOut {},
+    // Query :: OnSwap :: give-out
+    // Offer asset info:xprt
+    // Ask asset info:contract1
+    // Amount:1000
+    // Current offer asset balance:10000
+    // Current ask asset balance:10000
+    // --- compute_offer_amount()
+    // cp: 100000000
+    // before_commission_deduction: 1030
+    // offer_amount: 1148
+    // spread_amount: 118
+    // offer amount:1148
+    // Spread amount:118
+    // Before commission deduction:1030
+    // Total fee:30
+    // Swap success
+    // Offer asset:1148xprt
+    // Ask asset:1000contract1
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
