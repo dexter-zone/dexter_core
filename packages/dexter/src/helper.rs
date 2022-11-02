@@ -1,5 +1,6 @@
 use crate::asset::{addr_validate_to_lower, Asset, AssetInfo, DecimalAsset};
 use crate::error::ContractError;
+use crate::vault::FEE_PRECISION;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
@@ -389,5 +390,5 @@ pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom: &str) -
 
 // Returns the number of tokens charged as total fee
 pub fn calculate_underlying_fees(amount: Uint128, total_fee_bps: u16) -> Uint128 {
-    amount * Decimal::from_ratio(total_fee_bps, 10_000u16)
+    amount * Decimal::from_ratio(total_fee_bps, FEE_PRECISION)
 }

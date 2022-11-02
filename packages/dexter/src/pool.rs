@@ -201,20 +201,20 @@ pub struct AfterJoinResponse {
     // Is the response type :: Success or Failure
     pub response: ResponseType,
     // Is the fee to be charged
-    pub fee: Option<Asset>,
+    pub fee: Option<Vec<Asset>>,
 }
 
 /// ## Description  - Helper struct for [`QueryMsg::OnExitPool`]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AfterExitResponse {
-    /// Assets which will be transferred to the recipient against tokens being burnt
+    /// Sorted list of assets which will be transferred to the recipient against tokens being burnt
     pub assets_out: Vec<Asset>,
     /// Number of LP tokens to burn
     pub burn_shares: Uint128,
     /// Operation will be a `Success` or `Failure`
     pub response: ResponseType,
     /// Fee to be charged
-    pub fee: Option<Asset>,
+    pub fee: Option<Vec<Asset>>,
 }
 
 /// ## Description
@@ -281,14 +281,4 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
         response: ResponseType::Failure(error),
         fee: None,
     }
-}
-
-// ----------------x----------------x----------------x----------------x----------------x----------------
-// ----------------x----------------x     Custom Init Params       x----------------x------------
-// ----------------x----------------x----------------x----------------x----------------x----------------
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct WeightedParams {
-    pub weights: Vec<Asset>,
-    pub exit_fee: Option<Decimal>,
 }
