@@ -1,5 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::{
     to_binary, Addr, CanonicalAddr, Decimal, QuerierWrapper, QueryRequest, StdResult, Uint128,
@@ -12,7 +11,7 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 pub const USERS: Map<&Addr, StakerInfo> = Map::new("user");
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     pub anchor_token: CanonicalAddr,
     pub staking_token: CanonicalAddr,
@@ -27,7 +26,7 @@ pub struct Config {
 //     singleton_read(storage, KEY_CONFIG).load()
 // }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct State {
     pub last_distributed: u64,
     pub total_bond_amount: Uint128,
@@ -42,7 +41,7 @@ pub struct State {
 //     singleton_read(storage, KEY_STATE).load()
 // }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct StakerInfo {
     pub reward_index: Decimal,
     pub bond_amount: Uint128,

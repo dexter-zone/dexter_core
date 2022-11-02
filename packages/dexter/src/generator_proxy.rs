@@ -1,12 +1,11 @@
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 use cw20::Cw20ReceiveMsg;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
-use crate::asset::AssetInfo;
+use crate::{asset::AssetInfo, generator::{PendingTokenResponse, RewardInfoResponse}};
 
 /// This structure describes the basic parameters for creating a contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// The generator contract address
     pub generator_contract_addr: String,
@@ -20,15 +19,13 @@ pub struct InstantiateMsg {
     pub reward_token: AssetInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum Cw20HookMsg {
     Deposit {},
 }
 
 /// This structure describes the execute messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Receives a message of type [`Cw20ReceiveMsg`]
     Receive(Cw20ReceiveMsg),
@@ -55,8 +52,7 @@ pub enum ExecuteMsg {
 }
 
 /// This structure describes the callback messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum CallbackMsg {
     TransferLpTokensAfterWithdraw {
         /// The LP token recipient
@@ -68,18 +64,23 @@ pub enum CallbackMsg {
 }
 
 /// This structure describes query messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns the contract's core configuration
+    #[returns(ConfigResponse)]
     Config {},
     /// Returns the amount of deposited LP tokens
+    #[returns(Uint128)]
     Deposit {},
     /// Returns the amount of rewards to be distributed
+    #[returns(Uint128)]
     Reward {},
     /// Returns the amount of pending rewards which can be claimed right now
+    #[returns(PendingTokenResponse)]
     PendingToken {},
     /// Returns the 3rd party reward token contract address
+    #[returns(RewardInfoResponse)]
     RewardInfo {},
 }
 
@@ -87,5 +88,5 @@ pub type ConfigResponse = InstantiateMsg;
 
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}

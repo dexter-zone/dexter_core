@@ -29,6 +29,7 @@ serde = { version = "1.0.125", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.24" }
 dexter = { path = "../../../packages/dexter", default-features = false }
 protobuf = { version = "2", features = ["with-bytes"] }
+cosmwasm-schema = "1.1.5"
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"

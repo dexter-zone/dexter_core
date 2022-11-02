@@ -1,10 +1,9 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     to_binary, Addr, Api, BankMsg, Coin, ConversionOverflowError, CosmosMsg, Decimal256, Fraction,
     MessageInfo, QuerierWrapper, StdError, StdResult, Uint128, Uint256, WasmMsg,
 };
 use cw20::Cw20ExecuteMsg;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::querier::{query_balance, query_token_balance};
@@ -16,8 +15,8 @@ pub const NATIVE_TOKEN_PRECISION: u8 = 6;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Token types.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(Hash, Eq)]
 pub enum AssetInfo {
     /// Non-native Token
     Token { contract_addr: Addr },
@@ -172,7 +171,7 @@ impl AssetInfo {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description - This enum describes a asset (native or CW20).
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Asset {
     /// Information about an asset stored in a [`AssetInfo`] struct
     pub info: AssetInfo,
@@ -258,7 +257,7 @@ impl Asset {
 // ----------------x----------------x    {{AssetExchangeRate}} struct Type    x----------------x--------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AssetExchangeRate {
     pub offer_info: AssetInfo,
     pub ask_info: AssetInfo,
@@ -271,7 +270,7 @@ pub struct AssetExchangeRate {
 
 /// ## Description
 /// This struct describes a Terra asset as decimal.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct DecimalAsset {
     pub info: AssetInfo,
     pub amount: Decimal256,

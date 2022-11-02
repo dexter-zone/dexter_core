@@ -1,6 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map};
 use dexter::helper::OwnershipProposal;
@@ -8,7 +6,7 @@ use dexter::vesting::{OrderBy, VestingInfo};
 
 /// ## Description
 /// This structure describes the main control config of vesting contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     /// contract address that controls settings
     pub owner: Addr,

@@ -1,8 +1,7 @@
 use crate::asset::{Asset, AssetInfo};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
 
 // TWAP PRECISION is 9 decimal places
@@ -13,8 +12,7 @@ pub const TWAP_PRECISION: u16 = 9u16;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes the key for the different Pool types supported by Dexter
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum PoolType {
     /// XYK pool type
     Xyk {},
@@ -46,8 +44,7 @@ impl Display for PoolType {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Swap types.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum SwapType {
     GiveIn {},
     GiveOut {},
@@ -80,7 +77,7 @@ const MAX_PROTOCOL_FEE_PERCENT: u16 = 50u16;
 const MAX_DEV_FEE_PERCENT: u16 = 25u16;
 
 /// ## Description - This struct describes the Fee configuration supported by a particular pool type.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct FeeInfo {
     pub total_fee_bps: u16,
     pub protocol_fee_percent: u16,
@@ -115,7 +112,7 @@ impl FeeInfo {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description - This struct describes the main control config of Vault.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     /// The admin address that controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
@@ -130,7 +127,7 @@ pub struct Config {
 }
 
 /// This struct stores a pool type's configuration.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct PoolConfig {
     /// ID of contract which is used to create pools of this type
     pub code_id: u64,
@@ -163,14 +160,14 @@ impl Default for PoolConfig {
 }
 
 /// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct TmpPoolInfo {
     pub pool_id: Uint128,
     pub assets: Vec<AssetInfo>,
 }
 
 /// This struct stores a pool type's configuration.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct PoolInfo {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
@@ -184,7 +181,7 @@ pub struct PoolInfo {
     pub pool_type: PoolType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct SingleSwapRequest {
     pub pool_id: Uint128,
     pub asset_in: AssetInfo,
@@ -200,7 +197,7 @@ pub struct SingleSwapRequest {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This struct describes the Msg used to instantiate in this contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
@@ -211,8 +208,7 @@ pub struct InstantiateMsg {
 }
 
 /// This struct describes the functions that can be executed in this contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     // Receives LP Tokens when removing Liquidity
     Receive(Cw20ReceiveMsg),
@@ -275,8 +271,7 @@ pub enum ExecuteMsg {
 
 /// ## Description
 /// This struct describes a CW20 hook message.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum Cw20HookMsg {
     /// Withdrawing liquidity from the pool
     ExitPool {
@@ -287,23 +282,31 @@ pub enum Cw20HookMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+/// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
+    
+
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Config returns controls settings that specified in custom [`ConfigResponse`] struct
+    #[returns[ConfigResponse]]
     Config {},
-    /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
+    /// Return PoolConfig
+    #[returns(PoolConfigResponse)]
     QueryRegistry { pool_type: PoolType },
     /// Returns boolean value indicating if the genarator is disabled or not for the pool
+    #[returns(bool)]
     IsGeneratorDisabled { lp_token_addr: String },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
+    #[returns(PoolInfoResponse)]
     GetPoolById { pool_id: Uint128 },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
+    #[returns(PoolInfoResponse)]
     GetPoolByAddress { pool_addr: String },
 }
 
 /// ## Description -  This struct describes a migration message.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -311,7 +314,7 @@ pub struct MigrateMsg {}
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description -  A custom struct for each query response that returns controls settings of contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     pub owner: Addr,
     pub lp_token_code_id: u64,

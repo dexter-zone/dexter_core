@@ -1,5 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
 
 use cosmwasm_std::{Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
@@ -8,15 +7,14 @@ use cw20::Cw20ReceiveMsg;
 // Copied from Anchor protocol's Staking contract interface here -
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     pub anchor_token: String,
     pub staking_token: String, // lp token of ANC-UST pair contract
     pub distribution_schedule: Vec<(u64, u64, Uint128)>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     Receive(Cw20ReceiveMsg),
     Unbond {
@@ -26,18 +24,16 @@ pub enum ExecuteMsg {
     Withdraw {},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum Cw20HookMsg {
     Bond {},
 }
 
 /// We currently take no arguments for migrations
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum QueryMsg {
     Config {},
     State {
@@ -50,7 +46,7 @@ pub enum QueryMsg {
 }
 
 // We define a custom struct for each query response
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     pub anchor_token: String,
     pub staking_token: String,
@@ -58,7 +54,7 @@ pub struct ConfigResponse {
 }
 
 // We define a custom struct for each query response
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct StateResponse {
     pub last_distributed: u64,
     pub total_bond_amount: Uint128,
@@ -66,7 +62,7 @@ pub struct StateResponse {
 }
 
 // We define a custom struct for each query response
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct StakerInfoResponse {
     pub staker: String,
     pub reward_index: Decimal,

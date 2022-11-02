@@ -21,6 +21,7 @@ schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 dexter = { path = "../../../packages/dexter", default-features = false }
 thiserror = { version = "1.0.20" }
+cosmwasm-schema = "1.1.5"
 
 [dev-dependencies]
 cosmwasm-schema = { version = "1.0.0", default-features = false  }

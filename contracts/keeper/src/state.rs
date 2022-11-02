@@ -1,7 +1,6 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Addr;
 use cw_storage_plus::Item;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 /// ## Description
 /// Stores the contract configuration at the given key
@@ -9,7 +8,7 @@ pub const CONFIG: Item<Config> = Item::new("config");
 
 /// ## Description
 /// This structure stores the main paramters for the Keeper contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     /// The factory contract address
     pub vault_contract: Addr,

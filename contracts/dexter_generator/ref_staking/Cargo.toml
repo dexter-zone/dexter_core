@@ -40,6 +40,7 @@ cw-storage-plus = "0.13.2"
 dexter = { path = "../../../packages/dexter", default-features = false }
 schemars = "0.8.1"
 serde = { version = "1.0.125", default-features = false, features = ["derive"] }
+cosmwasm-schema = "1.1.5"
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"

@@ -1,3 +1,4 @@
+#[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
@@ -30,7 +31,7 @@ use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-vault";
+const CONTRACT_NAME: &str = "crates.io:dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.

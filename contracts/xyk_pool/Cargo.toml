@@ -27,13 +27,14 @@ integer-sqrt = "0.1.5"
 dexter = { path = "../../packages/dexter", default-features = false }
 cw2 = { version = "0.13.2" }
 cw20 = { version = "0.13.2" }
-cosmwasm-std = "1.0"
+cosmwasm-std = "1.1.5"
 cw-storage-plus = {version = "0.13.2"}
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
 serde-json-wasm = "0.4.1"
+cosmwasm-schema = "1.1.5"
 
 [dev-dependencies]
 cw-multi-test = "0.13.2"

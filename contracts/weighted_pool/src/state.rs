@@ -1,7 +1,6 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Decimal, DepsMut, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::Config;
@@ -24,7 +23,7 @@ pub const WEIGHTS: Map<String, Decimal> = Map::new("weights");
 
 /// ## Description
 /// This struct describes the main math config of pool.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MathConfig {
     /// Exit fee in % charged when liquidity is withdrawn from the pool
     pub exit_fee: Option<Decimal>,
@@ -34,7 +33,7 @@ pub struct MathConfig {
 
 /// ## Description
 /// This struct which stores the TWAP calcs related info for the pool
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Twap {
     /// The vector contains cumulative prices for each pair of assets in the pool
     pub cumulative_prices: Vec<(AssetInfo, AssetInfo, Uint128)>,
@@ -89,7 +88,7 @@ pub(crate) fn get_weight(storage: &dyn Storage, asset_info: &AssetInfo) -> StdRe
 }
 
 /// ## Description - This struct describes a asset (native or CW20) and its normalized weight
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct WeightedAsset {
     /// Information about an asset stored in a [`Asset`] struct
     pub asset: Asset,

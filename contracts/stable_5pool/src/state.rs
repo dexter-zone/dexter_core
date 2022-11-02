@@ -1,8 +1,6 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use dexter::asset::AssetInfo;
 use dexter::pool::Config;
 
@@ -18,7 +16,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 
 /// ## Description
 /// This struct describes the main math config of pool.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MathConfig {
     // This is the current amplification used in the pool
     pub init_amp: u64,
@@ -34,7 +32,7 @@ pub struct MathConfig {
 
 /// ## Description
 /// This struct which stores the TWAP calcs related info for the pool
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Twap {
     /// The vector contains cumulative prices for each pair of assets in the pool
     pub cumulative_prices: Vec<(AssetInfo, AssetInfo, Uint128)>,
@@ -42,16 +40,14 @@ pub struct Twap {
 }
 
 /// This struct holds stableswap pool parameters.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub struct StablePoolParams {
     /// The current stableswap pool amplification
     pub amp: u64,
 }
 
 /// This enum stores the options available to start and stop changing a stableswap pool's amplification.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum StablePoolUpdateParams {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},

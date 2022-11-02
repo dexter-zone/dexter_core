@@ -1,22 +1,20 @@
 use crate::asset::{Asset, AssetInfo};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Addr;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This struct describes the Msg used to instantiate in this contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// The vault contract address
     pub vault_contract: String,
 }
 
 /// This struct describes the functions that can be executed in this contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Updates general settings
     UpdateConfig {
@@ -28,8 +26,7 @@ pub enum ExecuteMsg {
 }
 
 /// This struct describes the query functions available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum QueryMsg {
     /// Returns information about the Keeper configs that contains in the [`ConfigResponse`]
     Config {},
@@ -39,7 +36,7 @@ pub enum QueryMsg {
 
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -47,7 +44,7 @@ pub struct MigrateMsg {}
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// A custom struct that holds contract parameters and is used to retrieve them.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     /// The DEX token contract address
     pub dex_token_contract: Option<Addr>,
@@ -58,7 +55,7 @@ pub struct ConfigResponse {
 }
 
 /// A custom struct used to return multiple asset balances.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct BalancesResponse {
     pub balances: Vec<Asset>,
 }
