@@ -220,11 +220,14 @@ pub fn execute_update_pool_liquidity(
 
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
-            
+
     let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
-        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute(
+            "pool_assets",
+            serde_json_wasm::to_string(&config.assets).unwrap(),
+        )
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
@@ -413,7 +416,18 @@ pub fn query_on_join_pool(
             .cmp(&b.info.to_string().to_lowercase())
     });
 
-    // Get Asset  stored in state for each asset in a HashMap
+    // Check asset definations and make sure no asset is repeated
+    let mut previous_asset: String = "".to_string();
+    for asset in act_assets_in.iter() {
+        if previous_asset == asset.info.as_string() {
+            return Ok(return_join_failure(
+                "Repeated assets in asset_in".to_string(),
+            ));
+        }
+        previous_asset = asset.info.as_string();
+    }
+
+    // Get Asset stored in state for each asset in a HashMap
     let token_pools: HashMap<_, _> = config
         .assets
         .clone()
@@ -422,7 +436,6 @@ pub fn query_on_join_pool(
         .collect();
 
     let mut non_zero_flag = false;
-
     // get asset info for each asset in the list provided by the user to its pool mapping
     let mut assets_collection = act_assets_in
         .clone()
@@ -435,7 +448,6 @@ pub fn query_on_join_pool(
 
             // Get appropriate pool
             let token_pool = token_pools.get(&asset.info).copied().unwrap();
-
             Ok((asset, token_pool))
         })
         .collect::<Result<Vec<_>, ContractError>>()
@@ -451,6 +463,10 @@ pub fn query_on_join_pool(
                 },
                 *pool_amount,
             ));
+            act_assets_in.push(Asset {
+                amount: Uint128::zero(),
+                info: pool_info.clone(),
+            });
         }
     });
 
@@ -525,11 +541,13 @@ pub fn query_on_join_pool(
 
         for i in 0..n_coins as usize {
             let ideal_balance = deposit_d.checked_multiply_ratio(old_balances[i], init_d)?;
+
             let difference = if ideal_balance > new_balances[i] {
                 ideal_balance - new_balances[i]
             } else {
                 new_balances[i] - ideal_balance
             };
+
             // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
             new_balances[i] -= fee.checked_mul(difference)?;
         }
@@ -540,8 +558,10 @@ pub fn query_on_join_pool(
             math_config.greatest_precision,
         )?;
 
-        Decimal256::with_precision(total_share, math_config.greatest_precision)?
-            .checked_multiply_ratio(after_fee_d.saturating_sub(init_d), init_d)?
+        let tokens_to_mint =
+            Decimal256::with_precision(total_share, math_config.greatest_precision)?
+                .checked_multiply_ratio(after_fee_d.saturating_sub(init_d), init_d)?;
+        tokens_to_mint
     };
 
     let mint_amount = mint_amount.to_uint128_with_precision(math_config.greatest_precision)?;
@@ -589,8 +609,22 @@ pub fn query_on_exit_pool(
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
+    // Check asset definations and make sure no asset is repeated
+    if assets_out.clone().is_some() {
+        let assets_out_ = assets_out.clone().unwrap();
+        let mut previous_asset: String = "".to_string();
+        for asset in assets_out_.clone().iter() {
+            if previous_asset == asset.info.as_string() {
+                return Ok(return_exit_failure(
+                    "Repeated assets in asset_in".to_string(),
+                ));
+            }
+            previous_asset = asset.info.as_string();
+        }
+    }
+
     let act_burn_amount;
-    let refund_assets;
+    let mut refund_assets;
 
     let pools = config.assets.clone();
     // If no assets are provided, we just burn the LP tokens and return the underlying assets based on their share in the pool
@@ -610,6 +644,31 @@ pub fn query_on_exit_pool(
         .unwrap_or_else(|_| 0u128.into());
         refund_assets = assets_out.unwrap();
     }
+
+    // If some assets are omitted then add them explicitly with 0 deposit
+    config.assets.iter().for_each(|pool_info| {
+        if !refund_assets
+            .iter()
+            .any(|asset| asset.info.eq(&pool_info.info))
+        {
+            refund_assets.push(Asset {
+                amount: Uint128::zero(),
+                info: pool_info.info.clone(),
+            });
+        }
+    });
+
+    if act_burn_amount.is_zero() {
+        return Ok(return_exit_failure("Burn amount is zero".to_string()));
+    }
+
+    // Sort the refund assets
+    refund_assets.sort_by(|a, b| {
+        a.info
+            .to_string()
+            .to_lowercase()
+            .cmp(&b.info.to_string().to_lowercase())
+    });
 
     Ok(AfterExitResponse {
         assets_out: refund_assets,
@@ -713,6 +772,7 @@ pub fn query_on_swap(
                 info: offer_asset_info.clone(),
                 amount,
             };
+
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount) = compute_swap(
                 deps.storage,
@@ -724,6 +784,7 @@ pub fn query_on_swap(
                 &pools,
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
@@ -737,6 +798,7 @@ pub fn query_on_swap(
                 info: ask_asset_info.clone(),
                 amount,
             };
+
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
             (calc_amount, spread_amount, total_fee) = compute_offer_amount(
                 deps.storage,
@@ -761,6 +823,7 @@ pub fn query_on_swap(
         }
     }
 
+    // Check if the calculated amount is valid
     if calc_amount.is_zero() {
         return Ok(return_swap_failure(
             "Computation error - calc_amount is zero".to_string(),
@@ -1059,7 +1122,7 @@ fn imbalanced_withdraw(
     // Invariant (D) after assets withdrawn
     let mut new_balances = assets_collection
         .iter()
-        .map(|(withdraw, pool)| Ok(pool - withdraw.amount))
+        .map(|(withdraw, pool)| Ok(pool.checked_sub(withdraw.amount)?))
         .collect::<StdResult<Vec<_>>>()?;
     let withdraw_d = compute_d(
         Uint64::from(amp),
@@ -1073,6 +1136,7 @@ fn imbalanced_withdraw(
 
     let fee = Decimal256::new(fee.atomics().into());
 
+    // Fee is applied
     for i in 0..n_coins as usize {
         let ideal_balance = withdraw_d.checked_multiply_ratio(old_balances[i], init_d)?;
         let difference = if ideal_balance > new_balances[i] {
@@ -1083,6 +1147,7 @@ fn imbalanced_withdraw(
         new_balances[i] -= fee.checked_mul(difference)?;
     }
 
+    // New invariant (D) after fee applied
     let after_fee_d = compute_d(
         Uint64::from(amp),
         &new_balances,

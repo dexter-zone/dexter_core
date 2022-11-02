@@ -5,7 +5,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-
 /// This structure stores the core parameters for the Generator contract.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
@@ -269,7 +268,7 @@ pub struct PoolInfo {
     /// for calculation of new proxy rewards
     pub proxy_reward_balance_before_update: Uint128,
     /// the orphan proxy rewards which are left by emergency withdrawals. Vector of pools (reward_proxy, index).
-    pub orphan_proxy_rewards: Uint128
+    pub orphan_proxy_rewards: Uint128,
 }
 
 /// This structure stores the outstanding amount of token rewards that a user accrued.
@@ -295,7 +294,7 @@ pub struct UnbondingInfo {
     /// The amount of LP tokens being unbonded
     pub amount: Uint128,
     /// Timestamp at which the unbonding period will end adn the tokens become claimable by the user
-    pub unlock_timstamp: u64,
+    pub unlock_timestamp: u64,
 }
 
 // ----------------x----------------x--------------x--------------
@@ -339,7 +338,7 @@ pub struct ConfigResponse {
     pub vesting_contract: Option<Addr>,
     /// The list of active pools with allocation points
     pub active_pools: Vec<(Addr, Uint128)>,
-    /// Unbonding period 
+    /// Unbonding period
     pub unbonding_period: u64,
 }
 
@@ -378,5 +377,5 @@ pub struct RewardInfoResponse {
     /// The address of the base reward token
     pub base_reward_token: Option<Addr>,
     /// The address of the 3rd party reward token
-    pub proxy_reward_token: Option<Addr>
+    pub proxy_reward_token: Option<Addr>,
 }

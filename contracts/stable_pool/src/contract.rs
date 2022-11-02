@@ -207,7 +207,10 @@ pub fn execute_update_pool_liquidity(
     let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
-        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute(
+            "pool_assets",
+            serde_json_wasm::to_string(&config.assets).unwrap(),
+        )
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
@@ -388,6 +391,13 @@ pub fn query_on_join_pool(
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
+    // Check if both assets are provided
+    if assets_in.clone().unwrap().len() != config.assets.len() {
+        return Ok(return_join_failure(
+            "Invalid number of assets provided".to_string(),
+        ));
+    }
+
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
     act_assets_in.sort_by(|a, b| {
@@ -424,6 +434,7 @@ pub fn query_on_join_pool(
     }
 
     // Calculate the number of LP shares to be minted
+    // if the total share is 0, then the number of shares to be minted is sqrt(deposit_amount_0 * deposit_amount_1)
     let new_shares = if total_share.is_zero() {
         // LP token precision
         let liquidity_token_precision = query_token_precision(
@@ -455,6 +466,7 @@ pub fn query_on_join_pool(
             token_precision_0,
             greater_precision,
         )?;
+
         let mut pool_amount_1 = adjust_precision(
             config.assets[1].amount,
             token_precision_1,
@@ -603,6 +615,7 @@ pub fn query_on_swap(
                 compute_current_amp(&math_config, &env)?,
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+
             // Re-adjust for their token precisions
             calc_amount = adjust_precision(calc_amount, greater_precision, ask_precision)?;
             spread_amount = adjust_precision(spread_amount, greater_precision, ask_precision)?;
@@ -630,6 +643,7 @@ pub fn query_on_swap(
                 compute_current_amp(&math_config, &env)?,
             )
             .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+
             // Calculate the protocol and dev fee
             offer_asset = Asset {
                 info: offer_asset_info.clone(),

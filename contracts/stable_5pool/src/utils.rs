@@ -36,7 +36,7 @@ pub(crate) fn compute_swap(
     let token_precision = get_precision(storage, &ask_pool.info)?;
 
     let new_ask_pool = calc_y(
-        &offer_asset.info,
+        &offer_asset,
         &ask_pool.info,
         offer_pool.amount + offer_asset.amount,
         pools,
@@ -45,6 +45,7 @@ pub(crate) fn compute_swap(
     )?;
 
     let return_amount = ask_pool.amount.to_uint128_with_precision(token_precision)? - new_ask_pool;
+
     let offer_asset_amount = offer_asset
         .amount
         .to_uint128_with_precision(token_precision)?;
@@ -80,6 +81,7 @@ pub(crate) fn compute_offer_amount(
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;
 
+    // before_commission = ask_amount * 1/(1-commission_rate)
     let before_commission = Decimal256::with_precision(
         (Decimal::one() - commission_rate_decimals)
             .inv()
@@ -88,8 +90,8 @@ pub(crate) fn compute_offer_amount(
         ask_precision as u32,
     )?;
 
-    let offer_amount = calc_y(
-        &ask_pool.info,
+    let new_offer_pool = calc_y(
+        &ask_pool,
         &offer_pool.info,
         ask_pool.amount - before_commission,
         &pools,
@@ -97,7 +99,8 @@ pub(crate) fn compute_offer_amount(
         greatest_precision,
     )?;
 
-    let offer_amount = offer_amount.checked_sub(
+    // offer_amount = new_offer_pool - offer_pool
+    let offer_amount = new_offer_pool.checked_sub(
         offer_pool
             .amount
             .to_uint128_with_precision(greatest_precision)?,
@@ -111,6 +114,7 @@ pub(crate) fn compute_offer_amount(
 
     let commission_amount = commission_rate_decimals
         .checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
+
     Ok((offer_amount, spread_amount, commission_amount))
 }
 

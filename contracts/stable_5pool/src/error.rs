@@ -17,6 +17,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("Repeated assets in asset infos")]
+    RepeatedAssets {},
+
     #[error(
         "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
     )]

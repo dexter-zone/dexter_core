@@ -153,13 +153,7 @@ pub fn execute(
             dex_token,
             vesting_contract,
             unbonding_period,
-        } => execute_update_config(
-            deps,
-            info,
-            dex_token,
-            vesting_contract,
-            unbonding_period,
-        ),
+        } => execute_update_config(deps, info, dex_token, vesting_contract, unbonding_period),
         ExecuteMsg::SetupPools { pools } => execute_setup_pools(deps, env, info, pools),
         ExecuteMsg::SetupProxyForPool {
             lp_token,
@@ -310,8 +304,6 @@ fn receive_cw20(
                 amount,
             },
         ),
-
-
     }
 }
 
@@ -688,7 +680,6 @@ fn update_rewards_and_execute(
     update_single_pool: Option<Addr>,
     on_reply: ExecuteOnReply,
 ) -> Result<Response, ContractError> {
-
     // Store temporary user action in the storage
     TMP_USER_ACTION.update(deps.storage, |v| {
         if v.is_some() {
@@ -873,7 +864,7 @@ pub fn unstake(
     }
 
     if amount.is_zero() {
-        return  Err(ContractError::ZeroAmount {});
+        return Err(ContractError::ZeroAmount {});
     }
 
     let cfg = CONFIG.load(deps.storage)?;
@@ -904,7 +895,7 @@ pub fn unstake(
     if amount > Uint128::zero() {
         let unbonding_period = UnbondingInfo {
             amount,
-            unlock_timstamp: env.block.time.seconds() + cfg.unbonding_period,
+            unlock_timestamp: env.block.time.seconds() + cfg.unbonding_period,
         };
         // Save the unbonding period
         user.unbonding_periods.push(unbonding_period);
@@ -982,7 +973,7 @@ pub fn unlock(
     let mut rem_unbonding_sessions: Vec<UnbondingInfo> = vec![];
     for session in unbonding_sessions.iter() {
         // Check if session can be unlocked
-        if session.unlock_timstamp <= env.block.time.seconds() {
+        if session.unlock_timestamp <= env.block.time.seconds() {
             // ExecuteMsg to send LP Tokens to the user
             unlock_msgs.push(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
@@ -996,7 +987,7 @@ pub fn unlock(
         } else {
             rem_unbonding_sessions.push(UnbondingInfo {
                 amount: session.amount,
-                unlock_timstamp: session.unlock_timstamp,
+                unlock_timestamp: session.unlock_timestamp,
             });
         }
     }
@@ -1063,7 +1054,7 @@ pub fn emergency_unstake(
     // Create unbonding period
     let unbonding_period = UnbondingInfo {
         amount: user.amount,
-        unlock_timstamp: env.block.time.seconds() + cfg.unbonding_period,
+        unlock_timestamp: env.block.time.seconds() + cfg.unbonding_period,
     };
 
     // Save the unbonding period
@@ -1268,7 +1259,6 @@ pub fn pending_token(
     lp_token: String,
     user: String,
 ) -> Result<PendingTokenResponse, ContractError> {
-
     let cfg = CONFIG.load(deps.storage)?;
 
     let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
@@ -1462,7 +1452,7 @@ fn query_pool_info(
         proxy_reward_balance_before_update: pool.proxy_reward_balance_before_update,
         orphan_proxy_rewards: pool.orphan_proxy_rewards,
         lp_supply,
-        global_reward_index: pool.accumulated_rewards_per_share
+        global_reward_index: pool.accumulated_rewards_per_share,
     })
 }
 
@@ -1673,7 +1663,6 @@ pub fn accumulate_rewards_per_share(
     cfg: &Config,
     deposited: Option<Uint128>,
 ) -> StdResult<()> {
-
     let lp_supply: Uint128;
 
     // Update reward share for proxy rewards : In case proxy is set and LP tokens are staked
@@ -1687,7 +1676,9 @@ pub fn accumulate_rewards_per_share(
                 let token_rewards =
                     reward_amount.checked_sub(pool.proxy_reward_balance_before_update)?;
                 let share = Decimal::from_ratio(token_rewards, lp_supply);
-                pool.accumulated_proxy_rewards_per_share = pool.accumulated_proxy_rewards_per_share.checked_add(share)?;
+                pool.accumulated_proxy_rewards_per_share = pool
+                    .accumulated_proxy_rewards_per_share
+                    .checked_add(share)?;
                 pool.proxy_reward_balance_before_update = reward_amount;
             }
         }
@@ -1741,7 +1732,6 @@ pub fn send_pending_rewards(
     user: &UserInfo,
     to: &Addr,
 ) -> Result<Vec<WasmMsg>, ContractError> {
-
     if user.amount.is_zero() {
         return Ok(vec![]);
     }
@@ -1768,7 +1758,6 @@ pub fn send_pending_rewards(
 
     // Calculate pending proxy rewards
     if let Some(proxy) = &pool.reward_proxy {
-
         let pending_proxy_rewards = pool
             .accumulated_proxy_rewards_per_share
             .checked_mul_uint128(user.amount)?

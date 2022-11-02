@@ -38,6 +38,7 @@ serde-json-wasm = "0.4.1"
 
 [dev-dependencies]
 anyhow = "1.0"
+sim = { git = "https://github.com/dexter-zone/stableswap_simulations.git", rev = "d40f0e77f6b21cccdd8415f6f36db31f76be2f3f", package = "sim" }
 cosmwasm-schema = "1.0.0"
 lp-token = {path = "../lp_token"}
 cw-multi-test = "0.13.2"
