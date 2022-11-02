@@ -11,7 +11,7 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, WeightedParams,
+    Trade,
 };
 use dexter::querier::query_supply;
 use dexter::vault::SwapType;
@@ -20,7 +20,7 @@ use crate::error::ContractError;
 use crate::math::get_normalized_weight;
 use crate::state::{
     get_precision, get_weight, store_precisions, store_weights, MathConfig, Twap, WeightedAsset,
-    CONFIG, MATHCONFIG, TWAPINFO,
+    WeightedParams, CONFIG, MATHCONFIG, TWAPINFO,
 };
 use crate::utils::{
     accumulate_prices, calc_single_asset_join, compute_offer_amount, compute_swap,
@@ -427,6 +427,7 @@ pub fn query_on_join_pool(
     if assets_in.is_none() {
         return Ok(return_join_failure("No assets provided".to_string()));
     }
+
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
     act_assets_in.sort_by(|a, b| {
@@ -466,6 +467,9 @@ pub fn query_on_join_pool(
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
 
+    // Vector which will store fee charged info
+    let mut fee_vec: Vec<Asset> = vec![];
+
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
         // If the pool is empty, then return a `Failure` response
@@ -475,19 +479,28 @@ pub fn query_on_join_pool(
             ));
         }
 
+        // Get the asset to be provided
         let in_asset = act_assets_in[0].to_owned();
         let weighted_in_asset = pool_assets_weighted
             .iter()
             .find(|asset| asset.asset.info.equal(&in_asset.info))
             .unwrap();
 
-        let num_shares: Uint128 = calc_single_asset_join(
+        // Get number of LP tokens to be minted and fee to be charged for the single-asset-join
+        let num_shares: Uint128;
+        let fee_charged: Uint128;
+        (num_shares, fee_charged) = calc_single_asset_join(
             deps,
             &in_asset,
             config.fee_info.total_fee_bps,
             weighted_in_asset,
             total_share,
         )?;
+
+        fee_vec.push(Asset {
+            amount: fee_charged,
+            info: in_asset.info,
+        });
 
         // Add assets which are omitted with 0 deposit
         pool_assets_weighted.iter().for_each(|pool_asset| {
@@ -516,7 +529,7 @@ pub fn query_on_join_pool(
                 provided_assets: act_assets_in,
                 new_shares: num_shares,
                 response: dexter::pool::ResponseType::Success {},
-                fee: None,
+                fee: Some(fee_vec),
             });
         }
     }
@@ -568,25 +581,38 @@ pub fn query_on_join_pool(
         }
     }
 
+    // Update the pool liquidity for the tokens that have already joined the pool
     update_pool_state_for_joins(&tokens_joined, &mut pool_assets_weighted);
     let mut new_total_shares = total_share.checked_add(num_shares)?;
 
     // 5) Now single asset join each remaining coin.
     for single_asset in remaining_tokens_in.iter() {
+        // Get liquidity / weight of the asset
         let weighted_in_asset = pool_assets_weighted
             .iter()
             .find(|asset| asset.asset.info.equal(&single_asset.info))
             .unwrap();
-        let new_num_shares_from_single: Uint128 = calc_single_asset_join(
+
+        // Get number of LP tokens to be minted and fee to be charged for the single-asset-join
+        let new_num_shares_from_single: Uint128;
+        let fee_charged: Uint128;
+        (new_num_shares_from_single, fee_charged) = calc_single_asset_join(
             deps,
             single_asset,
             config.fee_info.total_fee_bps,
             weighted_in_asset,
             new_total_shares,
         )?;
-        // update total shares
+
+        fee_vec.push(Asset {
+            amount: fee_charged,
+            info: single_asset.info.clone(),
+        });
+
+        // update current total LP supply for next iteration
         new_total_shares = new_total_shares.checked_add(new_num_shares_from_single)?;
-        // add to lp-tokens to mint
+
+        // add to number of LP tokens to be minted
         num_shares += new_num_shares_from_single;
     }
 
@@ -603,9 +629,8 @@ pub fn query_on_join_pool(
         provided_assets: tokens_joined,
         new_shares: num_shares,
         response: dexter::pool::ResponseType::Success {},
-        fee: None,
+        fee: Some(fee_vec),
     };
-
     Ok(res)
 }
 

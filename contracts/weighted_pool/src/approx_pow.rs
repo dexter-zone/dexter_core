@@ -101,7 +101,10 @@ pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<
         big_k = Decimal::from_atomics(Uint128::from(i), 0)
             .map_err(|e| StdError::generic_err(e.to_string()))?;
 
-        term = term.checked_mul(c)?.checked_mul(x)?.checked_div(big_k)
+        term = term
+            .checked_mul(c)?
+            .checked_mul(x)?
+            .checked_div(big_k)
             .map_err(|e| StdError::generic_err(e.to_string()))?;
 
         if term.is_zero() {
@@ -118,7 +121,7 @@ pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<
         if negative {
             sum = sum.checked_sub(term)?;
         } else {
-            sum = sum.checked_add(term)? ;
+            sum = sum.checked_add(term)?;
         }
         i += 1;
     }
