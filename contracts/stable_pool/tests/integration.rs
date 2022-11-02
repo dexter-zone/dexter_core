@@ -179,10 +179,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(PoolType::Stable2Pool {}, pool_res.pool_type);
-    assert_eq!(
-        Some(Addr::unchecked("dev".to_string())),
-        pool_res.developer_addr
-    );
 
     let assets = vec![
         Asset {
@@ -649,7 +645,6 @@ fn test_query_on_join_pool() {
     );
 
     //// -----x----- Check #2.2 :: Success ::: Successfully provide liquidity and mint LP tokens -----x----- ////
-    let current_block = app.block_info();
     app.execute_contract(
         alice_address.clone(),
         token_instance.clone(),
