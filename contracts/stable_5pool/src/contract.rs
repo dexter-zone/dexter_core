@@ -510,7 +510,7 @@ pub fn query_on_join_pool(
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
 
     // Compute amp parameter
-    let amp = compute_current_amp(&math_config, &env)?;
+    let amp = compute_current_amp(&math_config, &env).unwrap_or_else(|_| 0u64.into());
 
     // If AMP value is invalid, then return a `Failure` response
     if amp == 0u64 {
@@ -1138,7 +1138,7 @@ fn imbalanced_withdraw(
 
     let n_coins = config.assets.len() as u8;
 
-    let amp = compute_current_amp(math_config, env)?;
+    let amp = compute_current_amp(math_config, env).unwrap_or_else(|_| 0u64.into());
 
     // Initial invariant (D)
     let old_balances = assets_collection
