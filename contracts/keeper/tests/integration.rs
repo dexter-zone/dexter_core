@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Coin, Decimal, Uint128};
+use cosmwasm_std::{Addr, Coin, Uint128};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use std::vec;
 

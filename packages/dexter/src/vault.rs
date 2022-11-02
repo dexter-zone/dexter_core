@@ -195,8 +195,6 @@ pub struct PoolInfo {
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    /// Current LP token total supply
-    pub lp_token_supply: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
