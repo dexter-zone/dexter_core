@@ -207,10 +207,6 @@ fn instantiate_contracts_instance(
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
-    assert_eq!(
-        Some(Addr::unchecked("dev".to_string())),
-        pool_res.developer_addr
-    );
 
     let assets = vec![
         Asset {
@@ -707,7 +703,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, join_pool_query_res.fee);
+    assert_eq!(Some(vec![]), join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(Uint128::from(3000u128), join_pool_query_res.new_shares);
 
@@ -1254,45 +1250,14 @@ fn test_query_on_join_pool() {
     });
 
     // -------x---- Stable5Pool -::- QueryOnJoinPool ----x---------
-    // assets_in: Some([Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1500000000) }])
-    // assets_in sorted
-    // act_assets_in: [Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1500000000) }]
-    // Asset pools stored in a hashmap
-    // asset:"contract2" Provided amount:"1500000000" Pool Liquidity:"1500001000"
-    // amp: 1000
-    // n_coins: 3
-    // compute_d() Function
-    // init_d (Initial invariant (D)): Decimal256(Uint256(3696237765829431864057))
-    // compute_d() Function
-    // deposit_d (Invariant (D) after deposit added): Decimal256(Uint256(5134725522424782528275))
-    // current total LP token supply (Total share of LP tokens minted by the pool): Uint128(3685350075)
-    // fee (total_fee_bps * N_COINS / (4 * (N_COINS - 1))): Decimal(Uint128(11250000000000000))
-    // /nStart loop for fee stuff
-    // deposit_d:5134.725522424782528275, old_balances[i]:1500.001, init_d:3696.237765829431864057
-    // ideal_balance (ideal_balance = deposit_d * old_balances[i] / init_d): "2083.76568454717753881"
-    // ideal_balance:2083.76568454717753881 ,
-    // new_balances:3000.001,
-    // difference:916.23531545282246119
-    // new_balances[i] (new_balances[i] -= fee * difference): "2989.693352701155747312"
-    // deposit_d:5134.725522424782528275, old_balances[i]:1110.001111, init_d:3696.237765829431864057
-    // ideal_balance (ideal_balance = deposit_d * old_balances[i] / init_d): "1541.987121949280434573"
-    // ideal_balance:1541.987121949280434573 ,
-    // new_balances:1110.001111,
-    // difference:431.986010949280434573
-    // new_balances[i] (new_balances[i] -= fee * difference): "1105.141268376820595112"
-    // deposit_d:5134.725522424782528275, old_balances[i]:1090.001109, init_d:3696.237765829431864057
-    // ideal_balance (ideal_balance = deposit_d * old_balances[i] / init_d): "1514.203595232648301702"
-    // ideal_balance:1514.203595232648301702 ,
-    // new_balances:1090.001109,
-    // difference:424.202486232648301702
-    // new_balances[i] (new_balances[i] -= fee * difference): "1085.228831029882706606"
-    // End loop for fee stuff
-    // after_fee_d (Invariant (D) after fee): Decimal256(Uint256(5114894477901800065220))
-    // total_share:3685350075, init_d:3696.237765829431864057, after_fee_d:5114.89447790180006522
-    // tokens_to_mint (Total share of LP tokens minted by the pool): Decimal256(Uint256(1414477896570580195721))
-    // mint_amount (adj): Uint128(1414477896)
-    // mint_amount (adj): Uint128(1414477896)
-    // provided_assets: [Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1500000000) }, Asset { info: Token { contract_addr: Addr("contract1") }, amount: Uint128(0) }, Asset { info: AssetInfo::NativeToken { denom: "axlusd".to_string() }, amount: Uint128(0) }]
+    // --- Stable5Pool:OnJoinPool Query : Begin ---
+    // init_d: 3691.212147126202104076
+    // deposit_d: 5129.699875790924368109
+    // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
+    // For axlusd, fee is charged on 424.266112539587866702 amount, which is difference b/w 1512.948481539587866702 (ideal_balance) and 1088.682369 (new_balance). Fee charged:4.7729937660703635
+    // For contract1, fee is charged on 432.109909885426293184 amount, which is difference b/w 1540.919749885426293184 (ideal_balance) and 1108.80984 (new_balance). Fee charged:4.861236486211045798
+    // For contract2, fee is charged on 916.428129128471638874 amount, which is difference b/w 2081.038644871528361126 (ideal_balance) and 2997.466774 (new_balance). Fee charged:10.309816452695305937
+    // after_fee_d (Invariant computed for - total tokens provided as liquidity - total fee): 5109.864501140504492175
     let join_pool_query_res: AfterJoinResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1306,7 +1271,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1414477896u128),
+        Uint128::from(1416399369u128),
         join_pool_query_res.new_shares
     );
 }
@@ -1499,7 +1464,7 @@ fn test_on_exit_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, exit_pool_query_res.fee);
+    assert_eq!(Some(vec![]), exit_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(Uint128::from(5000u128), exit_pool_query_res.burn_shares);
     assert_eq!(
@@ -1732,7 +1697,15 @@ fn test_on_exit_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, exit_pool_query_res.fee);
+    assert_eq!(
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string()
+            },
+            amount: Uint128::from(3436632u128)
+        },
+        exit_pool_query_res.fee.clone().unwrap()[0]
+    );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
         Uint128::from(479662098u128),
@@ -1828,7 +1801,15 @@ fn test_on_exit_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, exit_pool_query_res.fee);
+    assert_eq!(
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string()
+            },
+            amount: Uint128::from(1130207u128)
+        },
+        exit_pool_query_res.fee.clone().unwrap()[0]
+    );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
         Uint128::from(1734283091u128),
@@ -1926,7 +1907,15 @@ fn test_on_exit_pool() {
             },
         )
         .unwrap();
-    assert_eq!(None, exit_pool_query_res.fee);
+    assert_eq!(
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "axlusd".to_string()
+            },
+            amount: Uint128::from(2105900u128)
+        },
+        exit_pool_query_res.fee.clone().unwrap()[0]
+    );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
         Uint128::from(1976713421u128),

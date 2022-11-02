@@ -3,6 +3,7 @@ use cosmwasm_std::{Decimal, Decimal256, Deps, Env, Fraction, StdResult, Storage,
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
 use dexter::helper::{adjust_precision, select_pools};
 use dexter::pool::Config;
+use dexter::vault::FEE_PRECISION;
 use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;
@@ -76,7 +77,7 @@ pub(crate) fn compute_offer_amount(
     commission_rate: u16,
     greatest_precision: u8,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
-    let commission_rate_decimals = Decimal::from_ratio(commission_rate, 10000u16);
+    let commission_rate_decimals = Decimal::from_ratio(commission_rate, FEE_PRECISION);
 
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;

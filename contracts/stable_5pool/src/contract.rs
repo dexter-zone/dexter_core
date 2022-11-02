@@ -4,6 +4,8 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::vec;
@@ -26,7 +28,7 @@ use dexter::pool::{
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
 use dexter::querier::{query_supply, query_vault_config};
-use dexter::vault::SwapType;
+use dexter::vault::{SwapType, FEE_PRECISION};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
@@ -409,23 +411,6 @@ pub fn query_on_join_pool(
 
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
-    act_assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
-
-    // Check asset definations and make sure no asset is repeated
-    let mut previous_asset: String = "".to_string();
-    for asset in act_assets_in.iter() {
-        if previous_asset == asset.info.as_string() {
-            return Ok(return_join_failure(
-                "Repeated assets in asset_in".to_string(),
-            ));
-        }
-        previous_asset = asset.info.as_string();
-    }
 
     // Get Asset stored in state for each asset in a HashMap
     let token_pools: HashMap<_, _> = config
@@ -469,6 +454,31 @@ pub fn query_on_join_pool(
             });
         }
     });
+
+    // Sort assets and assets_collection
+    act_assets_in.sort_by(|a, b| {
+        a.info
+            .to_string()
+            .to_lowercase()
+            .cmp(&b.info.to_string().to_lowercase())
+    });
+    assets_collection.sort_by(|a, b| {
+        a.0.info
+            .to_string()
+            .to_lowercase()
+            .cmp(&b.0.info.to_string().to_lowercase())
+    });
+
+    // Check asset definations and make sure no asset is repeated
+    let mut previous_asset: String = "".to_string();
+    for asset in act_assets_in.iter() {
+        if previous_asset == asset.info.as_string() {
+            return Ok(return_join_failure(
+                "Repeated assets in asset_in".to_string(),
+            ));
+        }
+        previous_asset = asset.info.as_string();
+    }
 
     // If there's no non-zero assets in the list provided by the user, then return a `Failure` response
     if !non_zero_flag {
@@ -526,6 +536,9 @@ pub fn query_on_join_pool(
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
 
+    // Tokens to be charged as Fee
+    let mut fee_tokens: Vec<Asset> = vec![];
+
     // Calculate the number of LP shares to be minted
     let mint_amount = if total_share.is_zero() {
         deposit_d
@@ -540,6 +553,8 @@ pub fn query_on_join_pool(
         let fee = Decimal256::new(fee.atomics().into());
 
         for i in 0..n_coins as usize {
+            // Asset Info for token i
+            let asset_info = assets_collection[i].0.info.clone();
             let ideal_balance = deposit_d.checked_multiply_ratio(old_balances[i], init_d)?;
 
             let difference = if ideal_balance > new_balances[i] {
@@ -549,7 +564,13 @@ pub fn query_on_join_pool(
             };
 
             // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
-            new_balances[i] -= fee.checked_mul(difference)?;
+            let fee_charged = fee.checked_mul(difference)?;
+            fee_tokens.push(Asset {
+                amount: fee_charged
+                    .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
+                info: asset_info.clone(),
+            });
+            new_balances[i] -= fee_charged;
         }
 
         let after_fee_d = compute_d(
@@ -575,7 +596,7 @@ pub fn query_on_join_pool(
         provided_assets: act_assets_in,
         new_shares: mint_amount,
         response: dexter::pool::ResponseType::Success {},
-        fee: None,
+        fee: Some(fee_tokens),
     };
 
     Ok(res)
@@ -624,6 +645,7 @@ pub fn query_on_exit_pool(
     }
 
     let act_burn_amount;
+    let mut fees: Vec<Asset> = vec![];
     let mut refund_assets;
 
     let pools = config.assets.clone();
@@ -633,7 +655,7 @@ pub fn query_on_exit_pool(
         refund_assets = get_share_in_assets(pools.clone(), burn_amount.unwrap(), total_share);
     } else {
         // Imbalanced withdraw
-        act_burn_amount = imbalanced_withdraw(
+        let imb_wd_res: ImbalancedWithdrawResponse = imbalanced_withdraw(
             deps,
             &env,
             &config,
@@ -641,7 +663,12 @@ pub fn query_on_exit_pool(
             burn_amount.unwrap(),
             &assets_out.clone().unwrap(),
         )
-        .unwrap_or_else(|_| 0u128.into());
+        .unwrap_or_else(|_| ImbalancedWithdrawResponse {
+            burn_amount: Uint128::zero(),
+            fee: vec![],
+        });
+        act_burn_amount = imb_wd_res.burn_amount;
+        fees = imb_wd_res.fee;
         refund_assets = assets_out.unwrap();
     }
 
@@ -674,7 +701,7 @@ pub fn query_on_exit_pool(
         assets_out: refund_assets,
         burn_shares: act_burn_amount,
         response: dexter::pool::ResponseType::Success {},
-        fee: None,
+        fee: Some(fees),
     })
 }
 
@@ -688,8 +715,6 @@ pub fn query_on_exit_pool(
 ///  offer_asset_info - Of type [`AssetInfo`] which is the asset info of the asset to be traded in the offer side of the trade
 /// ask_asset_info - Of type [`AssetInfo`] which is the asset info of the asset to be traded in the ask side of the trade
 /// amount - Of type [`Uint128`] which is the amount of assets to be traded on ask or offer side, based on the swap type
-/// STABLES-3-WAP POOL -::- MATH LOGIC
-/// T.B.A
 pub fn query_on_swap(
     deps: Deps,
     env: Env,
@@ -1031,6 +1056,13 @@ fn stop_changing_amp(mut math_config: MathConfig, deps: DepsMut, env: Env) -> St
 // --------x--------x COMPUTATATIONS  x--------x--------
 // --------x--------x--------x--------x--------x--------
 
+/// ## Description - This struct describes the Fee configuration supported by a particular pool type.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ImbalancedWithdrawResponse {
+    pub burn_amount: Uint128,
+    pub fee: Vec<Asset>,
+}
+
 /// ## Description
 /// Imbalanced withdraw liquidity from the pool. Returns a [`ContractError`] on failure,
 /// otherwise returns the number of LP tokens to burn.
@@ -1047,7 +1079,7 @@ fn imbalanced_withdraw(
     math_config: &MathConfig,
     provided_amount: Uint128,
     assets: &[Asset],
-) -> Result<Uint128, ContractError> {
+) -> Result<ImbalancedWithdrawResponse, ContractError> {
     // List of AssetInfo's from provided assets
     let asset_infos = assets.iter().map(|asset| asset.info.clone()).collect_vec();
 
@@ -1060,6 +1092,7 @@ fn imbalanced_withdraw(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
+    // Store Pool balances in a hashMap
     let pools: HashMap<_, _> = config
         .assets
         .clone()
@@ -1131,20 +1164,33 @@ fn imbalanced_withdraw(
     )?;
 
     // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
-    let fee = Decimal::from_ratio(config.fee_info.total_fee_bps, 10000u16)
+    let fee = Decimal::from_ratio(config.fee_info.total_fee_bps, FEE_PRECISION)
         .checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
 
     let fee = Decimal256::new(fee.atomics().into());
 
+    // Tokens to be charged as Fee
+    let mut fee_tokens: Vec<Asset> = vec![];
+
     // Fee is applied
     for i in 0..n_coins as usize {
+        // Asset Info for token i
+        let asset_info = assets_collection[i].0.info.clone();
+
         let ideal_balance = withdraw_d.checked_multiply_ratio(old_balances[i], init_d)?;
         let difference = if ideal_balance > new_balances[i] {
             ideal_balance - new_balances[i]
         } else {
             new_balances[i] - ideal_balance
         };
-        new_balances[i] -= fee.checked_mul(difference)?;
+        let fee_charged = fee.checked_mul(difference)?;
+
+        new_balances[i] -= fee_charged;
+        fee_tokens.push(Asset {
+            amount: fee_charged
+                .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
+            info: asset_info.clone(),
+        });
     }
 
     // New invariant (D) after fee applied
@@ -1177,7 +1223,10 @@ fn imbalanced_withdraw(
         .into());
     }
 
-    Ok(burn_amount)
+    Ok(ImbalancedWithdrawResponse {
+        burn_amount: burn_amount,
+        fee: fee_tokens,
+    })
 }
 
 /// ## Description
