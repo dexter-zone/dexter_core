@@ -333,15 +333,14 @@ pub fn execute_update_pool_config(
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
-    // permission check :: If developer address is set then only developer can call this function
-    if pool_config.fee_info.developer_addr.is_some() {
-        if info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap() {
-            return Err(ContractError::Unauthorized {});
-        }
-    }
-    // permission check :: If developer address is not set then only owner can call this function
-    else {
-        if info.sender.clone() != config.owner {
+    // permission check - Owner can update any pool config. If the sender is not owner then we check
+    //  if the sender is the pool developer and if not, we return an error
+    if info.sender.clone() != config.owner {
+        if pool_config.fee_info.developer_addr.is_some() {
+            if info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap() {
+                return Err(ContractError::Unauthorized {});
+            }
+        } else {
             return Err(ContractError::Unauthorized {});
         }
     }
