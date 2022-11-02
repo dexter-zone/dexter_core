@@ -6,7 +6,6 @@
   "required": [
     "asset_infos",
     "fee_info",
-    "lp_token_code_id",
     "pool_id",
     "pool_type",
     "vault_addr"
@@ -31,23 +30,6 @@
         {
           "type": "null"
         }
-      ]
-    },
-    "lp_token_code_id": {
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "lp_token_name": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "lp_token_symbol": {
-      "type": [
-        "string",
-        "null"
       ]
     },
     "pool_id": {
@@ -128,7 +110,7 @@
       ]
     },
     "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
     },
     "FeeStructs": {
@@ -146,7 +128,7 @@
       }
     },
     "PoolType": {
-      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
       "oneOf": [
         {
           "description": "XYK pool type",
@@ -178,10 +160,10 @@
           "description": "Stable pool type",
           "type": "object",
           "required": [
-            "stable3_pool"
+            "stable5_pool"
           ],
           "properties": {
-            "stable3_pool": {
+            "stable5_pool": {
               "type": "object"
             }
           },

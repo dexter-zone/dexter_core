@@ -16,17 +16,6 @@
         "$ref": "#/definitions/Asset"
       }
     },
-    "developer_addr": {
-      "description": "The address to which the collected developer fee is transferred",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "lp_token_addr": {
       "description": "Address of the LP Token Contract",
       "anyOf": [
@@ -145,7 +134,7 @@
       ]
     },
     "PoolType": {
-      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
       "oneOf": [
         {
           "description": "XYK pool type",
@@ -177,10 +166,10 @@
           "description": "Stable pool type",
           "type": "object",
           "required": [
-            "stable3_pool"
+            "stable5_pool"
           ],
           "properties": {
-            "stable3_pool": {
+            "stable5_pool": {
               "type": "object"
             }
           },

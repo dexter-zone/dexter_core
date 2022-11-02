@@ -4,6 +4,27 @@
   "description": "This struct describes the execute messages of the contract.",
   "oneOf": [
     {
+      "title": "Description - Set  updatable parameters related to Pool's configuration",
+      "type": "object",
+      "required": [
+        "set_lp_token"
+      ],
+      "properties": {
+        "set_lp_token": {
+          "type": "object",
+          "required": [
+            "lp_token_addr"
+          ],
+          "properties": {
+            "lp_token_addr": {
+              "$ref": "#/definitions/Addr"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "title": "Description - Update updatable parameters related to Pool's configuration",
       "type": "object",
       "required": [
@@ -132,7 +153,7 @@
       ]
     },
     "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
     },
     "Uint128": {
