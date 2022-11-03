@@ -321,6 +321,14 @@ pub struct ConfigResponse {
     pub next_pool_id: Uint128,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AssetFeeBreakup {
+    pub asset: AssetInfo,
+    pub total_fee: Uint128,
+    pub protocol_fee: Uint128,
+    pub dev_fee: Uint128
+}
+
 pub type PoolConfigResponse = PoolConfig;
 
 /// ## Description -  A custom struct for query response that returns the
