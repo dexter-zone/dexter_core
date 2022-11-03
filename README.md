@@ -175,3 +175,13 @@ print(config_response)
 ```
 
 - `cosmos_SDK` is a W.I.P and execute functions are not working atm.
+
+### Persistence :: DEVNET INSTANCE
+
+Refer to artifacts/test_core-1.json to get the list of proposal ids and addresses with the dexter deployment on Persistence testnet.
+
+| Name               | Code Id | Instantiated Address                                                   |
+| ------------------ | ------- | ---------------------------------------------------------------------- |
+| `Dexter Vault`     | 6       | persistence1u5ytk4hvgk33uwa0jqlyjx0rjpsc4xu4m4lv0aem9emf5mtlzejsu2pzc0 |
+| `Dexter Keeper`    | 7       | persistence10y2sxew858txsfufrv366hkdm5lgn8w6dkhtxv8mdsmh7z8yuzfqgj6eg2 |
+| `Dexter Generator` | 13      | persistence1n6nvtuv37kevcexhrxns2ukqvut3xmagwfpxezcxtpxfexrzryus9mtdat |
