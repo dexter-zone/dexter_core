@@ -13,14 +13,6 @@ pub const TWAP_PRECISION: u16 = 9u16;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes the key for the different Pool types supported by Dexter
-/// ## Available pool types
-/// ```
-//// Xyk
-//// Stable2Pool
-//// Weighted
-//// Stable5Pool
-//// Custom(String::from("Custom"));
-/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PoolType {
@@ -54,11 +46,6 @@ impl Display for PoolType {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Swap types.
-/// ## Available swap types
-/// ```
-//// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
-//// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
-/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SwapType {
@@ -344,5 +331,4 @@ pub type PoolConfigResponse = PoolConfig;
 /// lp_token_address - The address of the LP token contract
 /// assets - The current asset balances of the pool
 /// pool_type - The type of the pool
-/// developer_addr - The address of the developer to which the fees are sent
 pub type PoolInfoResponse = PoolInfo;

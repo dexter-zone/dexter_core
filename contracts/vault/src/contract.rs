@@ -333,6 +333,10 @@ pub fn execute_update_pool_config(
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolConfigNotFound {})?;
 
+    // Emit Event
+    let mut event = Event::new("dexter-vault::update_pool_config")
+        .add_attribute("tx_executor", info.sender.to_string());
+
     // permission check - Owner can update any pool config. If the sender is not owner then we check
     //  if the sender is the pool developer and if not, we return an error
     if info.sender.clone() != config.owner {
@@ -348,11 +352,13 @@ pub fn execute_update_pool_config(
     // Disable or enable pool instances creation
     if let Some(is_disabled) = is_disabled {
         pool_config.is_disabled = is_disabled;
+        event = event.add_attribute("is_disabled", is_disabled.to_string());
     }
 
     // Disable or enable integration with dexter generator
     if let Some(is_generator_disabled) = is_generator_disabled {
         pool_config.is_generator_disabled = is_generator_disabled;
+        event = event.add_attribute("is_generator_disabled", is_generator_disabled.to_string());
     }
 
     // Update fee info
@@ -361,6 +367,19 @@ pub fn execute_update_pool_config(
             return Err(ContractError::InvalidFeeInfo {});
         }
         pool_config.fee_info = new_fee_info;
+        event = event
+            .add_attribute(
+                "total_fee_bps",
+                pool_config.fee_info.total_fee_bps.to_string(),
+            )
+            .add_attribute(
+                "protocol_fee_percent",
+                pool_config.fee_info.protocol_fee_percent.to_string(),
+            )
+            .add_attribute(
+                "dev_fee_percent",
+                pool_config.fee_info.dev_fee_percent.to_string(),
+            );
     }
 
     // Save pool config
@@ -370,7 +389,7 @@ pub fn execute_update_pool_config(
         &pool_config,
     )?;
 
-    Ok(Response::new().add_attribute("action", "update_pool_config"))
+    Ok(Response::new().add_event(event))
 }
 
 //--------x---------------x--------------x-----
