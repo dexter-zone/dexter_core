@@ -166,6 +166,18 @@ async function Demo() {
   let wallet_balance = Number(balance_res["amount"]) / 10 ** 6;
   console.log(`Wallet's XPRT balance = ${wallet_balance}`);
 
+  // Get Generator Contract Addresses if the proposal has passed
+  if (!network.generator_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.generator_contract_code_id
+    );
+    if (res["contracts"].length > 0) {
+      network.generator_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+
   // -----------x-------------x-------------x------------------------------
   // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------
   // -----------x-------------x-------------x------------------------------
@@ -945,7 +957,6 @@ async function Demo() {
     let init_msg = {
       owner: OWNER,
       vault: network.vault_contract_address,
-      guardian: undefined,
       dex_token: undefined,
       tokens_per_block: "0",
       start_block: "7975290", // 7952826 + Number(24*60*60/5*1.3),
@@ -1044,6 +1055,8 @@ async function Demo() {
       writeArtifact(network, CHAIN_ID);
     }
   }
+
+  return;
 
   // ---------------------------
   // CREATE XYK POOL (XPRT - T1)

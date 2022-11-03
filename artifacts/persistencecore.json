@@ -1,114 +1,55 @@
 {
   "contracts_store_code_proposals_executed": true,
-  "vault_store_code_proposal_id": 90,
-  "keeper_store_code_proposal_id": 91,
-  "lp_token_store_code_proposal_id": 92,
-  "xyk_pool_store_code_proposal_id": 93,
-  "weighted_pool_store_code_proposal_id": 94,
-  "stableswap_pool_store_code_proposal_id": 95,
-  "stable5swap_store_code_proposal_id": 96,
-  "vesting_store_code_proposal_id": 97,
-  "generator_store_code_proposal_id": 98,
-  "generator_proxy_store_code_proposal_id": 99,
-  "eq_staking_store_code_proposal_id": 100,
-  "vault_contract_code_id": 42,
-  "keeper_contract_code_id": 43,
+  "vault_store_code_proposal_id": 113,
+  "keeper_store_code_proposal_id": 114,
+  "lp_token_store_code_proposal_id": 115,
+  "xyk_pool_store_code_proposal_id": 116,
+  "weighted_pool_store_code_proposal_id": 117,
+  "stableswap_pool_store_code_proposal_id": 118,
+  "stable5swap_store_code_proposal_id": 119,
+  "vesting_store_code_proposal_id": 120,
+  "generator_store_code_proposal_id": 121,
+  "generator_proxy_store_code_proposal_id": 122,
+  "eq_staking_store_code_proposal_id": 123,
+  "vault_contract_code_id": 53,
+  "keeper_contract_code_id": 54,
   "lp_token_contract_code_id": 44,
-  "xyk_pool_contract_code_id": 45,
-  "weighted_pool_contract_code_id": 46,
-  "stableswap_contract_code_id": 47,
-  "stable5swap_pool_contract_code_id": 48,
-  "vesting_contract_code_id": 49,
-  "generator_contract_code_id": 50,
-  "generator_proxy_contract_code_id": 51,
-  "staking_contract_contract_code_id": 52,
-  "vault_instantiate_proposal_id": 101,
-  "vault_contract_address": "persistence1qevy63t5t3jsfycxdzjxggvfdpymdmd4lt0s59n0wyajc0xh6drsj6n650",
+  "xyk_pool_contract_code_id": 56,
+  "weighted_pool_contract_code_id": 57,
+  "stableswap_contract_code_id": 58,
+  "stable5swap_pool_contract_code_id": 59,
+  "vesting_contract_code_id": 60,
+  "generator_contract_code_id": 61,
+  "generator_proxy_contract_code_id": 62,
+  "staking_contract_contract_code_id": 63,
+  "vault_instantiate_proposal_id": 124,
+  "vault_contract_address": "persistence1u5ytk4hvgk33uwa0jqlyjx0rjpsc4xu4m4lv0aem9emf5mtlzejsu2pzc0",
   "dummy_tokens_instantiated": true,
   "test_tokens_addresses": [
     "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5",
     "persistence1da9krw7mn7cp2p74sus6x0ckfd5c9q5vhqe92yx8cf5dyqu8q8gq7mg5uk",
-    "persistence17ln6t80dtevdwxtat4g3d7gnvn7t6u6lwn9sfl95us4v2ze7uw5qd302s4"
+    "persistence17ln6t80dtevdwxtat4g3d7gnvn7t6u6lwn9sfl95us4v2ze7uw5qd302s4",
+    "persistence1uakxncqvela43mtpck8azfupk7wzzau8jx785595fc73tqg803hq6mwqqp",
+    "persistence107sw07mqlgkpysv5mv7m4hgxqcj2elhdhnkrjk5kaeamcfa293tsh4wdl5",
+    "persistence1fkah0lxpjdm746afuw9qvtafvtpgfmvtydg2s5uytzr4fzldh8sq7zexpz",
+    "persistence1a544t99uyrc3ewzce0k8gpvlsksnkfn5mcwgq8tpnrwzc73erjgq5p5ak7",
+    "persistence109mcvjd52amnrljjqhhtfp3epza6tw5mmly3ts6jtmuwevvzhvyqz6e4ws",
+    "persistence14gflskh3weuqc9x3k466yrkdql77sxac757zzkund08cn3ypeewq2qpr9j",
+    "persistence1zahr4lhn87fwjsytkaykdl9ttdwxsw5we6vg9nav80zm5tyemgasqqu2wk",
+    "persistence1gyjur3zwa5kk9u4ggj8y65pk5rvxm2ry2vgsd8krkwu8ma6s6xzsa98aav",
+    "persistence15lee27ugt6cnsg65yem2wkrl7fms0g9m2vwudshvdaqyxd3vvlqqdlnfzk",
+    "persistence1rfqm664wlrsc9j5hafxa9hql3jtyyrjl4yqzprwkg59eets89zdsjd4whp",
+    "persistence1t50p0lg0xrz756tlfjveutc8ujdtc7998cndmpm8pcn4dv4wc39s5m9040",
+    "persistence1cnyksdahdpzkh2wmhpjjg5xwwf6jssgmmxeddwlghd86uu9y8qeqw9hqwg"
   ],
   "proposals_to_update_permissions": true,
-  "lp_token_instantiate_permissions_proposal_id": 106,
-  "xyk_pool_instantiate_permissions_proposal_id": 107,
-  "stableswap_pool_instantiate_permissions_proposal_id": 108,
-  "stable5pool_instantiate_permissions_proposal_id": 109,
-  "weighted_instantiate_permissions_proposal_id": 110,
-  "keeper_contract_instantiate_proposal": "111",
-  "generator_contract_instantiate_proposal": "112",
-  "keeper_contract_addr": "persistence12pk32w0qn6hc2w06puckqyzglztzmekgupz4fv7xaf7vptmj3vdsukdfl9",
-  "xyk_pool_address": "persistence1q0nmlgr7588kxdz5cllgm7mdjujggvef26wr9495jpecxlk94ncs5qvl0g",
-  "xyk_pool_lp_token_address": "persistence107sw07mqlgkpysv5mv7m4hgxqcj2elhdhnkrjk5kaeamcfa293tsh4wdl5",
-  "xyk_pool_asset_infos": [
-    {
-      "native_token": {
-        "denom": "uxprt"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5"
-      }
-    }
-  ],
-  "stableswap_pool_address": "persistence1eud2axp8jmw4hqn0stthy58ht4klwj6d3834jut5rz5vf8hp4kyq7n30up",
-  "stableswap_pool_lp_token_address": "persistence1fkah0lxpjdm746afuw9qvtafvtpgfmvtydg2s5uytzr4fzldh8sq7zexpz",
-  "stableswap_pool_asset_infos": [
-    {
-      "token": {
-        "contract_addr": "persistence1da9krw7mn7cp2p74sus6x0ckfd5c9q5vhqe92yx8cf5dyqu8q8gq7mg5uk"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5"
-      }
-    }
-  ],
-  "stable5swap_pool_address": "persistence1nvfl02txuqde8uw3nnj0qkswp8f8yh6lduq5ldtfa295r9nv2h5sp3qy7t",
-  "stable5swap_pool_lp_token_address": "persistence1a544t99uyrc3ewzce0k8gpvlsksnkfn5mcwgq8tpnrwzc73erjgq5p5ak7",
-  "stable5swap_pool_asset_infos": [
-    {
-      "token": {
-        "contract_addr": "persistence1da9krw7mn7cp2p74sus6x0ckfd5c9q5vhqe92yx8cf5dyqu8q8gq7mg5uk"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence17ln6t80dtevdwxtat4g3d7gnvn7t6u6lwn9sfl95us4v2ze7uw5qd302s4"
-      }
-    }
-  ],
-  "weighted_pool_address": "persistence19qeup9gthwjj6ynf22vcj59vdulfr7tgfe4lp9f5wsklpmgpc05ssduyka",
-  "weighted_pool_lp_token_address": "persistence109mcvjd52amnrljjqhhtfp3epza6tw5mmly3ts6jtmuwevvzhvyqz6e4ws",
-  "weighted_pool_asset_infos": [
-    {
-      "native_token": {
-        "denom": "uxprt"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence1da9krw7mn7cp2p74sus6x0ckfd5c9q5vhqe92yx8cf5dyqu8q8gq7mg5uk"
-      }
-    },
-    {
-      "token": {
-        "contract_addr": "persistence17ln6t80dtevdwxtat4g3d7gnvn7t6u6lwn9sfl95us4v2ze7uw5qd302s4"
-      }
-    }
-  ],
-  "generator_contract_addr": "persistence1l6q7gg5f6c5vpjswlz2tjx8azfnnarxqwprjj9qh6t290t4fressdj0k7g"
+  "lp_token_instantiate_permissions_proposal_id": 129,
+  "xyk_pool_instantiate_permissions_proposal_id": 130,
+  "stableswap_pool_instantiate_permissions_proposal_id": 131,
+  "stable5pool_instantiate_permissions_proposal_id": 132,
+  "weighted_instantiate_permissions_proposal_id": 133,
+  "keeper_contract_instantiate_proposal": "134",
+  "generator_contract_instantiate_proposal": "135",
+  "keeper_contract_addr": "persistence10y2sxew858txsfufrv366hkdm5lgn8w6dkhtxv8mdsmh7z8yuzfqgj6eg2",
+  "generator_contract_addr": "persistence1n6nvtuv37kevcexhrxns2ukqvut3xmagwfpxezcxtpxfexrzryus9mtdat"
 }
