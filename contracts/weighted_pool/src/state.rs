@@ -96,7 +96,7 @@ pub struct WeightedAsset {
     pub weight: Decimal,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct WeightedParams {
     pub weights: Vec<Asset>,
     pub exit_fee: Option<Decimal>,

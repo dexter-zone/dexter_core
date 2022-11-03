@@ -1238,7 +1238,7 @@
       ],
       "properties": {
         "assets_out": {
-          "description": "Assets which will be transferred to the recipient against tokens being burnt",
+          "description": "Sorted list of assets which will be transferred to the recipient against tokens being burnt",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Asset"
@@ -1254,14 +1254,13 @@
         },
         "fee": {
           "description": "Fee to be charged",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Asset"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Asset"
+          }
         },
         "response": {
           "description": "Operation will be a `Success` or `Failure`",
@@ -1402,14 +1401,13 @@
       ],
       "properties": {
         "fee": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Asset"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Asset"
+          }
         },
         "new_shares": {
           "$ref": "#/definitions/Uint128"

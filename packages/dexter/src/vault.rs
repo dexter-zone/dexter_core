@@ -324,7 +324,7 @@ pub struct ConfigResponse {
     pub next_pool_id: Uint128,
 }
 
-#[derive(Serialize, Deserialize)]
+#[cw_serde]
 pub struct AssetFeeBreakup {
     pub asset: AssetInfo,
     pub total_fee: Uint128,
