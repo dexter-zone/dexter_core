@@ -2,6 +2,41 @@
 
 Dexter's XYK Pool uses the widely known xy=k formula for its compute calculations on Liquidity provision / withdrawal and swaps.
 
+## **Functional Flows**
+
+### 1. **Provide Liquidity - Query Logic**
+
+- User needs to provide assets info that he wants to provide. Mint_amount param is not used to calculate tokens to be provided.
+- No LP fee charged is charged during liquidity provision
+
+Error is returned when,
+
+- No assets provided - when no assets info is provided
+- Slippage tolerance check is not satisfied
+
+Provide liquidity functional flow can be of 2 types,
+
+- When liquidity is provided for the first time, and LP token supply is 0. Here, we calculate the number of LP tokens to be minted = (deposit_1\*deposit_2)^0.5
+
+- When liquidity is provided to a liquid pool, the number of LP tokens to be minted are calculated via = min( deposit_1*total_share/pool_1, deposit_21*total_share/pool_2 )
+
+### 2. **Remove Liquidity - Query Logic**
+
+- User needs to provide the number of LP tokens to be burnt. assets_out param is not used to calculate tokens to be withdrawn.
+- No LP fee charged is charged during liquidity withdrawal
+
+Error is returned when,
+
+- burn_amount is not provided
+
+Given LP tokens to be burnt, we calculate the number of tokens to be withdrawn for each asset via the following formula.
+
+    assets_out = pool_amount * burn_amount / total_share
+
+### 3. **Swap - Query Logic**
+
+User needs to provide the amount and the swap type, i.e give in or give out, along with the offer and ask asset identifiers. Refer to the docs for swap formulas for XYK pool/
+
 ## Contract State
 
 | Message    | Description                                                                  |

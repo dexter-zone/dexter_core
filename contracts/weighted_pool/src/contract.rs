@@ -59,7 +59,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // Validate number of assets
-    if msg.asset_infos.len() > 9 || msg.asset_infos.len() < 2 {
+    if msg.asset_infos.len() > 8 || msg.asset_infos.len() < 2 {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 

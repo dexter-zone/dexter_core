@@ -2,8 +2,87 @@
 
 The Vault is the core of Dexter; it is a smart contract that holds and manages all tokens in each Dexter Pool. It is also the portal through which most Dexter operations (swaps/joins/exits) take place.
 
-THe Vault owner (the Dexter DAO) can add new pool types to the Dexter Registery.
-The Vault charges swap fee on swaps that take place in Dexter pools and the fee is transferred to the Keeper contract.
+## **Admin powers -**
+
+The Dexter’s Vault contract can be assigned an **admin** (multisig or a assembly contract) which has the following powers,
+
+- Admin can call the **UpdateConfig()** function in the Vault contract to update any of the following parameters,
+  - **Fee_collector** - Address to which the fee collected by the vault is transferred
+  - **Generator_address** - Address of dexter generator contract, which supports bonding LP tokens for rewards. It can be set only once and cannot be changed.
+    - This is used to facilitate bonding the LP tokens with the generator in the same tx in which the user provides liquidity to the pool
+  - **Lp_token_code_id** - Code ID of the LP token contract which is used for initializing LP tokens for pools.
+- Admin can call the **UpdatePoolConfig()** function via which it can update the following parameters for that pool_type,
+  - **Disabling / Enabling new pool instances creation: Address in-charge of a particular pool type can disable or enable initialization for new instances**
+  - **Disable / Enable support with dexter generator:** Address in-charge of a particular pool type can disable or enable support by dexter generator, implying pools of that type will no longer be able to be supported by the generator for incentives
+  - **Update fee_info which will be applicable for new pool instances:** Address in-charge of a particular pool type can update the fee configuration to be used for new pool instances
+- **Add a new pool type -** Only admin can add a new pool type to dexter’s Vault via the **AddToRegistry()** function.
+- All the dexter pools are assigned the dexter’s admin as their admin when being initialized, implying they can be upgraded by the dexter admin.
+
+## **Functional Flows**
+
+### 1. **JoinPool - Execution Function**
+
+- Vault contract’s **JoinPool** fn is the only entry point for providing liquidity to any of the dexter’s supported pools.
+- If the pool is live on dexter generator for additional rewards, the user can choose to stake the newly minted LP tokens with the generator by providing **auto_stake = True**
+- Vault contract queries the specific pool contract to which liquidity is to be provided to get the following information,
+  - Sorted list of assets to be transferred from the user to the Vault as Pool Liquidity. This is provided by param **provided_assets**
+  - The number of LP tokens to be minted to the user / recipient. This is provided by param **new_shares**
+  - The response type :: Success or Failure. This is provided by param **response**
+  - Optional List assets (info and amounts) to be charged as fees to the user. This is provided by param **fee**
+- Only Stable-5-Pool and Weighted Pool charge fee when providing liquidity in an imbalanced manner. XYK and stableswap pools do not charge any fee
+- **Fee Calculations -**
+
+- We assume that the asset balances provided in **provided_assets** params are the total number of tokens to be transferred to the Vault and the protocol and developer fee is yet to be deducted from this.
+- For the number of LP tokens to be minted, we assume that they are being minted proportional to **tokens_transferred_to_vault - total_fee** while we actually provide **tokens_transferred_to_vault - total_fee + lp_fee** as liquidity to the pool
+
+### 2. **ExitPool - Execution Function**
+
+- Vault contract’s **ExitPool** fn is the only entry point for removing liquidity from any of the dexter’s supported pools.
+- Vault contract queries the specific pool contract from which liquidity is to be removed to get the following information
+  - Sorted list of assets to be transferred to the user from the Vault. This is provided by param **assets_out**
+  - The number of LP tokens to be burnt by the user. This is provided by param **burn_shares**
+  - The response type :: Success or Failure. This is provided by param **response**
+  - Optional List assets (info and amounts) to be charged. This is provided by param **fee**
+- Only Stable-5-Pool charges fee when withdrawing liquidity in an imbalanced manner.
+- Weighted Pool has an exit fee param and the fee is charged only in LP tokens and is not accrued towards anything.
+- XYK and stableswap pools do not charge any fee when withdrawing liquidity
+
+**Fee Calculations -**
+
+- We assume that the asset balances provided in **assets_out** params are the total number of tokens to be transferred to the User and the protocol and developer fee are additional amounts to be transferred as fees
+- For the number of LP tokens to be burnt, we assume that they are burnt proportional to **assets_out + total_fee**
+
+### 3. **Swap - Execution Function**
+
+- Vault contract’s **Swap** fn is the only entry point for swapping tokens via any of the dexter’s supported pools.
+- Vault contract queries the specific pool contract from which liquidity is to be routed to get the following information
+  - Number of tokens to be transferred to the user from the Vault and from Vault to the user, this is returned in **trade_params**
+  - The response type :: Success or Failure. This is provided by param **response**
+  - Optional asset (info and amount) to be charged as fee. This is provided by param **fee**
+
+**Fee Calculations -**
+
+- We assume that the asset out amount provided in **trade_params** are the total number of tokens to be transferred to the User and the protocol and developer fee are additional amounts to be transferred as fees and hence are to be additionally subtracted from the pool’s current liquidity balance
+- Pool Liquidity for the ask_asset is updated as following,
+
+**`new_pool_liquidity = old_pool_liquidity - return_amount - protocol_fee - dev_fee`**
+
+`where,`
+
+`old_pool_liquidity: Pool liquidity for ask asset before the swap`
+
+`new_pool_liquidity: Pool liquidity for ask asset after the swap`
+
+`return_amount: Number of ask tokens transferred to the user`
+
+`protocol_fee: protocol fee amount`
+
+`dev_fee; dev fee amount`
+
+- **Stable-5-Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
+- **Weighted Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
+- **XYK Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
+- **Stableswap Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
 
 ## Contract State
 
@@ -45,7 +124,7 @@ The Vault charges swap fee on swaps that take place in Dexter pools and the fee 
 | Message                                  | Description                                                                                            |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `QueryMsg::Config()`                     | Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure                 |
-| `QueryMsg::QueryRegistry([`PoolType`])` | Returns the provided [`PoolType`]'s Configuration settings in custom [`PoolConfigResponse`] structure  |
+| `QueryMsg::QueryRegistry([`PoolType`])`  | Returns the provided [`PoolType`]'s Configuration settings in custom [`PoolConfigResponse`] structure  |
 | `QueryMsg::GetPoolById([`Uint128`])`     | Returns the current stored state of pool with the provided ID in custom [`PoolInfoResponse`] structure |
 | `QueryMsg::GetPoolByAddress([`String`])` | Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure                  |
 
