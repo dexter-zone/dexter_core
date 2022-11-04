@@ -45,7 +45,7 @@
       ]
     },
     "owner": {
-      "description": "The Contract address that used for controls settings for factory, pools and tokenomics contracts",
+      "description": "The admin address that controls settings for factory, pools and tokenomics contracts",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"

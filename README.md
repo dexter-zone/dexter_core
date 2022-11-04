@@ -4,12 +4,16 @@ Dexter is the first DEX which is implemented as a generalized state transition e
 
 ![Dexter :: Architecture Overview](./docs/overview.png)
 
-At launch, Dexter will be supporting the following pool types,
+### Scope
 
-- XYK Pool
-- Stableswap Pool
-- Stable5Pool
-- Weighted Pool
+At launch, it will support the Stable-5-Pool type (introduced by curve) and the Weighted pool type (introduced by balancer), each of which designed for the following objectives,
+
+- **Stable-5-Pool -::-** Can be leveraged to develop specialized pools for liquid staking assets which can provide best trade execution.
+- **Weighted Pool -::-** Can be leveraged to develop re-balancing driven pool strategies which can maximize LP returns.
+
+Dexter generator (modified version of astroport generator) can be used to incentivize pool’s LP tokens with dual rewards, i.e the DEX’s token (not live at launch) and a proxy reward incentive that is given by any 3rd party staking contract.
+
+- Custom generator proxy adapter contracts need to be written for these 3rd party staking contracts to add them to the generator.
 
 ## Development
 
@@ -172,22 +176,12 @@ print(config_response)
 
 - `cosmos_SDK` is a W.I.P and execute functions are not working atm.
 
-### Persistence :: TESTNET INSTANCE
+### Persistence :: DEVNET INSTANCE
 
 Refer to artifacts/test_core-1.json to get the list of proposal ids and addresses with the dexter deployment on Persistence testnet.
 
-| Name                       | Code Id | Instantiated Address                                                   |
-| -------------------------- | ------- | ---------------------------------------------------------------------- |
-| `Dexter Vault`             | 6       | persistence1jyhyqjxf3pc7vzwyqhwe53up5pj0e53zw3xu2589uqgkvqngswnqgrmstf |
-| `Dexter Keeper`            | 7       | -                                                                      |
-| `LP Token :: Test token 1` | 8       | persistence1vguuxez2h5ekltfj9gjd62fs5k4rl2zy5hfrncasykzw08rezpfst7tmng |
-| `LP Token :: Test token 2` | 8       | persistence1rl8su3hadqqq2v86lscpuklsh2mh84cxqvjdew4jt9yd07dzekyq85jyzr |
-| `LP Token :: Test token 3` | 8       | persistence1vhjnzk9ly03dugffvzfcwgry4dgc8x0sv0nqqtfxj3ajn7rn5ghqtpaner |
-| `XYK Pool`                 | 9       | persistence1lxansfc8vkujy997e3xksd3ugsppv6a9jt32pjtgaxr0zkcnkznqu22a4s |
-| `Weighted Pool`            | 10      | persistence1j5h5zftg5su7ytz74f7rryl4f6x3p78lh907fw39eqhax75r94jsgj4n54 |
-| `Stableswap Pool`          | 11      | persistence1kkwp7pd4ts6gukm3e820kyftz4vv5jqtmal8pwqezrnq2ddycqas9nk2dh |
-| `Dexter Vesting`           | 12      | -                                                                      |
-| `Dexter Generator`         | 13      | -                                                                      |
-| `Dexter Generator : Proxy` | 14      | -                                                                      |
-| `Example Staking contract` | 15      | -                                                                      |
-| `Stable-5-Swap pool`       | 16      | persistence1a7pjjyvng22a8msatp4zj6ut9tmsd9qvp26gaj7tnrjrqtx7yafqm7ezny |
+| Name               | Code Id | Instantiated Address                                                   |
+| ------------------ | ------- | ---------------------------------------------------------------------- |
+| `Dexter Vault`     | 6       | persistence1u5ytk4hvgk33uwa0jqlyjx0rjpsc4xu4m4lv0aem9emf5mtlzejsu2pzc0 |
+| `Dexter Keeper`    | 7       | persistence10y2sxew858txsfufrv366hkdm5lgn8w6dkhtxv8mdsmh7z8yuzfqgj6eg2 |
+| `Dexter Generator` | 13      | persistence1n6nvtuv37kevcexhrxns2ukqvut3xmagwfpxezcxtpxfexrzryus9mtdat |

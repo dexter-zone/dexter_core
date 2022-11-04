@@ -298,12 +298,6 @@ mod tests {
         let pool1 = Uint128::from(1242_000000u128);
         let pool2 = Uint128::from(1542_000000u128);
         let pool3 = Uint128::from(1456_000000u128);
-        let model = StableSwapModel::new(
-            amp.u64().into(),
-            vec![pool1.u128(), pool2.u128(), pool3.u128()],
-            3,
-        );
-
         let d = compute_d(
             amp,
             &vec![

@@ -107,6 +107,32 @@ impl AssetInfo {
         Ok(())
     }
 
+    /// Returns a message of type [`CosmosMsg`].
+    /// For native tokens of type [`AssetInfo`] uses the default method [`BankMsg::Send`] to send a token amount to a recipient.
+    /// For a token of type [`AssetInfo`] we use the default method [`Cw20ExecuteMsg::Transfer`]
+    ///
+    /// ## Params
+    /// * **recipient** is the address where the funds will be sent.
+    pub fn into_msg(self, recipient: Addr, amount: Uint128) -> StdResult<CosmosMsg> {
+        match &self {
+            AssetInfo::Token { contract_addr } => Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: contract_addr.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: recipient.to_string(),
+                    amount,
+                })?,
+                funds: vec![],
+            })),
+            AssetInfo::NativeToken { denom } => Ok(CosmosMsg::Bank(BankMsg::Send {
+                to_address: recipient.to_string(),
+                amount: vec![Coin {
+                    denom: denom.to_string(),
+                    amount,
+                }],
+            })),
+        }
+    }
+
     /// Returns the number of native tokens being sent
     pub fn get_sent_native_token_balance(&self, message_info: &MessageInfo) -> Uint128 {
         if let AssetInfo::NativeToken { denom } = &self {

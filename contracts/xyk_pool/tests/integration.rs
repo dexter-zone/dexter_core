@@ -6,9 +6,8 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, FeeResponse, FeeStructs, QueryMsg, ResponseType,
-    SwapResponse,
+    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg,
+    FeeResponse, FeeStructs, QueryMsg, ResponseType, SwapResponse,
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
@@ -173,10 +172,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
-    assert_eq!(
-        Some(Addr::unchecked("dev".to_string())),
-        pool_res.developer_addr
-    );
 
     let assets = vec![
         Asset {
@@ -458,7 +453,7 @@ fn test_query_on_join_pool() {
     );
 
     //// -----x----- Check #2.2 :: Success ::: Successfully provide liquidity and mint LP tokens -----x----- ////
-    let current_block = app.block_info();
+
     app.execute_contract(
         alice_address.clone(),
         token_instance.clone(),

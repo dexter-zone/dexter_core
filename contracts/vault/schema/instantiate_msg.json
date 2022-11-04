@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "InstantiateMsg",
+  "description": "This struct describes the Msg used to instantiate in this contract.",
   "type": "object",
   "required": [
     "lp_token_code_id",
@@ -116,7 +117,7 @@
       }
     },
     "PoolType": {
-      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` Xyk Stable2Pool Weighted Stable3Pool Custom(String::from(\"Custom\")); ```",
+      "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
       "oneOf": [
         {
           "description": "XYK pool type",
@@ -148,10 +149,10 @@
           "description": "Stable pool type",
           "type": "object",
           "required": [
-            "stable3_pool"
+            "stable5_pool"
           ],
           "properties": {
-            "stable3_pool": {
+            "stable5_pool": {
               "type": "object"
             }
           },

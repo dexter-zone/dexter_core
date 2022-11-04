@@ -1,29 +1,21 @@
 use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, Uint64};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
-use cw_multi_test::{App, BasicApp, ContractWrapper, Executor};
+use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
-use dexter::generator;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::{
     generator::{
-        Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, ExecuteOnReply, InstantiateMsg,
-        MigrateMsg, PendingTokenResponse, PoolInfoResponse, PoolLengthResponse, QueryMsg,
-        RewardInfoResponse, UnbondingInfo, UserInfoResponse,
+        ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, PendingTokenResponse,
+        PoolInfoResponse, PoolLengthResponse, QueryMsg, UnbondingInfo, UserInfoResponse,
     },
-    generator_proxy::{
-        Cw20HookMsg as ProxyCw20HookMsg, ExecuteMsg as ProxyExecuteMsg, QueryMsg as ProxyQueryMsg,
-    },
-    pool::{AfterJoinResponse, QueryMsg as PoolQueryMsg},
     vault::{
-        ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
-        InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolInfo as VaultPoolInfo, PoolType,
-        QueryMsg as VaultQueryMsg,
+        ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PoolConfig,
+        PoolInfo as VaultPoolInfo, PoolType, QueryMsg as VaultQueryMsg,
     },
     vesting::{
-        Cw20HookMsg as VestingCw20HookMsg, ExecuteMsg as VestingExecuteMsg,
-        InstantiateMsg as VestingInstantiateMsg, QueryMsg as VestingQueryMsg, VestingAccount,
-        VestingAccountResponse, VestingSchedule, VestingSchedulePoint,
+        Cw20HookMsg as VestingCw20HookMsg, InstantiateMsg as VestingInstantiateMsg, VestingAccount,
+        VestingSchedule, VestingSchedulePoint,
     },
 };
 
@@ -50,15 +42,6 @@ fn store_token_code(app: &mut App) -> u64 {
         lp_token::contract::execute,
         lp_token::contract::instantiate,
         lp_token::contract::query,
-    ));
-    app.store_code(token_contract)
-}
-
-fn store_vesting_code(app: &mut App) -> u64 {
-    let token_contract = Box::new(ContractWrapper::new_with_empty(
-        dexter_vesting::contract::execute,
-        dexter_vesting::contract::instantiate,
-        dexter_vesting::contract::query,
     ));
     app.store_code(token_contract)
 }
@@ -312,7 +295,7 @@ fn create_vesting_schedule_for_generator(
         .execute_contract(owner.clone(), dex_token_addr.clone(), &msg, &[])
         .unwrap();
 
-    (vesting_instance)
+    vesting_instance
 }
 
 // Initializes the following -
@@ -639,14 +622,14 @@ fn test_setup_pool_deactivate_pool() {
         &"OSMO".to_string(),
         &"OSMO".to_string(),
     );
-    let (lp_token_addr1, pool_addr1) = create_pool_instance(
+    let (lp_token_addr1, _) = create_pool_instance(
         &mut app,
         Addr::unchecked(owner.clone()),
         vault_instance.clone(),
         token_addr.clone(),
         Uint128::one(),
     );
-    let (lp_token_addr2, pool_addr2) = create_pool_instance(
+    let (lp_token_addr2, _) = create_pool_instance(
         &mut app,
         Addr::unchecked(owner.clone()),
         vault_instance,
@@ -981,7 +964,7 @@ fn test_generator_with_no_rewards() {
         Uint128::one(),
     );
 
-    let (staking_instance, proxy_instance) = setup_proxy_with_staking(
+    let (_, proxy_instance) = setup_proxy_with_staking(
         &mut app,
         Addr::unchecked(owner.clone()),
         generator_instance.clone(),
@@ -1100,17 +1083,7 @@ fn test_generator_with_no_rewards() {
             amount: Uint128::from(11100_000000u128),
         },
     ];
-    let join_pool_query_res: AfterJoinResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &PoolQueryMsg::OnJoinPool {
-                assets_in: Some(assets_msg.clone()),
-                mint_amount: None,
-                slippage_tolerance: None,
-            },
-        )
-        .unwrap();
+
     // Increase allowance for Vault to spend LP tokens
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -1343,18 +1316,6 @@ fn test_generator_with_no_rewards() {
         b.height = b.height + 10;
     });
 
-    // Get current pending token reward balances
-    let prev_pending_token_re: PendingTokenResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &generator_instance,
-            &QueryMsg::PendingToken {
-                lp_token: lp_token_addr.clone().to_string(),
-                user: owner.clone().to_string(),
-            },
-        )
-        .unwrap();
-
     // SUCCESS :::: ExecuteContract::Unstake
     // Rewards are accumulated and sent to the user, tokens to be unstaked enter the unbonding lockup period
     // --------x--------x--------x--------x--------x--------
@@ -1443,7 +1404,6 @@ fn test_generator_with_no_rewards() {
         b.time = b.time.plus_seconds(8641);
         b.height = b.height + 86;
     });
-    let current_block = app.block_info();
 
     // SUCCESS :::: ExecuteContract::Unlock
     app.execute_contract(
@@ -1686,17 +1646,7 @@ fn test_generator_with_dex_rewards() {
             amount: Uint128::from(11100_000000u128),
         },
     ];
-    let join_pool_query_res: AfterJoinResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &PoolQueryMsg::OnJoinPool {
-                assets_in: Some(assets_msg.clone()),
-                mint_amount: None,
-                slippage_tolerance: None,
-            },
-        )
-        .unwrap();
+
     // Increase allowance for Vault to spend LP tokens
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -1948,18 +1898,6 @@ fn test_generator_with_dex_rewards() {
         b.height = b.height + 10;
     });
 
-    // Get current pending token reward balances
-    let prev_pending_token_re: PendingTokenResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &generator_instance,
-            &QueryMsg::PendingToken {
-                lp_token: lp_token_addr.clone().to_string(),
-                user: owner.clone().to_string(),
-            },
-        )
-        .unwrap();
-
     // SUCCESS :::: ExecuteContract::Unstake
     // Rewards are accumulated and sent to the user, tokens to be unstaked enter the unbonding lockup period
     // --------x--------x--------x--------x--------x--------
@@ -2057,7 +1995,6 @@ fn test_generator_with_dex_rewards() {
         b.time = b.time.plus_seconds(8641);
         b.height = b.height + 86;
     });
-    let current_block = app.block_info();
 
     // SUCCESS :::: ExecuteContract::Unlock
     app.execute_contract(

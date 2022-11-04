@@ -8,6 +8,7 @@ use dexter::pool::{Config, ResponseType};
 use crate::error::ContractError;
 use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
 use crate::state::{get_precision, get_weight, MathConfig, Twap, WeightedAsset};
+use dexter::vault::FEE_PRECISION;
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -88,8 +89,8 @@ pub(crate) fn compute_offer_amount(
     // get ask asset precisison
     let token_precision = get_precision(storage, &offer_pool.info)?;
 
-    let one_minus_commission =
-        Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
+    let one_minus_commission = Decimal256::one()
+        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string())?;
@@ -275,7 +276,7 @@ pub fn calc_single_asset_join(
     total_fee_bps: u16,
     pool_asset_weighted: &WeightedAsset,
     total_shares: Uint128,
-) -> StdResult<Uint128> {
+) -> StdResult<(Uint128, Uint128)> {
     let in_precision = get_precision(deps.storage, &asset_in.info)?;
 
     // Asset weights already normalized
@@ -284,7 +285,7 @@ pub fn calc_single_asset_join(
         in_precision.into(),
         pool_asset_weighted,
         total_shares,
-        Decimal::from_ratio(total_fee_bps, 10_000u16),
+        Decimal::from_ratio(total_fee_bps, FEE_PRECISION),
     )
 }
 

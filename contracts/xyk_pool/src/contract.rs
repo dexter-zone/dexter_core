@@ -185,7 +185,10 @@ pub fn execute_update_pool_liquidity(
     let event = Event::new("dexter-pool::update_liquidity")
         .add_attribute("pool_id", config.pool_id.to_string())
         .add_attribute("vault_address", config.vault_addr)
-        .add_attribute("pool_assets", serde_json_wasm::to_string(&config.assets).unwrap())
+        .add_attribute(
+            "pool_assets",
+            serde_json_wasm::to_string(&config.assets).unwrap(),
+        )
         .add_attribute("block_time_last", twap.block_time_last.to_string());
 
     Ok(Response::new().add_event(event))
@@ -482,6 +485,7 @@ pub fn query_on_swap(
             // Calculate the commission fees
 
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
+
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount,
@@ -693,8 +697,6 @@ pub fn compute_swap(
     let spread_amount: Uint256 =
         (offer_amount * Decimal256::from_ratio(ask_pool, offer_pool)) - return_amount;
 
-    // commission will be absorbed to pool
-    // let return_amount: Uint256 = return_amount - commission_amount;
     Ok((return_amount.try_into()?, spread_amount.try_into()?))
 }
 

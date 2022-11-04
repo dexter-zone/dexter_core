@@ -1,6 +1,6 @@
 use crate::approx_pow::calculate_pow;
 use crate::state::WeightedAsset;
-use cosmwasm_std::{Decimal, StdResult, Uint128, StdError};
+use cosmwasm_std::{Decimal, StdError, StdResult, Uint128};
 use dexter::helper::adjust_precision;
 
 // Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
@@ -21,10 +21,14 @@ pub fn solve_constant_function_invariant(
     token_weight_unknown: Decimal,
 ) -> StdResult<Decimal> {
     // weight_ratio = (weightX/weightY)
-    let weight_ratio = token_weight_fixed.checked_div(token_weight_unknown).map_err(|e| StdError::generic_err(e.to_string()))?;
+    let weight_ratio = token_weight_fixed
+        .checked_div(token_weight_unknown)
+        .map_err(|e| StdError::generic_err(e.to_string()))?;
 
     // y = balanceXBefore/balanceXAfter
-    let y = token_balance_fixed_before.checked_div(token_balance_fixed_after).map_err(|e| StdError::generic_err(e.to_string()))?;
+    let y = token_balance_fixed_before
+        .checked_div(token_balance_fixed_after)
+        .map_err(|e| StdError::generic_err(e.to_string()))?;
 
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
@@ -36,7 +40,7 @@ pub fn solve_constant_function_invariant(
         y_to_weight_ratio.checked_sub(Decimal::one())?
     };
 
-    let amount_y = token_balance_unknown_before.checked_mul(paranthetical)? ;
+    let amount_y = token_balance_unknown_before.checked_mul(paranthetical)?;
     return Ok(amount_y);
 }
 
@@ -48,12 +52,13 @@ pub fn calc_minted_shares_given_single_asset_in(
     asset_weight_and_balance: &WeightedAsset,
     total_shares: Uint128,
     swap_fee: Decimal,
-) -> StdResult<Uint128> {
+) -> StdResult<(Uint128, Uint128)> {
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
     // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
     let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee);
     let token_amount_in_after_fee = token_amount_in * fee_ratio;
+    let fee_charged = token_amount_in.checked_sub(token_amount_in_after_fee)?;
 
     let in_decimal = Decimal::from_atomics(token_amount_in_after_fee, in_precision).unwrap();
     let balance_decimal =
@@ -78,8 +83,9 @@ pub fn calc_minted_shares_given_single_asset_in(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
         6.into(),
-    );
-    return pool_amount_out_adj;
+    )?;
+
+    return Ok((pool_amount_out_adj, fee_charged));
 }
 
 // feeRatio returns the fee ratio that is defined as follows:

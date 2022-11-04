@@ -13,14 +13,6 @@ pub const TWAP_PRECISION: u16 = 9u16;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes the key for the different Pool types supported by Dexter
-/// ## Available pool types
-/// ```
-//// Xyk
-//// Stable2Pool
-//// Weighted
-//// Stable5Pool
-//// Custom(String::from("Custom"));
-/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PoolType {
@@ -54,11 +46,6 @@ impl Display for PoolType {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// This enum describes available Swap types.
-/// ## Available swap types
-/// ```
-//// GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request
-//// GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request
-/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SwapType {
@@ -82,7 +69,10 @@ impl Display for SwapType {
 // ----------------x----------------x    {{FeeInfo}} struct Type    x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
+// FEE PRECISION is 4 decimal places
+pub const FEE_PRECISION: u16 = 10_000u16;
 // Maximum total commission in bps that can be charged on any supported pool by Dexter
+// If MAX_TOTAL_FEE_BPS / FEE_PRECISION is 1, then the maximum total commission that can be charged on any supported pool by Dexter is 1%
 const MAX_TOTAL_FEE_BPS: u16 = 10_000u16;
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
 const MAX_PROTOCOL_FEE_PERCENT: u16 = 50u16;
@@ -108,6 +98,10 @@ impl FeeInfo {
 
     // Returns the number of tokens charged as total fee, protocol fee and dev fee
     pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128, Uint128) {
+        // println!(
+        //     "calculate_total_fee_breakup:: protocol_fee_percent = {}, dev_fee_percent = {}",
+        //     self.protocol_fee_percent, self.dev_fee_percent
+        // );
         let protocol_fee: Uint128 =
             total_fee * Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
         let dev_fee: Uint128 =
@@ -123,7 +117,7 @@ impl FeeInfo {
 /// ## Description - This struct describes the main control config of Vault.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
-    /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
+    /// The admin address that controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
     /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: u64,
@@ -188,8 +182,6 @@ pub struct PoolInfo {
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    /// The address to which the collected developer fee is transferred
-    pub developer_addr: Option<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -252,11 +244,6 @@ pub enum ExecuteMsg {
         lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
-    // InitializeLpTokenForPoolInstance {
-    //     pool_id: Uint128,
-    //     lp_token_name: Option<String>,
-    //     lp_token_symbol: Option<String>,
-    // },
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
@@ -330,7 +317,18 @@ pub struct ConfigResponse {
     pub lp_token_code_id: u64,
     pub fee_collector: Option<Addr>,
     pub generator_address: Option<Addr>,
+    /// The next pool ID to be used for creating new pools
+    pub next_pool_id: Uint128,
 }
 
 pub type PoolConfigResponse = PoolConfig;
+
+/// ## Description -  A custom struct for query response that returns the
+/// current stored state of a Pool Instance identified by either pool_id or pool_address.
+/// Parameters -::-
+/// `pool_id` - The ID of the pool instance
+/// `pool_address` - The address of the pool instance
+/// lp_token_address - The address of the LP token contract
+/// assets - The current asset balances of the pool
+/// pool_type - The type of the pool
 pub type PoolInfoResponse = PoolInfo;

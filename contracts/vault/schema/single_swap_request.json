@@ -103,7 +103,7 @@
       "type": "string"
     },
     "SwapType": {
-      "description": "This enum describes available Swap types. ## Available swap types ``` GiveIn ::   When we have the number of tokens being provided by the user to the pool in the swap request GiveOut :: When we have the number of tokens to be sent to the user from the pool in the swap request ```",
+      "description": "This enum describes available Swap types. ## Available swap types ``` ```",
       "oneOf": [
         {
           "type": "object",
