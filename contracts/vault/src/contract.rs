@@ -319,7 +319,7 @@ pub fn execute_update_config(
 /// * **is_generator_disabled**  Optional parameter. If set to `true`, the generator will not be able to support
 ///
 /// ## Executor
-/// Only owner or the Pool's developer address can execute it
+/// Only owner can execute it
 pub fn execute_update_pool_config(
     deps: DepsMut,
     info: MessageInfo,
@@ -337,16 +337,9 @@ pub fn execute_update_pool_config(
     let mut event = Event::new("dexter-vault::update_pool_config")
         .add_attribute("tx_executor", info.sender.to_string());
 
-    // permission check - Owner can update any pool config. If the sender is not owner then we check
-    //  if the sender is the pool developer and if not, we return an error
+    // permission check - Owner can update any pool config.
     if info.sender.clone() != config.owner {
-        if pool_config.fee_info.developer_addr.is_some() {
-            if info.sender.clone() != pool_config.fee_info.developer_addr.clone().unwrap() {
-                return Err(ContractError::Unauthorized {});
-            }
-        } else {
-            return Err(ContractError::Unauthorized {});
-        }
+        return Err(ContractError::Unauthorized {});
     }
 
     // Disable or enable pool instances creation
