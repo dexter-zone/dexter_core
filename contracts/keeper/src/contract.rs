@@ -1,3 +1,4 @@
+#[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::state::{Config, CONFIG};
 

@@ -673,7 +673,7 @@ async function Demo() {
         initial_balances: [
           { address: wallet_address, amount: "10000000000000" },
         ],
-        mint: { minter: wallet_address, amount: "1000000000000000" },
+        mint: { minter: wallet_address, cap: "1000000000000000" },
       };
       try {
         const wasmInstantiateProposal = {

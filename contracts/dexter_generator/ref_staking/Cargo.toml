@@ -34,7 +34,7 @@ overflow-checks = true
 backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
-cw20 = { version = "0.13.2" }
+cw20 = "0.16.0"
 cosmwasm-std = "1.0"
 cw-storage-plus = "0.13.2"
 dexter = { path = "../../../packages/dexter", default-features = false }

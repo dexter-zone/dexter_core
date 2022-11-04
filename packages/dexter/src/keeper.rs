@@ -1,5 +1,5 @@
 use crate::asset::{Asset, AssetInfo};
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -27,10 +27,13 @@ pub enum ExecuteMsg {
 
 /// This struct describes the query functions available in the contract.
 #[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns information about the Keeper configs that contains in the [`ConfigResponse`]
+    #[returns(ConfigResponse)]
     Config {},
     /// Returns the balance for each asset in the specified input parameters
+    #[returns(BalancesResponse)]
     Balances { assets: Vec<AssetInfo> },
 }
 

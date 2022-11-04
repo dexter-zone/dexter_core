@@ -21,8 +21,8 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 cosmwasm-std = "1.0"
-cw2 = { version = "0.13.2" }
-cw20 = { version = "0.13.2" }
+cw2 = "0.16.0"
+cw20 = "0.16.0"
 cw-storage-plus = "0.13.2"
 schemars = "0.8.1"
 serde = { version = "1.0.125", default-features = false, features = ["derive"] }

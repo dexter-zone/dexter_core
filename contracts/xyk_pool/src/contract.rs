@@ -1,3 +1,4 @@
+#[cfg(not(feature = "library"))]
 use cosmwasm_std::{
     entry_point, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction,
     MessageInfo, Response, StdError, StdResult, Uint128, Uint256,

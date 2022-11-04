@@ -27,8 +27,8 @@ library = []
 dexter = { path = "../../packages/dexter", default-features = false }
 cosmwasm-std = "1.1.5"
 cw-storage-plus = "0.13.2"
-cw2 = "0.13.2"
-cw20 = { version = "0.13.2" }
+cw2 = "0.16.0"
+cw20 = "0.16.0"
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
@@ -44,4 +44,4 @@ xyk-pool = { path = "../xyk_pool"}
 lp-token = { path = "../lp_token"}
 
 cw-multi-test = "0.13.2"
-cw20 = "0.13.2"
+cw20 = "0.16.0"

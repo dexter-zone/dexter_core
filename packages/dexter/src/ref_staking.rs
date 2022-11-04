@@ -1,4 +1,4 @@
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use cosmwasm_std::{Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
@@ -34,11 +34,15 @@ pub enum Cw20HookMsg {
 pub struct MigrateMsg {}
 
 #[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(ConfigResponse)]
     Config {},
+    #[returns(StateResponse)]
     State {
         block_time: Option<u64>,
     },
+    #[returns(StakerInfoResponse)]
     StakerInfo {
         staker: String,
         block_time: Option<u64>,
