@@ -4,7 +4,7 @@
         "amount": "1000",
         "asset_in": {
           "token": {
-            "contract_addr": "persistence1qg5ega6dykkxc307y25pecuufrjkxkaggkkxh7nad0vhyhtuhw3sa8s9dq"
+            "contract_addr": "persistence1wyh8cu9zs4gfnrgc2swuntw5ye6gkhg479x3hw96784xg23vqauq260zy8"
           }
         },
         "asset_out": { "native_token": { "denom": "uxprt" } },
