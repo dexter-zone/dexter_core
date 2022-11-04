@@ -8,7 +8,7 @@ XYK_POOL_LP_TOKEN_ADDRESS := ${shell cat artifacts/persistencecore.json | jq -r 
 JOIN_POOL_REQUEST := ${shell jq -c . < artifacts/contract-tx/join-pool-args.json}
 SWAP_REQUEST := ${shell jq -c . < artifacts/contract-tx/swap-args.json}
 SWAP_REVERSE_REQUEST := ${shell jq -c . < artifacts/contract-tx/swap-reverse-args.json}
-EXIT_POOL_RECEIVE_MSG := ${shell base64 artifacts/contract-tx/exit-pool-receive-args.json}
+EXIT_POOL_RECEIVE_MSG := ${shell base64 -i artifacts/contract-tx/exit-pool-receive-args.json}
 
 # EXIT_POOL_REQUEST := ${shell jq -c . < artifacts/contract-tx/exit-pool-request.json}
 EXIT_POOL_REQUEST := ${shell cat artifacts/contract-tx/exit-pool-request.json | sed -e "s/RECEIVE_BINARY_DATA/${EXIT_POOL_RECEIVE_MSG}/g" | jq -c}
