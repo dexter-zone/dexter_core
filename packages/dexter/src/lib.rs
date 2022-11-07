@@ -8,6 +8,7 @@ pub mod lp_token;
 pub mod pool;
 pub mod querier;
 pub mod ref_staking;
+pub mod router;
 pub mod vault;
 pub mod vesting;
 

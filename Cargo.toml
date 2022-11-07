@@ -8,7 +8,7 @@ members = [
     "contracts/xyk_pool", 
     "contracts/weighted_pool", 
     "contracts/dexter_generator/*", 
-    # "contracts/*",
+    "contracts/router",
     "packages/*"
 ]
 
