@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
+use cw20_base::msg::{ExecuteMsg, QueryMsg};
 use dexter::lp_token::InstantiateMsg;
-use cw20_base::msg::{QueryMsg, ExecuteMsg};
 
 fn main() {
     write_api! {

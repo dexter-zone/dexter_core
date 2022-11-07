@@ -2,7 +2,10 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 use cw20::Cw20ReceiveMsg;
 
-use crate::{asset::AssetInfo, generator::{PendingTokenResponse, RewardInfoResponse}};
+use crate::{
+    asset::AssetInfo,
+    generator::{PendingTokenResponse, RewardInfoResponse},
+};
 
 /// This structure describes the basic parameters for creating a contract.
 #[cw_serde]

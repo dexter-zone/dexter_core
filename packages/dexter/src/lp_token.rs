@@ -1,4 +1,3 @@
-
 use crate::helper::{is_valid_name, is_valid_symbol};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{StdError, StdResult, Uint128};

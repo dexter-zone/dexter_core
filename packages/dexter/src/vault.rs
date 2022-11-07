@@ -283,7 +283,6 @@ pub enum Cw20HookMsg {
 }
 
 /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct
-    
 
 #[cw_serde]
 #[derive(QueryResponses)]
@@ -329,7 +328,7 @@ pub struct AssetFeeBreakup {
     pub asset: AssetInfo,
     pub total_fee: Uint128,
     pub protocol_fee: Uint128,
-    pub dev_fee: Uint128
+    pub dev_fee: Uint128,
 }
 
 pub type PoolConfigResponse = PoolConfig;

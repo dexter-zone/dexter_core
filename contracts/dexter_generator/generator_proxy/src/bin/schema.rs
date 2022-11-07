@@ -1,5 +1,5 @@
 use cosmwasm_schema::write_api;
-use dexter::generator_proxy::{InstantiateMsg, ExecuteMsg, QueryMsg};
+use dexter::generator_proxy::{ExecuteMsg, InstantiateMsg, QueryMsg};
 
 fn main() {
     write_api! {

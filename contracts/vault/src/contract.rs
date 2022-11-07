@@ -22,9 +22,9 @@ use dexter::helper::{
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
-    Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg,
-    PoolConfig, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg,
-    SingleSwapRequest, AssetFeeBreakup,
+    AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg,
+    MigrateMsg, PoolConfig, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg,
+    SingleSwapRequest,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -889,14 +889,12 @@ pub fn execute_join_pool(
             stored_asset.amount = stored_asset.amount.checked_sub(dev_fee)?;
 
             // Indexing - Add fee to vec to push to event later
-            charged_fee_breakup.push(
-                AssetFeeBreakup { 
-                    asset: stored_asset.info.clone(),
-                    total_fee, 
-                    protocol_fee,
-                    dev_fee
-                }
-            );
+            charged_fee_breakup.push(AssetFeeBreakup {
+                asset: stored_asset.info.clone(),
+                total_fee,
+                protocol_fee,
+                dev_fee,
+            });
 
             // ExecuteMsg -::- Transfer tokens from user to the Vault
             // If token is native, then,
@@ -955,9 +953,10 @@ pub fn execute_join_pool(
         index = index + 1;
     }
 
-    let provided_assets_json = serde_json_wasm::to_string(&pool_join_transition.provided_assets).unwrap();
+    let provided_assets_json =
+        serde_json_wasm::to_string(&pool_join_transition.provided_assets).unwrap();
     let fees_json = serde_json_wasm::to_string(&charged_fee_breakup).unwrap();
-    
+
     event = event.add_attribute("provided_assets", provided_assets_json);
     event = event.add_attribute("fees", fees_json);
 
@@ -1162,15 +1161,13 @@ pub fn execute_exit_pool(
             stored_asset.amount = stored_asset.amount.checked_sub(liquidity_withdrawn)?;
 
             // Indexing - Collect fee data to add to add to event
-            charged_fee_breakup.push(
-                AssetFeeBreakup { 
-                    asset: stored_asset.info.clone(),
-                    total_fee, 
-                    protocol_fee,
-                    dev_fee
-                }
-            );
-            
+            charged_fee_breakup.push(AssetFeeBreakup {
+                asset: stored_asset.info.clone(),
+                total_fee,
+                protocol_fee,
+                dev_fee,
+            });
+
             // Indexing: Collect liquidity withdrawn to add to event
             liquidity_withdrawn_per_asset.push(Asset {
                 info: stored_asset.info.clone(),
@@ -1212,7 +1209,8 @@ pub fn execute_exit_pool(
     }
 
     let assets_out_json = serde_json_wasm::to_string(&assets_out).unwrap();
-    let liquidity_withdrawan_json = serde_json_wasm::to_string(&liquidity_withdrawn_per_asset).unwrap();
+    let liquidity_withdrawan_json =
+        serde_json_wasm::to_string(&liquidity_withdrawn_per_asset).unwrap();
     let fee_breakup_json = serde_json_wasm::to_string(&charged_fee_breakup).unwrap();
     event = event.add_attribute("assets_out", assets_out_json);
     event = event.add_attribute("liquidity_withdrawn", liquidity_withdrawan_json);
@@ -1509,7 +1507,6 @@ pub fn execute_swap(
         pool_info.assets,
     )?);
 
-
     event = event.add_attribute("protocol_fee", protocol_fee.to_string());
     event = event.add_attribute("dev_fee", dev_fee.to_string());
 
@@ -1524,7 +1521,7 @@ pub fn execute_swap(
                 .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
         );
     }
-    
+
     // ExecuteMsg :: Dev Fee transfer to Keeper contract
     if !dev_fee.is_zero() {
         execute_msgs.push(

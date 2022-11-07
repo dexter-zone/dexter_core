@@ -39,9 +39,7 @@ pub enum QueryMsg {
     #[returns(ConfigResponse)]
     Config {},
     #[returns(StateResponse)]
-    State {
-        block_time: Option<u64>,
-    },
+    State { block_time: Option<u64> },
     #[returns(StakerInfoResponse)]
     StakerInfo {
         staker: String,

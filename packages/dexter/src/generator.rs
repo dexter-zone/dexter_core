@@ -214,43 +214,25 @@ pub enum QueryMsg {
     PoolLength {},
     /// Deposit returns the LP token amount deposited in a specific generator
     #[returns(Uint128)]
-    Deposit {
-        lp_token: String,
-        user: String,
-    },
+    Deposit { lp_token: String, user: String },
     /// PendingToken returns the amount of rewards that can be claimed by an account that deposited a specific LP token in a generator
     #[returns(PendingTokenResponse)]
-    PendingToken {
-        lp_token: String,
-        user: String,
-    },
+    PendingToken { lp_token: String, user: String },
     /// RewardInfo returns reward information for a specified LP token
     #[returns(RewardInfoResponse)]
-    RewardInfo {
-        lp_token: String,
-    },
+    RewardInfo { lp_token: String },
     /// OrphanProxyRewards returns orphaned reward information for the specified LP token
     #[returns((AssetInfo, Uint128))]
-    OrphanProxyRewards {
-        lp_token: String,
-    },
+    OrphanProxyRewards { lp_token: String },
     /// PoolInfo returns information about a pool associated with the specified LP token alongside
     /// the total pending amount of DEX and proxy rewards claimable by generator stakers (for that LP token)
     #[returns(PoolInfoResponse)]
-    PoolInfo {
-        lp_token: String,
-    },
+    PoolInfo { lp_token: String },
     #[returns(UserInfoResponse)]
-    UserInfo {
-        lp_token: String,
-        user: String,
-    },
+    UserInfo { lp_token: String, user: String },
     /// SimulateFutureReward returns the amount of DEX that will be distributed until a future block and for a specific generator
     #[returns(Uint128)]
-    SimulateFutureReward {
-        lp_token: String,
-        future_block: u64,
-    },
+    SimulateFutureReward { lp_token: String, future_block: u64 },
 }
 
 /// This structure describes a migration message.
