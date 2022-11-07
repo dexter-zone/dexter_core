@@ -1,11 +1,10 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
     Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::vec;
@@ -1057,7 +1056,7 @@ fn stop_changing_amp(mut math_config: MathConfig, deps: DepsMut, env: Env) -> St
 // --------x--------x--------x--------x--------x--------
 
 /// ## Description - This struct describes the Fee configuration supported by a particular pool type.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ImbalancedWithdrawResponse {
     pub burn_amount: Uint128,
     pub fee: Vec<Asset>,

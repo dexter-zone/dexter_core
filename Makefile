@@ -8,7 +8,7 @@ XYK_POOL_LP_TOKEN_ADDRESS := ${shell cat artifacts/persistencecore.json | jq -r 
 JOIN_POOL_REQUEST := ${shell jq -c . < artifacts/contract-tx/join-pool-args.json}
 SWAP_REQUEST := ${shell jq -c . < artifacts/contract-tx/swap-args.json}
 SWAP_REVERSE_REQUEST := ${shell jq -c . < artifacts/contract-tx/swap-reverse-args.json}
-EXIT_POOL_RECEIVE_MSG := ${shell base64 artifacts/contract-tx/exit-pool-receive-args.json}
+EXIT_POOL_RECEIVE_MSG := ${shell base64 -i artifacts/contract-tx/exit-pool-receive-args.json}
 
 # EXIT_POOL_REQUEST := ${shell jq -c . < artifacts/contract-tx/exit-pool-request.json}
 EXIT_POOL_REQUEST := ${shell cat artifacts/contract-tx/exit-pool-request.json | sed -e "s/RECEIVE_BINARY_DATA/${EXIT_POOL_RECEIVE_MSG}/g" | jq -c}
@@ -41,7 +41,7 @@ query-registry:
 add-pool-liquidity:
 	echo "Allowing Vault address to Spend CW20 Pool Asset"
 	persistenceCore tx wasm execute $(XYK_POOL_CW_ASSET_ADDRESS) \
-		'{"increase_allowance":{"amount":"100000","spender":"${VAULT_CONTRACT_ADDRESS}"}}' \
+		'{"increase_allowance":{"amount":"1000000000","spender":"${VAULT_CONTRACT_ADDRESS}"}}' \
 		--node https://rpc.devnet.core.dexter.zone:443 \
 		--from test \
 		--keyring-backend test \
@@ -58,7 +58,7 @@ add-pool-liquidity:
 		--chain-id persistencecore \
 		-b block \
 		--gas 2000000 \
-		--amount 100000uxprt
+		--amount 1000000000uxprt
 
 exit-pool:
 	echo $(EXIT_POOL_REQUEST)
@@ -72,7 +72,7 @@ exit-pool:
 		--gas 2000000
 
 swap-asset:
-	persistenceCore tx wasm execute persistence14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sjvz4fk \
+	persistenceCore tx wasm execute $(VAULT_CONTRACT_ADDRESS) \
 		'$(SWAP_REQUEST)'  \
 		--node https://rpc.devnet.core.dexter.zone:443 \
 		--from test \
@@ -92,7 +92,7 @@ swap-asset-reverse:
 		--gas 2000000 \
 		-b block
 	
-	persistenceCore tx wasm execute persistence14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sjvz4fk \
+	persistenceCore tx wasm execute $(VAULT_CONTRACT_ADDRESS) \
 		'$(SWAP_REVERSE_REQUEST)'  \
 		--node https://rpc.devnet.core.dexter.zone:443 \
 		--from test \

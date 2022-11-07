@@ -1,10 +1,9 @@
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Order, Uint128};
 use cw20::Cw20ReceiveMsg;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 /// This structure describes the parameters used for creating a contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
@@ -13,8 +12,7 @@ pub struct InstantiateMsg {
 }
 
 /// This structure describes the execute messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Claim claims vested tokens and sends them to a recipient
     Claim {
@@ -45,7 +43,7 @@ pub enum ExecuteMsg {
 }
 
 /// This structure stores vesting information for a specific address that is getting tokens.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingAccount {
     /// The address that is getting tokens
     pub address: String,
@@ -54,7 +52,7 @@ pub struct VestingAccount {
 }
 
 /// This structure stores parameters for a batch of vesting schedules.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingInfo {
     /// The vesting schedules
     pub schedules: Vec<VestingSchedule>,
@@ -63,7 +61,7 @@ pub struct VestingInfo {
 }
 
 /// This structure stores parameters for a specific vesting schedule
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingSchedule {
     /// The start date for the vesting schedule
     pub start_point: VestingSchedulePoint,
@@ -72,7 +70,7 @@ pub struct VestingSchedule {
 }
 
 /// This structure stores the parameters used to create a vesting schedule.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingSchedulePoint {
     /// The start time for the vesting schedule
     pub time: u64,
@@ -81,8 +79,7 @@ pub struct VestingSchedulePoint {
 }
 
 /// This structure describes the query messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum QueryMsg {
     /// ## Description
     /// Returns the configuration for the contract using a [`ConfigResponse`] object.
@@ -105,7 +102,7 @@ pub enum QueryMsg {
 }
 
 /// This structure describes a custom struct used to return the contract configuration.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     /// Address allowed to set contract parameters
     pub owner: Addr,
@@ -114,7 +111,7 @@ pub struct ConfigResponse {
 }
 
 /// This structure describes a custom struct used to return vesting data about a specific vesting target.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingAccountResponse {
     /// The address that's vesting tokens
     pub address: Addr,
@@ -123,15 +120,14 @@ pub struct VestingAccountResponse {
 }
 
 /// This structure describes a custom struct used to return vesting data for multiple vesting targets.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct VestingAccountsResponse {
     /// A list of accounts that are vesting tokens
     pub vesting_accounts: Vec<VestingAccountResponse>,
 }
 
 /// This enum describes the types of sorting that can be applied to some piece of data
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum OrderBy {
     /// Ascending
     Asc,
@@ -154,12 +150,11 @@ impl Into<Order> for OrderBy {
 
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 /// This structure describes a CW20 hook message.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum Cw20HookMsg {
     /// RegisterVestingAccounts registers vesting targets/accounts
     RegisterVestingAccounts {

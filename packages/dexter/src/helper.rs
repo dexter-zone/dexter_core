@@ -1,6 +1,7 @@
 use crate::asset::{addr_validate_to_lower, Asset, AssetInfo, DecimalAsset};
 use crate::error::ContractError;
 use crate::vault::FEE_PRECISION;
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
@@ -8,8 +9,6 @@ use cosmwasm_std::{
 use cw20_base::msg::ExecuteMsg as CW20ExecuteMsg;
 use cw_storage_plus::Item;
 use itertools::Itertools;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x       Ownership Update helper functions          x----------------
@@ -17,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 /// ## Description
 /// Describes the basic settings for creating a request for a change of ownership.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct OwnershipProposal {
     /// a new ownership.
     pub owner: Addr,

@@ -1,5 +1,4 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
@@ -18,14 +17,14 @@ pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct FeeStructs {
     pub total_fee_bps: u16,
 }
 
 /// ## Description
 /// This struct describes the main control config of pool.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
@@ -45,7 +44,7 @@ pub struct Config {
 
 /// ## Description
 /// This helper struct is used for swap operations in the pool
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Trade {
     /// The number of tokens to be sent by the user to the Vault
     pub amount_in: Uint128,
@@ -57,8 +56,7 @@ pub struct Trade {
 
 /// ## Description
 /// This enum is used to describe if the math computations (joins/exits/swaps) will be successful or not
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ResponseType {
     Success {},
     Failure(String),
@@ -91,7 +89,7 @@ impl ResponseType {
 
 /// ## Description
 /// This struct describes the basic settings for creating a contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// Pool ID
     pub pool_id: Uint128,
@@ -109,8 +107,7 @@ pub struct InstantiateMsg {
 /// ## Description
 ///
 /// This struct describes the execute messages of the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// ## Description - Set  updatable parameters related to Pool's configuration
     SetLpToken { lp_token_addr: Addr },
@@ -122,17 +119,21 @@ pub enum ExecuteMsg {
 
 /// ## Description
 /// This struct describes the query messages of the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// ## Description - Returns the current configuration of the pool.
+    #[returns(ConfigResponse)]
     Config {},
     /// ## Description - Returns information about the Fees settings in a [`FeeResponse`] object.
+    #[returns(FeeResponse)]
     FeeParams {},
     /// ## Description - Returns Pool ID which is of type [`Uint128`]
+    #[returns(Uint128)]
     PoolId {},
     /// ## Description - Returns [`AfterJoinResponse`] type which contains - `return_assets` info, number of LP shares to be minted, the `response` of type [`ResponseType`]
     /// and `fee` of type [`Option<Asset>`] which is the fee to be charged
+    #[returns(AfterJoinResponse)]
     OnJoinPool {
         assets_in: Option<Vec<Asset>>,
         mint_amount: Option<Uint128>,
@@ -140,11 +141,13 @@ pub enum QueryMsg {
     },
     /// ## Description - Returns [`AfterExitResponse`] type which contains - `assets_out` info, number of LP shares to be burnt, the `response` of type [`ResponseType`]
     ///  and `fee` of type [`Option<Asset>`] which is the fee to be charged
+    #[returns(AfterExitResponse)]
     OnExitPool {
         assets_out: Option<Vec<Asset>>,
         burn_amount: Option<Uint128>,
     },
     /// ## Description - Returns [`SwapResponse`] type which contains - `trade_params` info, the `response` of type [`ResponseType`] and `fee` of type [`Option<Asset>`] which is the fee to be charged
+    #[returns(SwapResponse)]
     OnSwap {
         swap_type: SwapType,
         offer_asset: AssetInfo,
@@ -154,25 +157,27 @@ pub enum QueryMsg {
         belief_price: Option<Decimal>,
     },
     /// ## Description - Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
+    #[returns(CumulativePriceResponse)]
     CumulativePrice {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
     },
     /// ## Description - Returns information about the cumulative prices in a [`CumulativePricesResponse`] object.
+    #[returns(CumulativePricesResponse)]
     CumulativePrices {},
 }
 
 /// ## Description
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
@@ -192,7 +197,7 @@ pub struct ConfigResponse {
 }
 
 /// ## Description - Helper struct for [`QueryMsg::OnJoinPool`]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AfterJoinResponse {
     // Is a sorted list consisting of amount of info of tokens which will be provided by the user to the Vault as liquidity
     pub provided_assets: Vec<Asset>,
@@ -205,7 +210,7 @@ pub struct AfterJoinResponse {
 }
 
 /// ## Description  - Helper struct for [`QueryMsg::OnExitPool`]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct AfterExitResponse {
     /// Sorted list of assets which will be transferred to the recipient against tokens being burnt
     pub assets_out: Vec<Asset>,
@@ -218,14 +223,14 @@ pub struct AfterExitResponse {
 }
 
 /// ## Description
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct FeeResponse {
     /// The total fees (in bps) charged by a pool of this type
     pub total_fee_bps: u16,
 }
 
 /// ## Description - Helper struct for [`QueryMsg::OnSwap`]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct SwapResponse {
     ///  Is of type [`Trade`] which contains all params related with the trade
     pub trade_params: Trade,
@@ -236,14 +241,14 @@ pub struct SwapResponse {
 }
 
 /// ## Description - Helper struct for [`QueryMsg::CumulativePrice`]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CumulativePriceResponse {
     pub exchange_info: AssetExchangeRate,
     pub total_share: Uint128,
 }
 
 /// ## Description - Helper struct for [`QueryMsg::CumulativePrices`]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct CumulativePricesResponse {
     pub exchange_infos: Vec<AssetExchangeRate>,
     pub total_share: Uint128,

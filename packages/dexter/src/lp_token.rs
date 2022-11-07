@@ -1,12 +1,10 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::helper::{is_valid_name, is_valid_symbol};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{StdError, StdResult, Uint128};
 use cw20::{Cw20Coin, Logo, MinterResponse};
 
 /// ## Description -  This structure describes the basic settings for creating a token contract.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[cw_serde]
 pub struct InstantiateMsg {
     pub name: String,
     pub symbol: String,
@@ -17,7 +15,7 @@ pub struct InstantiateMsg {
 }
 
 /// ## Description -  This structure describes the marketing info settings such as project, description, and token logo.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[cw_serde]
 pub struct InstantiateMarketingInfo {
     /// The project name
     pub project: Option<String>,
@@ -30,7 +28,7 @@ pub struct InstantiateMarketingInfo {
 }
 
 /// ## Description -  This structure describes a migration message.
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 impl InstantiateMsg {

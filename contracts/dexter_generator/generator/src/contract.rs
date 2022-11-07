@@ -1,3 +1,4 @@
+#[cfg(not(feature = "library"))]
 use cosmwasm_std::{
     attr, entry_point, from_binary, to_binary, Addr, Attribute, Binary, Decimal, Deps, DepsMut,
     Env, MessageInfo, QuerierWrapper, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
