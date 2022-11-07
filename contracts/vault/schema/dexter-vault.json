@@ -124,7 +124,7 @@
         "additionalProperties": false
       },
       "PoolType": {
-        "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+        "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
             "description": "XYK pool type",
@@ -722,7 +722,7 @@
         "additionalProperties": false
       },
       "PoolType": {
-        "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+        "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
             "description": "XYK pool type",
@@ -844,7 +844,7 @@
         "additionalProperties": false
       },
       "SwapType": {
-        "description": "This enum describes available Swap types. ## Available swap types ``` ```",
+        "description": "This enum describes available Swap types.",
         "oneOf": [
           {
             "type": "object",
@@ -1003,7 +1003,7 @@
     ],
     "definitions": {
       "PoolType": {
-        "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+        "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
             "description": "XYK pool type",
@@ -1284,7 +1284,7 @@
           ]
         },
         "PoolType": {
-          "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+          "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
             {
               "description": "XYK pool type",
@@ -1503,7 +1503,7 @@
           ]
         },
         "PoolType": {
-          "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+          "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
             {
               "description": "XYK pool type",
@@ -1670,7 +1670,7 @@
           "additionalProperties": false
         },
         "PoolType": {
-          "description": "This enum describes the key for the different Pool types supported by Dexter ## Available pool types ``` ```",
+          "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
             {
               "description": "XYK pool type",
