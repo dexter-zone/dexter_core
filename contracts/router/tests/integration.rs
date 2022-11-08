@@ -1142,6 +1142,35 @@ fn test_router_functionality() {
         ],
         multihop_sim_response.swap_operations
     );
+    assert_eq!(
+        vec![
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                amount: Uint128::from(29999u128)
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance2.clone()
+                },
+                amount: Uint128::from(29099u128)
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
+                },
+                amount: Uint128::from(28226u128)
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                amount: Uint128::from(27379u128)
+            }
+        ],
+        multihop_sim_response.fee
+    );
 
     // SWAP TYPE -::- GIVE OUT {}
     // Pool ID: Uint128(3)  | asset_in: "token0" | asset_out: "contract2" | amount_to_receive "885277"
@@ -1228,6 +1257,35 @@ fn test_router_functionality() {
             }
         ],
         multihop_sim_response.swap_operations
+    );
+    assert_eq!(
+        vec![
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                amount: Uint128::from(29999u128)
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance2.clone()
+                },
+                amount: Uint128::from(29099u128)
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
+                },
+                amount: Uint128::from(28226u128)
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone()
+                },
+                amount: Uint128::from(27379u128)
+            }
+        ],
+        multihop_sim_response.fee
     );
 
     // -------x---------- DEXTER ROUTER -::- Test Multi-Hop Function ----------x----------

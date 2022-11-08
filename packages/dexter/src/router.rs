@@ -1,4 +1,4 @@
-use crate::asset::AssetInfo;
+use crate::asset::{Asset, AssetInfo};
 use crate::pool::ResponseType;
 use crate::vault::SwapType;
 use cosmwasm_schema::{cw_serde, QueryResponses};
@@ -92,6 +92,7 @@ pub struct ConfigResponse {
 #[cw_serde]
 pub struct SimulateMultiHopResponse {
     pub swap_operations: Vec<SimulatedTrade>,
+    pub fee: Vec<Asset>,
     pub response: ResponseType,
 }
 
@@ -115,6 +116,7 @@ pub fn return_swap_sim_failure(
 ) -> SimulateMultiHopResponse {
     SimulateMultiHopResponse {
         swap_operations: suc_swaps,
+        fee: vec![],
         response: ResponseType::Failure(error),
     }
 }

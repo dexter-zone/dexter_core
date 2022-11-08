@@ -8,7 +8,7 @@ use cosmwasm_std::{
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
-use dexter::asset::{addr_validate_to_lower, AssetInfo};
+use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
 use dexter::pool::ResponseType;
 use dexter::router::{
     return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest,
@@ -453,7 +453,7 @@ fn query_get_config(deps: Deps) -> StdResult<ConfigResponse> {
 }
 
 /// ## Description - Returns an object of type [`SimulateMultiHopResponse`] which contains the reponse type (success or failure)
-/// along with the list of [`SimulatedTrade`] objects which contains the details of each hop in the multiswap request.
+/// along with the list of [`SimulatedTrade`] objects which contains the details of each hop in the multiswap request and [`Asset`] project detiling fee charged for each hop
 ///
 /// ## Params
 /// * **multiswap_request** is the object of type [`Vec<HopSwapRequest>`] which contains the list of hops in the multiswap request.
@@ -468,6 +468,7 @@ fn query_simulate_multihop(
 ) -> StdResult<SimulateMultiHopResponse> {
     let config = CONFIG.load(deps.storage)?;
     let mut simulated_trades: Vec<SimulatedTrade> = vec![];
+    let mut fee_response: Vec<Asset> = vec![];
 
     // Error - If invalid request
     if multiswap_request.len() == 0 {
@@ -540,6 +541,11 @@ fn query_simulate_multihop(
                     received_amount: pool_swap_transition.trade_params.amount_out,
                 });
                 // println!("simulated_trades: {:?}", simulated_trades);
+
+                // Push Fee to the vector
+                if pool_swap_transition.fee.is_some() {
+                    fee_response.push(pool_swap_transition.fee.unwrap());
+                }
 
                 // Set the next amount in to the amount out of the previous swap as it will be used for the next swap
                 next_amount_in = pool_swap_transition.trade_params.amount_out;
@@ -622,6 +628,11 @@ fn query_simulate_multihop(
                     },
                 );
 
+                // Push Fee to the vector
+                if pool_swap_transition.fee.is_some() {
+                    fee_response.insert(0, pool_swap_transition.fee.unwrap());
+                }
+
                 // println!(
                 //     "asset_in: {:?} offered_amount: {:?} || asset_out: {:?} received_amount: {:?}",
                 //     hop.asset_in.to_string(),
@@ -651,6 +662,7 @@ fn query_simulate_multihop(
 
     Ok(SimulateMultiHopResponse {
         swap_operations: simulated_trades,
+        fee: fee_response,
         response: ResponseType::Success {},
     })
 }
