@@ -51,5 +51,14 @@
   "keeper_contract_instantiate_proposal": "134",
   "generator_contract_instantiate_proposal": "135",
   "keeper_contract_addr": "persistence10y2sxew858txsfufrv366hkdm5lgn8w6dkhtxv8mdsmh7z8yuzfqgj6eg2",
-  "generator_contract_addr": "persistence1n6nvtuv37kevcexhrxns2ukqvut3xmagwfpxezcxtpxfexrzryus9mtdat"
+  "generator_contract_addr": "persistence1n6nvtuv37kevcexhrxns2ukqvut3xmagwfpxezcxtpxfexrzryus9mtdat",
+  "staking_instantiate_proposal_id": 239,
+  "staking_contract_addr": "persistence1zkzzrn0ln2e3n9tg3n9c89q4gyh5grljulphnuahknvuedrrwleqsfwxds",
+  "proxy_instantiate_proposal_id": 241,
+  "proxy_contract_addr": "persistence13q9hhcd9t5ma5tfsx585z2ndjufpkrr0u4hehvw7fh9cve33khdslntav0",
+  "vesting_instantiate_proposal_id": 242,
+  "vesting_contract_addr": "persistence1mj46n4hh8ejrdyel35h3p6vs2en3kw0emjqxekn5tt74xc0v6ftqmkf2xc",
+  "router_store_code_proposal_id": 246,
+  "router_contract_contract_code_id": 0,
+  "router_contract_code_id": 0
 }

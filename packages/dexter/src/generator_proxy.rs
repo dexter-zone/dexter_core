@@ -2,10 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 use cw20::Cw20ReceiveMsg;
 
-use crate::{
-    asset::AssetInfo,
-    generator::{PendingTokenResponse, RewardInfoResponse},
-};
+use crate::{asset::AssetInfo, generator::PendingTokenResponse};
 
 /// This structure describes the basic parameters for creating a contract.
 #[cw_serde]
@@ -82,8 +79,8 @@ pub enum QueryMsg {
     /// Returns the amount of pending rewards which can be claimed right now
     #[returns(PendingTokenResponse)]
     PendingToken {},
-    /// Returns the 3rd party reward token contract address
-    #[returns(RewardInfoResponse)]
+    /// Returns the 3rd party reward token info
+    #[returns(AssetInfo)]
     RewardInfo {},
 }
 

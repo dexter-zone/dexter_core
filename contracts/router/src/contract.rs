@@ -150,10 +150,6 @@ pub fn execute_multihop_swap(
         let tokens_received = multiswap_request[0]
             .asset_in
             .get_sent_native_token_balance(&info);
-        println!(
-            "Offer token is native. Tokens received: {:?}",
-            tokens_received
-        );
 
         // Error - if the number of native tokens sent is less than the offer amount, then return error
         if tokens_received.is_zero() || tokens_received < offer_amount {
@@ -176,7 +172,6 @@ pub fn execute_multihop_swap(
     // Handle conditions if the first hop is a swap from a CW20 token
     // - Transfer the offer amount from the sender to the router contract
     else {
-        println!("Offer token is not native. Transferring tokens to router from the user and providing allowance");
         let transfer_from_msg = dexter::helper::build_transfer_cw20_from_user_msg(
             multiswap_request[0].asset_in.as_string(),
             info.sender.clone().to_string(),
@@ -214,7 +209,6 @@ pub fn execute_multihop_swap(
     event = event.add_attribute("first_hop_asset_in", first_hop.asset_in.to_string());
     event = event.add_attribute("offer_amount", offer_amount.to_string());
     event = event.add_attribute("first_hop_asset_out", first_hop.asset_out.to_string());
-    println!("First hop swap request: {:?}", first_hop_swap_request);
 
     // Need to send native tokens if the offer asset is native token
     let coins: Vec<Coin> = if first_hop.asset_in.is_native_token() {
@@ -243,10 +237,6 @@ pub fn execute_multihop_swap(
     current_ask_balance = multiswap_request[0]
         .asset_out
         .query_for_balance(&deps.querier, env.contract.address.clone())?;
-    println!(
-        "Current ask balance (before swap): {:?}",
-        current_ask_balance
-    );
 
     // CallbackMsg - Add Callback Msg as we need to continue with the hops
     multiswap_request.remove(0);
@@ -286,18 +276,9 @@ pub fn continue_hop_swap(
     // Calculate current offer asset balance
     let asset_balance =
         offer_asset.query_for_balance(&deps.querier, env.contract.address.clone())?;
-    println!(
-        "\nCurrent offer asset ({:?}) balance (after swap): {:?}",
-        offer_asset.to_string(),
-        asset_balance
-    );
 
     // Amount returned from the last hop swap
     let amount_returned_prev_hop = asset_balance.checked_sub(prev_ask_amount)?;
-    println!(
-        "Amount returned from the last hop swap: {:?}",
-        amount_returned_prev_hop
-    );
 
     // ExecuteMsgs
     let mut response = Response::new();
@@ -306,10 +287,6 @@ pub fn continue_hop_swap(
 
     // If Hop is over, check if the minimum receive amount is met and transfer the tokens to the recipient
     if multiswap_request.len() == 0 {
-        println!(
-            "Hop is over. Checking if minimum receive amount is met. Minimum receive amount: {:?} Amount returned from the last hop swap: {:?}",
-            minimum_receive.to_string(), amount_returned_prev_hop.to_string()
-        );
         if amount_returned_prev_hop < minimum_receive {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg: format!("Minimum receive amount not met. Swap failed. Smount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
@@ -359,7 +336,6 @@ pub fn continue_hop_swap(
             max_spread: next_hop.max_spread,
             belief_price: next_hop.belief_price,
         };
-        println!("Next hop swap request: {:?}", next_hop_swap_request);
 
         // Need to send native tokens if the offer asset is native token
         let coins: Vec<Coin> = if next_hop.asset_in.is_native_token() {
@@ -388,11 +364,6 @@ pub fn continue_hop_swap(
         current_ask_balance = multiswap_request[0]
             .asset_out
             .query_for_balance(&deps.querier, env.contract.address.clone())?;
-        println!(
-            "Current ask asset ({:?}) balance: {:?}",
-            multiswap_request[0].asset_out.to_string(),
-            current_ask_balance
-        );
 
         // Add Callback Msg as we need to continue with the hops
         multiswap_request.remove(0);
@@ -500,13 +471,6 @@ fn query_simulate_multihop(
                             pool_id: hop.pool_id,
                         })?,
                     }))?;
-                // println!(
-                //     "Pool ID: {:?}  | asset_in: {:?} | asset_out: {:?} | amount_provided {:?}",
-                //     hop.pool_id,
-                //     next_token_in.to_string(),
-                //     hop.asset_out.to_string(),
-                //     next_amount_in.to_string()
-                // );
 
                 // Query pool to get the amount of tokens that will be received
                 let pool_swap_transition: dexter::pool::SwapResponse =
@@ -521,8 +485,6 @@ fn query_simulate_multihop(
                             belief_price: hop.belief_price,
                         })?,
                     }))?;
-
-                // println!("pool_swap_transition: {:?}", pool_swap_transition);
 
                 // If the swap gives error, return the error
                 if !pool_swap_transition.response.is_success() {
@@ -540,7 +502,6 @@ fn query_simulate_multihop(
                     offered_amount: pool_swap_transition.trade_params.amount_in,
                     received_amount: pool_swap_transition.trade_params.amount_out,
                 });
-                // println!("simulated_trades: {:?}", simulated_trades);
 
                 // Push Fee to the vector
                 if pool_swap_transition.fee.is_some() {
@@ -551,11 +512,6 @@ fn query_simulate_multihop(
                 next_amount_in = pool_swap_transition.trade_params.amount_out;
                 // Set the next token in to the token out of the previous swap as it will be used for the next swap
                 next_token_in = hop.asset_out.clone();
-                // println!(
-                //     "Number of {:?} tokens returned and are to be used for next swap: {:?}\n",
-                //     hop.asset_out.clone().to_string(),
-                //     next_amount_in
-                // );
             }
         }
         SwapType::GiveOut {} => {
@@ -575,14 +531,6 @@ fn query_simulate_multihop(
                         vec![],
                         format!("Invalid multiswap request. Asset {} to be provided for next hop does not match the asset {} returned by the current hop. ", prev_token_out.to_string(), hop.asset_in.to_string())));
                 }
-
-                // println!(
-                //     "Pool ID: {:?}  | asset_in: {:?} | asset_out: {:?} | amount_to_receive {:?}",
-                //     hop.pool_id,
-                //     hop.asset_in.to_string(),
-                //     hop.asset_out.to_string(),
-                //     prev_amount_out.to_string()
-                // );
 
                 // Get pool info
                 let pool_response: dexter::vault::PoolInfoResponse =
@@ -633,23 +581,10 @@ fn query_simulate_multihop(
                     fee_response.insert(0, pool_swap_transition.fee.unwrap());
                 }
 
-                // println!(
-                //     "asset_in: {:?} offered_amount: {:?} || asset_out: {:?} received_amount: {:?}",
-                //     hop.asset_in.to_string(),
-                //     pool_swap_transition.trade_params.amount_in,
-                //     hop.asset_out.to_string(),
-                //     pool_swap_transition.trade_params.amount_out
-                // );
-
                 // Number of tokens provied in the current hop are received from the previous hop
                 prev_amount_out = pool_swap_transition.trade_params.amount_in;
                 // Token provided in current swap is the token received in the previous swap
                 prev_token_out = hop.asset_in.clone();
-                // println!(
-                //     "Number of {:?} tokens to be provided for this swap and should be returned by previous swap: {:?}\n",
-                //     hop.asset_in.clone().to_string(),
-                //     prev_amount_out
-                // );
             }
         }
         SwapType::Custom(_) => {

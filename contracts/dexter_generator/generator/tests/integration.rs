@@ -7,7 +7,8 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::{
     generator::{
         ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, PendingTokenResponse,
-        PoolInfoResponse, PoolLengthResponse, QueryMsg, UnbondingInfo, UserInfoResponse,
+        PoolInfoResponse, PoolLengthResponse, QueryMsg, RewardInfoResponse, UnbondingInfo,
+        UserInfoResponse,
     },
     vault::{
         ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PoolConfig,
@@ -2024,4 +2025,15 @@ fn test_generator_with_dex_rewards() {
     );
     let empty_vec: Vec<UnbondingInfo> = vec![];
     assert_eq!(empty_vec, new_user_info_re.unbonding_periods);
+
+    // RewardInfo
+    let reward_info_re: RewardInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_instance,
+            &QueryMsg::RewardInfo {
+                lp_token: lp_token_addr.clone().to_string(),
+            },
+        )
+        .unwrap();
 }

@@ -274,7 +274,7 @@ pub fn execute(
 ///
 /// * **cw20_msg** is an object of type [`Cw20ReceiveMsg`]. This is the CW20 message to process.
 fn receive_cw20(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     cw20_msg: Cw20ReceiveMsg,
@@ -1341,7 +1341,7 @@ fn query_reward_info(deps: Deps, lp_token: String) -> Result<RewardInfoResponse,
 
     let proxy_reward_token = match pool.reward_proxy {
         Some(proxy) => {
-            let res: Addr = deps
+            let res: AssetInfo = deps
                 .querier
                 .query_wasm_smart(&proxy, &ProxyQueryMsg::RewardInfo {})?;
             Some(res)
@@ -1745,8 +1745,9 @@ pub fn send_pending_rewards(
         .checked_mul_uint128(user.amount)?
         .checked_sub(user.reward_debt)?;
 
-    // Send proxy rewards Msg
+    // Claim from vesting and transfer to user rewards Msg
     if !pending_rewards.is_zero() {
+        // claim if insufficient dex tokens available
         messages.push(WasmMsg::Execute {
             contract_addr: cfg.vesting_contract.clone().unwrap().to_string(),
             msg: to_binary(&VestingExecuteMsg::Claim {
@@ -1765,6 +1766,8 @@ pub fn send_pending_rewards(
             .checked_sub(user.reward_debt_proxy)?;
 
         if !pending_proxy_rewards.is_zero() {
+            // check proxy tokens available with generator, if not available then claim from vesting to transfer to user
+
             messages.push(WasmMsg::Execute {
                 contract_addr: proxy.to_string(),
                 funds: vec![],
