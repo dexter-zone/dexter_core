@@ -107,8 +107,7 @@ fn handle_callback(
 // ----------------x----------------x  :::: ROUTER::EXECUTE Fns Implementation   ::::  x----------------x----------------
 // ----------------x----------------x--------------------------x-----------------------x----------------x----------------
 
-/// ## Description - Entry point for the multi-hop swap tx. The multi-hop route swap request details are passed in [`Vec<HopSwapRequest>`] Type parameter.
-///                  User needs to provide the offer amount for the first hop swap and the minimum receive amount for the last hop swap.
+/// ## Description - Entry point for the multi-hop swap tx. The multi-hop route swap request details are passed in [`Vec<HopSwapRequest>`] Type parameter. User needs to provide the offer amount for the first hop swap and the minimum receive amount for the last hop swap.
 ///
 /// ## Params
 /// * **multiswap_request** of type [`Vec<HopSwapRequest>`] which is holding the details of the multi-hop swap request.

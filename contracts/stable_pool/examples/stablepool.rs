@@ -1,10 +1,11 @@
 use cosmwasm_schema::write_api;
-use dexter::vault::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use dexter::pool::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 
 fn main() {
     write_api! {
         instantiate: InstantiateMsg,
-        execute: ExecuteMsg,
         query: QueryMsg,
+        execute: ExecuteMsg,
+        migrate: MigrateMsg,
     }
 }

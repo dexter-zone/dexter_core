@@ -744,7 +744,13 @@
       }
     }
   },
-  "migrate": null,
+  "migrate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MigrateMsg",
+    "description": "This struct describes a migration message. We currently take no arguments for migrations.",
+    "type": "object",
+    "additionalProperties": false
+  },
   "sudo": null,
   "responses": {
     "config": {

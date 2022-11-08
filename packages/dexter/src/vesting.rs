@@ -1,6 +1,7 @@
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
+
 use cosmwasm_std::{Addr, Order, Uint128};
-use cw20::Cw20ReceiveMsg;
+use cw20::{BalanceResponse, Cw20ReceiveMsg};
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
@@ -80,15 +81,19 @@ pub struct VestingSchedulePoint {
 
 /// This structure describes the query messages available in the contract.
 #[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// ## Description
     /// Returns the configuration for the contract using a [`ConfigResponse`] object.
+    #[returns(ConfigResponse)]
     Config {},
     /// ## Description
     /// Returns information about an address vesting tokens using a [`VestingAccountResponse`] object.
+    #[returns(VestingAccountResponse)]
     VestingAccount { address: String },
     /// ## Description
     /// Returns a list of addresses that are vesting tokens using a [`VestingAccountsResponse`] object.
+    #[returns(BalanceResponse)]
     VestingAccounts {
         start_after: Option<String>,
         limit: Option<u32>,
@@ -96,8 +101,10 @@ pub enum QueryMsg {
     },
     /// ## Description
     /// Returns the total unvested amount of tokens for a specific address.
+    #[returns(BalanceResponse)]
     AvailableAmount { address: String },
     /// Timestamp returns the current timestamp
+    #[returns(BalanceResponse)]
     Timestamp {},
 }
 
@@ -128,6 +135,7 @@ pub struct VestingAccountsResponse {
 
 /// This enum describes the types of sorting that can be applied to some piece of data
 #[cw_serde]
+
 pub enum OrderBy {
     /// Ascending
     Asc,
@@ -155,6 +163,7 @@ pub struct MigrateMsg {}
 
 /// This structure describes a CW20 hook message.
 #[cw_serde]
+
 pub enum Cw20HookMsg {
     /// RegisterVestingAccounts registers vesting targets/accounts
     RegisterVestingAccounts {

@@ -23,11 +23,10 @@ cw-storage-plus = "0.15"
 schemars = "0.8.1"
 thiserror = { version = "1.0.20" }
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+cosmwasm-schema = "1.1"
 
 [dev-dependencies]
 # we only need to enable this if we use integration tests
-#cosmwasm-vm = { version = "0.10.1", default-features = false }
-cosmwasm-schema = { version = "1.0.0" }
 cw-multi-test = "0.13.2"
 dexter-vault = { path = "../vault"}
 stable5pool = { path = "../stable_5pool"}

@@ -88,6 +88,30 @@ async function Demo() {
   const mnemonic = process.env.WALLET_MNEMONIC;
   const chain_id = process.env.CHAIN_ID;
 
+  // Setting up dual rewards for dexter generator
+  // 1. Instantiate staking contract with lp token, rewards token and distribution schedule
+  // 2. Instantiate proxy contract for the staking contract
+  // 3. Send reward tokens to staking contract for distribution
+  // 4. Allow proxy in generator and initialize the lp generator pool
+
+  // 1. Setup vesting schedule for generator in vesting contract
+  // 2. Set tokens_per_block for generator
+
+  const DEX_TOKEN =
+    "persistence14pca2wuhufwpe4hsuka6ue2fmg0ffl5uumaa4p45l009mjw7r0pqtnz2f5";
+
+  const LP_POOL =
+    "persistence1nldrmkjqskmpjzkmefmvt4k9xh6rd7z68vf9hggjfnwh5uhgtwrqlsxx0j";
+  const LP_TOKEN =
+    "persistence14ay0q9mpn4qrz9wtc8wyms6pq5lchcynfjn7hskh2u95t4437wmsdnfwv9";
+  const REWARD_TOKEN =
+    "persistence1da9krw7mn7cp2p74sus6x0ckfd5c9q5vhqe92yx8cf5dyqu8q8gq7mg5uk";
+  const distribution: [number, number, String] = [
+    1667566020,
+    1675342020,
+    "1000000000000",
+  ];
+
   // Incase the mnemonic / chain ID is not set in the environment variables
   if (!mnemonic || !chain_id) {
     throw new Error("WALLET_MNEMONIC / CHAIN_ID is not set");
@@ -165,70 +189,311 @@ async function Demo() {
   let wallet_balance = Number(balance_res["amount"]) / 10 ** 6;
   console.log(`Wallet's XPRT balance = ${wallet_balance}`);
 
-  // // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
-  let contracts: any[] = [
-    {
-      name: "Dexter Generator : Proxy",
-      path: "../artifacts/dexter_generator_proxy.wasm",
-      proposal_id: 0,
-    },
-    {
-      name: "Staking contract",
-      path: "../artifacts/anchor_staking.wasm",
-      proposal_id: 0,
-    },
-  ];
-
-  // UPLOAD CODE IDs
-  // --- Staking Contract ---
-  let staking_contract_code_id = 0;
-  try {
-    console.log(`\nSubmitting Proposal to store Staking Contract ...`);
-    const wasm = fs.readFileSync("../artifacts/anchor_staking.wasm");
-    const wasmStoreProposal = {
-      typeUrl: "/cosmwasm.wasm.v1.StoreCodeProposal",
-      value: Uint8Array.from(
-        cosmwasm.wasm.v1.StoreCodeProposal.encode(
-          cosmwasm.wasm.v1.StoreCodeProposal.fromPartial({
-            title: "Staking contract",
-            description: `Add wasm code for Staking contract`,
-            runAs: wallet_address,
-            wasmByteCode: Pako.gzip(wasm, { level: 9 }),
-            instantiatePermission: {
-              permission: cosmwasm.wasm.v1.accessTypeFromJSON(1),
-            },
-          })
-        ).finish()
-      ),
-    };
-    const res = await Gov_MsgSubmitProposal(
-      client,
-      wasmStoreProposal,
-      fee_denom,
-      deposit_amount
-    );
-    staking_contract_code_id = Number(res[0].events[3].attributes[1].value);
-    console.log(
-      `Staking contract -::- STORE CODE PROPOSAL ID = ${staking_contract_code_id}`
-    );
-  } catch (e) {
-    console.log("Proposal Error has occoured => ", e);
-  }
-  // TRANSACTION 2. --> Vote on proposal
+  // INSTANTIATE VESTING CONTRACT
+  // ----------------------------
+  // ----------------------------
   if (
-    staking_contract_code_id > 0 &&
-    CHAIN_ID != "core-1" &&
-    CHAIN_ID != "test-core-1"
+    !network.vesting_instantiate_proposal_id &&
+    (!network.vesting_contract_addr || network.vesting_contract_addr === "")
   ) {
-    try {
-      await voteOnProposal(client, contracts[i]["proposal_id"], 1, fee_denom);
-      await voteOnProposal(validator_1, staking_contract_code_id, 1, fee_denom);
-      await voteOnProposal(validator_2, staking_contract_code_id, 1, fee_denom);
-      console.log("Voted successfully");
-    } catch (e) {
-      console.log("Error has occoured while voting => ", e);
+    console.log(`\nSubmitting Proposal to instantiate Vesting Contract ...`);
+
+    // Make proposal to instantiate Vesting contract
+    if (network.vesting_contract_code_id > 0) {
+      let init_vesting_msg = {
+        owner: wallet_address,
+        token_addr: DEX_TOKEN,
+      };
+      try {
+        const wasmInstantiateProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+              cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                title: "Vesting Contract",
+                description: "Vesting contract",
+                runAs: wallet_address,
+                admin: wallet_address,
+                codeId: network.vesting_contract_code_id.toString(),
+                label: "Vesting Contract",
+                msg: Buffer.from(JSON.stringify(init_vesting_msg)).toString(
+                  "base64"
+                ),
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(
+          client,
+          wasmInstantiateProposal,
+          fee_denom,
+          deposit_amount
+        );
+        console.log(res);
+        network.vesting_instantiate_proposal_id = Number(
+          res[0].events[3].attributes[1].value
+        );
+        writeArtifact(network, CHAIN_ID);
+        // const json = JSON.parse(res.rawLog?);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }
+      // Vote on Proposal
+      if (
+        network.vesting_instantiate_proposal_id > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
+        try {
+          console.log(
+            `Voting on Proposal # ${network.vesting_instantiate_proposal_id}`
+          );
+          await voteOnProposal(
+            client,
+            network.vesting_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_1,
+            network.vesting_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_2,
+            network.vesting_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          console.log("Voted successfully");
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
     }
   }
+
+  // Get Vesting contract address if the proposal has passed
+  if (!network.vesting_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.vesting_contract_code_id
+    );
+    console.log(res);
+    if (res["contracts"].length > 0) {
+      network.vesting_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+  console.log(`Vesting Contract address = ${network.vesting_contract_addr}`);
+  return;
+
+  // INSTANTIATE STAKING CONTRACT
+  // ----------------------------
+  // ----------------------------
+  if (
+    !network.staking_contract_addr ||
+    network.staking_contract_addr === "" ||
+    !network.eq_staking_store_code_proposal_id ||
+    network.eq_staking_store_code_proposal_id == 0
+  ) {
+    console.log(`\nSubmitting Proposal to instantiate Staking Contract ...`);
+
+    // Make proposal to instantiate Staking contract
+    if (network.staking_contract_contract_code_id > 0) {
+      let init_staking_msg = {
+        anchor_token: REWARD_TOKEN,
+        staking_token: LP_TOKEN,
+        distribution_schedule: [distribution],
+      };
+      try {
+        const wasmInstantiateProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+              cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                title: "Staking Contract",
+                description: "Staking contract",
+                runAs: wallet_address,
+                admin: wallet_address,
+                codeId: network.staking_contract_contract_code_id.toString(),
+                label: "Staking Contract",
+                msg: Buffer.from(JSON.stringify(init_staking_msg)).toString(
+                  "base64"
+                ),
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(
+          client,
+          wasmInstantiateProposal,
+          fee_denom,
+          deposit_amount
+        );
+        console.log(res);
+        network.staking_instantiate_proposal_id = Number(
+          res[0].events[3].attributes[1].value
+        );
+        writeArtifact(network, CHAIN_ID);
+        // const json = JSON.parse(res.rawLog?);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }
+      // Vote on Proposal
+      if (
+        network.staking_instantiate_proposal_id > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
+        try {
+          console.log(
+            `Voting on Proposal # ${network.staking_instantiate_proposal_id}`
+          );
+          await voteOnProposal(
+            client,
+            network.staking_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_1,
+            network.staking_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_2,
+            network.staking_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          console.log("Voted successfully");
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
+    }
+  }
+
+  // Get Staking contract address if the proposal has passed
+  if (!network.staking_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.staking_contract_contract_code_id
+    );
+    console.log(res);
+    if (res["contracts"].length > 0) {
+      network.staking_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+  console.log(`Staking Contract address = ${network.staking_contract_addr}`);
+
+  // INSTANTIATE PROXY REWARDS CONTRACT
+  // ----------------------------
+  // ----------------------------
+  if (
+    network.staking_contract_addr &&
+    network.generator_proxy_contract_code_id &&
+    network.generator_proxy_contract_code_id != 0 &&
+    !network.proxy_instantiate_proposal_id
+  ) {
+    console.log(`\nSubmitting Proposal to instantiate Proxy Contract ...`);
+
+    // Make proposal to instantiate Proxy contract
+    if (network.generator_proxy_contract_code_id > 0) {
+      let init_proxy_msg = {
+        generator_contract_addr: network.generator_contract_addr,
+        pair_addr: LP_POOL,
+        lp_token_addr: LP_TOKEN,
+        reward_contract_addr: network.staking_contract_addr,
+        reward_token: { token: { contract_addr: REWARD_TOKEN } },
+      };
+      try {
+        const wasmInstantiateProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+              cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                title: "Proxy Contract",
+                description: "Proxy contract",
+                runAs: wallet_address,
+                admin: wallet_address,
+                codeId: network.generator_proxy_contract_code_id.toString(),
+                label: "Proxy Contract",
+                msg: Buffer.from(JSON.stringify(init_proxy_msg)).toString(
+                  "base64"
+                ),
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(
+          client,
+          wasmInstantiateProposal,
+          fee_denom,
+          deposit_amount
+        );
+        console.log(res);
+        network.proxy_instantiate_proposal_id = Number(
+          res[0].events[3].attributes[1].value
+        );
+        writeArtifact(network, CHAIN_ID);
+        // const json = JSON.parse(res.rawLog?);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }
+      // Vote on Proposal
+      if (
+        network.proxy_instantiate_proposal_id > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
+        try {
+          console.log(
+            `Voting on Proposal # ${network.proxy_instantiate_proposal_id}`
+          );
+          await voteOnProposal(
+            client,
+            network.proxy_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_1,
+            network.proxy_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_2,
+            network.proxy_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          console.log("Voted successfully");
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
+    }
+  }
+
+  // Get Proxy contract address if the proposal has passed
+  if (!network.proxy_contract_addr) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.generator_proxy_contract_code_id
+    );
+    console.log(res);
+    if (res["contracts"].length > 0) {
+      network.proxy_contract_addr = res["contracts"][0];
+      writeArtifact(network, CHAIN_ID);
+    }
+  }
+  console.log(`Proxy Contract address = ${network.proxy_contract_addr}`);
 }
 
 function delay(ms: number) {

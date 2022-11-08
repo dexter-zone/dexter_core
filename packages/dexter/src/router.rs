@@ -1,26 +1,25 @@
 use crate::asset::AssetInfo;
 use crate::pool::ResponseType;
 use crate::vault::SwapType;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, StdResult, Uint128, WasmMsg};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 pub const MAX_SWAP_OPERATIONS: usize = 50;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {
     /// The dexter Vault contract address
     pub dexter_vault: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct Config {
     /// The dexter vault contract address
     pub dexter_vault: Addr,
 }
 
 /// This enum describes a swap operation.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct HopSwapRequest {
     /// Pool Id via which the swap is to be routed
     pub pool_id: Uint128,
@@ -33,8 +32,7 @@ pub struct HopSwapRequest {
 }
 
 /// This structure describes the execute messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     /// ExecuteMultihopSwap processes multiple swaps via dexter pools
     ExecuteMultihopSwap {
@@ -47,15 +45,14 @@ pub enum ExecuteMsg {
     Callback(CallbackMsg),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum CallbackMsg {
     ContinueHopSwap {
         multiswap_request: Vec<HopSwapRequest>,
         offer_asset: AssetInfo,
         prev_ask_amount: Uint128,
         recipient: Addr,
-        minimum_receive: Option<Uint128>,
+        minimum_receive: Uint128,
     },
 }
 
@@ -72,11 +69,13 @@ impl CallbackMsg {
 }
 
 /// This structure describes the query messages available in the contract.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(ConfigResponse)]
     Config {},
     /// SimulateMultihopSwap simulates multi-hop swap operations
+    #[returns(SimulateMultiHopResponse)]
     SimulateMultihopSwap {
         multiswap_request: Vec<HopSwapRequest>,
         swap_type: SwapType,
@@ -84,19 +83,19 @@ pub enum QueryMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct ConfigResponse {
     /// The dexter vault contract address
     pub dexter_vault: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct SimulateMultiHopResponse {
     pub swap_operations: Vec<SimulatedTrade>,
     pub response: ResponseType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct SimulatedTrade {
     pub pool_id: Uint128,
     pub asset_in: AssetInfo,
@@ -107,7 +106,7 @@ pub struct SimulatedTrade {
 
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct MigrateMsg {}
 
 pub fn return_swap_sim_failure(
