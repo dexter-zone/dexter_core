@@ -1,20 +1,18 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{
-    AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
-};
+
 use dexter::router::{
     ConfigResponse, ExecuteMsg, HopSwapRequest, InstantiateMsg, QueryMsg, SimulateMultiHopResponse,
     SimulatedTrade,
 };
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
-    InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolConfigResponse, PoolInfo,
-    PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest, SwapType,
+    InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolInfoResponse, PoolType,
+    QueryMsg as VaultQueryMsg, SwapType,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -746,8 +744,43 @@ fn test_router_functionality() {
     )
     .unwrap();
 
+    // Increase Allowances
+    app.execute_contract(
+        owner.clone(),
+        token_instance1.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: router_instance.clone().to_string(),
+            amount: Uint128::from(100000000_000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        owner.clone(),
+        token_instance2.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: router_instance.clone().to_string(),
+            amount: Uint128::from(100000000_000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+    app.execute_contract(
+        owner.clone(),
+        token_instance3.clone(),
+        &Cw20ExecuteMsg::IncreaseAllowance {
+            spender: router_instance.clone().to_string(),
+            amount: Uint128::from(100000000_000000u128),
+            expires: None,
+        },
+        &[],
+    )
+    .unwrap();
+
     // Create STABLE-5-POOL pool
-    let (stable5_pool_addr, stable5_lp_token_addr, stable5_pool_id) = initialize_stable_5_pool(
+    let (_, _, stable5_pool_id) = initialize_stable_5_pool(
         &mut app,
         &Addr::unchecked(owner.clone()),
         vault_instance.clone(),
@@ -758,7 +791,7 @@ fn test_router_functionality() {
         denom1.clone(),
     );
     // Create WEIGHTED pool
-    let (_, weighted_lp_token_addr, weighted_pool_id) = initialize_weighted_pool(
+    let (_, _, weighted_pool_id) = initialize_weighted_pool(
         &mut app,
         &Addr::unchecked(owner.clone()),
         vault_instance.clone(),
@@ -789,7 +822,7 @@ fn test_router_functionality() {
     // -------x---------- STABLE-5-POOL -::- PROVIDE LIQUIDITY -------x----------
     // -------x---------- -------x---------- -------x---------- -------x----------
 
-    let mut assets_msg = vec![
+    let assets_msg = vec![
         Asset {
             info: AssetInfo::NativeToken {
                 denom: denom0.clone(),
@@ -998,7 +1031,7 @@ fn test_router_functionality() {
     //                          SimulatedTrade { pool_id: Uint128(1), asset_in: Token { contract_addr: Addr("contract3") }, offered_amount: Uint128(940882), asset_out: NativeToken { denom: "token0" }, received_amount: Uint128(912656) },
     //                          SimulatedTrade { pool_id: Uint128(3), asset_in: NativeToken { denom: "token0" }, offered_amount: Uint128(912656), asset_out: Token { contract_addr: Addr("contract2") }, received_amount: Uint128(885277) }]
     //       , response: Success }
-    let mut multiswap_request_msg: Vec<HopSwapRequest> = [
+    let multiswap_request_msg: Vec<HopSwapRequest> = [
         HopSwapRequest {
             pool_id: Uint128::from(xyk_pool_id),
             asset_in: AssetInfo::NativeToken {
@@ -1137,7 +1170,7 @@ fn test_router_functionality() {
         .query_wasm_smart(
             &router_instance.clone(),
             &dexter::router::QueryMsg::SimulateMultihopSwap {
-                multiswap_request: multiswap_request_msg,
+                multiswap_request: multiswap_request_msg.clone(),
                 swap_type: SwapType::GiveOut {},
                 amount: Uint128::from(885277u128),
             },
@@ -1196,5 +1229,176 @@ fn test_router_functionality() {
         ],
         multihop_sim_response.swap_operations
     );
-    println!("multihop_sim_response: {:?}", multihop_sim_response);
+
+    // -------x---------- DEXTER ROUTER -::- Test Multi-Hop Function ----------x----------
+    // -------x---------- ---------x---------- -------------x---------- -------x----------
+
+    let current_block = app.block_info();
+    app.update_block(|b| {
+        b.height += 10;
+        b.time = Timestamp::from_seconds(current_block.time.seconds() + 90)
+    });
+
+    let multiswap_request_msg: Vec<HopSwapRequest> = [
+        HopSwapRequest {
+            pool_id: Uint128::from(xyk_pool_id),
+            asset_in: AssetInfo::Token {
+                contract_addr: token_instance1.clone(),
+            },
+            asset_out: AssetInfo::NativeToken {
+                denom: denom0.clone(),
+            },
+            max_spread: None,
+            belief_price: None,
+        },
+        HopSwapRequest {
+            pool_id: Uint128::from(weighted_pool_id),
+            asset_in: AssetInfo::NativeToken {
+                denom: denom0.clone(),
+            },
+            asset_out: AssetInfo::Token {
+                contract_addr: token_instance2.clone(),
+            },
+            max_spread: None,
+            belief_price: None,
+        },
+        HopSwapRequest {
+            pool_id: Uint128::from(stable5_pool_id),
+            asset_in: AssetInfo::Token {
+                contract_addr: token_instance2.clone(),
+            },
+            asset_out: AssetInfo::Token {
+                contract_addr: token_instance3.clone(),
+            },
+            max_spread: None,
+            belief_price: None,
+        },
+    ]
+    .to_vec();
+
+    let cur_sender_offer_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    let cur_sender_ask_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance3.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    let cur_vault_offer_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+    let cur_vault_ask_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance3.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    // Multi-Hop Swap
+    // Offer token is not native. Transferring tokens to router from the user and providing allowance
+    // First hop swap request: SingleSwapRequest { pool_id: Uint128(4), asset_in: Token { contract_addr: Addr("contract2") }, asset_out: NativeToken { denom: "token0" }, swap_type: GiveIn, amount: Uint128(885277), max_spread: None, belief_price: None }
+    // Current ask balance (before swap): Uint128(0)
+
+    // Current offer asset ("token0") balance (after swap): Uint128(858711)
+    // Amount returned from the last hop swap: Uint128(858711)
+    // Next hop swap request: SingleSwapRequest { pool_id: Uint128(2), asset_in: NativeToken { denom: "token0" }, asset_out: Token { contract_addr: Addr("contract3") }, swap_type: GiveIn, amount: Uint128(858711), max_spread: None, belief_price: None }
+    // Current ask asset ("contract3") balance: Uint128(0)
+
+    // Current offer asset ("contract3") balance (after swap): Uint128(832942)
+    // Amount returned from the last hop swap: Uint128(832942)
+    // Next hop swap request: SingleSwapRequest { pool_id: Uint128(1), asset_in: Token { contract_addr: Addr("contract3") }, asset_out: Token { contract_addr: Addr("contract4") }, swap_type: GiveIn, amount: Uint128(832942), max_spread: None, belief_price: None }
+    // Current ask asset ("contract4") balance: Uint128(0)
+
+    // Current offer asset ("contract4") balance (after swap): Uint128(807954)
+    // Amount returned from the last hop swap: Uint128(807954)
+    // Hop is over. Checking if minimum receive amount is met. Minimum receive amount: "0" Amount returned from the last hop swap: "807954"
+    let multihop_swap_msg = ExecuteMsg::ExecuteMultihopSwap {
+        multiswap_request: multiswap_request_msg,
+        recipient: None,
+        offer_amount: Uint128::from(885277u128),
+        minimum_receive: None,
+    };
+    app.execute_contract(
+        owner.clone(),
+        router_instance.clone(),
+        &multihop_swap_msg,
+        &[],
+    )
+    .unwrap();
+
+    let new_sender_offer_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+    let new_sender_ask_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance3.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    let new_vault_offer_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance1.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+    let new_vault_ask_asset_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &token_instance3.clone(),
+            &Cw20QueryMsg::Balance {
+                address: vault_instance.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(
+        Uint128::from(807954u128),
+        new_sender_ask_asset_balance.balance - cur_sender_ask_asset_balance.balance
+    );
+    assert_eq!(
+        Uint128::from(823946u128), // Fees are also deducted
+        cur_vault_ask_asset_balance.balance - new_vault_ask_asset_balance.balance
+    );
+
+    assert_eq!(
+        Uint128::from(885277u128),
+        cur_sender_offer_asset_balance.balance - new_sender_offer_asset_balance.balance
+    );
+    assert_eq!(
+        Uint128::from(885277u128),
+        new_vault_offer_asset_balance.balance - cur_vault_offer_asset_balance.balance
+    );
 }

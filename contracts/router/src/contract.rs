@@ -1,17 +1,15 @@
-use std::fmt::format;
 use std::vec;
 
 use crate::error::ContractError;
 use crate::state::CONFIG;
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Addr, Attribute, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, QueryRequest, Response, StdError, StdResult, Uint128, WasmMsg, WasmQuery,
+    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo,
+    QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery,
 };
-use cw2::set_contract_version;
-use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
-use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
+use cw2::{get_contract_version, set_contract_version};
+use cw20::Cw20ExecuteMsg;
+use dexter::asset::{addr_validate_to_lower, AssetInfo};
 use dexter::pool::ResponseType;
-use dexter::querier::query_vault_config;
 use dexter::router::{
     return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest,
     InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade,
@@ -105,6 +103,18 @@ fn handle_callback(
     }
 }
 
+// ----------------x----------------x--------------------------x-----------------------x----------------x----------------
+// ----------------x----------------x  :::: ROUTER::EXECUTE Fns Implementation   ::::  x----------------x----------------
+// ----------------x----------------x--------------------------x-----------------------x----------------x----------------
+
+/// ## Description - Entry point for the multi-hop swap tx. The multi-hop route swap request details are passed in [`Vec<HopSwapRequest>`] Type parameter.
+///                  User needs to provide the offer amount for the first hop swap and the minimum receive amount for the last hop swap.
+///
+/// ## Params
+/// * **multiswap_request** of type [`Vec<HopSwapRequest>`] which is holding the details of the multi-hop swap request.
+/// * **offer_amount** of type [`Uint128`] which is the amount of the first hop swap
+/// * **recipient** Optional parameter. Recipient address of the swap tx. If not provided, then the default value is the sender address.
+/// * **minimum_receive** Optional parameter. Minimum tokens to receive from the last hop swap. If not provided, then the default value is 0.
 pub fn execute_multihop_swap(
     deps: DepsMut,
     env: Env,
@@ -123,24 +133,59 @@ pub fn execute_multihop_swap(
         });
     }
 
+    // CosmosMsgs to be sent in the response
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
-    let current_ask_balance: Uint128;
-    let mut attributes: Vec<Attribute> = vec![];
+    // Event for indexing support
+    let mut event = Event::new("dexter-router::multihop-swap")
+        .add_attribute("total_hops", multiswap_request.len().to_string());
 
-    // Get number of offer asset (Native) tokens sent with the msg
-    let tokens_received: Uint128;
+    // Current ask token balance available with the router contract
+    let current_ask_balance: Uint128;
+
+    // Handle conditions if the first hop is a swap from native token
+    // - check number of native tokens sent with the tx
+    // - if the number of native tokens sent is less than the offer amount, then return error
+    // - if the number of native tokens sent is greater than the offer amount, then send the remaining tokens back to the sender
     if multiswap_request[0].asset_in.is_native_token() {
+        // Query - Get number of offer asset (Native) tokens sent with the msg
         let tokens_received = multiswap_request[0]
             .asset_in
             .get_sent_native_token_balance(&info);
+        println!(
+            "Offer token is native. Tokens received: {:?}",
+            tokens_received
+        );
 
-        // Error - If offer amount is invalid
+        // Error - if the number of native tokens sent is less than the offer amount, then return error
         if tokens_received.is_zero() || tokens_received < offer_amount {
             return Err(ContractError::InvalidMultihopSwapRequest {
-                msg: "Invalid number of tokens sent. ".to_string(),
+                msg: format!(
+                    "Invalid number of tokens sent. Tokens sent = {} Tokens received = {}",
+                    tokens_received, offer_amount
+                ),
             });
         }
-    } else {
+
+        // ExecuteMsg -if the number of native tokens sent is greater than the offer amount, then send the remaining tokens back to the sender
+        if tokens_received > offer_amount {
+            execute_msgs.push(multiswap_request[0].asset_in.clone().into_msg(
+                info.sender.clone(),
+                tokens_received.checked_sub(offer_amount)?,
+            )?);
+        }
+    }
+    // Handle conditions if the first hop is a swap from a CW20 token
+    // - Transfer the offer amount from the sender to the router contract
+    else {
+        println!("Offer token is not native. Transferring tokens to router from the user and providing allowance");
+        let transfer_from_msg = dexter::helper::build_transfer_cw20_from_user_msg(
+            multiswap_request[0].asset_in.as_string(),
+            info.sender.clone().to_string(),
+            env.contract.address.to_string(),
+            offer_amount,
+        )?;
+        execute_msgs.push(transfer_from_msg);
+
         // If a CW20 token, we need to give allowance to the dexter Vault contract
         let allowance_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: multiswap_request[0].asset_in.to_string(),
@@ -159,13 +204,18 @@ pub fn execute_multihop_swap(
     let first_hop_swap_request = SingleSwapRequest {
         pool_id: first_hop.pool_id,
         asset_in: first_hop.asset_in.clone(),
-        asset_out: first_hop.asset_out,
+        asset_out: first_hop.asset_out.clone(),
         swap_type: SwapType::GiveIn {},
         // Amount provided is the amount to be used for the first hop
         amount: offer_amount,
         max_spread: first_hop.max_spread,
         belief_price: first_hop.belief_price,
     };
+    event = event.add_attribute("first_hop_pool_id", first_hop.pool_id.to_string());
+    event = event.add_attribute("first_hop_asset_in", first_hop.asset_in.to_string());
+    event = event.add_attribute("offer_amount", offer_amount.to_string());
+    event = event.add_attribute("first_hop_asset_out", first_hop.asset_out.to_string());
+    println!("First hop swap request: {:?}", first_hop_swap_request);
 
     // Need to send native tokens if the offer asset is native token
     let coins: Vec<Coin> = if first_hop.asset_in.is_native_token() {
@@ -177,7 +227,7 @@ pub fn execute_multihop_swap(
         vec![]
     };
 
-    // ExecuteMsg for the first hop
+    // ExecuteMsg - For the first hop
     let first_hop_execute_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.dexter_vault.to_string(),
         funds: coins,
@@ -194,22 +244,34 @@ pub fn execute_multihop_swap(
     current_ask_balance = multiswap_request[0]
         .asset_out
         .query_for_balance(&deps.querier, env.contract.address.clone())?;
+    println!(
+        "Current ask balance (before swap): {:?}",
+        current_ask_balance
+    );
 
-    // Add Callback Msg as we need to continue with the hops
+    // CallbackMsg - Add Callback Msg as we need to continue with the hops
     multiswap_request.remove(0);
     let arb_chain_msg = CallbackMsg::ContinueHopSwap {
         multiswap_request: multiswap_request,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
         recipient: recipient.unwrap_or_else(|| info.sender),
-        minimum_receive: minimum_receive,
+        minimum_receive: minimum_receive.unwrap_or_else(|| Uint128::zero()),
     }
     .to_cosmos_msg(&env.contract.address)?;
     execute_msgs.push(arb_chain_msg);
 
-    Ok(Response::new())
+    Ok(Response::new().add_messages(execute_msgs).add_event(event))
 }
 
+/// ## Description - Callback Entry point for the multi-hop swap tx. Remaining multi-hop route swap details are passed in [`Vec<HopSwapRequest>`] Type parameter.
+///
+/// ## Params
+/// * **multiswap_request** of type [`Vec<HopSwapRequest>`] which is holding the details of the remaining multi-hop swap path.
+/// * **offer_asset** of type [`AssetInfo`] which is the token to be used for the next swap.
+/// * **prev_ask_amount** of type [`Uint128`] which was the contract balance of the ask token before the last swap.
+/// * **recipient**  Recipient address of the swap tx.
+/// * **minimum_receive** Optional parameter. Minimum tokens to receive from the last hop swap. If not provided, then the default value is 0.
 pub fn continue_hop_swap(
     deps: DepsMut,
     env: Env,
@@ -218,27 +280,48 @@ pub fn continue_hop_swap(
     offer_asset: AssetInfo,
     prev_ask_amount: Uint128,
     recipient: Addr,
-    minimum_receive: Option<Uint128>,
+    minimum_receive: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
     // Calculate current offer asset balance
     let asset_balance =
         offer_asset.query_for_balance(&deps.querier, env.contract.address.clone())?;
+    println!(
+        "\nCurrent offer asset ({:?}) balance (after swap): {:?}",
+        offer_asset.to_string(),
+        asset_balance
+    );
+
+    // Amount returned from the last hop swap
     let amount_returned_prev_hop = asset_balance.checked_sub(prev_ask_amount)?;
+    println!(
+        "Amount returned from the last hop swap: {:?}",
+        amount_returned_prev_hop
+    );
 
     // ExecuteMsgs
+    let mut response = Response::new();
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
     let current_ask_balance: Uint128;
 
     // If Hop is over, check if the minimum receive amount is met and transfer the tokens to the recipient
     if multiswap_request.len() == 0 {
-        if amount_returned_prev_hop < minimum_receive.unwrap() {
+        println!(
+            "Hop is over. Checking if minimum receive amount is met. Minimum receive amount: {:?} Amount returned from the last hop swap: {:?}",
+            minimum_receive.to_string(), amount_returned_prev_hop.to_string()
+        );
+        if amount_returned_prev_hop < minimum_receive {
             return Err(ContractError::InvalidMultihopSwapRequest {
-                msg: "Minimum receive amount not met. Swap failed.".to_string(),
+                msg: format!("Minimum receive amount not met. Swap failed. Smount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
             });
         }
         execute_msgs.push(offer_asset.into_msg(recipient, amount_returned_prev_hop)?);
+
+        response = response.add_attribute(
+            "amount_returned_last_hop",
+            amount_returned_prev_hop.to_string(),
+        );
     } else {
         let next_hop = multiswap_request[0].clone();
 
@@ -246,8 +329,8 @@ pub fn continue_hop_swap(
         if !offer_asset.equal(&next_hop.asset_in.clone()) {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg:
-                    "Invalid multiswap request. Offer asset does not match the next hop's asset in."
-                        .to_string(),
+                format!("Invalid multiswap request. Asset {} out of previous hop does not match the asset {} to be provided for next hop."
+                , offer_asset, next_hop.asset_in),
             });
         }
 
@@ -277,6 +360,7 @@ pub fn continue_hop_swap(
             max_spread: next_hop.max_spread,
             belief_price: next_hop.belief_price,
         };
+        println!("Next hop swap request: {:?}", next_hop_swap_request);
 
         // Need to send native tokens if the offer asset is native token
         let coins: Vec<Coin> = if next_hop.asset_in.is_native_token() {
@@ -305,21 +389,38 @@ pub fn continue_hop_swap(
         current_ask_balance = multiswap_request[0]
             .asset_out
             .query_for_balance(&deps.querier, env.contract.address.clone())?;
+        println!(
+            "Current ask asset ({:?}) balance: {:?}",
+            multiswap_request[0].asset_out.to_string(),
+            current_ask_balance
+        );
 
         // Add Callback Msg as we need to continue with the hops
         multiswap_request.remove(0);
         let arb_chain_msg = CallbackMsg::ContinueHopSwap {
             multiswap_request: multiswap_request,
-            offer_asset: next_hop_swap_request.asset_out,
+            offer_asset: next_hop_swap_request.asset_out.clone(),
             prev_ask_amount: current_ask_balance,
             recipient: recipient,
             minimum_receive: minimum_receive,
         }
         .to_cosmos_msg(&env.contract.address)?;
         execute_msgs.push(arb_chain_msg);
+
+        response = response
+            .add_attribute(
+                "amount_returned_prev_hop",
+                amount_returned_prev_hop.to_string(),
+            )
+            .add_attribute(
+                "current_hop_ask_asset",
+                next_hop_swap_request.asset_out.to_string(),
+            );
     }
 
-    Ok(Response::new())
+    response = response.add_messages(execute_msgs);
+
+    Ok(response)
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
@@ -344,6 +445,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
+/// ## Description - Returns the stored Router Configuration settings in custom [`ConfigResponse`] structure
 fn query_get_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
@@ -469,13 +571,13 @@ fn query_simulate_multihop(
                         format!("Invalid multiswap request. Asset {} to be provided for next hop does not match the asset {} returned by the current hop. ", prev_token_out.to_string(), hop.asset_in.to_string())));
                 }
 
-                println!(
-                    "Pool ID: {:?}  | asset_in: {:?} | asset_out: {:?} | amount_to_receive {:?}",
-                    hop.pool_id,
-                    hop.asset_in.to_string(),
-                    hop.asset_out.to_string(),
-                    prev_amount_out.to_string()
-                );
+                // println!(
+                //     "Pool ID: {:?}  | asset_in: {:?} | asset_out: {:?} | amount_to_receive {:?}",
+                //     hop.pool_id,
+                //     hop.asset_in.to_string(),
+                //     hop.asset_out.to_string(),
+                //     prev_amount_out.to_string()
+                // );
 
                 // Get pool info
                 let pool_response: dexter::vault::PoolInfoResponse =
@@ -521,23 +623,23 @@ fn query_simulate_multihop(
                     },
                 );
 
-                println!(
-                    "asset_in: {:?} offered_amount: {:?} || asset_out: {:?} received_amount: {:?}",
-                    hop.asset_in.to_string(),
-                    pool_swap_transition.trade_params.amount_in,
-                    hop.asset_out.to_string(),
-                    pool_swap_transition.trade_params.amount_out
-                );
+                // println!(
+                //     "asset_in: {:?} offered_amount: {:?} || asset_out: {:?} received_amount: {:?}",
+                //     hop.asset_in.to_string(),
+                //     pool_swap_transition.trade_params.amount_in,
+                //     hop.asset_out.to_string(),
+                //     pool_swap_transition.trade_params.amount_out
+                // );
 
                 // Number of tokens provied in the current hop are received from the previous hop
                 prev_amount_out = pool_swap_transition.trade_params.amount_in;
                 // Token provided in current swap is the token received in the previous swap
                 prev_token_out = hop.asset_in.clone();
-                println!(
-                    "Number of {:?} tokens to be provided for this swap and should be returned by previous swap: {:?}\n",
-                    hop.asset_in.clone().to_string(),
-                    prev_amount_out
-                );
+                // println!(
+                //     "Number of {:?} tokens to be provided for this swap and should be returned by previous swap: {:?}\n",
+                //     hop.asset_in.clone().to_string(),
+                //     prev_amount_out
+                // );
             }
         }
         SwapType::Custom(_) => {
@@ -554,36 +656,21 @@ fn query_simulate_multihop(
     })
 }
 
-/// Helper Function. Returns CosmosMsg which transfers CW20 Tokens from owner to recipient. (Transfers DEX from user to itself )
-fn build_swap_via_vault_msg(
-    vault_addr: String,
-    swap_request: SingleSwapRequest,
-    recipient: Option<String>,
-    min_receive: Option<Uint128>,
-    max_spend: Option<Uint128>,
-    coin_to_transfer: Option<Coin>,
-) -> StdResult<CosmosMsg> {
-    // Tokens to transfer (to do if AssetIn is NativeToken)
-    let mut coins: Vec<Coin> = vec![];
+// ----------------x----------------x---------------------x-------------------x----------------x----------------
+// ----------------x----------------x  :::: VAULT::Migration function   ::::  x----------------x----------------
+// ----------------x----------------x---------------------x-------------------x----------------x----------------
 
-    if swap_request.asset_in.is_native_token() {
-        coins.push(Coin {
-            denom: swap_request.asset_in.to_string(),
-            amount: max_spend.unwrap(),
-        });
-    };
+/// ## Description - Used for migration of contract. Returns the default object of type [`Response`].
+/// ## Params
+/// * **_msg** is the object of type [`MigrateMsg`].
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    let contract_version = get_contract_version(deps.storage)?;
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    if let Some(coin) = coin_to_transfer {
-        coins.push(coin);
-    }
-    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: vault_addr,
-        funds: coins,
-        msg: to_binary(&dexter::vault::ExecuteMsg::Swap {
-            swap_request,
-            recipient,
-            min_receive,
-            max_spend,
-        })?,
-    }))
+    Ok(Response::new()
+        .add_attribute("previous_contract_name", &contract_version.contract)
+        .add_attribute("previous_contract_version", &contract_version.version)
+        .add_attribute("new_contract_name", CONTRACT_NAME)
+        .add_attribute("new_contract_version", CONTRACT_VERSION))
 }
