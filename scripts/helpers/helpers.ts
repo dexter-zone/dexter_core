@@ -679,16 +679,21 @@ export async function find_code_id_from_contract_hash(
   offset?: number,
   limit?: number
 ) {
-  let codes = await query_wasm_codes(client, offset, limit);
-  let codeInfos = codes["codeInfos"];
-
-  for (let i = 0; i < codeInfos.length; i++) {
-    let hex = Buffer.from(codeInfos[i]["dataHash"]).toString("hex");
-    let code_id = codeInfos[i]["codeId"];
-    // console.log(` code_id = ${code_id} hex = ${hex}`);
-    if (hash == hex) {
-      return code_id;
+  offset = 0;
+  limit = 100;
+  for (let j = 0; j < 100; j++) {
+    let codes = await query_wasm_codes(client, offset, limit);
+    let codeInfos = codes["codeInfos"];
+    for (let i = 0; i < codeInfos.length; i++) {
+      let hex = Buffer.from(codeInfos[i]["dataHash"]).toString("hex");
+      let code_id = codeInfos[i]["codeId"];
+      console.log(` code_id = ${code_id} hex = ${hex}`);
+      if (hash == hex) {
+        return code_id;
+      }
     }
+    offset = offset + limit;
+    console.log(`\noffset = ${offset}`);
   }
   return 0;
 }

@@ -178,14 +178,15 @@ async function Demo() {
     }
   }
 
-  let ress = await query_gov_proposal(client, 246);
-  console.log(ress);
+  // let ress = await query_gov_proposal(client, 253);
+  // console.log(ress);
 
-  let code_id_res = await find_code_id_from_contract_hash(
-    client,
-    "8537ca75efdca29421e35c39e4996cd5eb9ed0b2c7f2ec8a5df4e11f57344030"
-  );
-  console.log(code_id_res);
+  // let code_id_res = await find_code_id_from_contract_hash(
+  //   client,
+  //   "712d320459fd7ed6ef35ad00369b03957a1b23305385b3f376c7db41f68b4ca7"
+  // );
+  // console.log(code_id_res);
+  // return;
 
   // -----------x-------------x-------------x------------------------------
   // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------99,994
