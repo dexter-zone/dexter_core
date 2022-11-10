@@ -338,7 +338,7 @@ async function Demo() {
               cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
                 title: "Dexter Router",
                 description:
-                  "Dexter Router contract, used facilitating token swaps and instantiating pools",
+                  "Dexter Router contract, used facilitating token swaps",
                 runAs: wallet_address,
                 admin: wallet_address,
                 codeId: network.router_contract_code_id.toString(),

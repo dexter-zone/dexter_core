@@ -289,7 +289,7 @@ pub fn continue_hop_swap(
     if multiswap_request.len() == 0 {
         if amount_returned_prev_hop < minimum_receive {
             return Err(ContractError::InvalidMultihopSwapRequest {
-                msg: format!("Minimum receive amount not met. Swap failed. Smount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
+                msg: format!("Minimum receive amount not met. Swap failed. Amount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
             });
         }
         execute_msgs.push(offer_asset.into_msg(recipient, amount_returned_prev_hop)?);

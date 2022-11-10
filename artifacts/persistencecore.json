@@ -60,5 +60,6 @@
   "vesting_contract_addr": "persistence1mj46n4hh8ejrdyel35h3p6vs2en3kw0emjqxekn5tt74xc0v6ftqmkf2xc",
   "router_store_code_proposal_id": 253,
   "router_contract_code_id": 133,
-  "router_instantiate_proposal_id": 254
+  "router_instantiate_proposal_id": 254,
+  "router_contract_address": "persistence14qjmq82xa52quc5rkxmexgxw773c4sn2u0y6dy3njmjg66ups60qca4gs9"
 }
