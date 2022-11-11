@@ -368,5 +368,5 @@ pub struct RewardInfoResponse {
     /// The address of the base reward token
     pub base_reward_token: Option<Addr>,
     /// The address of the 3rd party reward token
-    pub proxy_reward_token: Option<Addr>,
+    pub proxy_reward_token: Option<AssetInfo>,
 }

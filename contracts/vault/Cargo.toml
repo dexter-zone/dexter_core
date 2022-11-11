@@ -25,16 +25,16 @@ library = []
 
 [dependencies]
 dexter = { path = "../../packages/dexter", default-features = false }
-cosmwasm-std = "1.1.5"
-cw-storage-plus = "0.13.2"
-cw2 = "0.16.0"
-cw20 = "0.16.0"
+cosmwasm-std = { version = "1.1" }
+cw-storage-plus = "0.15"
+cw2 = "0.15"
+cw20 = { version = "0.15" }
 schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
 serde-json-wasm = "0.4.1"
-cosmwasm-schema = "1.1.5"
+cosmwasm-schema = "1.1"
 
 [dev-dependencies]
 stable5pool = { path = "../stable_5pool"}
@@ -44,4 +44,4 @@ xyk-pool = { path = "../xyk_pool"}
 lp-token = { path = "../lp_token"}
 
 cw-multi-test = "0.13.2"
-cw20 = "0.16.0"
+cw20 = { version = "0.15" }

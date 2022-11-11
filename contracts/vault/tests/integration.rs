@@ -1595,7 +1595,7 @@ fn test_join_pool() {
         new_user_lp_balance.balance - cur_user_lp_balance.balance
     );
 
-    let new_vault_token1_balance: BalanceResponse = app
+    let mut new_vault_token1_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
             &token_instance1.clone(),

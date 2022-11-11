@@ -379,7 +379,7 @@
         "additionalProperties": false
       },
       {
-        "description": "Returns the 3rd party reward token contract address",
+        "description": "Returns the 3rd party reward token info",
         "type": "object",
         "required": [
           "reward_info"
@@ -394,7 +394,13 @@
       }
     ]
   },
-  "migrate": null,
+  "migrate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MigrateMsg",
+    "description": "This structure describes a migration message. We currently take no arguments for migrations",
+    "type": "object",
+    "additionalProperties": false
+  },
   "sudo": null,
   "responses": {
     "config": {
@@ -543,34 +549,54 @@
     },
     "reward_info": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "RewardInfoResponse",
-      "description": "This structure holds the response returned when querying for the token addresses used to reward a specific generator",
-      "type": "object",
-      "properties": {
-        "base_reward_token": {
-          "description": "The address of the base reward token",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
+      "title": "AssetInfo",
+      "description": "This enum describes available Token types.",
+      "oneOf": [
+        {
+          "description": "Non-native Token",
+          "type": "object",
+          "required": [
+            "token"
+          ],
+          "properties": {
+            "token": {
+              "type": "object",
+              "required": [
+                "contract_addr"
+              ],
+              "properties": {
+                "contract_addr": {
+                  "$ref": "#/definitions/Addr"
+                }
+              },
+              "additionalProperties": false
             }
-          ]
+          },
+          "additionalProperties": false
         },
-        "proxy_reward_token": {
-          "description": "The address of the 3rd party reward token",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
+        {
+          "description": "Native token",
+          "type": "object",
+          "required": [
+            "native_token"
+          ],
+          "properties": {
+            "native_token": {
+              "type": "object",
+              "required": [
+                "denom"
+              ],
+              "properties": {
+                "denom": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
             }
-          ]
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false,
+      ],
       "definitions": {
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",

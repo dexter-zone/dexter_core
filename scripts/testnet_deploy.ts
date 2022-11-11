@@ -179,7 +179,7 @@ async function Demo() {
   }
 
   // -----------x-------------x-------------x------------------------------
-  // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------
+  // ----------- MAKE STORE CODE PROPOSALS FOR ALL DEXTER CONTRACTS -------99,994
   // -----------x-------------x-------------x------------------------------
 
   // // CONTRACTS WHICH ARE TO BE DEPLOYED ON PERSISTENCE ONE NETWORK FOR DEXTER PROTOCOL
@@ -237,6 +237,11 @@ async function Demo() {
     {
       name: "Staking contract",
       path: "../artifacts/anchor_staking.wasm",
+      proposal_id: 0,
+    },
+    {
+      name: "Router contract",
+      path: "../artifacts/dexter_router.wasm",
       proposal_id: 0,
     },
   ];
@@ -339,6 +344,7 @@ async function Demo() {
     network.generator_proxy_store_code_proposal_id =
       contracts[9]["proposal_id"];
     network.eq_staking_store_code_proposal_id = contracts[10]["proposal_id"];
+    network.router_store_code_proposal_id = contracts[11]["proposal_id"];
     writeArtifact(network, CHAIN_ID);
     console.log(
       "Proposals for storing code for dexter contracts executed successfully"
@@ -458,6 +464,17 @@ async function Demo() {
     );
     network.staking_contract_contract_code_id = Number(code_id_res);
   }
+  if (
+    !network.router_contract_contract_code_id ||
+    network.router_contract_contract_code_id == 0
+  ) {
+    let code_id_res = await find_code_id_from_contract_hash(
+      client,
+      contracts[11]["hash"]
+    );
+    network.router_contract_contract_code_id = Number(code_id_res);
+  }
+
   writeArtifact(network, CHAIN_ID);
 
   // -----------x-------------x---------x---------------
@@ -648,6 +665,122 @@ async function Demo() {
         res["contracts"][res["contracts"].length - 1];
     } else {
       console.log("Vault Contract Address not found. Exiting...");
+      return;
+    }
+    writeArtifact(network, CHAIN_ID);
+  }
+
+  // -----------x-------------x---------x---------------
+  // ----------- INSTANTIATE DEXTER ROUTER  -------------
+  // -----------x-------------x---------x---------------
+
+  // Check if Router contract code has been stored on chain
+  if (network.router_contract_code_id == 0) {
+    console.log("Router contract code id not found. Exiting...");
+    return;
+  }
+
+  // INSTANTIATE DEXTER ROUTER CONTRACT --> If router contract has not been instantiated yet
+  if (
+    network.router_contract_code_id > 0 &&
+    (!network.router_instantiate_proposal_id ||
+      network.router_instantiate_proposal_id == 0)
+  ) {
+    console.log(
+      `\nSubmitting Proposal to instantiate Dexter ROUTER Contract ...`
+    );
+
+    // Make proposal to instantiate Vault contract
+    if (network.router_contract_code_id > 0) {
+      let init_router_msg = {
+        dexter_vault: network.vault_contract_address,
+      };
+      try {
+        const wasmInstantiateProposal = {
+          typeUrl: "/cosmwasm.wasm.v1.InstantiateContractProposal",
+          value: Uint8Array.from(
+            cosmwasm.wasm.v1.InstantiateContractProposal.encode(
+              cosmwasm.wasm.v1.InstantiateContractProposal.fromJSON({
+                title: "Dexter Router",
+                description:
+                  "Dexter Router contract, used facilitating token swaps and instantiating pools",
+                runAs: wallet_address,
+                admin: wallet_address,
+                codeId: network.router_contract_code_id.toString(),
+                label: "Dexter Router",
+                msg: Buffer.from(JSON.stringify(init_router_msg)).toString(
+                  "base64"
+                ),
+              })
+            ).finish()
+          ),
+        };
+        const res = await Gov_MsgSubmitProposal(
+          client,
+          wasmInstantiateProposal,
+          fee_denom,
+          deposit_amount
+        );
+        console.log(res);
+        network.router_instantiate_proposal_id = Number(
+          res[0].events[3].attributes[1].value
+        );
+        writeArtifact(network, CHAIN_ID);
+        // const json = JSON.parse(res.rawLog?);
+      } catch (e) {
+        console.log("Proposal Error has occoured => ", e);
+      }
+      // Vote on Proposal
+      if (
+        network.router_instantiate_proposal_id > 0 &&
+        CHAIN_ID != "core-1" &&
+        CHAIN_ID != "test-core-1"
+      ) {
+        try {
+          console.log(
+            `Voting on Proposal # ${network.router_instantiate_proposal_id}`
+          );
+          await voteOnProposal(
+            client,
+            network.router_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_1,
+            network.router_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          await voteOnProposal(
+            validator_2,
+            network.router_instantiate_proposal_id,
+            1,
+            fee_denom
+          );
+          console.log("Voted successfully");
+        } catch (e) {
+          console.log("Error has occoured while voting => ", e);
+        }
+      }
+    }
+  }
+
+  // Get ROUTER Contract Address if the proposal has passed
+  if (
+    (!network.router_contract_address ||
+      network.router_contract_address == "") &&
+    network.router_instantiate_proposal_id > 0
+  ) {
+    let res = await query_wasm_contractsByCode(
+      client,
+      network.router_contract_code_id
+    );
+    if (res["contracts"].length > 0) {
+      network.router_contract_address =
+        res["contracts"][res["contracts"].length - 1];
+    } else {
+      console.log("Router Contract Address not found. Exiting...");
       return;
     }
     writeArtifact(network, CHAIN_ID);
