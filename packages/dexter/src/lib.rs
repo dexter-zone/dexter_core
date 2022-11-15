@@ -11,6 +11,7 @@ pub mod ref_staking;
 pub mod router;
 pub mod vault;
 pub mod vesting;
+pub mod multi_staking;
 
 #[allow(clippy::all)]
 mod uints {
