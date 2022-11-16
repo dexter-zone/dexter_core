@@ -2,38 +2,35 @@
 use cosmwasm_std::entry_point;
 
 use cosmwasm_std::{
-    from_binary, Addr, Decimal, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
+    from_binary, Addr, Decimal, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Deps, Binary, to_binary, CosmosMsg,
 };
 
 use dexter::{
     asset::AssetInfo,
-    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, State},
+    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, UnclaimedReward}, helper::{build_transfer_token_to_user_msg},
 };
 
 // use crate::state::{Config, StakerInfo, State, CONFIG, STATE, USERS};
 
-use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw20::{Cw20ReceiveMsg};
 
 use crate::state::{
-    AssetStakerInfo, Config, RewardSchedule, CONFIG, REWARD_SCHEDULES, REWARD_STATES, STAKERS,
-    STATE,
+    AssetStakerInfo, Config, RewardSchedule, CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO
 };
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     _info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> StdResult<Response> {
-    // CONFIG.save(
-    //     deps.storage,
-    //     &Config {
-    //         anchor_token: deps.api.addr_canonicalize(&msg.anchor_token)?,
-    //         staking_token: deps.api.addr_canonicalize(&msg.staking_token)?,
-    //         distribution_schedule: msg.distribution_schedule,
-    //     },
-    // )?;
+    CONFIG.save(
+        deps.storage,
+        &Config {
+            allowed_lp_tokens: vec![]
+        },
+    )?;
 
     // STATE.save(
     //     deps.storage,
@@ -50,6 +47,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
+        ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::AddRewardFactory {
             lp_token,
@@ -68,14 +66,26 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             end_block_time,
         ),
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
-        ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, info.sender, lp_token),
+        ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
     }
+}
+
+fn allow_lp_token(
+    deps: DepsMut,
+    _env: Env,
+    _info: MessageInfo,
+    lp_token: Addr,
+) -> StdResult<Response> {
+    let mut config = CONFIG.load(deps.storage)?;
+    config.allowed_lp_tokens.push(lp_token);
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::default())
 }
 
 pub fn add_reward_factory(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     lp_token: Addr,
     asset: AssetInfo,
     amount: Uint128,
@@ -90,9 +100,10 @@ pub fn add_reward_factory(
         end_block_time,
     };
 
-    let factory_info = STATE.load(deps.storage)?;
     let mut reward_schedules =
-        REWARD_SCHEDULES.load(deps.storage, (&lp_token, &asset.to_string()))?;
+        REWARD_SCHEDULES.may_load(deps.storage, (&lp_token, &asset.to_string()))?
+            .unwrap_or_default();
+    
     reward_schedules.push(reward_schedule);
 
     REWARD_SCHEDULES.save(
@@ -101,6 +112,16 @@ pub fn add_reward_factory(
         &reward_schedules,
     )?;
 
+    let mut lp_active_reward_assets = LP_ACTIVE_REWARD_ASSETS
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
+
+    if !lp_active_reward_assets.contains(&asset) {
+        lp_active_reward_assets.push(asset);
+    }
+
+    LP_ACTIVE_REWARD_ASSETS.save(deps.storage, &lp_token, &lp_active_reward_assets)?;
+    
     Ok(Response::default())
 }
 
@@ -128,6 +149,9 @@ pub fn receive_cw20(
                     start_block_time,
                     end_block_time,
                 } => {
+                    if !config.allowed_lp_tokens.contains(&lp_token) {
+                        return Err(StdError::generic_err("LP Token not supported for staking"));
+                    }
                     let token_address = deps.api.addr_validate(info.sender.as_str())?;
                     add_reward_factory(
                         deps,
@@ -149,11 +173,13 @@ pub fn receive_cw20(
 }
 
 pub fn compute_reward(
-    config: &Config,
+    _config: &Config,
     current_block_time: u64,
     state: &mut AssetRewardState,
     reward_schedules: Vec<RewardSchedule>,
 ) {
+
+    println!("Reward schedules {:?}", reward_schedules);
     if state.total_bond_amount.is_zero() {
         state.last_distributed = current_block_time;
         return;
@@ -170,13 +196,18 @@ pub fn compute_reward(
 
         // min(s.1, block_time) - max(s.0, last_distributed)
         let passed_time = std::cmp::min(end_time, current_block_time)
-            - std::cmp::max(start_time, current_block_time);
+            - std::cmp::max(start_time, state.last_distributed);
+
+        
 
         let time = end_time - start_time;
         let distribution_amount_per_second: Decimal = Decimal::from_ratio(s.amount, time);
         distributed_amount += distribution_amount_per_second * Uint128::from(passed_time as u128);
+
+        println!("passed time {}, distribution amount per second {}, distributed amount {}", passed_time, distribution_amount_per_second, distributed_amount);
     }
 
+    println!("Distributed amount: {:?}", distributed_amount);
     state.last_distributed = current_block_time;
     state.reward_index =
         state.reward_index + Decimal::from_ratio(distributed_amount, state.total_bond_amount);
@@ -200,7 +231,7 @@ pub fn increase_bond_amount(
     amount: Uint128,
 ) -> StdResult<()> {
     staker_info.bond_amount = staker_info.bond_amount.checked_add(amount)?;
-    state.total_bond_amount = staker_info.bond_amount.checked_add(amount)?;
+    state.total_bond_amount = state.total_bond_amount.checked_add(amount)?;
     Ok(())
 }
 
@@ -221,37 +252,61 @@ pub fn bond(
     lp_token: Addr,
     amount: Uint128,
 ) -> StdResult<Response> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let mut user_staking_info = STAKERS.load(deps.storage, (&sender, &lp_token))?;
+    let config = CONFIG.load(deps.storage)?;
 
-    for asset_staker_info in &mut user_staking_info {
+    let lp_active_reward_assets = LP_ACTIVE_REWARD_ASSETS
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
+
+    for asset in lp_active_reward_assets {
+        let mut asset_staker_info = ASSET_STAKER_INFO
+            .may_load(deps.storage, (&lp_token, &sender, &asset.to_string()))?
+            .unwrap_or(AssetStakerInfo {
+                asset: asset.clone(),
+                bond_amount: Uint128::zero(),
+                pending_reward: Uint128::zero(),
+                reward_index: Decimal::zero(),
+            });
+
         let mut asset_state =
-            REWARD_STATES.load(deps.storage, &asset_staker_info.asset.to_string())?;
-        let reward_schedules = REWARD_SCHEDULES.load(
+            REWARD_STATES.may_load(deps.storage, &asset.to_string())?
+            .unwrap_or(AssetRewardState {
+                total_bond_amount: Uint128::zero(),
+                reward_index: Decimal::zero(),
+                last_distributed: env.block.time.seconds(),
+            });
+        
+        let reward_schedules = REWARD_SCHEDULES.may_load(
             deps.storage,
             (&lp_token, &asset_staker_info.asset.to_string()),
-        )?;
-
+        )?.unwrap_or_default();
+        
         compute_reward(
             &config,
             env.block.time.seconds(),
             &mut asset_state,
             reward_schedules,
         );
-        compute_staker_reward(&mut asset_state, asset_staker_info)?;
+        compute_staker_reward(&mut asset_state, &mut asset_staker_info)?;
+        increase_bond_amount(&mut asset_state, &mut asset_staker_info, amount)?;
 
-        increase_bond_amount(&mut asset_state, asset_staker_info, amount)?;
-
+        println!("\n\nBlock time {}", env.block.time.seconds());
+        println!("BOND: Asset state: {:?}", asset_state);
+        println!("BOND: Asset staker info: {:?}", asset_staker_info);
         REWARD_STATES.save(
             deps.storage,
             &asset_staker_info.asset.to_string(),
             &asset_state,
         )?;
+
+        ASSET_STAKER_INFO.save(
+            deps.storage,
+            (&lp_token, &sender, &asset_staker_info.asset.to_string()),
+            &asset_staker_info,
+        )?;
     }
 
-    STAKERS.save(deps.storage, (&sender, &lp_token), &user_staking_info);
-
-    return Err(StdError::generic_err("data should be given"));
+    Ok(Response::default())
 }
 
 pub fn unbond(
@@ -261,91 +316,140 @@ pub fn unbond(
     lp_token: Addr,
     amount: Uint128,
 ) -> StdResult<Response> {
-    let mut config = CONFIG.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
 
-    let mut user_staking_info = STAKERS.load(deps.storage, (&sender, &lp_token))?;
+    let lp_active_reward_assets = LP_ACTIVE_REWARD_ASSETS
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
 
-    for asset_staker_info in &mut user_staking_info {
+    for asset in lp_active_reward_assets {
+        let mut asset_staker_info = ASSET_STAKER_INFO
+            .may_load(deps.storage, (&lp_token, &sender, &asset.to_string()))?
+            .unwrap_or(AssetStakerInfo {
+                asset: asset.clone(),
+                bond_amount: Uint128::zero(),
+                pending_reward: Uint128::zero(),
+                reward_index: Decimal::zero(),
+            });
+
         let mut asset_state =
-            REWARD_STATES.load(deps.storage, &asset_staker_info.asset.to_string())?;
-        let reward_schedules = REWARD_SCHEDULES.load(
+            REWARD_STATES.load(deps.storage, &asset.to_string())?;
+        
+        let reward_schedules = REWARD_SCHEDULES.may_load(
             deps.storage,
             (&lp_token, &asset_staker_info.asset.to_string()),
-        )?;
-
+        )?.unwrap_or_default();
+        
         compute_reward(
             &config,
             env.block.time.seconds(),
             &mut asset_state,
             reward_schedules,
         );
-        compute_staker_reward(&mut asset_state, asset_staker_info)?;
+        compute_staker_reward(&mut asset_state, &mut asset_staker_info)?;
+        decrease_bond_amount(&mut asset_state, &mut asset_staker_info, amount)?;
 
-        decrease_bond_amount(&mut asset_state, asset_staker_info, amount)?;
-
+        println!("\n\nBlock time {}", env.block.time.seconds());
+        println!("UNBOND: Asset state: {:?}", asset_state);
+        println!("UNBOND: Asset staker info: {:?}", asset_staker_info);
         REWARD_STATES.save(
             deps.storage,
             &asset_staker_info.asset.to_string(),
             &asset_state,
         )?;
-    }
 
-    STAKERS.save(deps.storage, (&sender, &lp_token), &user_staking_info);
-
-    return Err(StdError::generic_err("data should be given"));
-}
-
-pub fn withdraw(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> StdResult<Response> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
-
-    let mut user_staking_info = STAKERS.load(deps.storage, (&sender, &lp_token))?;
-
-    let mut transfer_msgs: Vec<Cw20ExecuteMsg> = vec![];
-    for asset_staker_info in &mut user_staking_info {
-        let mut asset_state =
-            REWARD_STATES.load(deps.storage, &asset_staker_info.asset.to_string())?;
-        let reward_schedules = REWARD_SCHEDULES.load(
+        ASSET_STAKER_INFO.save(
             deps.storage,
-            (&lp_token, &asset_staker_info.asset.to_string()),
-        )?;
-
-        compute_reward(
-            &config,
-            env.block.time.seconds(),
-            &mut asset_state,
-            reward_schedules,
-        );
-        compute_staker_reward(&mut asset_state, asset_staker_info)?;
-
-        asset_staker_info.pending_reward = Uint128::zero();
-        transfer_msgs.push(
-            Cw20ExecuteMsg::Transfer {
-                recipient: sender.to_string(),
-                amount: asset_staker_info.pending_reward,
-            }
-            .into(),
-        );
-
-        REWARD_STATES.save(
-            deps.storage,
-            &asset_staker_info.asset.to_string(),
-            &asset_state,
+            (&lp_token, &sender, &asset_staker_info.asset.to_string()),
+            &asset_staker_info,
         )?;
     }
-
-    STAKERS.save(deps.storage, (&sender, &lp_token), &user_staking_info);
 
     Ok(Response::default())
 }
 
-// #[cfg_attr(not(feature = "library"), entry_point)]
-// pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-//     // match msg {
-//     //     QueryMsg::Config {} => to_binary(&query_config(deps)?),
-//     //     QueryMsg::State { block_time } => to_binary(&query_state(deps, block_time)?),
-//     //     QueryMsg::StakerInfo { staker, block_time } => {
-//     //         to_binary(&query_staker_info(deps, staker, block_time)?)
-//     //     }
-//     // }
-// }
+pub fn withdraw(deps: DepsMut, env: Env, sender: &Addr, lp_token: Addr) -> StdResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+
+    let lp_active_reward_assets = LP_ACTIVE_REWARD_ASSETS
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
+
+    let mut transfer_msgs: Vec<CosmosMsg> = vec![];
+    for asset in lp_active_reward_assets {
+        let mut asset_staker_info = ASSET_STAKER_INFO
+            .may_load(deps.storage, (&lp_token, &sender, &asset.to_string()))?
+            .unwrap_or(AssetStakerInfo {
+                asset: asset.clone(),
+                bond_amount: Uint128::zero(),
+                pending_reward: Uint128::zero(),
+                reward_index: Decimal::zero(),
+            });
+
+        let mut asset_state =
+            REWARD_STATES.load(deps.storage, &asset.to_string())?;
+        
+        let reward_schedules = REWARD_SCHEDULES.may_load(
+            deps.storage,
+            (&lp_token, &asset_staker_info.asset.to_string()),
+        )?.unwrap_or_default();
+        
+        compute_reward(
+            &config,
+            env.block.time.seconds(),
+            &mut asset_state,
+            reward_schedules,
+        );
+        compute_staker_reward(&mut asset_state, &mut asset_staker_info)?;
+
+        transfer_msgs.push(
+            build_transfer_token_to_user_msg(asset, sender.clone(), asset_staker_info.pending_reward)?
+        );
+        asset_staker_info.pending_reward = Uint128::zero();
+
+        REWARD_STATES.save(
+            deps.storage,
+            &asset_staker_info.asset.to_string(),
+            &asset_state,
+        )?;
+
+        ASSET_STAKER_INFO.save(
+            deps.storage,
+            (&lp_token, &sender, &asset_staker_info.asset.to_string()),
+            &asset_staker_info,
+        )?;
+    }
+
+
+    Ok(Response::default().add_messages(transfer_msgs))
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::UnclaimedRewards { lp_token, user } => {
+            let assets_for_lp = LP_ACTIVE_REWARD_ASSETS
+                .may_load(deps.storage, &lp_token)?
+                .unwrap_or_default();
+            
+            
+            let mut unclaimed_rewards: Vec<UnclaimedReward> = vec![];
+            for asset in assets_for_lp {
+                let asset_staker_info = ASSET_STAKER_INFO
+                    .may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?
+                    .unwrap_or(AssetStakerInfo {
+                        asset: asset.clone(),
+                        bond_amount: Uint128::zero(),
+                        pending_reward: Uint128::zero(),
+                        reward_index: Decimal::zero(),
+                    });
+
+                unclaimed_rewards.push(UnclaimedReward {
+                    asset: asset.clone(),
+                    amount: asset_staker_info.pending_reward,
+                });
+            }
+            to_binary(&unclaimed_rewards)
+        }
+    }
+}

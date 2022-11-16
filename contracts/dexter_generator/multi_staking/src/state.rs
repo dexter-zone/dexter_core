@@ -31,12 +31,12 @@ pub struct AssetStakerInfo {
 }
 
 
-pub const STATE: Item<State> = Item::new("state");
 pub const CONFIG: Item<Config> = Item::new("config");
 
 // pub const LP_ACTIVE_REWARD_ASSETS: Map<&Addr, Vec<AssetInfo>> = Map::new("lp_active_reward_assets");
-pub const STAKERS: Map<(&Addr, &Addr), Vec<AssetStakerInfo>> = Map::new("stakers");
+// Map between (LP Token, User, Asset identifier) to AssetStakerInfo
+pub const ASSET_STAKER_INFO: Map<(&Addr, &Addr, &str), AssetStakerInfo> = Map::new("asset_staker_info");
 
-
+pub const LP_ACTIVE_REWARD_ASSETS: Map<&Addr, Vec<AssetInfo>> = Map::new("lp_active_reward_assets");
 pub const REWARD_SCHEDULES: Map<(&Addr, &str) , Vec<RewardSchedule>> = Map::new("rewards");
 pub const REWARD_STATES: Map<&str, AssetRewardState> = Map::new("reward_states");

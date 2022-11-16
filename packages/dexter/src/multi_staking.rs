@@ -1,13 +1,14 @@
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Uint128, Decimal, Addr};
 use cw20::Cw20ReceiveMsg;
+use schemars::JsonSchema;
 
 use crate::asset::AssetInfo;
 
 
 #[cw_serde]
 pub struct InstantiateMsg {
-
+    
 }
 
 #[cw_serde]
@@ -18,6 +19,9 @@ pub enum ExecuteMsg {
         amount: Uint128,
         start_block_time: u64,
         end_block_time: u64,
+    },
+    AllowLpToken {
+        lp_token: Addr,
     },
     Receive(Cw20ReceiveMsg),
     Unbond {
@@ -52,6 +56,17 @@ pub enum Cw20HookMsg {
 }
 
 #[cw_serde]
-pub enum QueryMsg {
+pub struct UnclaimedReward {
+    pub asset: AssetInfo,
+    pub amount: Uint128,
+}
 
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    #[returns(Vec<UnclaimedReward>)]
+    UnclaimedRewards {
+        lp_token: Addr,
+        user: Addr
+    }
 }
