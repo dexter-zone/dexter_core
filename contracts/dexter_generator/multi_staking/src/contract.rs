@@ -51,20 +51,37 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::AddRewardFactory {
             lp_token,
-            asset,
+            denom,
             amount,
             start_block_time,
             end_block_time,
-        } => add_reward_factory(
-            deps,
-            env,
-            info,
-            lp_token,
-            asset,
-            amount,
-            start_block_time,
-            end_block_time,
-        ),
+        } => {
+            // Verify that the asset for reward was sent with the message
+            if info.funds.len() != 1 {
+                return Err(StdError::generic_err("Only 1 asset can be sent with the message"));
+            }
+
+            let sender = info.sender.clone();
+            let sent_asset = info.funds[0].clone();
+
+            if sent_asset.denom == denom {
+                let asset = AssetInfo::NativeToken { denom: denom.clone() };
+                // verify that enough amount was sent
+                if sent_asset.amount >= amount {
+                    let mut response = add_reward_factory(deps, env, info, lp_token, asset.clone(), amount, start_block_time, end_block_time)?;
+
+                    let extra_amount = sent_asset.amount.checked_sub(amount)?;
+                    response =  build_transfer_token_to_user_msg(asset, sender, extra_amount)
+                        .map(|msg| response.add_message(msg))?;
+
+                    Ok(response)
+                } else {
+                    Err(StdError::generic_err("Not enough asset for reward was sent"))
+                }
+            } else {
+                Err(StdError::generic_err("Asset for reward was not sent with the message"))
+            }
+        },
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
     }

@@ -15,7 +15,7 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     AddRewardFactory {
         lp_token: Addr,
-        asset: AssetInfo,
+        denom: String,
         amount: Uint128,
         start_block_time: u64,
         end_block_time: u64,
