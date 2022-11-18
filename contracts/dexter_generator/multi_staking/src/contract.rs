@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 
 use cosmwasm_std::{
-    from_binary, Addr, Decimal, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Deps, Binary, to_binary, CosmosMsg,
+    from_binary, Addr, Decimal, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Deps, Binary, to_binary, CosmosMsg, WasmMsg,
 };
 
 use dexter::{
@@ -12,7 +12,7 @@ use dexter::{
 
 // use crate::state::{Config, StakerInfo, State, CONFIG, STATE, USERS};
 
-use cw20::{Cw20ReceiveMsg};
+use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
 
 use crate::state::{
     AssetStakerInfo, Config, RewardSchedule, CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO
@@ -71,8 +71,10 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                     let mut response = add_reward_factory(deps, env, info, lp_token, asset.clone(), amount, start_block_time, end_block_time)?;
 
                     let extra_amount = sent_asset.amount.checked_sub(amount)?;
-                    response =  build_transfer_token_to_user_msg(asset, sender, extra_amount)
-                        .map(|msg| response.add_message(msg))?;
+
+                    if extra_amount > Uint128::zero() {
+                       response = response.add_message(build_transfer_token_to_user_msg(asset, sender, extra_amount)?);
+                    }
 
                     Ok(response)
                 } else {
@@ -339,6 +341,8 @@ pub fn unbond(
         .may_load(deps.storage, &lp_token)?
         .unwrap_or_default();
 
+    let mut response = Response::new();
+
     for asset in lp_active_reward_assets {
         let mut asset_staker_info = ASSET_STAKER_INFO
             .may_load(deps.storage, (&lp_token, &sender, &asset.to_string()))?
@@ -369,6 +373,17 @@ pub fn unbond(
         println!("\n\nBlock time {}", env.block.time.seconds());
         println!("UNBOND: Asset state: {:?}", asset_state);
         println!("UNBOND: Asset staker info: {:?}", asset_staker_info);
+
+        // Send the User's LP back to them
+        response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: lp_token.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: sender.to_string(),
+                amount,
+            })?,
+        }));
+
         REWARD_STATES.save(
             deps.storage,
             &asset_staker_info.asset.to_string(),
@@ -382,7 +397,7 @@ pub fn unbond(
         )?;
     }
 
-    Ok(Response::default())
+    Ok(response)
 }
 
 pub fn withdraw(deps: DepsMut, env: Env, sender: &Addr, lp_token: Addr) -> StdResult<Response> {

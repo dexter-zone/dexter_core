@@ -1,6 +1,6 @@
 use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
 use cw_multi_test::{App, Executor, ContractWrapper};
-use dexter::multi_staking::{InstantiateMsg, ExecuteMsg, Cw20HookMsg, QueryMsg, UnclaimedReward};
+use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, Cw20HookMsg, QueryMsg, UnclaimedReward}, asset::AssetInfo};
 use cw20::{Cw20ExecuteMsg, MinterResponse};
 
 const EPOCH_START: u64 = 1_000_000_000;
@@ -22,13 +22,13 @@ fn instantiate_multi_staking_contract(
     code_id: u64,
     admin: Addr
 ) -> Addr {
-    let instantiateMsg = InstantiateMsg {};
+    let instantiate_msg = InstantiateMsg {};
 
     let multi_staking_instance = app
         .instantiate_contract(
             code_id,
             admin.to_owned(),
-            &instantiateMsg,
+            &instantiate_msg,
             &[],
             "multi_staking",
             None,
@@ -120,8 +120,7 @@ fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
         admin_addr.clone()
     );
 
-
-    let cw20_code_id = store_cw20_contract(app);
+    // let cw20_code_id = store_cw20_contract(app);
     let lp_token_code_id = store_lp_token_contract(app);
 
     let lp_token_addr = create_lp_token(
@@ -176,6 +175,105 @@ fn test_fail_create_reward_with_less_amount() {
 }
 
 
+fn create_reward_schedule(
+    app: &mut App,
+    admin_addr: &Addr,
+    multistaking_contract: &Addr,
+    lp_token: &Addr,
+    reward_asset: AssetInfo,
+    amount: Uint128,
+    start_block_time: u64,
+    end_block_time: u64,
+) {
+
+    match reward_asset {
+        AssetInfo::NativeToken { denom } => {
+            app.execute_contract(
+                admin_addr.clone(), 
+                multistaking_contract.clone(), 
+                &ExecuteMsg::AddRewardFactory { 
+                        lp_token: lp_token.clone(), 
+                        denom: denom.clone(), 
+                        amount: amount.clone(), 
+                        start_block_time, 
+                        end_block_time 
+                },
+                &vec![Coin::new(amount.u128(), denom.as_str())]
+            ).unwrap();
+        },
+        AssetInfo::Token { contract_addr } => {
+            app.execute_contract(
+                admin_addr.clone(), 
+                contract_addr.clone(), 
+                &Cw20ExecuteMsg::Send { 
+                        contract: multistaking_contract.to_string(),
+                        amount,
+                        msg: to_binary(&Cw20HookMsg::AddRewardFactory {
+                            lp_token: lp_token.clone(),
+                            start_block_time,
+                            end_block_time,
+                        }).unwrap()
+                    },
+                &vec![]
+            ).unwrap();
+        }
+    }
+}
+
+fn mint_lp_tokens_to_addr(
+    app: &mut App,
+    admin_addr: &Addr,
+    lp_token_addr: &Addr,
+    recipient_addr: &Addr,
+    amount: Uint128,
+) {
+    app.execute_contract(
+        admin_addr.clone(),
+        lp_token_addr.clone(),
+        &Cw20ExecuteMsg::Mint {
+            recipient: recipient_addr.to_string(),
+            amount,
+        },
+        &vec![],
+    )
+    .unwrap();
+}
+
+fn bond_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    sender: &Addr,
+    amount: Uint128,
+) {
+    app.execute_contract(
+        sender.clone(),
+        lp_token_addr.clone(),
+        &Cw20ExecuteMsg::Send {
+            contract: multistaking_contract.to_string(),
+            amount,
+            msg: to_binary(&Cw20HookMsg::Bond {}).unwrap(),
+        },
+        &vec![],
+    )
+    .unwrap();
+}
+
+fn unbond_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    sender: &Addr,
+    amount: Uint128,
+) {
+    app.execute_contract(
+        sender.clone(), 
+        multistaking_contract.clone(),
+        &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount },
+        &vec![],
+    ).unwrap();
+}
+
 #[test]
 fn test_verify_extra_amount_is_sent_back() {
     let admin = String::from("admin");
@@ -211,6 +309,24 @@ fn test_verify_extra_amount_is_sent_back() {
 
 }
 
+fn query_unclaimed_rewards(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    user_addr: &Addr,
+) -> Vec<UnclaimedReward> {
+    app
+        .wrap()
+        .query_wasm_smart(
+            multistaking_contract.clone(),
+            &QueryMsg::UnclaimedRewards {
+                lp_token: lp_token_addr.clone(),
+                user: user_addr.clone(),
+            },
+        )
+        .unwrap()
+}
+
 
 #[test]
 fn test_staking() {
@@ -229,19 +345,15 @@ fn test_staking() {
 
     let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
 
-    // Create a new reward schedule
-    app.execute_contract(
-        admin_addr.clone(), 
-        multi_staking_instance.clone(), 
-        &ExecuteMsg::AddRewardFactory { 
-            lp_token: lp_token_addr.clone(), 
-            denom: "uxprt".to_string(), 
-            amount: Uint128::from(100_000_000 as u64), 
-            start_block_time: 1_000_001_000, 
-            end_block_time: 1_000_002_000 
-        },
-        &vec![Coin::new(100_000_000, "uxprt")]
-    ).unwrap();
+    create_reward_schedule(&mut app, 
+        &admin_addr, 
+        &multi_staking_instance, 
+        &lp_token_addr, 
+        AssetInfo::NativeToken { denom: "uxprt".to_string() },
+        Uint128::from( 100_000_000 as u64),
+        1000_001_000,
+        1000_002_000
+    );
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_000);
@@ -249,26 +361,9 @@ fn test_staking() {
     });
 
     // Mint some LP tokens
-    app.execute_contract(
-        admin_addr.clone(), 
-        lp_token_addr.clone(), 
-        &Cw20ExecuteMsg::Mint { 
-            recipient: user_addr.to_string(),
-            amount: Uint128::from(100_000_000 as u64) 
-        },
-        &vec![]
-    ).unwrap();
+    mint_lp_tokens_to_addr(&mut app, &admin_addr, &lp_token_addr, &user_addr, Uint128::from(100_000_000 as u64));
 
-    app.execute_contract(
-        user_addr.clone(), 
-        lp_token_addr.clone(), 
-        &Cw20ExecuteMsg::Send { 
-                contract: multi_staking_instance.to_string(), 
-                amount: Uint128::from(100_000 as u64),
-                msg: to_binary(&Cw20HookMsg::Bond {}).unwrap()
-            },
-        &vec![]
-    ).unwrap();
+    bond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(100_000_000 as u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_500);
@@ -276,24 +371,14 @@ fn test_staking() {
     });
 
     // Unbond half of the amoutt at 50% of the reward schedule
-    app.execute_contract(
-        user_addr.clone(), 
-        multi_staking_instance.clone(),
-        &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount: Uint128::from(50_000 as u64) },
-        &vec![],
-    ).unwrap();
+    unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(50_000_000 as u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_002_001);
         b.height = b.height + 100;
     });
 
-    app.execute_contract(
-        user_addr.clone(), 
-        multi_staking_instance.clone(),
-        &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount: Uint128::from(50_000 as u64) },
-        &vec![],
-    ).unwrap();
+    unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(50_000_000 as u64));
     
     let query_msg = QueryMsg::UnclaimedRewards { lp_token: lp_token_addr.clone(), user: user_addr.clone() };
     let response: Vec<UnclaimedReward> = app.wrap().query_wasm_smart(multi_staking_instance.clone(), &query_msg).unwrap();
@@ -317,4 +402,121 @@ fn test_staking() {
     let balances =  app.wrap().query_all_balances(user_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
     assert_eq!(balance_uxprt.amount, Uint128::from(100_000_000 as u64));
+}
+
+
+#[test]
+fn test_multi_reward_schedules() {
+    let admin = String::from("admin");
+    let user_1 = String::from("user_1");
+    let user_2 = String::from("user_2");
+
+    let coins = vec![
+        Coin::new(1000_000_000, "uxprt"),
+        Coin::new(1000_000_000, "uatom"),
+    ];
+
+    let admin_addr = Addr::unchecked(admin.clone());
+    let user_1_addr = Addr::unchecked(user_1.clone());
+    let user_2_addr = Addr::unchecked(user_2.clone());
+
+    let mut app = mock_app(admin_addr.clone(), coins);
+
+    let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
+
+    let admin_balance = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
+    println!("Admin balance: {:?}", admin_balance);
+
+    create_reward_schedule(&mut app, 
+        &admin_addr, 
+        &multi_staking_instance, 
+        &lp_token_addr, 
+        AssetInfo::NativeToken { denom: "uxprt".to_string() },
+        Uint128::from(100_000_000 as u64),
+        1000_001_000,
+        1000_002_000
+    );
+
+    create_reward_schedule(&mut app, 
+        &admin_addr, 
+        &multi_staking_instance, 
+        &lp_token_addr, 
+        AssetInfo::NativeToken { denom: "uxprt".to_string() },
+        Uint128::from(100_000_000 as u64),
+        1000_001_500,
+        1000_002_000
+    );
+
+    create_reward_schedule(&mut app, 
+        &admin_addr, 
+        &multi_staking_instance, 
+        &lp_token_addr, 
+        AssetInfo::NativeToken { denom: "uatom".to_string() },
+        Uint128::from(200_000_000 as u64),
+        1000_001_200,
+        1000_002_000
+    );
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_000);
+        b.height = b.height + 100;
+    });
+
+    // Mint some LP tokens
+    mint_lp_tokens_to_addr(&mut app, &admin_addr, &lp_token_addr, &user_1_addr, Uint128::from(200_000 as u64));
+    mint_lp_tokens_to_addr(&mut app, &admin_addr, &lp_token_addr, &user_2_addr, Uint128::from(1_000_000 as u64));
+
+    bond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr, Uint128::from(100_000 as u64));
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_200);
+        b.height = b.height + 100;
+    });
+
+    bond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_2_addr, Uint128::from(1_000_000 as u64));
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.height = b.height + 100;
+    });
+
+    // Unbond half of the amoutt at 50% of the reward schedule
+    unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr, Uint128::from(50_000 as u64));
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_002_001);
+        b.height = b.height + 100;
+    });
+
+    unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr, Uint128::from(50_000 as u64));
+    unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_2_addr, Uint128::from(1_000_000 as u64));
+    
+
+    let unclaimed_rewards_user_1 = query_unclaimed_rewards(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr);
+    let unclaimed_rewards_user_2 = query_unclaimed_rewards(&mut app, &multi_staking_instance, &lp_token_addr, &user_2_addr);
+    
+    println!("Unclaimed rewards user 1: {:?}", unclaimed_rewards_user_1);
+    println!("Unclaimed rewards user 2: {:?}", unclaimed_rewards_user_2);
+
+    assert_eq!(unclaimed_rewards_user_1.len(), 2);
+
+    // println!("Response: {:?}", unclaimed_rewards);
+    // assert_eq!(unclaimed_rewards.len(), 1);
+    // let unclaimed_reward = unclaimed_rewards.get(0).unwrap();
+    // assert_eq!(unclaimed_reward.amount, Uint128::from(100_000_000 as u64));
+    // assert_eq!(unclaimed_reward.asset, dexter::asset::AssetInfo::NativeToken { denom: "uxprt".to_string() });
+
+
+    // // Withdraw the rewards
+    // app.execute_contract(
+    //     user_1_addr.clone(), 
+    //     multi_staking_instance.clone(),
+    //     &ExecuteMsg::Withdraw { lp_token: lp_token_addr.clone() },
+    //     &vec![],
+    // ).unwrap();
+
+    // // query bank module for user balance
+    // let balances =  app.wrap().query_all_balances(user_1_addr).unwrap();
+    // let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
+    // assert_eq!(balance_uxprt.amount, Uint128::from(100_000_000 as u64));
 }
