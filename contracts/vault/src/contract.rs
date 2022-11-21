@@ -16,8 +16,7 @@ use std::collections::HashSet;
 use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
 use dexter::helper::{
     build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal,
-    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, is_valid_name,
-    is_valid_symbol, propose_new_owner,
+    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
@@ -137,18 +136,8 @@ pub fn execute(
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
-            lp_token_name,
-            lp_token_symbol,
             init_params,
-        } => execute_create_pool_instance(
-            deps,
-            env,
-            pool_type,
-            asset_infos,
-            lp_token_name,
-            lp_token_symbol,
-            init_params,
-        ),
+        } => execute_create_pool_instance(deps, env, pool_type, asset_infos, init_params),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -508,8 +497,6 @@ pub fn execute_create_pool_instance(
     env: Env,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
-    lp_token_name: Option<String>,
-    lp_token_symbol: Option<String>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
     // Sort Assets List
@@ -539,13 +526,6 @@ pub fn execute_create_pool_instance(
 
     event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
-    if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
-        return Err(ContractError::InvalidLpTokenName {});
-    }
-    if !lp_token_symbol.is_none() && !is_valid_symbol(&lp_token_symbol.as_ref().unwrap()) {
-        return Err(ContractError::InvalidLpTokenSymbol {});
-    }
-
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
@@ -573,9 +553,9 @@ pub fn execute_create_pool_instance(
     TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
 
     // LP Token Name
-    let token_name = get_lp_token_name(pool_id.clone(), lp_token_name.clone());
+    let token_name = get_lp_token_name(pool_id.clone());
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(lp_token_symbol.clone());
+    let token_symbol = get_lp_token_symbol();
 
     // Emit Event
     event = event

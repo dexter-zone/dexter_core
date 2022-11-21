@@ -236,8 +236,6 @@ pub enum ExecuteMsg {
     CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
-        lp_token_name: Option<String>,
-        lp_token_symbol: Option<String>,
         init_params: Option<Binary>,
     },
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and

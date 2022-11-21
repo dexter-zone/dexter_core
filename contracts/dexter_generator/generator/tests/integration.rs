@@ -224,8 +224,6 @@ fn create_pool_instance(
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -2027,7 +2025,7 @@ fn test_generator_with_dex_rewards() {
     assert_eq!(empty_vec, new_user_info_re.unbonding_periods);
 
     // RewardInfo
-    let reward_info_re: RewardInfoResponse = app
+    let _reward_info_re: RewardInfoResponse = app
         .wrap()
         .query_wasm_smart(
             &generator_instance,

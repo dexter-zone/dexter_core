@@ -156,8 +156,6 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         pool_type: PoolType::Stable2Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&StablePoolParams { amp: 10u64 }).unwrap()),
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     let res = app
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
@@ -1010,25 +1008,6 @@ fn test_on_exit_pool() {
             pool_id: Uint128::from(1u128),
             recipient: None,
             assets: None,
-            burn_amount: None,
-        })
-        .unwrap(),
-    };
-    let res = app
-        .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
-        .unwrap_err();
-    assert_eq!(
-        res.root_cause().to_string(),
-        "Pool logic not satisfied. Reason : error : Invalid number of LP tokens to burn amount"
-    );
-
-    let exit_msg = Cw20ExecuteMsg::Send {
-        contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(50u8),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
-            pool_id: Uint128::from(1u128),
-            recipient: None,
-            assets: None,
             burn_amount: Some(Uint128::from(0u128)),
         })
         .unwrap(),
@@ -1036,10 +1015,7 @@ fn test_on_exit_pool() {
     let res = app
         .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap_err();
-    assert_eq!(
-        res.root_cause().to_string(),
-        "Pool logic not satisfied. Reason : error : Invalid number of LP tokens to burn amount"
-    );
+    assert_eq!(res.root_cause().to_string(), "Amount cannot be 0");
 
     //// -----x----- Check #2 :: Success ::: Successfully exit the pool -----x----- ////
 
