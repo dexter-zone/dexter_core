@@ -31,6 +31,9 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
+    // Validate address / denom for reward token
+    msg.reward_token.check(deps.api)?;
+
     let config = Config {
         generator_contract_addr: deps.api.addr_validate(&msg.generator_contract_addr)?,
         pair_addr: deps.api.addr_validate(&msg.pair_addr)?,
