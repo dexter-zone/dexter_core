@@ -424,11 +424,19 @@ pub fn execute_add_to_registry(
     }
 
     // Set pool config
-    pool_config = new_pool_config;
+    pool_config = new_pool_config.clone();
 
     // validate fee bps limits
     if !pool_config.fee_info.valid_fee_info() {
         return Err(ContractError::InvalidFeeInfo {});
+    }
+
+    // Validate dev address (if provided)
+    if new_pool_config.fee_info.developer_addr.clone().is_some() {
+        addr_validate_to_lower(
+            deps.api,
+            new_pool_config.fee_info.developer_addr.unwrap().as_str(),
+        )?;
     }
 
     // Save pool config
