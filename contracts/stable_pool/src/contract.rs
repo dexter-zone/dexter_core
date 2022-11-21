@@ -613,9 +613,9 @@ pub fn query_on_swap(
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
             (calc_amount, spread_amount) = compute_swap(
                 cur_offer_asset_bal,
-                query_token_precision(&deps.querier, offer_asset_info.clone())?,
+                offer_precision,
                 cur_ask_asset_bal,
-                query_token_precision(&deps.querier, ask_asset_info.clone())?,
+                ask_precision,
                 amount,
                 compute_current_amp(&math_config, &env)?,
             )
