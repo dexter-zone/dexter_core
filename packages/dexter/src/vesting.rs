@@ -1,5 +1,6 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
+use crate::asset::AssetInfo;
 use cosmwasm_std::{Addr, Order, Uint128};
 use cw20::{BalanceResponse, Cw20ReceiveMsg};
 
@@ -9,7 +10,7 @@ pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
     /// The address of the token that's being vested
-    pub token_addr: String,
+    pub token: AssetInfo,
 }
 
 /// This structure describes the execute messages available in the contract.
@@ -114,7 +115,7 @@ pub struct ConfigResponse {
     /// Address allowed to set contract parameters
     pub owner: Addr,
     /// The address of the token being vested
-    pub token_addr: Addr,
+    pub token: AssetInfo,
 }
 
 /// This structure describes a custom struct used to return vesting data about a specific vesting target.

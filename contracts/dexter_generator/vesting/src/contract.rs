@@ -45,7 +45,7 @@ pub fn instantiate(
         deps.storage,
         &Config {
             owner: addr_validate_to_lower(deps.api, &msg.owner)?,
-            token_addr: addr_validate_to_lower(deps.api, &msg.token_addr)?,
+            token: msg.token,
         },
     )?;
 

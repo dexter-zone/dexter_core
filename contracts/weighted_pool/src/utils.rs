@@ -32,6 +32,8 @@ pub(crate) fn compute_swap(
     ask_pool: &DecimalAsset,
     ask_weight: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
+    println!("\n\n compute_swap()");
+
     // get ask asset precisison
     let token_precision = get_precision(storage, &ask_pool.info)?;
 
@@ -55,6 +57,7 @@ pub(crate) fn compute_swap(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         ask_weight,
     )?;
+    println!("return_amount: {}", return_amount);
 
     // adjust return amount to correct precision
     let return_amount = adjust_precision(
@@ -62,8 +65,8 @@ pub(crate) fn compute_swap(
         return_amount.decimal_places() as u8,
         token_precision,
     )?;
+    println!("return_amount (adjusted): {}", return_amount);
 
-    // difference in return amount compared to "ideal" swap.
     Ok((return_amount, Uint128::zero()))
 }
 
@@ -86,20 +89,37 @@ pub(crate) fn compute_offer_amount(
     offer_weight: Decimal,
     commission_rate: u16,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
+    println!("\n\n compute_offer_amount()");
+    println!("ask_asset: {:?}", ask_asset);
+    println!("ask_pool: {:?}", ask_pool);
+    println!("ask_weight: {:?}", ask_weight);
+    println!("offer_pool: {:?}", offer_pool);
+    println!("offer_weight: {:?}", offer_weight);
+    println!("commission_rate: {:?}", commission_rate);
+
     // get ask asset precisison
     let token_precision = get_precision(storage, &offer_pool.info)?;
+    println!("token_precision: {}", token_precision);
 
     let one_minus_commission = Decimal256::one()
         - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
+    println!("one_minus_commission: {}", one_minus_commission);
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
+    println!("inv_one_minus_commission: {}", inv_one_minus_commission);
 
     let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string())?;
+    println!("ask_asset_amount: {}", ask_asset_amount);
     let before_commission_deduction =
         ask_asset_amount * Decimal::from_str(&inv_one_minus_commission.clone().to_string())?;
+    println!(
+        "before_commission_deduction: {}",
+        before_commission_deduction
+    );
 
     // Ask pool balance after swap
     let pool_post_swap_out_balance =
         Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
+    println!("pool_post_swap_out_balance: {}", pool_post_swap_out_balance);
 
     //         /**********************************************************************************************
     //         // inGivenOut                                                                                //
@@ -119,18 +139,25 @@ pub(crate) fn compute_offer_amount(
         Decimal::from_str(&offer_pool.amount.to_string())?,
         offer_weight,
     )?;
+    println!("real_offer: {}", real_offer);
+
     // adjust return amount to correct precision
     let real_offer = adjust_precision(
         real_offer.atomics(),
         real_offer.decimal_places() as u8,
         token_precision,
     )?;
+    println!("real_offer (adjusted): {}", real_offer);
 
     let before_commission_deduction_ = adjust_precision(
         before_commission_deduction.atomics(),
         before_commission_deduction.decimal_places() as u8,
         token_precision,
     )?;
+    println!(
+        "before_commission_deduction_ (adjusted): {}",
+        before_commission_deduction_
+    );
 
     Ok((real_offer, Uint128::zero(), before_commission_deduction_))
 }
@@ -214,8 +241,15 @@ pub fn maximal_exact_ratio_join(
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
+    println!("\n\nmaximal_exact_ratio_join");
+    println!("act_assets_in: {:?}", act_assets_in);
+    println!("pool_assets_weighted: {:?}", pool_assets_weighted);
+    println!("total_share: {}", total_share);
+
     let mut min_share = Decimal::one();
+    println!("min_share: {}", min_share);
     let mut max_share = Decimal::zero();
+    println!("max_share: {}", max_share);
     let mut asset_shares = vec![];
 
     for (asset_in, weighted_pool_in) in act_assets_in
@@ -228,12 +262,17 @@ pub fn maximal_exact_ratio_join(
         }
         // denom will never be 0 as long as total_share > 0
         let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
+        println!("asset_in {:?}", asset_in.info.to_string());
+        println!("share_ratio: {}", share_ratio);
         min_share = min_share.min(share_ratio);
+        println!("min_share: {}", min_share);
         max_share = max_share.max(share_ratio);
+        println!("max_share: {}", max_share);
         asset_shares.push(share_ratio);
     }
 
     let new_shares = min_share * total_share;
+    println!("new_shares: {}", new_shares);
     let mut rem_assets = vec![];
 
     if min_share.ne(&max_share) {
@@ -254,6 +293,9 @@ pub fn maximal_exact_ratio_join(
             // account for unused amounts
             let used_amount = min_share * weighted_pool_in.asset.amount;
             let new_amount = asset_in.amount - used_amount;
+            println!("asset_in : {:?}", asset_in.info.to_string());
+            println!("used_amount: {}", used_amount);
+            println!("new_amount: {}", new_amount);
 
             // if coinShareRatios[i] == minShareRatio, no remainder
             if !new_amount.is_zero() {
@@ -265,6 +307,7 @@ pub fn maximal_exact_ratio_join(
         }
     }
 
+    println!("new_shares: {}\n\n\n\n", new_shares);
     Ok((new_shares, rem_assets, ResponseType::Success {}))
 }
 

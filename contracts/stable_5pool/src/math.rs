@@ -116,11 +116,13 @@ pub(crate) fn calc_y(
 
     let n_coins = Uint64::from(pools.len() as u8);
     let ann = Uint256::from(amp.checked_mul(n_coins)?.u64() / AMP_PRECISION);
+    println!("ann: {}", ann);
     let mut sum = Decimal256::zero();
     let pool_values = pools.iter().map(|asset| asset.amount).collect_vec();
 
     let d = compute_d(amp, &pool_values, greatest_precision)?
         .to_uint256_with_precision(greatest_precision)?;
+    println!("d: {}", d);
 
     let mut c = d;
 
@@ -140,19 +142,35 @@ pub(crate) fn calc_y(
             .map_err(|_| StdError::generic_err("CheckedMultiplyRatioError"))?;
         sum += pool_amount;
     }
+    println!("c: {}", c);
+    println!("sum: {}", sum);
 
     let c = c * d / (ann * Uint256::from(n_coins));
+    println!("c: {}", c);
     let sum = sum.to_uint256_with_precision(greatest_precision)?;
+    println!("sum: {}", sum);
 
     let b = sum + d / ann;
+    println!("b: {}", b);
 
     let mut y = d;
+    println!("y: {}", y);
 
     let d = y;
+    println!("d: {}", d);
 
+    println!("Precision : {:?}", Uint256::from(1u8));
     for _ in 0..ITERATIONS {
+        println!("index__");
         let y_prev = y;
+
+        println!("y_prev: {:?}", y_prev);
+
+        println!("y*y + c: {:?}", y * y + c);
+        println!("denominator = y + y + b: {:?}", y + y + b);
+        println!("denominator = denominator - c: {:?}", y + y + b - d);
         y = (y * y + c) / (y + y + b - d);
+        println!("y: {}", y);
 
         if y >= y_prev {
             if y - y_prev <= Uint256::from(1u8) {

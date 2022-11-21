@@ -13,7 +13,7 @@ pub struct Config {
     /// The Vault address
     pub vault: Addr,
     /// The DEX token address
-    pub dex_token: Option<Addr>,
+    pub dex_token: Option<AssetInfo>,
     /// Total amount of DEX TOKEN rewards per block
     pub tokens_per_block: Uint128,
     /// Total allocation points. Must be the sum of all allocation points in all active generators
@@ -42,7 +42,7 @@ pub struct InstantiateMsg {
     /// Address of vault contract
     pub vault: String,
     /// DEX token contract address
-    pub dex_token: Option<String>,
+    pub dex_token: Option<AssetInfo>,
     /// Amount of DEX distributed per block among all pairs
     pub tokens_per_block: Uint128,
     /// Start block for distributing DEX
@@ -57,7 +57,7 @@ pub enum ExecuteMsg {
     /// ## Executor -  Only the owner can execute it.
     UpdateConfig {
         // The DEX Token address
-        dex_token: Option<String>,
+        dex_token: Option<AssetInfo>,
         /// The DEX Vesting contract address
         vesting_contract: Option<String>,
         /// Number of seconds to wait before a user can withdraw his LP tokens after unbonding. Doesn't update
@@ -316,7 +316,7 @@ pub struct ConfigResponse {
     /// the Factory address
     pub vault: Addr,
     /// DEX token contract address
-    pub dex_token: Option<Addr>,
+    pub dex_token: Option<AssetInfo>,
     /// Total amount of DEX distributed per block
     pub tokens_per_block: Uint128,
     /// Sum of total allocation points across all active generators
@@ -366,7 +366,7 @@ pub struct PoolInfoResponse {
 #[cw_serde]
 pub struct RewardInfoResponse {
     /// The address of the base reward token
-    pub base_reward_token: Option<Addr>,
+    pub base_reward_token: Option<AssetInfo>,
     /// The address of the 3rd party reward token
     pub proxy_reward_token: Option<AssetInfo>,
 }

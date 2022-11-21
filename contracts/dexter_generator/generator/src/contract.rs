@@ -317,7 +317,7 @@ fn receive_cw20(
 /// data will be updated with the new vesting contract address.
 ///
 /// ## Params
-/// * **dex_token** is an [`Option`] field object of type [`String`].This is the DEX token and can be only set once
+/// * **dex_token** is an [`Option`] field object of type [`AssetInfo`].This is the DEX token and can be only set once
 /// * **vesting_contract** is an [`Option`] field object of type [`String`]. This is the new vesting contract address.
 /// * **unbonding_period** is an [`Option`] field object of type [`u64`].This is the unbonding period in seconds.
 ///
@@ -326,7 +326,7 @@ fn receive_cw20(
 pub fn execute_update_config(
     deps: DepsMut,
     info: MessageInfo,
-    dex_token: Option<String>,
+    dex_token: Option<AssetInfo>,
     vesting_contract: Option<String>,
     unbonding_period: Option<u64>,
 ) -> Result<Response, ContractError> {
@@ -343,7 +343,7 @@ pub fn execute_update_config(
         if config.dex_token.is_some() {
             return Err(ContractError::DexTokenAlreadySet {});
         }
-        config.dex_token = Some(addr_validate_to_lower(deps.api, dex_token.as_str())?);
+        config.dex_token = Some(dex_token);
     }
 
     // Check and update config::vesting_contract
@@ -1747,7 +1747,6 @@ pub fn send_pending_rewards(
 
     // Claim from vesting and transfer to user rewards Msg
     if !pending_rewards.is_zero() {
-        // claim if insufficient dex tokens available
         messages.push(WasmMsg::Execute {
             contract_addr: cfg.vesting_contract.clone().unwrap().to_string(),
             msg: to_binary(&VestingExecuteMsg::Claim {

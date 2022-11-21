@@ -20,6 +20,19 @@ pub fn solve_constant_function_invariant(
     token_balance_unknown_before: Decimal,
     token_weight_unknown: Decimal,
 ) -> StdResult<Decimal> {
+    println!("solve_constant_function_invariant");
+    println!(
+        "token_balance_fixed_before: {:?}",
+        token_balance_fixed_before
+    );
+    println!("token_balance_fixed_after: {:?}", token_balance_fixed_after);
+    println!("token_weight_fixed: {:?}", token_weight_fixed);
+    println!(
+        "token_balance_unknown_before: {:?}",
+        token_balance_unknown_before
+    );
+    println!("token_weight_unknown: {:?}", token_weight_unknown);
+
     // weight_ratio = (weightX/weightY)
     let weight_ratio = token_weight_fixed
         .checked_div(token_weight_unknown)
@@ -32,15 +45,19 @@ pub fn solve_constant_function_invariant(
 
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
+    println!("y_to_weight_ratio: {:?}", y_to_weight_ratio);
 
+    println!("Decimal::one(): {:?}", Decimal::one());
     // Decimal is an unsigned so always return abs value
     let paranthetical = if y_to_weight_ratio <= Decimal::one() {
         Decimal::one().checked_sub(y_to_weight_ratio)?
     } else {
         y_to_weight_ratio.checked_sub(Decimal::one())?
     };
+    println!("paranthetical: {:?}", paranthetical);
 
     let amount_y = token_balance_unknown_before.checked_mul(paranthetical)?;
+    println!("amount_y: {:?}", amount_y);
     return Ok(amount_y);
 }
 
@@ -53,16 +70,29 @@ pub fn calc_minted_shares_given_single_asset_in(
     total_shares: Uint128,
     swap_fee: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
+    println!("calc_minted_shares_given_single_asset_in");
+    println!("token_amount_in: {:?}", token_amount_in);
+    println!("in_precision: {:?}", in_precision);
+    println!("asset_weight_and_balance: {:?}", asset_weight_and_balance);
+    println!("total_shares: {:?}", total_shares);
+    println!("swap_fee: {:?}", swap_fee);
+
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
     // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
     let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee);
+    println!("fee_ratio: {:?}", fee_ratio);
     let token_amount_in_after_fee = token_amount_in * fee_ratio;
+    println!("token_amount_in_after_fee: {:?}", token_amount_in_after_fee);
+
     let fee_charged = token_amount_in.checked_sub(token_amount_in_after_fee)?;
+    println!("fee_charged: {:?}", fee_charged);
 
     let in_decimal = Decimal::from_atomics(token_amount_in_after_fee, in_precision).unwrap();
+    println!("in_decimal: {:?}", in_decimal);
     let balance_decimal =
         Decimal::from_atomics(asset_weight_and_balance.asset.amount, in_precision).unwrap();
+    println!("balance_decimal: {:?}", balance_decimal);
 
     // To figure out the number of shares we add, first notice that we can treat
     // the number of shares as linearly related to the `k` value function. This is due to the normalization.
@@ -79,11 +109,15 @@ pub fn calc_minted_shares_given_single_asset_in(
         Decimal::from_atomics(total_shares, 6).unwrap(),
         Decimal::one(),
     )?;
+    println!("pool_amount_out: {:?}", pool_amount_out);
+
     let pool_amount_out_adj = adjust_precision(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
         6.into(),
     )?;
+    println!("pool_amount_out_adj: {:?}", pool_amount_out_adj);
+    println!("fee_charged: {:?}", fee_charged);
 
     return Ok((pool_amount_out_adj, fee_charged));
 }
@@ -101,4 +135,30 @@ fn fee_ratio(normalized_weight: Decimal, swap_fee: Decimal) -> Decimal {
 /// * **total_weight** is the total weight of all assets.
 pub fn get_normalized_weight(weight: Uint128, total_weight: Uint128) -> Decimal {
     Decimal::from_ratio(weight, total_weight)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_solve_constant_function_invariant() {
+        let mut pool_amount_out = solve_constant_function_invariant(
+            Decimal::from_ratio(45363_000000u128, 1u128),
+            Decimal::from_ratio(45963_000000u128, 1u128),
+            Decimal::from_ratio(45u128, 1u128),
+            Decimal::from_ratio(15363_000000u128, 1u128),
+            Decimal::from_ratio(55u128, 1u128),
+        )
+        .unwrap();
+        println!("pool_amount_out: {:?}", pool_amount_out.atomics());
+
+        let pool_amount_out_adj = adjust_precision(
+            pool_amount_out.atomics(),
+            pool_amount_out.decimal_places() as u8,
+            6.into(),
+        )
+        .unwrap();
+
+        println!("pool_amount_out_adj: {:?}", pool_amount_out_adj);
+    }
 }

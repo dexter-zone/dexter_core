@@ -33,8 +33,16 @@ pub(crate) fn compute_swap(
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
 ) -> StdResult<(Uint128, Uint128)> {
+    println!("compute_swap");
+    println!("math_config: {:?}", math_config);
+    println!("offer_asset: {:?}", offer_asset);
+    println!("offer_pool: {:?}", offer_pool);
+    println!("ask_pool: {:?}", ask_pool);
+    println!("pools: {:?}", pools);
+
     // get ask asset precisison
     let token_precision = get_precision(storage, &ask_pool.info)?;
+    println!("token_precision: {:?}", token_precision);
 
     let new_ask_pool = calc_y(
         &offer_asset,
@@ -44,15 +52,19 @@ pub(crate) fn compute_swap(
         compute_current_amp(math_config, env)?,
         token_precision,
     )?;
+    println!("new_ask_pool: {:?}", new_ask_pool);
 
     let return_amount = ask_pool.amount.to_uint128_with_precision(token_precision)? - new_ask_pool;
+    println!("return_amount: {:?}", return_amount);
 
     let offer_asset_amount = offer_asset
         .amount
         .to_uint128_with_precision(token_precision)?;
+    println!("offer_asset_amount: {:?}", offer_asset_amount);
 
     // We consider swap rate 1:1 in stable swap thus any difference is considered as spread.
     let spread_amount = offer_asset_amount.saturating_sub(return_amount);
+    println!("spread_amount: {:?}\n\n\n", spread_amount);
 
     Ok((return_amount, spread_amount))
 }
@@ -77,10 +89,21 @@ pub(crate) fn compute_offer_amount(
     commission_rate: u16,
     greatest_precision: u8,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
+    println!("\n\ncompute_offer_amount");
+    println!("math_config: {:?}", math_config);
+    println!("ask_asset: {:?}", ask_asset);
+    println!("offer_pool: {:?}", offer_pool);
+    println!("ask_pool: {:?}", ask_pool);
+    println!("pools: {:?}", pools);
+    println!("commission_rate: {:?}", commission_rate);
+
     let commission_rate_decimals = Decimal::from_ratio(commission_rate, FEE_PRECISION);
+    println!("commission_rate_decimals: {:?}", commission_rate_decimals);
 
     let offer_precision = get_precision(storage, &offer_pool.info)?;
+    println!("offer_precision: {:?}", offer_precision);
     let ask_precision = get_precision(storage, &ask_asset.info)?;
+    println!("ask_precision: {:?}", ask_precision);
 
     // before_commission = ask_amount * 1/(1-commission_rate)
     let before_commission = Decimal256::with_precision(
@@ -90,6 +113,7 @@ pub(crate) fn compute_offer_amount(
             .checked_mul_uint128(ask_asset.amount)?,
         ask_precision as u32,
     )?;
+    println!("before_commission: {:?}", before_commission);
 
     let new_offer_pool = calc_y(
         &ask_pool,
@@ -99,6 +123,7 @@ pub(crate) fn compute_offer_amount(
         compute_current_amp(&math_config, &env)?,
         greatest_precision,
     )?;
+    println!("new_offer_pool: {:?}", new_offer_pool);
 
     // offer_amount = new_offer_pool - offer_pool
     let offer_amount = new_offer_pool.checked_sub(
@@ -106,15 +131,19 @@ pub(crate) fn compute_offer_amount(
             .amount
             .to_uint128_with_precision(greatest_precision)?,
     )?;
+    println!("offer_amount: {:?}", offer_amount);
 
     let offer_amount = adjust_precision(offer_amount, greatest_precision, offer_precision)?;
+    println!("offer_amount: {:?}", offer_amount);
 
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
     let spread_amount =
         offer_amount.saturating_sub(before_commission.to_uint128_with_precision(ask_precision)?);
+    println!("spread_amount: {:?}", spread_amount);
 
     let commission_amount = commission_rate_decimals
         .checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
+    println!("commission_amount: {:?}\n\n\n", commission_amount);
 
     Ok((offer_amount, spread_amount, commission_amount))
 }
