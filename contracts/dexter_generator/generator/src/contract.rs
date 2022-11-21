@@ -628,9 +628,8 @@ fn add_proxy(
         )));
     }
 
-    pool_info.reward_proxy = Some(proxy.clone());
-
     accumulate_rewards_per_share(&deps.querier, &env, &lp_token, &mut pool_info, &cfg, None)?;
+    pool_info.reward_proxy = Some(proxy.clone());
 
     // If a reward proxy is set - send LP tokens to the proxy
     let lp_supply = query_token_balance(
