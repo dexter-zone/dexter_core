@@ -8,7 +8,9 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use dexter::keeper::{
+    BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
+};
 use dexter::querier::query_vault_config;
 
 /// Contract name that is used for migration.
@@ -188,4 +190,19 @@ fn query_get_balances(deps: Deps, env: Env, assets: Vec<AssetInfo>) -> StdResult
     }
 
     Ok(resp)
+}
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Migrate Function   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+/// ## Description
+/// Used for migration of contract. Returns the default object of type [`Response`].
+/// ## Params
+/// * **_deps** is the object of type [`DepsMut`].
+/// * **_env** is the object of type [`Env`].
+/// * **_msg** is the object of type [`MigrateMsg`].
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    Ok(Response::default())
 }
