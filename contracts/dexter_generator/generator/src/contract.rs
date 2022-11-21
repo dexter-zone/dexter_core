@@ -38,6 +38,9 @@ const CONTRACT_NAME: &str = "dexter-generator";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Constant for the maximum number of unbonding positions a user can have for an LP token
+const MAX_UNBONDING_PERIODS: u64 = 10;
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -890,6 +893,13 @@ pub fn unstake(
     // Update user's balance
     let updated_amount = user.amount.checked_sub(amount)?;
     let mut user = update_user_balance(user, &pool.clone(), updated_amount)?;
+
+    // Number of unbonding periods cannot exceed maximum
+    if user.unbonding_periods.len() >= MAX_UNBONDING_PERIODS.try_into().unwrap() {
+        return Err(ContractError::MaxUnbondingPeriods {
+            max_unbonding_periods: MAX_UNBONDING_PERIODS,
+        });
+    }
 
     // Create unbonding period
     if amount > Uint128::zero() {

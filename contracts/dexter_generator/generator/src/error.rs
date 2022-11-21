@@ -13,6 +13,9 @@ pub enum ContractError {
     #[error("Zero amount provided")]
     ZeroAmount {},
 
+    #[error("Number of unbonding periods active for an LP token cannot exceed maximum allowed {max_unbonding_periods}")]
+    MaxUnbondingPeriods { max_unbonding_periods: u64 },
+
     #[error("Dex token already set")]
     DexTokenAlreadySet {},
 
