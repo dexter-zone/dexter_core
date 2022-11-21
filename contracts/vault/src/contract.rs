@@ -1219,6 +1219,11 @@ pub fn execute_exit_pool(
     event = event.add_attribute("sender", sender);
     event = event.add_attribute("vault_contract_address", env.contract.address);
 
+    // Check - Burn amount cannot be 0
+    if pool_exit_transition.burn_shares.is_zero() {
+        return Err(ContractError::BurnAmountZero {});
+    }
+
     // ExecuteMsg:: Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
