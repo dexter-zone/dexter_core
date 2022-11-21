@@ -1331,6 +1331,13 @@ pub fn execute_swap(
         });
     }
 
+    // Error - If any of the amount_in / amount_out is zero
+    if pool_swap_transition.trade_params.amount_in.is_zero()
+        || pool_swap_transition.trade_params.amount_out.is_zero()
+    {
+        return Err(ContractError::SwapAmountZero {});
+    }
+
     // Params - Create offer and ask assets
     let offer_asset = Asset {
         info: swap_request.asset_in.clone(),

@@ -525,6 +525,12 @@ pub fn query_on_swap(
         }
     }
 
+    if calc_amount.is_zero() {
+        return Ok(return_swap_failure(
+            "Computation error - calc_amount is zero".to_string(),
+        ));
+    }
+
     // Check the max spread limit (if it was specified)
     let spread_check = assert_max_spread(
         belief_price,

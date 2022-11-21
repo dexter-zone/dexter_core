@@ -845,6 +845,12 @@ pub fn query_on_swap(
         }
     }
 
+    if calc_amount.is_zero() {
+        return Ok(return_swap_failure(
+            "Computation error - calc_amount is zero".to_string(),
+        ));
+    }
+
     Ok(SwapResponse {
         trade_params: Trade {
             amount_in: offer_asset.amount,
