@@ -1049,12 +1049,18 @@ pub fn emergency_unstake(
         });
     }
 
-    // Update user's balance
+    // Update user's balance. All LP tokens are to be unbonded and the user's bonded amount is set to 0.
+    let unbonded_amount = user.amount;
     let mut user = update_user_balance(user, &pool, Uint128::zero())?;
+
+    // Check that amount is non-zero
+    if unbonded_amount == Uint128::zero() {
+        return Err(ContractError::ZeroUnbondAmount {});
+    }
 
     // Create unbonding period
     let unbonding_period = UnbondingInfo {
-        amount: user.amount,
+        amount: unbonded_amount,
         unlock_timestamp: env.block.time.seconds() + cfg.unbonding_period,
     };
 
@@ -1068,7 +1074,7 @@ pub fn emergency_unstake(
     Ok(Response::new()
         .add_messages(transfer_msgs)
         .add_attribute("action", "emergency_withdraw")
-        .add_attribute("amount", user.amount))
+        .add_attribute("amount", unbonded_amount))
 }
 
 /// ## Description

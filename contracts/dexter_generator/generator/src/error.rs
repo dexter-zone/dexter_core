@@ -40,6 +40,9 @@ pub enum ContractError {
     #[error("Insufficient amount of orphan rewards!")]
     ZeroOrphanRewards {},
 
+    #[error("Amount to unbond cannot be 0!")]
+    ZeroUnbondAmount {},
+
     #[error("Contract can't be migrated!")]
     MigrationError {},
 
