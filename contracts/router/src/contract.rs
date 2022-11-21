@@ -8,7 +8,7 @@ use cosmwasm_std::{
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
-use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
+use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::ResponseType;
 use dexter::router::{
     return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest,
@@ -34,7 +34,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let cfg = Config {
-        dexter_vault: addr_validate_to_lower(deps.api, &msg.dexter_vault)?,
+        dexter_vault: deps.api.addr_validate(&msg.dexter_vault)?,
     };
 
     CONFIG.save(deps.storage, &cfg)?;
