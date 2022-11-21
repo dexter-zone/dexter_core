@@ -239,12 +239,13 @@ pub fn receive_cw20(
             pool_id,
             recipient,
             assets,
-            burn_amount,
+            mut burn_amount,
         } => {
             // Check if amount is valid or not
-            if burn_amount.is_some() && burn_amount.unwrap() > amount_transferred {
+            if burn_amount.is_some() && burn_amount.unwrap() != amount_transferred {
                 return Err(ContractError::InvalidAmount {});
             }
+            burn_amount = Some(amount_transferred);
 
             let act_recepient = recipient.unwrap_or(sender.clone());
             let sender = sender.clone();
