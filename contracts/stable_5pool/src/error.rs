@@ -20,6 +20,9 @@ pub enum ContractError {
     #[error("Repeated assets in asset infos")]
     RepeatedAssets {},
 
+    #[error("LP token already set")]
+    LpTokenAlreadySet {},
+
     #[error(
         "Invalid number of assets. This pool type supports at least 2 and at most 5 assets within a stable pool"
     )]

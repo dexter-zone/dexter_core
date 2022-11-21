@@ -17,6 +17,9 @@ pub enum ContractError {
     #[error("Weight cannot be 0")]
     ZeroWeight {},
 
+    #[error("LP token already set")]
+    LpTokenAlreadySet {},
+
     #[error("Number of assets and weights provided do not match")]
     NumberOfAssetsAndWeightsMismatch {},
 

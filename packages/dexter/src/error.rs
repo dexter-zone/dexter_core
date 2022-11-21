@@ -20,6 +20,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("LP token already set")]
+    LpTokenAlreadySet {},
+
     #[error("Operation non supported")]
     NonSupported {},
 

@@ -166,6 +166,10 @@ pub fn set_lp_token(
         return Err(ContractError::Unauthorized {});
     }
 
+    if config.lp_token_addr.is_some() {
+        return Err(ContractError::LpTokenAlreadySet {});
+    }
+
     // Update state
     config.lp_token_addr = Some(lp_token_addr);
     CONFIG.save(deps.storage, &config)?;
