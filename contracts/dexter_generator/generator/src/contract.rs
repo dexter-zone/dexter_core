@@ -634,6 +634,15 @@ fn add_proxy(
     accumulate_rewards_per_share(&deps.querier, &env, &lp_token, &mut pool_info, &cfg, None)?;
     pool_info.reward_proxy = Some(proxy.clone());
 
+    // Store PROXY_REWARD_ASSET
+    if !PROXY_REWARD_ASSET.has(deps.storage, &proxy.clone()) {
+        let proxy_cfg: dexter::generator_proxy::ConfigResponse = deps
+            .querier
+            .query_wasm_smart(proxy.clone(), &dexter::generator_proxy::QueryMsg::Config {})?;
+        let asset = proxy_cfg.reward_token;
+        PROXY_REWARD_ASSET.save(deps.storage, &proxy.clone(), &asset)?;
+    }
+
     // If a reward proxy is set - send LP tokens to the proxy
     let lp_supply = query_token_balance(
         &deps.querier,
