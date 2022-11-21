@@ -20,7 +20,7 @@ use dexter::pool::{
     Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType, FEE_PRECISION, TWAP_PRECISION};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::xyk_pool";
@@ -727,8 +727,8 @@ pub fn compute_offer_amount(
     // ask => offer
     // offer_amount = cp / (ask_pool - ask_amount / (1 - commission_rate)) - offer_pool
     let cp = Uint256::from(offer_pool) * Uint256::from(ask_pool);
-    let one_minus_commission =
-        Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
+    let one_minus_commission = Decimal256::one()
+        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;

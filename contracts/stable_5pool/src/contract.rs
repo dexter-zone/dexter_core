@@ -10,12 +10,11 @@ use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
+use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{
     get_precision, store_precisions, MathConfig, StablePoolParams, StablePoolUpdateParams, Twap,
     CONFIG, MATHCONFIG, TWAPINFO,
 };
-
-use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
@@ -550,7 +549,7 @@ pub fn query_on_join_pool(
         let fee_info = config.fee_info.clone();
 
         // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
-        let fee = Decimal::from_ratio(fee_info.total_fee_bps, 10000u16)
+        let fee = Decimal::from_ratio(fee_info.total_fee_bps, FEE_PRECISION)
             .checked_mul(Decimal::from_ratio(n_coins, 4 * (n_coins - 1)))?;
 
         let fee = Decimal256::new(fee.atomics().into());

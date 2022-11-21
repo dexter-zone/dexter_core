@@ -24,7 +24,7 @@ use dexter::pool::{
     Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::{query_supply, query_token_precision, query_vault_config};
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType, FEE_PRECISION, TWAP_PRECISION};
 use dexter::U256;
 
 use std::vec;
@@ -933,7 +933,7 @@ fn compute_offer_amount(
     commission_rate: u16,
     amp: u64,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
-    let commission_rate_decimals = Decimal::from_ratio(commission_rate, 10000u16);
+    let commission_rate_decimals = Decimal::from_ratio(commission_rate, FEE_PRECISION);
     // ask => offer
 
     // Adjust balances based on their precisions
