@@ -81,6 +81,13 @@ pub fn instantiate(
         if !pc.fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
+        // Validate dev address (if provided)
+        if pc.fee_info.developer_addr.clone().is_some() {
+            addr_validate_to_lower(
+                deps.api,
+                pc.fee_info.developer_addr.clone().unwrap().as_str(),
+            )?;
+        }
         REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
     CONFIG.save(deps.storage, &config)?;
@@ -360,6 +367,14 @@ pub fn execute_update_pool_config(
         if !new_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
+        // Validate dev address (if provided)
+        if new_fee_info.developer_addr.clone().is_some() {
+            addr_validate_to_lower(
+                deps.api,
+                new_fee_info.developer_addr.clone().unwrap().as_str(),
+            )?;
+        }
+
         pool_config.fee_info = new_fee_info;
         event = event
             .add_attribute(
@@ -432,10 +447,15 @@ pub fn execute_add_to_registry(
     }
 
     // Validate dev address (if provided)
-    if new_pool_config.fee_info.developer_addr.clone().is_some() {
+    if pool_config.fee_info.developer_addr.clone().is_some() {
         addr_validate_to_lower(
             deps.api,
-            new_pool_config.fee_info.developer_addr.unwrap().as_str(),
+            pool_config
+                .fee_info
+                .developer_addr
+                .clone()
+                .unwrap()
+                .as_str(),
         )?;
     }
 
