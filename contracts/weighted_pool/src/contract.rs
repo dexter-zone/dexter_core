@@ -106,6 +106,9 @@ pub fn instantiate(
 
     let mut asset_weights: Vec<(AssetInfo, Decimal)> = vec![];
     for asset in weights.iter() {
+        if asset.amount.is_zero() {
+            return Err(ContractError::ZeroWeight {});
+        }
         let normalized_weight = get_normalized_weight(asset.amount.clone(), total_weight);
         asset_weights.push((asset.info.clone(), normalized_weight));
     }
