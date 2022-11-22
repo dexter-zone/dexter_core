@@ -7,6 +7,7 @@ use crate::asset::AssetInfo;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Addr,
+    pub unlock_period: u64,
 }
 
 #[cw_serde]
@@ -38,10 +39,25 @@ pub struct RewardSchedule {
 
 #[cw_serde]
 pub struct Config {
-    // TODO: check if we need this
     pub allowed_lp_tokens: Vec<Addr>,
+    /// Unlocking period in seconds
+    /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
+    /// after they have called the unbond function
+    pub unlock_period: u64,
     // Admin has privilege to add remove allowed lp tokens for reward
     pub admin: Addr,
+}
+
+#[cw_serde]
+pub struct TokenLock {
+    pub unlock_time: u64,
+    pub amount: Uint128,
+}
+
+#[cw_serde]
+pub struct TokenLockInfo {
+    pub locks: Vec<TokenLock>,
+    pub unlocked_amount: Uint128
 }
 
 #[cw_serde]
@@ -60,6 +76,12 @@ pub enum QueryMsg {
         lp_token: Addr,
         user: Addr,
         block_time: Option<u64>,
+    },
+    #[returns(TokenLockInfo)]
+    TokenLocks {
+        lp_token: Addr,
+        user: Addr,
+        block_time: u64
     },
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
@@ -105,6 +127,9 @@ pub enum ExecuteMsg {
     Unbond {
         lp_token: Addr,
         amount: Uint128,
+    },
+    Unlock {
+        lp_token: Addr,
     },
     Withdraw {
         lp_token: Addr,

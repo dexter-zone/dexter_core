@@ -7,12 +7,12 @@ use cosmwasm_std::{
 
 use dexter::{
     asset::AssetInfo,
-    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, UnclaimedReward, Config, RewardSchedule, AssetStakerInfo}, helper::{build_transfer_token_to_user_msg},
+    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, UnclaimedReward, Config, RewardSchedule, AssetStakerInfo, TokenLockInfo, TokenLock}, helper::{build_transfer_token_to_user_msg},
 };
 
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
 
-use crate::state::{CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO};
+use crate::state::{CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO, USER_LP_TOKEN_LOCKS};
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -25,6 +25,7 @@ pub fn instantiate(
         deps.storage,
         &Config {
             admin: msg.admin,
+            unlock_period: msg.unlock_period,
             allowed_lp_tokens: vec![]
         },
     )?;
@@ -92,6 +93,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             Ok(response.add_message(transfer_msg))
         }
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
+        ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info.sender, lp_token),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
     }
 }
@@ -394,7 +396,7 @@ pub fn unbond(
         .may_load(deps.storage, &lp_token)?
         .unwrap_or_default();
 
-    let mut response = Response::new();
+    let response = Response::new();
 
     for asset in lp_active_reward_assets {
         let mut asset_staker_info = ASSET_STAKER_INFO
@@ -435,16 +437,71 @@ pub fn unbond(
         )?;
     }
     
-    // Send the User's LP back to them
-    response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: lp_token.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: sender.to_string(),
-            amount,
-        })?,
-    }));
+    // Start unlocking clock for the user's LP Tokens
+    let mut unlocks = USER_LP_TOKEN_LOCKS
+        .may_load(deps.storage, (&lp_token, &sender))?
+        .unwrap_or_default();
 
+    let config = CONFIG.load(deps.storage)?;
+    
+    unlocks.push(
+        TokenLock {
+            unlock_time: env.block.time.seconds() + config.unlock_period,
+            amount
+        }
+    );
+
+    USER_LP_TOKEN_LOCKS.save(
+        deps.storage,
+        (&lp_token, &sender),
+        &unlocks,
+    )?;
+
+    Ok(response)
+}
+
+pub fn unlock(
+    deps: DepsMut,
+    env: Env,
+    sender: Addr,
+    lp_token: Addr,
+) -> StdResult<Response> {
+
+    let locks = USER_LP_TOKEN_LOCKS
+        .may_load(deps.storage, (&lp_token, &sender))?
+        .unwrap_or_default();
+
+    let mut response = Response::new();
+
+    let mut unlocked_amount = Uint128::zero();
+
+    for token_lock in locks.iter() {
+        if token_lock.unlock_time <= env.block.time.seconds() {
+            unlocked_amount += token_lock.amount;
+        }
+    }
+
+    let unlocks = locks.iter()
+        .filter(|lock| lock.unlock_time > env.block.time.seconds())
+        .cloned()
+        .collect::<Vec<_>>();
+
+    USER_LP_TOKEN_LOCKS.save(
+        deps.storage,
+        (&lp_token, &sender),
+        &unlocks,
+    )?;
+
+    if unlocked_amount > Uint128::zero() {
+        response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: lp_token.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: sender.to_string(),
+                amount: unlocked_amount,
+            })?,
+        }));
+    }
 
     Ok(response)
 }
@@ -566,5 +623,27 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             )?.unwrap_or_default();
             to_binary(&reward_schedules)
         },
+        QueryMsg::TokenLocks { lp_token, user, block_time } => {
+            let mut locks = USER_LP_TOKEN_LOCKS
+                .may_load(deps.storage, (&lp_token, &user))?
+                .unwrap_or_default();
+
+            let mut unlocked_amount = Uint128::zero();
+            let mut filtered_locks = vec![];
+
+            for lock in locks.iter_mut() {
+                if lock.unlock_time < block_time {
+                    unlocked_amount += lock.amount;
+                    lock.amount = Uint128::zero();
+                } else {
+                    filtered_locks.push(lock.clone());
+                }
+            }
+
+            to_binary(&TokenLockInfo {
+                unlocked_amount,
+                locks: filtered_locks,
+            })
+        }
     }
 }

@@ -1,7 +1,7 @@
 use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
 use cw_multi_test::{App, Executor, ContractWrapper};
-use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, Cw20HookMsg, QueryMsg, UnclaimedReward}, asset::AssetInfo};
-use cw20::{Cw20ExecuteMsg, MinterResponse};
+use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, Cw20HookMsg, QueryMsg, UnclaimedReward, TokenLock, TokenLockInfo}, asset::AssetInfo};
+use cw20::{Cw20ExecuteMsg, MinterResponse, Cw20QueryMsg, BalanceResponse};
 
 const EPOCH_START: u64 = 1_000_000_000;
 
@@ -24,6 +24,7 @@ fn instantiate_multi_staking_contract(
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
         admin: admin.clone(),
+        unlock_period: 1000,
     };
 
     let multi_staking_instance = app
@@ -277,6 +278,20 @@ fn unbond_lp_tokens(
     ).unwrap();
 }
 
+fn unlock_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    sender: &Addr
+) {
+    app.execute_contract(
+        sender.clone(), 
+        multistaking_contract.clone(),
+        &ExecuteMsg::Unlock { lp_token: lp_token_addr.clone() },
+        &vec![],
+    ).unwrap();
+}
+
 fn query_unclaimed_rewards(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -291,6 +306,42 @@ fn query_unclaimed_rewards(
                 lp_token: lp_token_addr.clone(),
                 user: user_addr.clone(),
                 block_time: None
+            },
+        )
+        .unwrap()
+}
+
+fn query_lp_token_balance(
+    app: &mut App,
+    lp_token_addr: &Addr,
+    user_addr: &Addr,
+) -> Uint128 {
+    app
+        .wrap()
+        .query_wasm_smart(
+            lp_token_addr.clone(),
+            &Cw20QueryMsg::Balance {
+                address: user_addr.to_string(),
+            },
+        )
+        .unwrap()
+}
+
+fn query_token_locks(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    user_addr: &Addr,
+    block_time: u64,
+) -> TokenLockInfo {
+    app
+        .wrap()
+        .query_wasm_smart(
+            multistaking_contract.clone(),
+            &QueryMsg::TokenLocks {
+                    lp_token: lp_token_addr.clone(),
+                    user: user_addr.clone(),
+                    block_time,
             },
         )
         .unwrap()
@@ -457,6 +508,22 @@ fn test_verify_extra_amount_is_sent_back() {
 
 }
 
+fn assert_user_lp_token_balance(
+    app: &mut App,
+    user_addr: &Addr,
+    lp_token_addr: &Addr,
+    expected_balance: Uint128,
+) {
+    let response: BalanceResponse = app.wrap().query_wasm_smart(
+        lp_token_addr.clone(),
+        &cw20::Cw20QueryMsg::Balance {
+            address: user_addr.to_string(),
+        },
+    ).unwrap();
+    let user_lp_token_balance = response.balance;
+    assert_eq!(user_lp_token_balance, expected_balance);
+}
+
 #[test]
 fn test_staking() {
     let admin = String::from("admin");
@@ -491,8 +558,13 @@ fn test_staking() {
 
     // Mint some LP tokens
     mint_lp_tokens_to_addr(&mut app, &admin_addr, &lp_token_addr, &user_addr, Uint128::from(100_000_000 as u64));
+    // Check user LP Balance
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(100_000_000 as u64));
 
     bond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(100_000_000 as u64));
+
+    // Validate that user balance is reduced after bonding
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0 as u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_500);
@@ -502,12 +574,78 @@ fn test_staking() {
     // Unbond half of the amoutt at 50% of the reward schedule
     unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(50_000_000 as u64));
 
+    // Validate that user balance is still zero after bonding till unlock happens
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0 as u64));
+
+    let token_lock_info = query_token_locks(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, 1_000_001_500);
+    let token_locks = token_lock_info.locks;
+    
+    assert_eq!(token_lock_info.unlocked_amount, Uint128::from(0 as u64));
+    assert_eq!(token_locks.len(), 1);
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].unlock_time, 1_000_002_500);
+
+    // try to unlock some tokens, but it should not alter any balance as unlock time is not reached
+    unlock_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr);
+
+    // Validate that user balance is still zero after bonding till unlock happens
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0 as u64));
+
+
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_002_001);
         b.height = b.height + 100;
     });
 
     unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, Uint128::from(50_000_000 as u64));
+
+    // validate new unlock that must have been issued after second unbonding
+    let token_lock_info = query_token_locks(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, 1_000_002_001);
+    let token_locks = token_lock_info.locks;
+    assert_eq!(token_locks.len(), 2);
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].unlock_time, 1_000_002_500);
+    assert_eq!(token_locks[1].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[1].unlock_time, 1_000_003_001);
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_002_501);
+        b.height = b.height + 100;
+    });
+
+    // Unlock first set of tokens
+    unlock_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr);
+
+    // Validate that user LP balance is updated post unlock
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(50_000_000 as u64));
+
+    // validate unlocks are updated after first unlock
+    let token_lock_info = query_token_locks(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, 1_000_002_501);
+    let token_locks = token_lock_info.locks;
+    assert_eq!(token_locks.len(), 1);
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].unlock_time, 1_000_003_001);
+
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_003_002);
+        b.height = b.height + 100;
+    });
+
+    let token_lock_info = query_token_locks(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, 1_000_003_002);
+    let token_locks = token_lock_info.locks;
+    assert_eq!(token_locks.len(), 0);
+    assert_eq!(token_lock_info.unlocked_amount, Uint128::from(50_000_000 as u64));
+
+    // Unlock second set of tokens
+    unlock_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr);
+
+    // Validate that user LP balance is updated post unlock
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(100_000_000 as u64));
+
+    // validate unlocks are updated after second unlock
+    let token_lock_info = query_token_locks(&mut app, &multi_staking_instance, &lp_token_addr, &user_addr, 1_000_003_001);
+    let token_locks = token_lock_info.locks;
+    assert_eq!(token_locks.len(), 0);
     
     let query_msg = QueryMsg::UnclaimedRewards { lp_token: lp_token_addr.clone(), user: user_addr.clone(), block_time: None };
     let response: Vec<UnclaimedReward> = app.wrap().query_wasm_smart(multi_staking_instance.clone(), &query_msg).unwrap();
@@ -732,7 +870,6 @@ fn test_multi_user_multi_reward_schedule() {
 
     unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr, Uint128::from(50_000 as u64));
     unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_2_addr, Uint128::from(1_000_000 as u64));
-    
 
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr);
     let unclaimed_rewards_user_2 = query_unclaimed_rewards(&mut app, &multi_staking_instance, &lp_token_addr, &user_2_addr);
