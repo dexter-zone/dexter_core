@@ -74,6 +74,23 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 Err(StdError::generic_err("Asset for reward was not sent with the message"))
             }
         },
+        ExecuteMsg::Bond { lp_token, amount } => {
+            let sender = info.sender;
+            
+            // Transfer the lp token to the contract
+            let transfer_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: lp_token.to_string(),
+                    funds: vec![],
+                    msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                        owner: sender.to_string(),
+                        recipient: env.contract.address.to_string(),
+                        amount,
+                    })?,
+            });
+
+            let response = bond(deps, env, sender, lp_token, amount)?;
+            Ok(response.add_message(transfer_msg))
+        }
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
     }

@@ -98,6 +98,10 @@ pub enum ExecuteMsg {
         lp_token: Addr,
     },
     Receive(Cw20ReceiveMsg),
+    Bond {
+        lp_token: Addr,
+        amount: Uint128,
+    },
     Unbond {
         lp_token: Addr,
         amount: Uint128,
