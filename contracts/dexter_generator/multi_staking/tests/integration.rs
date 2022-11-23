@@ -23,7 +23,7 @@ fn instantiate_multi_staking_contract(
     admin: Addr
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
-        admin: admin.clone(),
+        owner: admin.clone(),
         unlock_period: 1000,
     };
 
@@ -435,43 +435,136 @@ fn test_update_admin() {
     // New admin
     let new_admin_addr = Addr::unchecked("new_admin".to_string());
 
-    // Create a new reward schedule
+    // Test: try to create ownership proposal from unauthorized address
     let unauthorized_addr = Addr::unchecked("unauthorized".to_string());
     let response = app.execute_contract(
         unauthorized_addr.clone(), 
         multi_staking_instance.clone(), 
-        &ExecuteMsg::UpdateAdmin { 
-            new_admin: new_admin_addr.clone(), 
+        &ExecuteMsg::ProposeNewOwner { 
+            owner: new_admin_addr.clone(),
+            expires_in: 1000,
         },
         &vec![]
     );
     
     assert!(response.is_err());
-    // Check the error is amount insufficied fundsinsufficient funds
-    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Only admin can update admin");
+    // Check error is unauthorized
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Unauthorized");
 
-    // Update admin
-   let response =  app.execute_contract(
+    // Create owner update proposal
+    app.execute_contract(
         admin_addr.clone(), 
         multi_staking_instance.clone(), 
-        &ExecuteMsg::UpdateAdmin { 
-            new_admin: new_admin_addr.clone(),
+        &ExecuteMsg::ProposeNewOwner {
+            owner: new_admin_addr.clone(),
+            expires_in: 1000,
         },
+        &vec![]
+    ).unwrap();
+
+    // Test: Try to claim ownership from unauthorized address
+    let response = app.execute_contract(
+        unauthorized_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ClaimOwnership {},
+        &vec![]
+    );
+
+    assert!(response.is_err());
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Unauthorized");
+
+    // Test: Try to claim ownership after proposal expires
+    // update block
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_001);
+        b.height = b.height + 100;
+    });
+
+    // try claiming ownership
+    let response =  app.execute_contract(
+        new_admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ClaimOwnership {},
+        &vec![]
+    );
+
+    // response should be error
+    assert!(response.is_err());
+    // Error should be time expired
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Ownership proposal expired");
+
+    // Test: Try to claim ownership before proposal expires
+    // Create new owner update proposal
+    app.execute_contract(
+        admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ProposeNewOwner {
+            owner: new_admin_addr.clone(),
+            expires_in: 1000,
+        },
+        &vec![]
+    ).unwrap();
+
+    // update block
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.height = b.height + 100;
+    });
+
+    // try claiming ownership
+    let response =  app.execute_contract(
+        new_admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ClaimOwnership {},
         &vec![]
     );
 
     // response should be ok
-    response.unwrap();
-    // assert_eq!(response.is_ok(), true);
+    assert!(response.is_ok());
 
     // Check if admin is updated
     let admin: Addr = app.wrap().query_wasm_smart(
         multi_staking_instance.clone(), 
-        &QueryMsg::Admin {}
+        &QueryMsg::Owner {}
     ).unwrap();
 
     assert_eq!(admin, new_admin_addr);
+
+
+    // Test: Try to claim ownership after proposal drop
+    // Create new owner update proposal
+    app.execute_contract(
+        new_admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ProposeNewOwner {
+            owner: admin_addr.clone(),
+            expires_in: 1000,
+        },
+        &vec![]
+    ).unwrap();
+
+    // drop the proposal
+    app.execute_contract(
+        new_admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::DropOwnershipProposal {},
+        &vec![]
+    ).unwrap();
+
+    // try to claim ownership
+    let response =  app.execute_contract(
+        admin_addr.clone(), 
+        multi_staking_instance.clone(), 
+        &ExecuteMsg::ClaimOwnership {},
+        &vec![]
+    );
+
+    // response should be error
+    assert!(response.is_err());
+    // Error should be proposal not found
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Ownership proposal not found");
 }
+
 
 #[test]
 fn test_verify_extra_amount_is_sent_back() {

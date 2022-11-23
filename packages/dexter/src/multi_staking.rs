@@ -6,7 +6,7 @@ use crate::asset::AssetInfo;
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub admin: Addr,
+    pub owner: Addr,
     pub unlock_period: u64,
 }
 
@@ -44,8 +44,8 @@ pub struct Config {
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
-    // Admin has privilege to add remove allowed lp tokens for reward
-    pub admin: Addr,
+    // owner has privilege to add remove allowed lp tokens for reward
+    pub owner: Addr,
 }
 
 #[cw_serde]
@@ -86,7 +86,7 @@ pub enum QueryMsg {
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
     #[returns(Addr)]
-    Admin {},
+    Owner {},
     #[returns(Vec<RewardSchedule>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
 }
@@ -103,9 +103,6 @@ pub enum Cw20HookMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    UpdateAdmin {
-        new_admin: Addr,
-    },
     AddRewardFactory {
         lp_token: Addr,
         denom: String,
@@ -134,4 +131,11 @@ pub enum ExecuteMsg {
     Withdraw {
         lp_token: Addr,
     },
+    // owner update flows
+    ProposeNewOwner {
+        owner: Addr,
+        expires_in: u64,
+    },
+    ClaimOwnership {},
+    DropOwnershipProposal {}
 }

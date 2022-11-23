@@ -7,12 +7,12 @@ use cosmwasm_std::{
 
 use dexter::{
     asset::AssetInfo,
-    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, UnclaimedReward, Config, RewardSchedule, AssetStakerInfo, TokenLockInfo, TokenLock}, helper::{build_transfer_token_to_user_msg},
+    multi_staking::{AssetRewardState, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, UnclaimedReward, Config, RewardSchedule, AssetStakerInfo, TokenLockInfo, TokenLock}, helper::{build_transfer_token_to_user_msg, propose_new_owner, drop_ownership_proposal, claim_ownership},
 };
 
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
 
-use crate::state::{CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO, USER_LP_TOKEN_LOCKS};
+use crate::state::{CONFIG, REWARD_SCHEDULES, REWARD_STATES, LP_ACTIVE_REWARD_ASSETS, ASSET_STAKER_INFO, USER_LP_TOKEN_LOCKS, OWNERSHIP_PROPOSAL};
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -24,8 +24,8 @@ pub fn instantiate(
     CONFIG.save(
         deps.storage,
         &Config {
-            admin: msg.admin,
             unlock_period: msg.unlock_period,
+            owner: msg.owner,
             allowed_lp_tokens: vec![]
         },
     )?;
@@ -36,7 +36,6 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
-        ExecuteMsg::UpdateAdmin { new_admin } => update_admin(deps, info, new_admin),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token_from_allowed_list(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -77,7 +76,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         },
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
-            
+
             // Transfer the lp token to the contract
             let transfer_msg = CosmosMsg::Wasm(WasmMsg::Execute {
                     contract_addr: lp_token.to_string(),
@@ -95,6 +94,28 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info.sender, lp_token),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
+        ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
+            let config = CONFIG.load(deps.storage)?;
+            let response = propose_new_owner(deps, info, env, owner.to_string(), expires_in, config.owner, OWNERSHIP_PROPOSAL)?;
+            Ok(response)
+        },
+        ExecuteMsg::DropOwnershipProposal {} => {
+            let config: Config = CONFIG.load(deps.storage)?;
+
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+                .map_err(|e| e.into())
+        }
+        ExecuteMsg::ClaimOwnership {} => {
+            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+                CONFIG.update::<_, StdError>(deps.storage, |mut v| {
+                    v.owner = new_owner;
+                    Ok(v)
+                })?;
+
+                Ok(())
+            })
+            .map_err(|e| e.into())
+        }
     }
 }
 
@@ -105,10 +126,10 @@ fn allow_lp_token(
     lp_token: Addr,
 ) -> StdResult<Response> {
 
-    // validate if admin sent the message
+    // validate if owner sent the message
     let mut config = CONFIG.load(deps.storage)?;
-    if config.admin != info.sender {
-        return Err(StdError::generic_err("Only admin can allow lp token for reward"));
+    if config.owner != info.sender {
+        return Err(StdError::generic_err("Only owner can allow lp token for reward"));
     }
 
     // verify that lp token is not already allowed
@@ -127,29 +148,12 @@ fn remove_lp_token_from_allowed_list(
     lp_token: &Addr,
 ) -> StdResult<Response> {
     let mut config = CONFIG.load(deps.storage)?;
-    // validate if admin sent the message
-    if config.admin != info.sender {
-        return Err(StdError::generic_err("Only admin can remove lp token from allowed list"));
+    // validate if owner sent the message
+    if config.owner != info.sender {
+        return Err(StdError::generic_err("Only owner can remove lp token from allowed list"));
     }
 
     config.allowed_lp_tokens.retain(|x| x != lp_token);
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::default())
-}
-
-fn update_admin(
-    deps: DepsMut,
-    info: MessageInfo,
-    new_admin: Addr,
-) -> StdResult<Response> {
-    let mut config = CONFIG.load(deps.storage)?;
-    // validate if admin sent the message
-    if config.admin != info.sender {
-        return Err(StdError::generic_err("Only admin can update admin"));
-    }
-
-    config.admin = new_admin;
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::default())
@@ -612,9 +616,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             let allowed_lp_tokens = config.allowed_lp_tokens;
             to_binary(&allowed_lp_tokens)
         },
-        QueryMsg::Admin {  } => {
+        QueryMsg::Owner {  } => {
             let  config = CONFIG.load(deps.storage)?;
-            to_binary(&config.admin)
+            to_binary(&config.owner)
         },
         QueryMsg::RewardSchedules { lp_token, asset } => {
             let reward_schedules = REWARD_SCHEDULES.may_load(

@@ -1,6 +1,6 @@
 use cosmwasm_std::{Addr, Uint128};
 use cw_storage_plus::{Map, Item};
-use dexter::{asset::AssetInfo, multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock}};
+use dexter::{asset::AssetInfo, multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock}, helper::OwnershipProposal};
 
 
 
@@ -14,3 +14,4 @@ pub const REWARD_STATES: Map<&str, AssetRewardState> = Map::new("reward_states")
 
 // Map between (LP Token, User) to (Unlock time, Amount)
 pub const USER_LP_TOKEN_LOCKS: Map<(&Addr, &Addr), Vec<TokenLock>> = Map::new("user_lp_token_unlocks");
+pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
