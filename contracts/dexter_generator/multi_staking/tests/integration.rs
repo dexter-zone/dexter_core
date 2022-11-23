@@ -163,7 +163,7 @@ fn test_fail_create_reward_with_less_amount() {
     let response = app.execute_contract(
         admin_addr.clone(), 
         multi_staking_instance.clone(), 
-        &ExecuteMsg::AddRewardFactory { 
+        &ExecuteMsg::AddRewardSchedule { 
             lp_token: lp_token_addr.clone(), 
             denom: "uxprt".to_string(), 
             amount: Uint128::from(100_000_000 as u64), 
@@ -195,7 +195,7 @@ fn create_reward_schedule(
             app.execute_contract(
                 admin_addr.clone(), 
                 multistaking_contract.clone(), 
-                &ExecuteMsg::AddRewardFactory { 
+                &ExecuteMsg::AddRewardSchedule { 
                         lp_token: lp_token.clone(), 
                         denom: denom.clone(), 
                         amount: amount.clone(), 
@@ -212,7 +212,7 @@ fn create_reward_schedule(
                 &Cw20ExecuteMsg::Send { 
                         contract: multistaking_contract.to_string(),
                         amount,
-                        msg: to_binary(&Cw20HookMsg::AddRewardFactory {
+                        msg: to_binary(&Cw20HookMsg::AddRewardSchedule {
                             lp_token: lp_token.clone(),
                             start_block_time,
                             end_block_time,
@@ -582,7 +582,7 @@ fn test_verify_extra_amount_is_sent_back() {
     let response = app.execute_contract(
         admin_addr.clone(), 
         multi_staking_instance.clone(), 
-        &ExecuteMsg::AddRewardFactory { 
+        &ExecuteMsg::AddRewardSchedule { 
             lp_token: lp_token_addr.clone(), 
             denom: "uxprt".to_string(), 
             amount: Uint128::from(100_000_000 as u64), 

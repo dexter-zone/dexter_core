@@ -39,7 +39,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token_from_allowed_list(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::AddRewardFactory {
+        ExecuteMsg::AddRewardSchedule {
             lp_token,
             denom,
             amount,
@@ -220,7 +220,7 @@ pub fn receive_cw20(
                     let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
                     bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
                 }
-                Cw20HookMsg::AddRewardFactory {
+                Cw20HookMsg::AddRewardSchedule {
                     lp_token,
                     start_block_time,
                     end_block_time,
