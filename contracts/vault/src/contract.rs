@@ -1210,7 +1210,7 @@ pub fn execute_exit_pool(
     event = event.add_attribute("liquidity_withdrawn", liquidity_withdrawan_json);
     event = event.add_attribute("fees", fee_breakup_json);
 
-    event = event.add_attribute("sender", sender);
+    event = event.add_attribute("sender", sender.clone());
     event = event.add_attribute("vault_contract_address", env.contract.address);
 
     // Check - Burn amount cannot be 0
@@ -1233,7 +1233,7 @@ pub fn execute_exit_pool(
             contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Transfer {
                 amount: lp_to_return,
-                recipient: recipient_addr.to_string(),
+                recipient: sender.clone(),
             })?,
             funds: vec![],
         }));
