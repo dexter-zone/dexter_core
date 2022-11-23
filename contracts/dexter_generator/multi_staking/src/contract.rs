@@ -567,7 +567,7 @@ pub fn withdraw(deps: DepsMut, env: Env, sender: &Addr, lp_token: Addr) -> StdRe
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::UnclaimedRewards { lp_token, user, block_time } => {
             let assets_for_lp = LP_ACTIVE_REWARD_ASSETS
@@ -586,22 +586,26 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
                         reward_index: Decimal::zero(),
                     });
 
-                if let Some(block_time) = block_time {
-                    let mut asset_state =
-                        REWARD_STATES.load(deps.storage, &asset.to_string())?;
-                    
-                    let reward_schedules = REWARD_SCHEDULES.may_load(
-                        deps.storage,
-                        (&lp_token, &asset_staker_info.asset.to_string()),
-                    )?.unwrap_or_default();
-                    
-                    compute_reward(
-                        block_time,
-                        &mut asset_state,
-                        reward_schedules,
-                    );
-                    compute_staker_reward(&mut asset_state, &mut asset_staker_info)?;
+                let block_time = block_time.unwrap_or(env.block.time.seconds());
+
+                if block_time < env.block.time.seconds() {
+                    return Err(StdError::generic_err("Block time cannot be in the past"));
                 }
+
+                let mut asset_state =
+                    REWARD_STATES.load(deps.storage, &asset.to_string())?;
+                
+                let reward_schedules = REWARD_SCHEDULES.may_load(
+                    deps.storage,
+                    (&lp_token, &asset_staker_info.asset.to_string()),
+                )?.unwrap_or_default();
+                
+                compute_reward(
+                    block_time,
+                    &mut asset_state,
+                    reward_schedules,
+                );
+                compute_staker_reward(&mut asset_state, &mut asset_staker_info)?;
 
                 reward_info.push(UnclaimedReward {
                     asset: asset.clone(),
@@ -635,6 +639,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             let mut unlocked_amount = Uint128::zero();
             let mut filtered_locks = vec![];
 
+            let block_time = block_time.unwrap_or(env.block.time.seconds());
             for lock in locks.iter_mut() {
                 if lock.unlock_time < block_time {
                     unlocked_amount += lock.amount;

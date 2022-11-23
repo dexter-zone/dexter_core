@@ -71,17 +71,22 @@ pub struct AssetStakerInfo {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    /// Returns currently unclaimed rewards for a user for a give LP token
+    /// If a future block time is provided, it will return the unclaimed rewards till that block time.
     #[returns(Vec<UnclaimedReward>)]
     UnclaimedRewards {
         lp_token: Addr,
         user: Addr,
         block_time: Option<u64>,
     },
+    /// Returns current token locks for a user for a given LP token
+    /// If a future block time is provided, it will return the token locks and unlocked value at
+    /// that block time based on current unlock period
     #[returns(TokenLockInfo)]
     TokenLocks {
         lp_token: Addr,
         user: Addr,
-        block_time: u64
+        block_time: Option<u64>
     },
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},

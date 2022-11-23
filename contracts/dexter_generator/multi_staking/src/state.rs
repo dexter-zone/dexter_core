@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::Addr;
 use cw_storage_plus::{Map, Item};
 use dexter::{asset::AssetInfo, multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock}, helper::OwnershipProposal};
 
