@@ -296,6 +296,24 @@ pub fn query_lp_token_balance(
         .unwrap()
 }
 
+pub fn query_bonded_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    user_addr: &Addr,
+) -> Uint128 {
+    app
+        .wrap()
+        .query_wasm_smart(
+            multistaking_contract.clone(),
+            &QueryMsg::BondedLpTokens {
+                lp_token: lp_token_addr.clone(),
+                user: user_addr.clone(),
+            },
+        )
+        .unwrap()
+}
+
 pub fn query_token_locks(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -326,7 +344,7 @@ pub fn withdraw_unclaimed_rewards(
         user_addr.clone(),
         multistaking_contract.clone(),
         &ExecuteMsg::Withdraw {
-            lp_token: lp_token_addr.clone(),
+            lp_token: lp_token_addr.clone()
         },
         &vec![],
     )

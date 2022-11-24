@@ -14,7 +14,6 @@ pub struct InstantiateMsg {
 pub struct AssetRewardState {
     pub reward_index: Decimal,
     pub last_distributed: u64,
-    pub total_bond_amount: Uint128,
 }
 
 #[cw_serde]
@@ -64,7 +63,6 @@ pub struct TokenLockInfo {
 pub struct AssetStakerInfo {
     pub asset: AssetInfo,
     pub reward_index: Decimal,
-    pub bond_amount: Uint128,
     pub pending_reward: Uint128,
 }
 
@@ -87,6 +85,11 @@ pub enum QueryMsg {
         lp_token: Addr,
         user: Addr,
         block_time: Option<u64>
+    },
+    #[returns(Uint128)]
+    BondedLpTokens {
+        lp_token: Addr,
+        user: Addr,
     },
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},

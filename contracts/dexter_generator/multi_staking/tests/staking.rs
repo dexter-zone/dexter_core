@@ -1,8 +1,7 @@
 use cosmwasm_std::{Coin, Uint128, Addr, Timestamp};
-use cw_multi_test::Executor;
-use dexter::{multi_staking::{ExecuteMsg, UnclaimedReward, QueryMsg}, asset::AssetInfo};
+use dexter::{multi_staking::{UnclaimedReward, QueryMsg}, asset::AssetInfo};
 
-use crate::utils::{mock_app, setup, create_reward_schedule, bond_lp_tokens, unbond_lp_tokens, query_token_locks, unlock_lp_tokens, withdraw_unclaimed_rewards, mint_lp_tokens_to_addr, query_unclaimed_rewards, assert_user_lp_token_balance};
+use crate::utils::{mock_app, setup, create_reward_schedule, bond_lp_tokens, unbond_lp_tokens, query_bonded_lp_tokens, query_token_locks, unlock_lp_tokens, withdraw_unclaimed_rewards, mint_lp_tokens_to_addr, query_unclaimed_rewards, assert_user_lp_token_balance};
 mod utils;
 
 #[test]
@@ -343,6 +342,10 @@ fn test_multi_user_multi_reward_schedule() {
     // Unbond half of the amoutt at 50% of the reward schedule
     unbond_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr, Uint128::from(50_000 as u64));
 
+    // validate that the LP Tokens still remain bonded until unlocked
+    let user_1_bonded = query_bonded_lp_tokens(&mut app, &multi_staking_instance, &lp_token_addr, &user_1_addr);
+    assert_eq!(user_1_bonded, Uint128::from(50_000 as u64));
+    
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_002_001);
         b.height = b.height + 100;

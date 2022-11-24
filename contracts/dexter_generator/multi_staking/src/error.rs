@@ -42,6 +42,11 @@ pub enum ContractError {
         start_block_time: u64,
         end_block_time: u64,
     },
+
+    #[error("Impoosible contract state: {error}")]
+    ImpossibleContractState {
+        error: String,
+    }
 }
 
 impl From<OverflowError> for ContractError {
