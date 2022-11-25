@@ -55,7 +55,12 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    
+
+    // Check if code id is valid
+    if msg.lp_token_code_id == 0 {
+        return Err(ContractError::InvalidCodeId {});
+    }
+
     if let Some(pool_creation_fee) = &msg.pool_creation_fee {
         if pool_creation_fee.amount.is_zero() {
             return Err(ContractError::InvalidPoolCreationFee {});
@@ -84,6 +89,10 @@ pub fn instantiate(
 
     // Save Pool Config info
     for pc in msg.pool_configs.iter() {
+        // Check if code id is valid
+        if pc.code_id == 0 {
+            return Err(ContractError::InvalidCodeId {});
+        }
         // validate fee bps limits
         if !pc.default_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
@@ -334,6 +343,10 @@ pub fn execute_update_config(
 
     // Update LP token code id
     if let Some(lp_token_code_id) = lp_token_code_id {
+        // Check if code id is valid
+        if lp_token_code_id == 0 {
+            return Err(ContractError::InvalidCodeId {});
+        }
         config.lp_token_code_id = lp_token_code_id;
     }
 
@@ -359,6 +372,12 @@ pub fn execute_update_pool_type_config(
     is_generator_disabled: Option<bool>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+
+    // permission check - Owner can update any pool config.
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
     let mut pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
@@ -366,11 +385,6 @@ pub fn execute_update_pool_type_config(
     // Emit Event
     let mut event = Event::new("dexter-vault::update_pool_config")
         .add_attribute("tx_executor", info.sender.to_string());
-
-    // permission check - Owner can update any pool config.
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
 
     // Update allow instantiation
     if let Some(allow_instantiation) = allow_instantiation {
@@ -474,7 +488,7 @@ fn execute_update_pool_config(
         .add_event(event)
         .add_message(msg)
         .add_attribute("action", "update_pool_config");
-    
+
     Ok(response)
 }
 
@@ -691,12 +705,12 @@ pub fn execute_create_pool_instance(
             AssetInfo::NativeToken { denom } => {
                 let tokens_received =
                     find_sent_native_token_balance(&info, &denom);
-                
+
                 if tokens_received < fee_amount {
-                    return Err(ContractError::InsufficientNativeTokensSent { 
+                    return Err(ContractError::InsufficientNativeTokensSent {
                         denom,
                         sent: tokens_received,
-                        needed: fee_amount  
+                        needed: fee_amount
                     });
                 } else if tokens_received > fee_amount {
                     // refund the extra tokens
@@ -889,6 +903,8 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                     tmp_pool_info.lp_token_addr.clone().unwrap(),
                 ),
             ]);
+            // TODO(discuss): If you create the LP token before you create the pool, then this doesn't need to happen.
+            // We can minimize the execute msgs for pool types and just set the LP token during pool init itself.
             response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: tmp_pool_info.pool_addr.clone().unwrap().to_string(),
                 funds: vec![],
@@ -896,8 +912,12 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                     lp_token_addr: tmp_pool_info.lp_token_addr.clone().unwrap(),
                 })?,
             }));
-            // Store the temporary Pool Info
-            TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+            // Save the temporary pool info as permanent pool info mapped with the Pool Id
+            ACTIVE_POOLS.save(
+                deps.storage,
+                &tmp_pool_info.pool_id.to_string().as_bytes(),
+                &tmp_pool_info,
+            )?;
             // Store LP token addr _> Pool Id mapping in the LP token map
             LP_TOKEN_TO_POOL_ID.save(
                 deps.storage,
@@ -920,13 +940,6 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             return Err(ContractError::InvalidSubMsgId {});
         }
     }
-
-    // Save the temporary pool info as permanent pool info mapped with the Pool Id
-    ACTIVE_POOLS.save(
-        deps.storage,
-        &tmp_pool_info.pool_id.to_string().as_bytes(),
-        &tmp_pool_info,
-    )?;
 
     Ok(response.add_event(event))
 }
@@ -962,7 +975,7 @@ pub fn execute_join_pool(
     // Read -  Get PoolInfo {} for the pool to which liquidity is to be provided
     let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
-        .expect("Invalid Pool Id");
+        .or(Err(ContractError::InvalidPoolId {}))?;
 
     // Read -  Get PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1195,6 +1208,8 @@ pub fn execute_join_pool(
 
     Ok(Response::new()
         .add_messages(execute_msgs)
+        // TODO(discuss): action isn't there for others. It should be consistent. Should it be removed from here or kept everywhere?
+        // What benefit does it give? We are anyways emitting the event already that can be used to differentiate.
         .add_attribute("action", "dexter-vault/execute/join_pool")
         .add_event(event))
 }
@@ -1224,7 +1239,7 @@ pub fn execute_exit_pool(
     //  Read -  Get PoolInfo {} for the pool to which liquidity is to be provided
     let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
-        .expect("Invalid Pool Id");
+        .or(Err(ContractError::InvalidPoolId {}))?;
 
     // Read -  Get PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1259,6 +1274,8 @@ pub fn execute_exit_pool(
         });
     }
 
+    // TODO(discuss): the check for transition assets_out len matching the pool_info assets is missing??
+
     // Param - Number of LP shares to be returned to the user
     let lp_to_return: Uint128;
 
@@ -1266,6 +1283,11 @@ pub fn execute_exit_pool(
     if pool_exit_transition.burn_shares > burn_amount.unwrap() {
         return Err(ContractError::InsufficientLpTokensToExit {});
     } else {
+        // TODO(discuss):
+        // 1. yeah! we are only returning this, not the extra that we would have actually received.
+        //    We should be returning that extra too.
+        // 2. Somehow by the above if check we are enforcing that the burn_amount must always be provided.
+        //    So, why keep burn_amount as optional?
         lp_to_return = burn_amount
             .unwrap()
             .checked_sub(pool_exit_transition.burn_shares)?;
@@ -1486,7 +1508,7 @@ pub fn execute_swap(
     //  Read -  Get PoolInfo {} for the pool
     let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
-        .expect("Invalid Pool Id");
+        .or(Err(ContractError::InvalidPoolId {}))?;
 
     // Read - Get the PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1558,21 +1580,21 @@ pub fn execute_swap(
     // Compute - Fee Calculation
     let mut protocol_fee = Uint128::zero();
     let mut dev_fee = Uint128::zero();
-    if pool_swap_transition.fee.clone().is_some()
-        && !pool_swap_transition.fee.clone().unwrap().amount.is_zero()
-    {
-        event = event.add_attribute(
-            "fee_asset",
-            serde_json_wasm::to_string(&pool_swap_transition.fee.clone().unwrap().info).unwrap(),
-        );
-        event = event.add_attribute(
-            "total_fee",
-            pool_swap_transition.fee.clone().unwrap().amount.to_string(),
-        );
-        // Compute - Protocol Fee and dev fee
-        (protocol_fee, dev_fee) = pool_config
-            .default_fee_info
-            .calculate_total_fee_breakup(pool_swap_transition.fee.clone().unwrap().amount);
+    if let Some(fee) = pool_swap_transition.fee.clone() {
+        if !fee.amount.is_zero() {
+            event = event.add_attribute(
+                "fee_asset",
+                serde_json_wasm::to_string(&fee.info).unwrap(),
+            );
+            event = event.add_attribute(
+                "total_fee",
+                fee.amount.to_string(),
+            );
+            // Compute - Protocol Fee and dev fee
+            (protocol_fee, dev_fee) = pool_config
+                .default_fee_info
+                .calculate_total_fee_breakup(fee.amount);
+        }
     }
 
     // Compute - Update fee if recipient addresses are not set
@@ -1613,6 +1635,7 @@ pub fn execute_swap(
         )
         .add_attribute("ask_amount", ask_asset.amount.to_string());
 
+    // TODO(discuss): this validation should be moved up, better to fail early than doing all the compute then fail.
     // Param - recipient address
     let mut recipient = info.sender.clone();
     if !op_recipient.is_none() {
@@ -1627,7 +1650,6 @@ pub fn execute_swap(
     event = event.add_attribute("sender", info.sender.clone());
 
     // Update asset balances
-    let mut index = 0;
     let mut offer_asset_updated: bool = false;
     let mut ask_asset_updated: bool = false;
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
@@ -1698,8 +1720,11 @@ pub fn execute_swap(
             // ExecuteMsg : Transfer tokens from Vault to the recipient
             execute_msgs.push(ask_asset.clone().into_msg(recipient.clone())?);
         }
-        // Increment Index
-        index = index + 1;
+
+        // if we have updated both offer & ask asset, no need to iterate further and waste gas
+        if offer_asset_updated && ask_asset_updated {
+            break;
+        }
     }
 
     // Error - Error if something is wrong with state update operations
@@ -1802,12 +1827,12 @@ pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigRe
 /// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
 pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResult<bool> {
     let pool_id = LP_TOKEN_TO_POOL_ID
-        .may_load(deps.storage, lp_token_addr.as_bytes())?
-        .expect("The LP token address does not belong to any pool");
+        .load(deps.storage, lp_token_addr.as_bytes())
+        .or(Err(StdError::generic_err(ContractError::LpTokenNotFound {}.to_string())))?;
 
     let pool_info = ACTIVE_POOLS
         .load(deps.storage, &pool_id.to_string().as_bytes())
-        .expect("Invalid Pool Id");
+        .or(Err(StdError::generic_err(ContractError::InvalidPoolId {}.to_string())))?;
 
     let pool_type_config = REGISTRY
         .load(deps.storage, pool_info.pool_type.to_string())
@@ -1820,10 +1845,7 @@ pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResu
 /// ## Params
 /// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
 pub fn query_pool_by_id(deps: Deps, pool_id: Uint128) -> StdResult<PoolInfoResponse> {
-    let pool_info = ACTIVE_POOLS
-        .load(deps.storage, pool_id.to_string().as_bytes())
-        .unwrap();
-    Ok(pool_info)
+    ACTIVE_POOLS.load(deps.storage, pool_id.to_string().as_bytes())
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure
@@ -1835,10 +1857,8 @@ pub fn query_pool_by_addr(deps: Deps, pool_addr: String) -> StdResult<PoolInfoRe
         contract_addr: pool_addr.to_string(),
         msg: to_binary(&dexter::pool::QueryMsg::PoolId {})?,
     }))?;
-    let pool_info = ACTIVE_POOLS
-        .load(deps.storage, pool_id.to_string().as_bytes())
-        .unwrap();
-    Ok(pool_info)
+
+    ACTIVE_POOLS.load(deps.storage, pool_id.to_string().as_bytes())
 }
 
 // ----------------x----------------x---------------------x-------------------x----------------x----------------
