@@ -17,6 +17,22 @@ pub fn mock_app(admin: Addr, coins: Vec<Coin>) -> App {
     app
 }
 
+#[allow(dead_code)]
+pub fn forward_block_time_by_seconds(app: &mut App, seconds: u64) {
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(seconds);
+        b.height = b.height + 100;
+    });
+}
+
+#[allow(dead_code)]
+pub fn forward_block_time_to_seconds(app: &mut App, seconds: u64) {
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(seconds);
+        b.height = b.height + 100;
+    });
+}
+
 pub fn instantiate_multi_staking_contract(
     app: &mut App, 
     code_id: u64,
@@ -147,7 +163,7 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
     return (multi_staking_instance, lp_token_addr);
 }
 
-
+#[allow(dead_code)]
 pub fn create_reward_schedule(
     app: &mut App,
     admin_addr: &Addr,
