@@ -22,8 +22,8 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg,
-    MigrateMsg, PoolConfig, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg,
-    SingleSwapRequest,
+    MigrateMsg, PoolTypeConfig, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg,
+    SingleSwapRequest, AllowPoolInstantiation,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -58,6 +58,7 @@ pub fn instantiate(
 
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
+        whitelisted_addresses: vec![],
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
@@ -117,19 +118,25 @@ pub fn execute(
             fee_collector,
             generator_address,
         ),
-        ExecuteMsg::UpdatePoolConfig {
+        ExecuteMsg::UpdatePoolTypeConfig {
             pool_type,
-            is_disabled,
+            allow_instantiation,
             new_fee_info,
             is_generator_disabled,
         } => execute_update_pool_config(
             deps,
             info,
             pool_type,
-            is_disabled,
+            allow_instantiation,
             new_fee_info,
             is_generator_disabled,
         ),
+        ExecuteMsg::AddAddressToWhitelist { address } => {
+            execute_add_address_to_whitelist(deps, info, address)
+        },
+        ExecuteMsg::RemoveAddressFromWhitelist { address } => {
+            execute_remove_address_from_whitelist(deps, info, address)
+        },
         ExecuteMsg::AddToRegistry { new_pool_config } => {
             execute_add_to_registry(deps, env, info, new_pool_config)
         }
@@ -137,7 +144,7 @@ pub fn execute(
             pool_type,
             asset_infos,
             init_params,
-        } => execute_create_pool_instance(deps, env, pool_type, asset_infos, init_params),
+        } => execute_create_pool_instance(deps, env, info, pool_type, asset_infos, init_params),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -317,7 +324,7 @@ pub fn execute_update_pool_config(
     deps: DepsMut,
     info: MessageInfo,
     pool_type: PoolType,
-    is_disabled: Option<bool>,
+    allow_instantiation: Option<AllowPoolInstantiation>,
     new_fee_info: Option<FeeInfo>,
     is_generator_disabled: Option<bool>,
 ) -> Result<Response, ContractError> {
@@ -335,10 +342,10 @@ pub fn execute_update_pool_config(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Disable or enable pool instances creation
-    if let Some(is_disabled) = is_disabled {
-        pool_config.is_disabled = is_disabled;
-        event = event.add_attribute("is_disabled", is_disabled.to_string());
+    // Update allow instantiation
+    if let Some(allow_instantiation) = allow_instantiation {
+        event = event.add_attribute("allow_instantiation", allow_instantiation.to_string());
+        pool_config.allow_instantiation = allow_instantiation;
     }
 
     // Disable or enable integration with dexter generator
@@ -384,6 +391,66 @@ pub fn execute_update_pool_config(
     Ok(Response::new().add_event(event))
 }
 
+
+fn execute_add_address_to_whitelist(
+    deps: DepsMut,
+    info: MessageInfo,
+    address: String,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // permission check
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate address
+    let address = deps.api.addr_validate(address.as_str())?;
+
+    // check if address to be added is the owner
+    if address == config.owner {
+        return Err(ContractError::CannotAddOwnerToWhitelist);
+    }
+
+    // check if address is already whitelisted
+    if config.whitelisted_addresses.contains(&address) {
+        return Err(ContractError::AddressAlreadyWhitelisted);
+    }
+
+    // Add address to whitelist
+    config.whitelisted_addresses.push(address);
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attribute("action", "add_address_to_whitelist"))
+}
+
+fn execute_remove_address_from_whitelist(
+    deps: DepsMut,
+    info: MessageInfo,
+    address: String,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // permission check
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate address
+    let address = deps.api.addr_validate(address.as_str())?;
+
+    // check if address is already whitelisted
+    if !config.whitelisted_addresses.contains(&address) {
+        return Err(ContractError::AddressNotWhitelisted);
+    }
+
+    // Remove address from whitelist
+    config.whitelisted_addresses.retain(|x| x != &address);
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attribute("action", "remove_address_from_whitelist"))
+}
+
 //--------x---------------x--------------x-----
 //--------x  Execute :: Create Pool      x-----
 //--------x---------------x--------------x-----
@@ -399,7 +466,7 @@ pub fn execute_add_to_registry(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    new_pool_config: PoolConfig,
+    new_pool_config: PoolTypeConfig,
 ) -> Result<Response, ContractError> {
     let config: Config = CONFIG.load(deps.storage)?;
 
@@ -460,8 +527,8 @@ pub fn execute_add_to_registry(
                 .unwrap_or(Addr::unchecked("None".to_string())),
         )
         .add_attribute(
-            "is_instantiation_disabled",
-            pool_config.is_disabled.to_string(),
+            "allow_instantiation",
+            pool_config.allow_instantiation.to_string(),
         )
         .add_attribute(
             "is_generator_disabled",
@@ -495,10 +562,32 @@ pub fn execute_add_to_registry(
 pub fn execute_create_pool_instance(
     deps: DepsMut,
     env: Env,
+    info: MessageInfo,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
+    // Get current pool's config from stored pool configs
+    let pool_config = REGISTRY
+        .load(deps.storage, pool_type.to_string())
+        .map_err(|_| ContractError::PoolConfigNotFound {})?;
+
+    // Check if pool config is disabled
+    match pool_config.allow_instantiation {
+        AllowPoolInstantiation::OnlyWhitelistedAddresses => {
+            // Check if sender is whitelisted
+            if !config.whitelisted_addresses.contains(&info.sender) || info.sender != config.owner {
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+        AllowPoolInstantiation::Nobody => {
+            return Err(ContractError::PoolTypeInstantiationDisabled);
+        }
+        AllowPoolInstantiation::Everyone => {},
+    }
+
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
         a.to_string()
@@ -525,18 +614,6 @@ pub fn execute_create_pool_instance(
     }
 
     event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
-
-    let config = CONFIG.load(deps.storage)?;
-
-    // Get current pool's config from stored pool configs
-    let pool_config = REGISTRY
-        .load(deps.storage, pool_type.to_string())
-        .map_err(|_| ContractError::PoolConfigNotFound {})?;
-
-    // Check if pool config is disabled
-    if pool_config.is_disabled {
-        return Err(ContractError::PoolConfigDisabled {});
-    }
 
     // Pool Id for the new pool instance
     let pool_id = config.next_pool_id;

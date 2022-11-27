@@ -11,7 +11,7 @@ use dexter::pool::{
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
-    PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
+    PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
 
@@ -81,7 +81,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
         fee_info: FeeInfo {
@@ -90,7 +90,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
             dev_fee_percent: 15u16,
             developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
 

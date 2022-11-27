@@ -116,6 +116,8 @@ impl FeeInfo {
 pub struct Config {
     /// The admin address that controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
+    /// Additional allowed addresses that can create pools. If empty, only owner can create pools
+    pub whitelisted_addresses: Vec<Addr>,
     /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: u64,
     /// The contract address to which protocol fees are sent
@@ -126,25 +128,43 @@ pub struct Config {
     pub next_pool_id: Uint128,
 }
 
+#[cw_serde]
+pub enum AllowPoolInstantiation {
+    Everyone,
+    OnlyWhitelistedAddresses,
+    Nobody,
+}
+
+impl Display for AllowPoolInstantiation {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        match self {
+            AllowPoolInstantiation::Everyone => fmt.write_str("everyone"),
+            AllowPoolInstantiation::OnlyWhitelistedAddresses => {
+                fmt.write_str("only-whitelisted-addresses")
+            }
+            AllowPoolInstantiation::Nobody => fmt.write_str("nobody"),
+        }
+    }
+}
+
 /// This struct stores a pool type's configuration.
 #[cw_serde]
-pub struct PoolConfig {
+pub struct PoolTypeConfig {
     /// ID of contract which is used to create pools of this type
     pub code_id: u64,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
     pub fee_info: FeeInfo,
-    /// Whether a pool type is disabled or not. If it is disabled, new pools cannot be
-    /// created, but existing ones can still read the pool configuration
-    pub is_disabled: bool,
+    /// Controls whether the pool can be created by anyone or only by whitelisted addresses (if any) or not at all
+    pub allow_instantiation: AllowPoolInstantiation,
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
     pub is_generator_disabled: bool,
 }
 
-impl Default for PoolConfig {
+impl Default for PoolTypeConfig {
     fn default() -> Self {
-        PoolConfig {
+        PoolTypeConfig {
             code_id: 0u64,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -153,7 +173,7 @@ impl Default for PoolConfig {
                 dev_fee_percent: 0,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: AllowPoolInstantiation::Nobody,
             is_generator_disabled: false,
         }
     }
@@ -201,7 +221,7 @@ pub struct SingleSwapRequest {
 pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
-    pub pool_configs: Vec<PoolConfig>,
+    pub pool_configs: Vec<PoolTypeConfig>,
     pub lp_token_code_id: u64,
     pub fee_collector: Option<String>,
     pub generator_address: Option<String>,
@@ -219,18 +239,24 @@ pub enum ExecuteMsg {
         fee_collector: Option<String>,
         generator_address: Option<String>,
     },
+    AddAddressToWhitelist { 
+        address: String 
+    },
+    RemoveAddressFromWhitelist { 
+        address: String 
+    },
     ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set.
     /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
     /// and updating Fee (` pool_config.fee_info`) for new pool instances
-    UpdatePoolConfig {
+    UpdatePoolTypeConfig {
         pool_type: PoolType,
-        is_disabled: Option<bool>,
+        allow_instantiation: Option<AllowPoolInstantiation>,
         new_fee_info: Option<FeeInfo>,
         is_generator_disabled: Option<bool>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {
-        new_pool_config: PoolConfig,
+        new_pool_config: PoolTypeConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
     CreatePoolInstance {
@@ -329,7 +355,7 @@ pub struct AssetFeeBreakup {
     pub dev_fee: Uint128,
 }
 
-pub type PoolConfigResponse = PoolConfig;
+pub type PoolConfigResponse = PoolTypeConfig;
 
 /// ## Description -  A custom struct for query response that returns the
 /// current stored state of a Pool Instance identified by either pool_id or pool_address.

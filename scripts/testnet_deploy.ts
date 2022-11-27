@@ -535,7 +535,7 @@ async function Demo() {
               dev_fee_percent: 15,
               developer_addr: wallet_address,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
           },
           {
@@ -547,7 +547,7 @@ async function Demo() {
               dev_fee_percent: 15,
               developer_addr: null,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
           },
           {
@@ -559,7 +559,7 @@ async function Demo() {
               dev_fee_percent: 15,
               developer_addr: null,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
           },
           {
@@ -571,7 +571,7 @@ async function Demo() {
               dev_fee_percent: 15,
               developer_addr: null,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
           },
         ],

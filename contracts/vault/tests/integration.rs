@@ -8,7 +8,7 @@ use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
 use dexter::vault::{
-    ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, PoolConfig,
+    ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, PoolTypeConfig,
     PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
     SwapType,
 };
@@ -95,7 +95,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     let token_code_id = store_token_code(app);
 
     let pool_configs = vec![
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -104,10 +104,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -116,10 +116,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             fee_info: FeeInfo {
@@ -128,10 +128,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             fee_info: FeeInfo {
@@ -140,7 +140,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     ];
@@ -513,7 +513,7 @@ fn proper_initialization() {
     let token_code_id = store_token_code(&mut app);
 
     let pool_configs = vec![
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -522,10 +522,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -534,10 +534,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             fee_info: FeeInfo {
@@ -546,10 +546,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             fee_info: FeeInfo {
@@ -558,7 +558,7 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     ];
@@ -609,7 +609,7 @@ fn proper_initialization() {
     assert_eq!(xyk_pool_code_id, xyk_pool_config_res.code_id);
     assert_eq!(PoolType::Xyk {}, xyk_pool_config_res.pool_type);
     assert_eq!(pool_configs[0].fee_info, xyk_pool_config_res.fee_info);
-    assert_eq!(pool_configs[0].is_disabled, xyk_pool_config_res.is_disabled);
+    assert_eq!(pool_configs[0].allow_instantiation, xyk_pool_config_res.allow_instantiation);
     assert_eq!(
         pool_configs[0].is_generator_disabled,
         xyk_pool_config_res.is_generator_disabled
@@ -630,8 +630,8 @@ fn proper_initialization() {
     assert_eq!(PoolType::Stable2Pool {}, stablepool_config_res.pool_type);
     assert_eq!(pool_configs[1].fee_info, stablepool_config_res.fee_info);
     assert_eq!(
-        pool_configs[1].is_disabled,
-        stablepool_config_res.is_disabled
+        pool_configs[1].allow_instantiation,
+        stablepool_config_res.allow_instantiation
     );
     assert_eq!(
         pool_configs[1].is_generator_disabled,
@@ -653,8 +653,8 @@ fn proper_initialization() {
     assert_eq!(PoolType::Stable5Pool {}, stable5pool_config_res.pool_type);
     assert_eq!(pool_configs[2].fee_info, stable5pool_config_res.fee_info);
     assert_eq!(
-        pool_configs[2].is_disabled,
-        stable5pool_config_res.is_disabled
+        pool_configs[2].allow_instantiation,
+        stable5pool_config_res.allow_instantiation
     );
     assert_eq!(
         pool_configs[2].is_generator_disabled,
@@ -676,8 +676,8 @@ fn proper_initialization() {
     assert_eq!(PoolType::Weighted {}, weightedpool_config_res.pool_type);
     assert_eq!(pool_configs[3].fee_info, weightedpool_config_res.fee_info);
     assert_eq!(
-        pool_configs[3].is_disabled,
-        weightedpool_config_res.is_disabled
+        pool_configs[3].allow_instantiation,
+        weightedpool_config_res.allow_instantiation
     );
     assert_eq!(
         pool_configs[3].is_generator_disabled,
@@ -687,7 +687,7 @@ fn proper_initialization() {
     //// -----x----- Error :: PoolConfigDuplicate Error -----x----- ////
 
     let pool_configs = vec![
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -696,10 +696,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -708,7 +708,7 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     ];
@@ -735,7 +735,7 @@ fn proper_initialization() {
 
     //// -----x----- Error :: InvalidFeeInfo Error -----x----- ////
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
         fee_info: FeeInfo {
@@ -744,7 +744,7 @@ fn proper_initialization() {
             dev_fee_percent: 15u16,
             developer_addr: None,
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
 
@@ -828,7 +828,7 @@ fn test_add_to_registery() {
     let xyk_pool_code_id = store_xyk_pool_code(&mut app);
     let token_code_id = store_token_code(&mut app);
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
         fee_info: FeeInfo {
@@ -837,7 +837,7 @@ fn test_add_to_registery() {
             dev_fee_percent: 15u16,
             developer_addr: None,
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
 
@@ -870,7 +870,7 @@ fn test_add_to_registery() {
     assert_eq!(xyk_pool_code_id, registery_res.code_id);
     assert_eq!(PoolType::Xyk {}, registery_res.pool_type);
     assert_eq!(pool_configs[0].fee_info, registery_res.fee_info);
-    assert_eq!(pool_configs[0].is_disabled, registery_res.is_disabled);
+    assert_eq!(pool_configs[0].allow_instantiation, registery_res.allow_instantiation);
     assert_eq!(
         pool_configs[0].is_generator_disabled,
         registery_res.is_generator_disabled
@@ -879,7 +879,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolConfig {
+        new_pool_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -888,7 +888,7 @@ fn test_add_to_registery() {
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     };
@@ -916,7 +916,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolConfig {
+        new_pool_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -925,7 +925,7 @@ fn test_add_to_registery() {
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     };
@@ -943,7 +943,7 @@ fn test_add_to_registery() {
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let stable_pool_code_id = 2u64;
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolConfig {
+        new_pool_config: PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -952,7 +952,7 @@ fn test_add_to_registery() {
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     };
@@ -981,7 +981,7 @@ fn test_add_to_registery() {
         },
         registery_res.fee_info
     );
-    assert_eq!(false, registery_res.is_disabled);
+    assert_eq!(dexter::vault::AllowPoolInstantiation::Everyone, registery_res.allow_instantiation);
     assert_eq!(false, registery_res.is_generator_disabled);
 }
 

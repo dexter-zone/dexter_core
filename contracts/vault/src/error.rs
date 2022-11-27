@@ -96,6 +96,18 @@ pub enum ContractError {
 
     #[error("Repeated assets in asset infos")]
     RepeatedAssets {},
+
+    #[error("Address already whitelisted")]
+    AddressAlreadyWhitelisted,
+
+    #[error("Address is not whitelisted currently")]
+    AddressNotWhitelisted,
+
+    #[error("Instantiation of this pool type is disabled")]
+    PoolTypeInstantiationDisabled,
+
+    #[error("Cannot add admin to whitelist. Admin is always whitelisted by default")]
+    CannotAddOwnerToWhitelist,
 }
 
 impl From<OverflowError> for ContractError {

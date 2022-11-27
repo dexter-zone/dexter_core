@@ -11,7 +11,7 @@ use dexter::router::{
 };
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
-    InstantiateMsg as VaultInstantiateMsg, PoolConfig, PoolInfoResponse, PoolType,
+    InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType,
     QueryMsg as VaultQueryMsg, SwapType,
 };
 
@@ -106,7 +106,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     let token_code_id = store_token_code(app);
 
     let pool_configs = vec![
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -115,10 +115,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -127,10 +127,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             fee_info: FeeInfo {
@@ -139,10 +139,10 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             fee_info: FeeInfo {
@@ -151,7 +151,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     ];
@@ -544,7 +544,7 @@ fn proper_initialization() {
     let router_code_id = store_router_code(&mut app);
 
     let pool_configs = vec![
-        PoolConfig {
+        PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             fee_info: FeeInfo {
@@ -553,10 +553,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             fee_info: FeeInfo {
@@ -565,10 +565,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             fee_info: FeeInfo {
@@ -577,10 +577,10 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
-        PoolConfig {
+        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             fee_info: FeeInfo {
@@ -589,7 +589,7 @@ fn proper_initialization() {
                 dev_fee_percent: 15u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         },
     ];

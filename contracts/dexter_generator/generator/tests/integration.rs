@@ -11,7 +11,7 @@ use dexter::{
         UserInfoResponse,
     },
     vault::{
-        ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PoolConfig,
+        ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig,
         PoolInfo as VaultPoolInfo, PoolType, QueryMsg as VaultQueryMsg,
     },
     vesting::{
@@ -147,7 +147,7 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
     let token_code_id = store_token_code(app);
     let xyk_pool_code_id = store_xyk_pool_code(app);
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
         fee_info: FeeInfo {
@@ -156,7 +156,7 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
             dev_fee_percent: 15u16,
             developer_addr: None,
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
     let vault_init_msg = VaultInstantiateMsg {
