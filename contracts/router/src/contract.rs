@@ -244,8 +244,8 @@ pub fn execute_multihop_swap(
         multiswap_request: multiswap_request,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
-        recipient: recipient.unwrap_or_else(|| info.sender),
-        minimum_receive: minimum_receive.unwrap_or_else(|| Uint128::zero()),
+        recipient: recipient.unwrap_or(info.sender),
+        minimum_receive: minimum_receive.unwrap_or(Uint128::zero()),
     }
     .to_cosmos_msg(&env.contract.address)?;
     execute_msgs.push(arb_chain_msg);

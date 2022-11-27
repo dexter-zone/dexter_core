@@ -39,18 +39,15 @@ pub fn query_token_balance(
     account_addr: Addr,
 ) -> StdResult<Uint128> {
     // load balance from the token contract
-    let res: Cw20BalanceResponse = querier
+    querier
         .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: String::from(contract_addr),
             msg: to_binary(&Cw20QueryMsg::Balance {
                 address: String::from(account_addr),
             })?,
         }))
-        .unwrap_or_else(|_| Cw20BalanceResponse {
-            balance: Uint128::zero(),
-        });
-
-    Ok(res.balance)
+        .map(|res: Cw20BalanceResponse| Ok(res.balance))
+        .unwrap_or(Ok(Uint128::zero()))
 }
 
 /// ## Description

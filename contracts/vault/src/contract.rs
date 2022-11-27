@@ -457,7 +457,7 @@ pub fn execute_add_to_registry(
             pool_config
                 .fee_info
                 .developer_addr
-                .unwrap_or_else(|| Addr::unchecked("None".to_string())),
+                .unwrap_or(Addr::unchecked("None".to_string())),
         )
         .add_attribute(
             "is_instantiation_disabled",

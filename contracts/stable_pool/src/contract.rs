@@ -611,15 +611,22 @@ pub fn query_on_swap(
     match swap_type {
         SwapType::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
-            (calc_amount, spread_amount) = compute_swap(
+            (calc_amount, spread_amount) = match compute_swap(
                 cur_offer_asset_bal,
                 offer_precision,
                 cur_ask_asset_bal,
                 ask_precision,
                 amount,
                 compute_current_amp(&math_config, &env)?,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             // Re-adjust for their token precisions
             calc_amount = adjust_precision(calc_amount, greater_precision, ask_precision)?;
@@ -638,7 +645,7 @@ pub fn query_on_swap(
         }
         SwapType::GiveOut {} => {
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
-            (calc_amount, spread_amount, total_fee) = compute_offer_amount(
+            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
                 cur_offer_asset_bal,
                 offer_precision,
                 cur_ask_asset_bal,
@@ -646,8 +653,15 @@ pub fn query_on_swap(
                 amount,
                 config.fee_info.total_fee_bps,
                 compute_current_amp(&math_config, &env)?,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             // Calculate the protocol and dev fee
             offer_asset = Asset {
@@ -1058,7 +1072,7 @@ pub fn assert_max_spread(
         let expected_return = offer_amount * belief_price.inv().unwrap();
         let spread_amount = expected_return
             .checked_sub(return_amount)
-            .unwrap_or_else(|_| Uint128::zero());
+            .unwrap_or(Uint128::zero());
         let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
         if return_amount < expected_return && calc_spread > max_spread {
             return ResponseType::Failure(

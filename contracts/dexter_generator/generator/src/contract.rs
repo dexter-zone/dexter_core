@@ -1462,7 +1462,7 @@ fn query_pool_info(
         .tokens_per_block
         .checked_mul(alloc_point)?
         .checked_div(config.total_alloc_point)
-        .unwrap_or_else(|_| Uint128::zero());
+        .unwrap_or(Uint128::zero());
 
     Ok(PoolInfoResponse {
         alloc_point,
@@ -1510,15 +1510,12 @@ pub fn query_simulate_future_reward(
 
     let lp_token = deps.api.addr_validate(&lp_token)?;
     let alloc_point = get_alloc_point(&cfg.active_pools, &lp_token);
-    let n_blocks = Uint128::from(future_block)
-        .checked_sub(env.block.height.into())
-        .unwrap_or_else(|_| Uint128::zero());
+    let n_blocks = Uint128::from(future_block).checked_sub(env.block.height.into())?;
 
     let simulated_reward = n_blocks
         .checked_mul(cfg.tokens_per_block)?
         .checked_mul(alloc_point)?
-        .checked_div(cfg.total_alloc_point)
-        .unwrap_or_else(|_| Uint128::zero());
+        .checked_div(cfg.total_alloc_point)?;
 
     Ok(simulated_reward)
 }

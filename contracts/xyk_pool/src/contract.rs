@@ -485,10 +485,17 @@ pub fn query_on_swap(
         SwapType::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
             (calc_amount, spread_amount) =
-                compute_swap(cur_offer_asset_bal, cur_ask_asset_bal, amount)
-                    .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
-            // Calculate the commission fees
+                match compute_swap(cur_offer_asset_bal, cur_ask_asset_bal, amount) {
+                    Ok(res) => res,
+                    Err(err) => {
+                        return Ok(return_swap_failure(format!(
+                            "Error during swap calculation: {}",
+                            err
+                        )))
+                    }
+                };
 
+            // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
             offer_asset = Asset {
@@ -503,13 +510,20 @@ pub fn query_on_swap(
         SwapType::GiveOut {} => {
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
             let before_commission_deduction: Uint128;
-            (calc_amount, spread_amount, before_commission_deduction) = compute_offer_amount(
+            (calc_amount, spread_amount, before_commission_deduction) = match compute_offer_amount(
                 cur_offer_asset_bal,
                 cur_ask_asset_bal,
                 amount,
                 config.fee_info.total_fee_bps,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(
                 before_commission_deduction,
@@ -745,7 +759,7 @@ pub fn compute_offer_amount(
 
     let spread_amount = (offer_amount * Decimal::from_ratio(ask_pool, offer_pool))
         .checked_sub(before_commission_deduction.try_into()?)
-        .unwrap_or_else(|_| Uint128::zero());
+        .unwrap_or(Uint128::zero());
 
     Ok((
         offer_amount,
@@ -864,7 +878,7 @@ pub fn assert_max_spread(
         let expected_return = offer_amount * belief_price.inv().unwrap();
         let spread_amount = expected_return
             .checked_sub(return_amount)
-            .unwrap_or_else(|_| Uint128::zero());
+            .unwrap_or(Uint128::zero());
         let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
         if return_amount < expected_return && calc_spread > max_spread {
             return ResponseType::Failure(

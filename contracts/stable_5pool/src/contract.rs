@@ -512,7 +512,7 @@ pub fn query_on_join_pool(
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
 
     // Compute amp parameter
-    let amp = compute_current_amp(&math_config, &env).unwrap_or_else(|_| 0u64.into());
+    let amp = compute_current_amp(&math_config, &env).unwrap_or(0u64.into());
 
     // If AMP value is invalid, then return a `Failure` response
     if amp == 0u64 {
@@ -665,7 +665,7 @@ pub fn query_on_exit_pool(
             burn_amount.unwrap(),
             &assets_out.clone().unwrap(),
         )
-        .unwrap_or_else(|_| ImbalancedWithdrawResponse {
+        .unwrap_or(ImbalancedWithdrawResponse {
             burn_amount: Uint128::zero(),
             fee: vec![],
         });
@@ -745,36 +745,19 @@ pub fn query_on_swap(
         .collect::<StdResult<Vec<_>>>()?;
 
     // Get the current balances of the Offer and ask assets from the supported assets list
-    let (offer_pool, ask_pool) = select_pools(
+    let (offer_pool, ask_pool) = match select_pools(
         Some(&offer_asset_info.clone()),
         Some(&ask_asset_info),
         &pools,
-    )
-    .unwrap_or_else(|_| {
-        (
-            DecimalAsset {
-                info: AssetInfo::NativeToken {
-                    denom: "".to_string(),
-                },
-                amount: Decimal256::zero(),
-            },
-            DecimalAsset {
-                info: AssetInfo::NativeToken {
-                    denom: "".to_string(),
-                },
-                amount: Decimal256::zero(),
-            },
-        )
-    });
-
-    // if there's 0 assets balance return failure response
-    if offer_pool.info.equal(&AssetInfo::NativeToken {
-        denom: "".to_string(),
-    }) || ask_pool.info.eq(&AssetInfo::NativeToken {
-        denom: "".to_string(),
-    }) {
-        return Ok(return_swap_failure("assets mismatch".to_string()));
-    }
+    ) {
+        Ok(res) => res,
+        Err(err) => {
+            return Ok(return_swap_failure(format!(
+                "Error during pool selection {}",
+                err
+            )))
+        }
+    };
 
     // if there's 0 assets balance return failure response
     if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
@@ -801,7 +784,7 @@ pub fn query_on_swap(
             };
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (calc_amount, spread_amount) = compute_swap(
+            (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
@@ -809,8 +792,15 @@ pub fn query_on_swap(
                 &offer_pool,
                 &ask_pool,
                 &pools,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
@@ -827,7 +817,7 @@ pub fn query_on_swap(
             };
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, spread_amount, total_fee) = compute_offer_amount(
+            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
@@ -837,8 +827,15 @@ pub fn query_on_swap(
                 &pools,
                 config.fee_info.total_fee_bps,
                 math_config.greatest_precision,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
@@ -1140,7 +1137,7 @@ fn imbalanced_withdraw(
 
     let n_coins = config.assets.len() as u8;
 
-    let amp = compute_current_amp(math_config, env).unwrap_or_else(|_| 0u64.into());
+    let amp = compute_current_amp(math_config, env).unwrap_or(0u64.into());
 
     // Initial invariant (D)
     let old_balances = assets_collection
