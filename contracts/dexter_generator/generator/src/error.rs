@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{DivideByZeroError, OverflowError, StdError};
 use thiserror::Error;
 
 /// This enum describes generator contract errors!
@@ -70,6 +70,12 @@ pub enum ContractError {
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
+        StdError::from(o).into()
+    }
+}
+
+impl From<DivideByZeroError> for ContractError {
+    fn from(o: DivideByZeroError) -> Self {
         StdError::from(o).into()
     }
 }
