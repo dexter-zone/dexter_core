@@ -85,7 +85,7 @@ pub fn execute(
                 };
                 // verify that enough amount was sent
                 if sent_asset.amount >= amount {
-                    let mut response = add_reward_factory(
+                    let mut response = add_reward_schedule(
                         deps,
                         env,
                         info,
@@ -213,7 +213,7 @@ fn remove_lp_token_from_allowed_list(
     Ok(Response::default())
 }
 
-pub fn add_reward_factory(
+pub fn add_reward_schedule(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
@@ -289,7 +289,7 @@ pub fn receive_cw20(
             end_block_time,
         } => {
             let token_address = deps.api.addr_validate(info.sender.as_str())?;
-            add_reward_factory(
+            add_reward_schedule(
                 deps,
                 env,
                 info,
@@ -344,11 +344,9 @@ pub fn compute_staker_reward(
     state: &AssetRewardState,
     staker_info: &mut AssetStakerInfo,
 ) -> StdResult<()> {
-    let pending_reward = (bond_amount * state.reward_index)
-        .checked_sub(bond_amount * staker_info.reward_index)?;
-
+    let pending_reward = bond_amount * (state.reward_index.checked_sub(staker_info.reward_index)?);
     staker_info.reward_index = state.reward_index;
-    staker_info.pending_reward += pending_reward;
+    staker_info.pending_reward = staker_info.pending_reward.checked_add(pending_reward)?;
     Ok(())
 }
 
@@ -404,6 +402,7 @@ pub fn bond(
     Ok(response)
 }
 
+/// Unbond LP tokens
 pub fn unbond(
     mut deps: DepsMut,
     env: Env,
@@ -522,7 +521,7 @@ pub fn update_staking_rewards(
     let reward_schedules = REWARD_SCHEDULES
         .may_load(
             deps.storage,
-            (&lp_token, &asset_staker_info.asset.to_string()),
+            (&lp_token, &asset.to_string()),
         )?
         .unwrap_or_default();
 
@@ -541,7 +540,7 @@ pub fn update_staking_rewards(
 
     ASSET_STAKER_INFO.save(
         deps.storage,
-        (&lp_token, &user, &asset_staker_info.asset.to_string()),
+        (&lp_token, &user, &asset.to_string()),
         &asset_staker_info,
     )?;
 
@@ -614,9 +613,6 @@ pub fn withdraw(
     sender: &Addr,
     lp_token: Addr,
 ) -> ContractResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    check_if_lp_token_allowed(&config, &lp_token)?;
-
     let mut response = Response::new();
     let current_bonded_amount = USER_BONDED_LP_TOKENS
         .may_load(deps.storage, (&lp_token, &sender))?
@@ -688,7 +684,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 let reward_schedules = REWARD_SCHEDULES
                     .may_load(
                         deps.storage,
-                        (&lp_token, &asset_staker_info.asset.to_string()),
+                        (&lp_token, &asset.to_string()),
                     )?
                     .unwrap_or_default();
 
@@ -744,8 +740,29 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 unlocked_amount,
                 locks: filtered_locks,
             }).map_err(ContractError::from)
-        },
-        // QueryMsg::BondedLpTokens { lp_token, user } => {
-        // }
+        }
+        QueryMsg::RewardState { lp_token, asset } => {
+            let reward_state = ASSET_LP_REWARD_STATE
+                .may_load(deps.storage, (&asset.to_string(), &lp_token))?;
+
+            match reward_state {
+                Some(reward_state) => to_binary(&reward_state).map_err(ContractError::from),
+                None => Err(ContractError::NoRewardState),
+            }
+        }
+        QueryMsg::StakerInfo {
+            lp_token,
+            asset,
+            user,
+        } => {
+            let reward_state = ASSET_STAKER_INFO
+                .may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?;
+
+            match reward_state {
+                Some(reward_state) => to_binary(&reward_state).map_err(ContractError::from),
+                None => Err(ContractError::NoUserRewardState),
+            }
+        }
+
     }
 }

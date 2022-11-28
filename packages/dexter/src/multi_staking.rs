@@ -38,6 +38,7 @@ pub struct RewardSchedule {
 
 #[cw_serde]
 pub struct Config {
+    /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
@@ -67,6 +68,13 @@ pub struct AssetStakerInfo {
 }
 
 #[cw_serde]
+#[derive(Default)]
+pub struct LpGlobalState {
+    pub total_bond_amount: Uint128,
+    pub active_reward_assets: Vec<AssetInfo>
+}
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns currently unclaimed rewards for a user for a give LP token
@@ -87,16 +95,27 @@ pub enum QueryMsg {
         block_time: Option<u64>
     },
     #[returns(Uint128)]
+    /// Returns the total staked amount for a given LP token
     BondedLpTokens {
         lp_token: Addr,
         user: Addr,
     },
+    /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
+    /// Returns the current owner of the contract
     #[returns(Addr)]
     Owner {},
+    /// Returns the reward schedule for a given LP token and a reward asset
     #[returns(Vec<RewardSchedule>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
+    /// Returns the current reward state for a given LP token and a reward asset
+    #[returns(AssetRewardState)]
+    RewardState { lp_token: Addr, asset: AssetInfo },
+    /// Returns the staking information for a given user based on the last 
+    /// interaction with the contract
+    #[returns(AssetStakerInfo)]
+    StakerInfo { lp_token: Addr, asset: AssetInfo, user: Addr },
 }
 
 #[cw_serde]

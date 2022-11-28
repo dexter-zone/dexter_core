@@ -46,7 +46,11 @@ pub enum ContractError {
     #[error("Impoosible contract state: {error}")]
     ImpossibleContractState {
         error: String,
-    }
+    },
+    #[error("No reward state found for the asset since the reward is not distributed for it yet")]
+    NoRewardState,
+    #[error("No reward state found for the asset for the user since the reward is not distributed to the user yet")]
+    NoUserRewardState,
 }
 
 impl From<OverflowError> for ContractError {

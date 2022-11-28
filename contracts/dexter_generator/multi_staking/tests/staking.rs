@@ -733,6 +733,29 @@ fn test_reward_schedule_creation_after_bonding() {
         1000_002_000,
     );
 
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_600);
+        b.height = b.height + 100;
+    });
+
+    // mint some LP tokens to user 2
+    mint_lp_tokens_to_addr(
+        &mut app,
+        &admin_addr,
+        &lp_token_addr,
+        &user_2_addr,
+        Uint128::from(1_000_000 as u64),
+    );
+
+    // bond LP tokens
+    bond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_2_addr,
+        Uint128::from(100_000 as u64),
+    );
+
     // increase time
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_002_001);
@@ -748,6 +771,14 @@ fn test_reward_schedule_creation_after_bonding() {
         Uint128::from(100_000 as u64),
     );
 
+    unbond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_2_addr,
+        Uint128::from(100_000 as u64),
+    );
+
     // calculate rewards
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(
         &mut app,
@@ -759,7 +790,26 @@ fn test_reward_schedule_creation_after_bonding() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(600_000_000 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(380_000_000 as u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
+                _ => panic!("Unexpected denom"),
+            }
+        } else {
+            panic!("Unexpected asset type")
+        }
+    }
+
+    let unclaimed_rewards_user_2 = query_unclaimed_rewards(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_2_addr,
+    );
+
+    for unclaimed_reward in unclaimed_rewards_user_2 {
+        if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
+            match denom.as_str() {
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(220_000_000 as u64)),
                 "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
                 _ => panic!("Unexpected denom"),
             }
