@@ -154,29 +154,12 @@ pub struct PoolTypeConfig {
     pub code_id: u64,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    pub fee_info: FeeInfo,
+    pub default_fee_info: FeeInfo,
     /// Controls whether the pool can be created by anyone or only by whitelisted addresses (if any) or not at all
     pub allow_instantiation: AllowPoolInstantiation,
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
     pub is_generator_disabled: bool,
-}
-
-impl Default for PoolTypeConfig {
-    fn default() -> Self {
-        PoolTypeConfig {
-            code_id: 0u64,
-            pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
-                total_fee_bps: 0,
-                protocol_fee_percent: 0,
-                dev_fee_percent: 0,
-                developer_addr: None,
-            },
-            allow_instantiation: AllowPoolInstantiation::Nobody,
-            is_generator_disabled: false,
-        }
-    }
 }
 
 /// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
@@ -195,6 +178,8 @@ pub struct PoolInfo {
     pub pool_addr: Option<Addr>,
     /// Address of the LP Token Contract    
     pub lp_token_addr: Option<Addr>,
+    /// Fee charged by the pool for swaps
+    pub fee_info: FeeInfo,
     /// Assets and their respective balances
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
@@ -262,8 +247,14 @@ pub enum ExecuteMsg {
     CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
+        fee_info: Option<FeeInfo>,
         init_params: Option<Binary>,
     },
+    UpdatePoolConfig {
+        pool_id: Uint128,
+        fee_info: FeeInfo,
+    },
+
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
@@ -355,7 +346,7 @@ pub struct AssetFeeBreakup {
     pub dev_fee: Uint128,
 }
 
-pub type PoolConfigResponse = PoolTypeConfig;
+pub type PoolConfigResponse = Option<PoolTypeConfig>;
 
 /// ## Description -  A custom struct for query response that returns the
 /// current stored state of a Pool Instance identified by either pool_id or pool_address.

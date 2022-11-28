@@ -98,7 +98,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -110,7 +110,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -122,7 +122,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -134,7 +134,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -282,6 +282,7 @@ fn initialize_stable_5_pool(
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -378,6 +379,7 @@ fn initialize_weighted_pool(
             })
             .unwrap(),
         ),
+        fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -429,6 +431,7 @@ fn initialize_stable_pool(
         pool_type: PoolType::Stable2Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -480,6 +483,7 @@ fn initialize_xyk_pool(
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
+        fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -516,7 +520,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -528,7 +532,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -540,7 +544,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -552,7 +556,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -606,9 +610,11 @@ fn proper_initialization() {
             },
         )
         .unwrap();
+
+    assert!(xyk_pool_config_res.is_some());
+    let xyk_pool_config_res = xyk_pool_config_res.unwrap();
     assert_eq!(xyk_pool_code_id, xyk_pool_config_res.code_id);
     assert_eq!(PoolType::Xyk {}, xyk_pool_config_res.pool_type);
-    assert_eq!(pool_configs[0].fee_info, xyk_pool_config_res.fee_info);
     assert_eq!(pool_configs[0].allow_instantiation, xyk_pool_config_res.allow_instantiation);
     assert_eq!(
         pool_configs[0].is_generator_disabled,
@@ -626,9 +632,12 @@ fn proper_initialization() {
             },
         )
         .unwrap();
+
+    assert!(stablepool_config_res.is_some());
+    let stablepool_config_res = stablepool_config_res.unwrap();
     assert_eq!(stable_pool_code_id, stablepool_config_res.code_id);
     assert_eq!(PoolType::Stable2Pool {}, stablepool_config_res.pool_type);
-    assert_eq!(pool_configs[1].fee_info, stablepool_config_res.fee_info);
+    assert_eq!(pool_configs[1].default_fee_info, stablepool_config_res.default_fee_info);
     assert_eq!(
         pool_configs[1].allow_instantiation,
         stablepool_config_res.allow_instantiation
@@ -649,9 +658,12 @@ fn proper_initialization() {
             },
         )
         .unwrap();
+
+    assert!(stable5pool_config_res.is_some());
+    let stable5pool_config_res = stable5pool_config_res.unwrap();
     assert_eq!(stable5_pool_code_id, stable5pool_config_res.code_id);
     assert_eq!(PoolType::Stable5Pool {}, stable5pool_config_res.pool_type);
-    assert_eq!(pool_configs[2].fee_info, stable5pool_config_res.fee_info);
+    assert_eq!(pool_configs[2].default_fee_info, stable5pool_config_res.default_fee_info);
     assert_eq!(
         pool_configs[2].allow_instantiation,
         stable5pool_config_res.allow_instantiation
@@ -672,9 +684,12 @@ fn proper_initialization() {
             },
         )
         .unwrap();
+    
+    assert!(weightedpool_config_res.is_some());
+    let weightedpool_config_res = weightedpool_config_res.unwrap();
     assert_eq!(weighted_pool_code_id, weightedpool_config_res.code_id);
     assert_eq!(PoolType::Weighted {}, weightedpool_config_res.pool_type);
-    assert_eq!(pool_configs[3].fee_info, weightedpool_config_res.fee_info);
+    assert_eq!(pool_configs[3].default_fee_info, weightedpool_config_res.default_fee_info);
     assert_eq!(
         pool_configs[3].allow_instantiation,
         weightedpool_config_res.allow_instantiation
@@ -690,7 +705,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -702,7 +717,7 @@ fn proper_initialization() {
         PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -738,7 +753,7 @@ fn proper_initialization() {
     let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 30000u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
@@ -831,7 +846,7 @@ fn test_add_to_registery() {
     let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
@@ -867,13 +882,17 @@ fn test_add_to_registery() {
     };
     let registery_res: PoolConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
-    assert_eq!(xyk_pool_code_id, registery_res.code_id);
-    assert_eq!(PoolType::Xyk {}, registery_res.pool_type);
-    assert_eq!(pool_configs[0].fee_info, registery_res.fee_info);
-    assert_eq!(pool_configs[0].allow_instantiation, registery_res.allow_instantiation);
+    
+    assert!(registery_res.is_some());
+    let pool_config_res = registery_res.unwrap();
+
+    assert_eq!(xyk_pool_code_id, pool_config_res.code_id);
+    assert_eq!(PoolType::Xyk {}, pool_config_res.pool_type);
+    assert_eq!(pool_configs[0].default_fee_info, pool_config_res.default_fee_info);
+    assert_eq!(pool_configs[0].allow_instantiation, pool_config_res.allow_instantiation);
     assert_eq!(
         pool_configs[0].is_generator_disabled,
-        registery_res.is_generator_disabled
+        pool_config_res.is_generator_disabled
     );
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
@@ -882,7 +901,7 @@ fn test_add_to_registery() {
         new_pool_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 10_0u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -919,7 +938,7 @@ fn test_add_to_registery() {
         new_pool_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 10_001u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -946,7 +965,7 @@ fn test_add_to_registery() {
         new_pool_config: PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 1_001u16,
                 protocol_fee_percent: 49u16,
                 dev_fee_percent: 15u16,
@@ -970,8 +989,11 @@ fn test_add_to_registery() {
     };
     let registery_res: PoolConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
-    assert_eq!(stable_pool_code_id, registery_res.code_id);
-    assert_eq!(PoolType::Stable2Pool {}, registery_res.pool_type);
+    
+    assert!(registery_res.is_some());
+    let pool_config_res = registery_res.unwrap();
+    assert_eq!(stable_pool_code_id, pool_config_res.code_id);
+    assert_eq!(PoolType::Stable2Pool {}, pool_config_res.pool_type);
     assert_eq!(
         FeeInfo {
             total_fee_bps: 1_001u16,
@@ -979,10 +1001,10 @@ fn test_add_to_registery() {
             dev_fee_percent: 15u16,
             developer_addr: None,
         },
-        registery_res.fee_info
+        pool_config_res.default_fee_info
     );
-    assert_eq!(dexter::vault::AllowPoolInstantiation::Everyone, registery_res.allow_instantiation);
-    assert_eq!(false, registery_res.is_generator_disabled);
+    assert_eq!(dexter::vault::AllowPoolInstantiation::Everyone, pool_config_res.allow_instantiation);
+    assert_eq!(false, pool_config_res.is_generator_disabled);
 }
 
 #[test]
@@ -1052,6 +1074,7 @@ fn test_create_pool_instance() {
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
+        fee_info: None,
     };
 
     let res = app

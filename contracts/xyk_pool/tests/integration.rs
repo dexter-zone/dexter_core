@@ -84,7 +84,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
@@ -152,6 +152,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
+        fee_info: None,
     };
     let res = app
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])

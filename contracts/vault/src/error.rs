@@ -83,13 +83,13 @@ pub enum ContractError {
     SwapLimit {},
 
     #[error("Duplicate of Pool Configs")]
-    PoolConfigDuplicate {},
+    PoolTypeConfigDuplicate {},
 
     #[error("Invalid FeeInfo params")]
     InvalidFeeInfo {},
 
-    #[error("Pool config not found")]
-    PoolConfigNotFound {},
+    #[error("Config for pool type not found")]
+    PoolTypeConfigNotFound {},
 
     #[error("Pool is currently disabled. No new pool instances can be created")]
     PoolConfigDisabled {},

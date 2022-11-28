@@ -90,7 +90,7 @@ fn instantiate_contracts_instance(
     let pool_configs = vec![PoolTypeConfig {
         code_id: stable5pool_code_id,
         pool_type: PoolType::Stable5Pool {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
@@ -184,6 +184,7 @@ fn instantiate_contracts_instance(
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&StablePoolParams { amp: 10u64 }).unwrap()),
+        fee_info: None,
     };
     let res = app
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])

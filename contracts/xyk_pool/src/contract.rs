@@ -19,7 +19,7 @@ use dexter::pool::{
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
     Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
-use dexter::querier::query_supply;
+use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::{SwapType, FEE_PRECISION, TWAP_PRECISION};
 
 /// Contract name that is used for migration.
@@ -109,6 +109,7 @@ pub fn execute(
     match msg {
         ExecuteMsg::SetLpToken { lp_token_addr } => set_lp_token(deps, env, info, lp_token_addr),
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
+        ExecuteMsg::UpdateFee { total_fee_bps } => update_total_fee_bps(deps, env, info, total_fee_bps),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
@@ -145,6 +146,28 @@ pub fn set_lp_token(
 
     let event = Event::new("dexter-pool::set_lp_token")
         .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
+    Ok(Response::new().add_event(event))
+}
+
+pub fn update_total_fee_bps(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    total_fee_bps: u16,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    config.fee_info.total_fee_bps = total_fee_bps;
+    CONFIG.save(deps.storage, &config)?;
+
+    let event = Event::new("dexter-pool::update_total_fee_bps")
+        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
     Ok(Response::new().add_event(event))
 }
 
