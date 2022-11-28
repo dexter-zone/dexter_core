@@ -162,6 +162,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let vault_instance = app
@@ -607,6 +608,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let vault_instance = app

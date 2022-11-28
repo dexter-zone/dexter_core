@@ -124,6 +124,9 @@ pub struct Config {
     pub fee_collector: Option<Addr>,
     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
     pub generator_address: Option<Addr>,
+    /// Fee required for creating a new pool.
+    /// Ideally, it is charged in the base currency of the chain but can be changed to governance token later
+    pub pool_creation_fee: Option<Asset>,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
 }
@@ -209,6 +212,7 @@ pub struct InstantiateMsg {
     pub pool_configs: Vec<PoolTypeConfig>,
     pub lp_token_code_id: u64,
     pub fee_collector: Option<String>,
+    pub pool_creation_fee: Option<Asset>,
     pub generator_address: Option<String>,
 }
 
@@ -222,6 +226,8 @@ pub enum ExecuteMsg {
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
+        // Fee required for creating a new pool.
+        pool_creation_fee: Option<Asset>,
         generator_address: Option<String>,
     },
     AddAddressToWhitelist { 

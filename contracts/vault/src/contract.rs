@@ -55,6 +55,12 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    
+    if let Some(pool_creation_fee) = &msg.pool_creation_fee {
+        if pool_creation_fee.amount.is_zero() {
+            return Err(ContractError::InvalidPoolCreationFee {});
+        }
+    }
 
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
@@ -62,6 +68,7 @@ pub fn instantiate(
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
+        pool_creation_fee: msg.pool_creation_fee,
         next_pool_id: Uint128::from(1u128),
     };
 
@@ -110,6 +117,7 @@ pub fn execute(
             lp_token_code_id,
             fee_collector,
             generator_address,
+            pool_creation_fee
         } => execute_update_config(
             deps,
             env,
@@ -117,6 +125,7 @@ pub fn execute(
             lp_token_code_id,
             fee_collector,
             generator_address,
+            pool_creation_fee,
         ),
         ExecuteMsg::UpdatePoolTypeConfig {
             pool_type,
@@ -294,6 +303,7 @@ pub fn execute_update_config(
     lp_token_code_id: Option<u64>,
     fee_collector: Option<String>,
     generator_address: Option<String>,
+    pool_creation_fee: Option<Asset>
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -313,6 +323,14 @@ pub fn execute_update_config(
             config.generator_address = Some(deps.api.addr_validate(generator_address.as_str())?);
         }
     }
+
+    // Validate the pool creation fee
+    if let Some(pool_creation_fee) = &pool_creation_fee {
+        if pool_creation_fee.amount.is_zero() {
+            return Err(ContractError::InvalidPoolCreationFee {});
+        }
+    }
+    config.pool_creation_fee = pool_creation_fee;
 
     // Update LP token code id
     if let Some(lp_token_code_id) = lp_token_code_id {
@@ -649,7 +667,7 @@ pub fn execute_create_pool_instance(
         .load(deps.storage, pool_type.to_string())
         .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
 
-    // Check if pool config is disabled
+    // Check if creation is allowed
     match pool_type_config.allow_instantiation {
         AllowPoolInstantiation::OnlyWhitelistedAddresses => {
             // Check if sender is whitelisted
@@ -662,6 +680,48 @@ pub fn execute_create_pool_instance(
         }
         AllowPoolInstantiation::Everyone => {}
     }
+
+    let mut execute_msgs = vec![];
+
+    // Validate if fee is sent for creation of pool
+    if let Some(pool_creation_fee) = config.pool_creation_fee {
+        // Check if sender has sent enough funds to pay for the pool creation fee
+        let fee_amount = pool_creation_fee.amount;
+        match pool_creation_fee.info.clone() {
+            AssetInfo::NativeToken { denom } => {
+                let tokens_received =
+                    find_sent_native_token_balance(&info, &denom);
+                
+                if tokens_received < fee_amount {
+                    return Err(ContractError::InsufficientNativeTokensSent { 
+                        denom,
+                        sent: tokens_received,
+                        needed: fee_amount  
+                    });
+                } else if tokens_received > fee_amount {
+                    // refund the extra tokens
+                    if tokens_received > fee_amount {
+                        let transfer_msg = pool_creation_fee.info.clone().create_transfer_msg(
+                            info.sender.clone(),
+                            tokens_received.checked_sub(fee_amount)?,
+                        )?;
+                        execute_msgs.push(transfer_msg);
+                    }
+                }
+            }
+            AssetInfo::Token { contract_addr } => {
+                if !fee_amount.is_zero() {
+                    execute_msgs.push(build_transfer_cw20_from_user_msg(
+                        contract_addr.to_string(),
+                        info.sender.clone().to_string(),
+                        env.contract.address.to_string(),
+                        fee_amount,
+                    )?);
+                }
+            }
+        }
+    }
+
 
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
@@ -779,6 +839,7 @@ pub fn execute_create_pool_instance(
 
     Ok(Response::new()
         .add_submessages([init_pool_sub_msg, init_lp_token_sub_msg])
+        .add_messages(execute_msgs)
         .add_event(event))
 }
 
@@ -1058,7 +1119,7 @@ pub fn execute_join_pool(
 
                 // ExecuteMsg -::- Return the extra native tokens sent by the user to the Vault
                 if tokens_received > transfer_in {
-                    execute_msgs.push(stored_asset.info.clone().into_msg(
+                    execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                         info.sender.clone(),
                         tokens_received.checked_sub(transfer_in)?,
                     )?);
@@ -1080,12 +1141,12 @@ pub fn execute_join_pool(
                 stored_asset
                     .info
                     .clone()
-                    .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                    .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
             );
         }
         // ExecuteMsg -::- To transfer the dev fee to the developer address
         if !dev_fee.is_zero() {
-            execute_msgs.push(stored_asset.info.clone().into_msg(
+            execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                 pool_config.default_fee_info.developer_addr.clone().unwrap(),
                 dev_fee,
             )?);
@@ -1321,7 +1382,7 @@ pub fn execute_exit_pool(
                     stored_asset
                         .info
                         .clone()
-                        .into_msg(recipient_addr.clone(), to_transfer)?,
+                        .create_transfer_msg(recipient_addr.clone(), to_transfer)?,
                 );
             }
 
@@ -1331,12 +1392,12 @@ pub fn execute_exit_pool(
                     stored_asset
                         .info
                         .clone()
-                        .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                        .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
                 );
             }
             // ExecuteMsg -::- To transfer the dev fee to the developer address
             if !dev_fee.is_zero() {
-                execute_msgs.push(stored_asset.info.clone().into_msg(
+                execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                     pool_config.default_fee_info.developer_addr.clone().unwrap(),
                     dev_fee,
                 )?);
@@ -1609,7 +1670,7 @@ pub fn execute_swap(
                 }
                 // ExecuteMsg - If number of tokens sent are more than what the pool expects, return additional tokens sent
                 if tokens_received > act_amount_in {
-                    execute_msgs.push(stored_asset.info.clone().into_msg(
+                    execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                         info.sender.clone(),
                         tokens_received.checked_sub(act_amount_in)?,
                     )?);
@@ -1670,13 +1731,13 @@ pub fn execute_swap(
                 .clone()
                 .unwrap()
                 .info
-                .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
         );
     }
 
     // ExecuteMsg :: Dev Fee transfer to Keeper contract
     if !dev_fee.is_zero() {
-        execute_msgs.push(pool_swap_transition.fee.clone().unwrap().info.into_msg(
+        execute_msgs.push(pool_swap_transition.fee.clone().unwrap().info.create_transfer_msg(
             pool_config.default_fee_info.developer_addr.unwrap(),
             dev_fee,
         )?);

@@ -108,6 +108,9 @@ pub enum ContractError {
 
     #[error("Cannot add admin to whitelist. Admin is always whitelisted by default")]
     CannotAddOwnerToWhitelist,
+
+    #[error("Pool creation fee must be null or greater than 0")]
+    InvalidPoolCreationFee,
 }
 
 impl From<OverflowError> for ContractError {

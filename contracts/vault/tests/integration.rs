@@ -151,6 +151,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let vault_instance = app
@@ -575,6 +576,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let vault_instance = app
@@ -734,6 +736,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let res = app
@@ -769,6 +772,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let res = app
@@ -807,6 +811,7 @@ fn update_config() {
         lp_token_code_id: None,
         fee_collector: Some("fee_address".to_string()),
         generator_address: Some("generator_address".to_string()),
+        pool_creation_fee: None
     };
 
     app.execute_contract(
@@ -864,6 +869,7 @@ fn test_add_to_registery() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     let vault_instance = app
