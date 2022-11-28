@@ -691,10 +691,12 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 compute_reward(block_time, lp_global_state.total_bond_amount, &mut asset_state, reward_schedules);
                 compute_staker_reward(current_bonded_amount, &mut asset_state, &mut asset_staker_info)?;
                 
-                reward_info.push(UnclaimedReward {
-                    asset: asset.clone(),
-                    amount: asset_staker_info.pending_reward,
-                });
+                if asset_staker_info.pending_reward > Uint128::zero() {
+                    reward_info.push(UnclaimedReward {
+                        asset: asset.clone(),
+                        amount: asset_staker_info.pending_reward,
+                    });
+                }
             }
 
             to_binary(&reward_info).map_err(ContractError::from)

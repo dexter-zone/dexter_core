@@ -5,9 +5,10 @@ use dexter::{
 };
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, create_reward_schedule, mint_lp_tokens_to_addr,
-    mock_app, query_bonded_lp_tokens, query_token_locks, query_unclaimed_rewards, setup,
-    unbond_lp_tokens, unlock_lp_tokens, withdraw_unclaimed_rewards,
+    assert_user_lp_token_balance, bond_lp_tokens, create_dummy_cw20_token, create_reward_schedule,
+    mint_lp_tokens_to_addr, mock_app, query_bonded_lp_tokens, query_token_locks,
+    query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
+    withdraw_unclaimed_rewards, mint_cw20_tokens_to_addr, query_cw20_balance
 };
 mod utils;
 
@@ -39,7 +40,7 @@ fn test_staking() {
         Uint128::from(100_000_000 as u64),
         1000_001_000,
         1000_002_000,
-    );
+    ).unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_000);
@@ -301,7 +302,7 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(100_000_000 as u64),
         1000_001_000,
         1000_002_000,
-    );
+    ).unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -314,7 +315,7 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(150_000_000 as u64),
         1000_001_500,
         1000_002_000,
-    );
+    ).unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -327,7 +328,7 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(200_000_000 as u64),
         1000_001_200,
         1000_002_000,
-    );
+    ).unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_000);
@@ -471,7 +472,7 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(100_000_000 as u64),
         1000_001_000,
         1000_002_000,
-    );
+    ).unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -484,7 +485,7 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(100_000_000 as u64),
         1000_001_500,
         1000_002_000,
-    );
+    ).unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -497,7 +498,7 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(200_000_000 as u64),
         1000_001_200,
         1000_002_000,
-    );
+    ).unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_000);
@@ -693,7 +694,7 @@ fn test_reward_schedule_creation_after_bonding() {
         Uint128::from(100_000_000 as u64),
         1000_001_000,
         1000_002_000,
-    );
+    ).unwrap();
 
     // mint some LP tokens to user
     mint_lp_tokens_to_addr(
@@ -712,7 +713,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &user_1_addr,
         Uint128::from(100_000 as u64),
     );
-    
+
     // increase time
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_200);
@@ -731,7 +732,7 @@ fn test_reward_schedule_creation_after_bonding() {
         Uint128::from(500_000_000 as u64),
         1000_001_500,
         1000_002_000,
-    );
+    ).unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_001_600);
@@ -817,6 +818,126 @@ fn test_reward_schedule_creation_after_bonding() {
             panic!("Unexpected asset type")
         }
     }
+}
 
+/// This test is to check if CW20 assets are correctly rewarded
+#[test]
+fn test_create_cw20_reward_schedule() {
+    let admin = String::from("admin");
+    let user_1 = String::from("user_1");
 
+    let coins = vec![coin(1_000_000_000, "uxprt"), coin(1_000_000_000, "uatom")];
+
+    let admin_addr = Addr::unchecked(admin.clone());
+    let user_1_addr = Addr::unchecked(user_1.clone());
+
+    let mut app = mock_app(admin_addr.clone(), coins);
+
+    let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
+
+    let cw20_code_id = store_cw20_contract(&mut app);
+    let cw20_token_addr = create_dummy_cw20_token(&mut app, &admin_addr, cw20_code_id);
+
+    // mint cw20 tokens to user 1
+    mint_cw20_tokens_to_addr(
+        &mut app,
+        &admin_addr,
+        &cw20_token_addr,
+        &admin_addr,
+        Uint128::from(100_000_000 as u64),
+    );
+
+    // create a reward schedule
+    let result = create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        AssetInfo::Token {
+            contract_addr: cw20_token_addr.clone()
+        },
+        Uint128::from(100_000_000 as u64),
+        1000_001_000,
+        1000_002_000,
+    );
+
+    assert!(result.is_ok());
+
+    // mint lp tokens to user 1
+    mint_lp_tokens_to_addr(
+        &mut app,
+        &admin_addr,
+        &lp_token_addr,
+        &user_1_addr,
+        Uint128::from(1_000_000 as u64),
+    );
+    // bond some LP tokens
+    bond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_1_addr,
+        Uint128::from(100_000 as u64),
+    );
+
+    // update time
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.height = b.height + 100;
+    });
+
+    // unbond all LP tokens
+    unbond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_1_addr,
+        Uint128::from(100_000 as u64),
+    );
+
+    // increase time
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_003_001);
+        b.height = b.height + 100;
+    });
+
+    // query rewards
+    let unclaimed_rewards_user_1 = query_unclaimed_rewards(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_1_addr,
+    );
+
+    for unclaimed_reward in unclaimed_rewards_user_1 {
+        if let AssetInfo::Token { contract_addr } = unclaimed_reward.asset {
+            assert_eq!(contract_addr, cw20_token_addr);
+            assert_eq!(unclaimed_reward.amount, Uint128::from(50_000_000 as u64));
+        } else {
+            panic!("Unexpected asset type")
+        }
+    }
+
+    // withdraw rewards
+    withdraw_unclaimed_rewards(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_1_addr
+    );
+
+    // query rewards
+    let unclaimed_rewards_user_1 = query_unclaimed_rewards(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_1_addr,
+    );
+
+    println!("unclaimed_rewards_user_1: {:?}", unclaimed_rewards_user_1);
+    assert_eq!(unclaimed_rewards_user_1.len(), 0);
+
+    // validate user cw20 balance
+    let user_1_cw20_balance = query_cw20_balance(&mut app, &cw20_token_addr, &user_1_addr);
+    assert_eq!(user_1_cw20_balance, Uint128::from(50_000_000 as u64));
 }

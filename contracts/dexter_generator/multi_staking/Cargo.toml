@@ -28,3 +28,4 @@ serde-json-wasm = "0.4.1"
 lp-token = {path = "../../lp_token"}
 cw-multi-test = "0.13.2"
 cw20-base = "0.15.0"
+anyhow = "1.0.32"

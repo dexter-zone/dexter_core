@@ -1,7 +1,7 @@
 use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
-use cw_multi_test::{App, Executor, ContractWrapper};
+use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
 use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward}, asset::AssetInfo};
-use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
+use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse, Cw20Coin};
 
 const EPOCH_START: u64 = 1_000_000_000;
 
@@ -85,6 +85,71 @@ pub fn store_cw20_contract(
     let code_id = app.store_code(cw20_contract);
     return code_id;
 }
+
+pub fn create_cw20_token(
+    app: &mut App,
+    code_id: u64,
+    creator: Addr,
+    name: String,
+    symbol: String,
+    decimals: u8,
+    initial_balances: Vec<Cw20Coin>,
+    mint: Option<MinterResponse>,
+) -> Addr {
+    let cw20_instantiate_msg = cw20_base::msg::InstantiateMsg {
+        name,
+        symbol,
+        decimals,
+        initial_balances,
+        marketing: None,
+        mint,
+    };
+
+    let cw20_instance = app
+        .instantiate_contract(
+            code_id,
+            creator.to_owned(),
+            &cw20_instantiate_msg,
+            &[],
+            "cw20",
+            None,
+        )
+        .unwrap();
+
+    return cw20_instance;
+}
+
+pub fn create_dummy_cw20_token(
+    app: &mut App,
+    admin: &Addr,
+    code_id: u64
+) -> Addr {
+    let cw20_instantiate_msg = cw20_base::msg::InstantiateMsg {
+        name: "dummy".to_string(),
+        symbol: "dummy".to_string(),
+        decimals: 6,
+        initial_balances: vec![],
+        marketing: None,
+        mint: Some(MinterResponse {
+            minter: admin.clone().to_string(),
+            cap: None,
+        }),
+    };
+
+    let cw20_instance = app
+        .instantiate_contract(
+            code_id,
+            admin.to_owned(),
+            &cw20_instantiate_msg,
+            &[],
+            "cw20",
+            None,
+        )
+        .unwrap();
+
+    return cw20_instance;
+}
+
 
 pub fn store_lp_token_contract(
     app: &mut App
@@ -173,7 +238,7 @@ pub fn create_reward_schedule(
     amount: Uint128,
     start_block_time: u64,
     end_block_time: u64,
-) {
+) -> anyhow::Result<AppResponse> {
 
     match reward_asset {
         AssetInfo::NativeToken { denom } => {
@@ -188,7 +253,7 @@ pub fn create_reward_schedule(
                         end_block_time 
                 },
                 &vec![Coin::new(amount.u128(), denom.as_str())]
-            ).unwrap();
+            )
         },
         AssetInfo::Token { contract_addr } => {
             app.execute_contract(
@@ -204,7 +269,7 @@ pub fn create_reward_schedule(
                         }).unwrap()
                     },
                 &vec![]
-            ).unwrap();
+            )
         }
     }
 }
@@ -219,6 +284,25 @@ pub fn mint_lp_tokens_to_addr(
     app.execute_contract(
         admin_addr.clone(),
         lp_token_addr.clone(),
+        &Cw20ExecuteMsg::Mint {
+            recipient: recipient_addr.to_string(),
+            amount,
+        },
+        &vec![],
+    )
+    .unwrap();
+}
+
+pub fn mint_cw20_tokens_to_addr(
+    app: &mut App,
+    admin_addr: &Addr,
+    cw20_addr: &Addr,
+    recipient_addr: &Addr,
+    amount: Uint128,
+) {
+    app.execute_contract(
+        admin_addr.clone(),
+        cw20_addr.clone(),
         &Cw20ExecuteMsg::Mint {
             recipient: recipient_addr.to_string(),
             amount,
@@ -381,4 +465,21 @@ pub fn assert_user_lp_token_balance(
     ).unwrap();
     let user_lp_token_balance = response.balance;
     assert_eq!(user_lp_token_balance, expected_balance);
+}
+
+pub fn query_cw20_balance(
+    app: &mut App,
+    cw20_addr: &Addr,
+    user_addr: &Addr,
+) -> Uint128 {
+    app
+        .wrap()
+        .query_wasm_smart(
+            cw20_addr.clone(),
+            &Cw20QueryMsg::Balance {
+                address: user_addr.to_string(),
+            },
+        )
+        .map(|r: BalanceResponse| r.balance)
+        .unwrap()
 }
