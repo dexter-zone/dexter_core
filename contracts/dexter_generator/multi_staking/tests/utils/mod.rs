@@ -318,7 +318,7 @@ pub fn bond_lp_tokens(
     lp_token_addr: &Addr,
     sender: &Addr,
     amount: Uint128,
-) {
+) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         sender.clone(),
         lp_token_addr.clone(),
@@ -329,7 +329,6 @@ pub fn bond_lp_tokens(
         },
         &vec![],
     )
-    .unwrap();
 }
 
 pub fn unbond_lp_tokens(
@@ -338,13 +337,13 @@ pub fn unbond_lp_tokens(
     lp_token_addr: &Addr,
     sender: &Addr,
     amount: Uint128,
-) {
+) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         sender.clone(), 
         multistaking_contract.clone(),
         &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount },
         &vec![],
-    ).unwrap();
+    )
 }
 
 pub fn unlock_lp_tokens(
@@ -357,6 +356,20 @@ pub fn unlock_lp_tokens(
         sender.clone(), 
         multistaking_contract.clone(),
         &ExecuteMsg::Unlock { lp_token: lp_token_addr.clone() },
+        &vec![],
+    ).unwrap();
+}
+
+pub fn disallow_lp_token(
+    app: &mut App,
+    admin_addr: &Addr,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr
+) {
+    app.execute_contract(
+        admin_addr.clone(), 
+        multistaking_contract.clone(),
+        &ExecuteMsg::RemoveLpToken { lp_token: lp_token_addr.clone() },
         &vec![],
     ).unwrap();
 }
@@ -482,4 +495,11 @@ pub fn query_cw20_balance(
         )
         .map(|r: BalanceResponse| r.balance)
         .unwrap()
+}
+
+pub fn query_balance(
+    app: &mut App,
+    user_addr: &Addr,
+) -> Vec<Coin> {
+    app.wrap().query_all_balances(user_addr).unwrap()
 }

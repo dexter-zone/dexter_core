@@ -371,7 +371,7 @@ pub fn bond(
         .may_load(deps.storage, (&lp_token, &sender))?
         .unwrap_or_default();
 
-    let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
+    let mut lp_global_state = LP_GLOBAL_STATE.may_load(deps.storage, &lp_token)?.unwrap_or_default();
     let mut response = Response::default();
 
     for asset in &lp_global_state.active_reward_assets {
@@ -515,7 +515,7 @@ pub fn update_staking_rewards(
         .may_load(deps.storage, (&asset.to_string(), &lp_token))?
         .unwrap_or(AssetRewardState {
             reward_index: Decimal::zero(),
-            last_distributed: current_block_time,
+            last_distributed: 0,
         });
 
     let reward_schedules = REWARD_SCHEDULES
