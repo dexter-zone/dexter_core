@@ -21,7 +21,7 @@ pub fn calculate_pow(
     exp: Decimal,
     precision: Option<Decimal>,
 ) -> StdResult<Decimal> {
-    let precision = precision.unwrap_or_else(|| Decimal::from_str("0.00000001").unwrap());
+    let precision = precision.unwrap_or(Decimal::from_str("0.00000001").unwrap());
     if exp.is_zero() || base.is_zero() {
         return Ok(base);
     };

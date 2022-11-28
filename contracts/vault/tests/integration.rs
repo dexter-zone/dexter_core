@@ -282,8 +282,6 @@ fn initialize_stable_5_pool(
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -380,8 +378,6 @@ fn initialize_weighted_pool(
             })
             .unwrap(),
         ),
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -433,8 +429,6 @@ fn initialize_stable_pool(
         pool_type: PoolType::Stable2Pool {},
         asset_infos: asset_infos.to_vec(),
         init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -486,8 +480,6 @@ fn initialize_xyk_pool(
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -1060,8 +1052,6 @@ fn test_create_pool_instance() {
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
 
     let res = app
@@ -1595,7 +1585,7 @@ fn test_join_pool() {
         new_user_lp_balance.balance - cur_user_lp_balance.balance
     );
 
-    let mut new_vault_token1_balance: BalanceResponse = app
+    let new_vault_token1_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
             &token_instance1.clone(),

@@ -27,7 +27,7 @@ The Generator contract here is taken from the Astroport's generator contract and
 | `Cw20HookMsg`             | Update rewards and transfer them to user.                                                                                                                      |
 | `Cw20HookMsg::Deposit`    | Deposit performs a token deposit on behalf of the message sender.                                                                                              |
 | `Cw20HookMsg::DepositFor` | DepositFor performs a token deposit on behalf of another address that's not the message sender.                                                                |
-| `ClaimRewards`            | DepositFor performs a token deposit on behalf of another address that's not the message sender.                                                                |
+| `ClaimRewards`            | ClaimRewards updates rewards and transfer accrued rewards to the user.                                                                                         |
 | `Unstake`                 | Unstake LP tokens from the Generator. LP tokens need to be unbonded for a period of time before they can be withdrawn.                                         |
 | `EmergencyUnstake`        | Unstake LP tokens from the Generator without withdrawing outstanding rewards. LP tokens need to be unbonded for a period of time before they can be withdrawn. |
 | `Unlock`                  | Unlock and withdraw LP tokens from the Generator                                                                                                               |

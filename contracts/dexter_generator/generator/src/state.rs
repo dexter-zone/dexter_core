@@ -5,7 +5,7 @@ use dexter::{
     DecimalCheckedOps,
 };
 
-use cosmwasm_std::{Addr, DepsMut, StdResult, Uint128};
+use cosmwasm_std::{Addr, StdResult, Uint128};
 use cw_storage_plus::{Item, Map};
 
 // ----------------x----------------x--------------x----------------
@@ -63,18 +63,4 @@ pub fn update_user_balance(
     }
 
     Ok(user)
-}
-
-/// ### Description
-/// Saves map between a proxy and an asset info if it is not saved yet.
-pub fn update_proxy_asset(deps: DepsMut, proxy_addr: &Addr) -> StdResult<()> {
-    if !PROXY_REWARD_ASSET.has(deps.storage, proxy_addr) {
-        let proxy_cfg: dexter::generator_proxy::ConfigResponse = deps
-            .querier
-            .query_wasm_smart(proxy_addr, &dexter::generator_proxy::QueryMsg::Config {})?;
-        let asset = proxy_cfg.reward_token;
-        PROXY_REWARD_ASSET.save(deps.storage, proxy_addr, &asset)?
-    }
-
-    Ok(())
 }

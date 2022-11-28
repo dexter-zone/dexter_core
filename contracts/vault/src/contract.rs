@@ -13,11 +13,10 @@ use protobuf::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use dexter::asset::{addr_opt_validate, addr_validate_to_lower, Asset, AssetInfo};
+use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
 use dexter::helper::{
     build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal,
-    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, is_valid_name,
-    is_valid_symbol, propose_new_owner,
+    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner,
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
@@ -58,7 +57,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
-        owner: addr_validate_to_lower(deps.api, &msg.owner)?,
+        owner: deps.api.addr_validate(&msg.owner)?,
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
@@ -80,6 +79,11 @@ pub fn instantiate(
         // validate fee bps limits
         if !pc.fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
+        }
+        // Validate dev address (if provided)
+        if pc.fee_info.developer_addr.clone().is_some() {
+            deps.api
+                .addr_validate(pc.fee_info.developer_addr.clone().unwrap().as_str())?;
         }
         REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
@@ -132,18 +136,8 @@ pub fn execute(
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
-            lp_token_name,
-            lp_token_symbol,
             init_params,
-        } => execute_create_pool_instance(
-            deps,
-            env,
-            pool_type,
-            asset_infos,
-            lp_token_name,
-            lp_token_symbol,
-            init_params,
-        ),
+        } => execute_create_pool_instance(deps, env, pool_type, asset_infos, init_params),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -232,12 +226,13 @@ pub fn receive_cw20(
             pool_id,
             recipient,
             assets,
-            burn_amount,
+            mut burn_amount,
         } => {
             // Check if amount is valid or not
-            if burn_amount.is_some() && burn_amount.unwrap() > amount_transferred {
+            if burn_amount.is_some() && burn_amount.unwrap() != amount_transferred {
                 return Err(ContractError::InvalidAmount {});
             }
+            burn_amount = Some(amount_transferred);
 
             let act_recepient = recipient.unwrap_or(sender.clone());
             let sender = sender.clone();
@@ -290,16 +285,13 @@ pub fn execute_update_config(
 
     // Update fee collector
     if let Some(fee_collector) = fee_collector {
-        config.fee_collector = Some(addr_validate_to_lower(deps.api, fee_collector.as_str())?);
+        config.fee_collector = Some(deps.api.addr_validate(fee_collector.as_str())?);
     }
 
     // Set generator only if its not set
     if !config.generator_address.is_some() {
         if let Some(generator_address) = generator_address {
-            config.generator_address = Some(addr_validate_to_lower(
-                deps.api,
-                generator_address.as_str(),
-            )?);
+            config.generator_address = Some(deps.api.addr_validate(generator_address.as_str())?);
         }
     }
 
@@ -360,6 +352,12 @@ pub fn execute_update_pool_config(
         if !new_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
+        // Validate dev address (if provided)
+        if new_fee_info.developer_addr.clone().is_some() {
+            deps.api
+                .addr_validate(new_fee_info.developer_addr.clone().unwrap().as_str())?;
+        }
+
         pool_config.fee_info = new_fee_info;
         event = event
             .add_attribute(
@@ -424,11 +422,23 @@ pub fn execute_add_to_registry(
     }
 
     // Set pool config
-    pool_config = new_pool_config;
+    pool_config = new_pool_config.clone();
 
     // validate fee bps limits
     if !pool_config.fee_info.valid_fee_info() {
         return Err(ContractError::InvalidFeeInfo {});
+    }
+
+    // Validate dev address (if provided)
+    if pool_config.fee_info.developer_addr.clone().is_some() {
+        deps.api.addr_validate(
+            pool_config
+                .fee_info
+                .developer_addr
+                .clone()
+                .unwrap()
+                .as_str(),
+        )?;
     }
 
     // Save pool config
@@ -447,7 +457,7 @@ pub fn execute_add_to_registry(
             pool_config
                 .fee_info
                 .developer_addr
-                .unwrap_or_else(|| Addr::unchecked("None".to_string())),
+                .unwrap_or(Addr::unchecked("None".to_string())),
         )
         .add_attribute(
             "is_instantiation_disabled",
@@ -487,8 +497,6 @@ pub fn execute_create_pool_instance(
     env: Env,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
-    lp_token_name: Option<String>,
-    lp_token_symbol: Option<String>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
     // Sort Assets List
@@ -518,13 +526,6 @@ pub fn execute_create_pool_instance(
 
     event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
-    if !lp_token_name.clone().is_none() && !is_valid_name(lp_token_name.as_ref().unwrap()) {
-        return Err(ContractError::InvalidLpTokenName {});
-    }
-    if !lp_token_symbol.is_none() && !is_valid_symbol(&lp_token_symbol.as_ref().unwrap()) {
-        return Err(ContractError::InvalidLpTokenSymbol {});
-    }
-
     let config = CONFIG.load(deps.storage)?;
 
     // Get current pool's config from stored pool configs
@@ -552,9 +553,9 @@ pub fn execute_create_pool_instance(
     TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
 
     // LP Token Name
-    let token_name = get_lp_token_name(pool_id.clone(), lp_token_name.clone());
+    let token_name = get_lp_token_name(pool_id.clone());
     // LP Token Symbol
-    let token_symbol = get_lp_token_symbol(lp_token_symbol.clone());
+    let token_symbol = get_lp_token_symbol();
 
     // Emit Event
     event = event
@@ -657,10 +658,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         // Reply from the submessage to instantiate the pool instance
         INSTANTIATE_POOL_REPLY_ID => {
             // Update the pool address in the temporary pool info
-            tmp_pool_info.pool_addr = Some(addr_validate_to_lower(
-                deps.api,
-                res.get_contract_address(),
-            )?);
+            tmp_pool_info.pool_addr = Some(deps.api.addr_validate(res.get_contract_address())?);
             response = response.add_attributes(vec![
                 attr("action", "reply"),
                 attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
@@ -675,10 +673,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         // Reply from the submessage to instantiate the LP token instance
         INSTANTIATE_LP_REPLY_ID => {
             // Update the LP token address in the temporary pool info
-            tmp_pool_info.lp_token_addr = Some(addr_validate_to_lower(
-                deps.api,
-                res.get_contract_address(),
-            )?);
+            tmp_pool_info.lp_token_addr = Some(deps.api.addr_validate(res.get_contract_address())?);
             response = response.add_attributes(vec![
                 attr("action", "reply"),
                 attr(
@@ -961,10 +956,9 @@ pub fn execute_join_pool(
     event = event.add_attribute("fees", fees_json);
 
     // Param - LP Token recipient / beneficiary if auto_stake = True
-    let recipient = addr_validate_to_lower(
-        deps.api,
-        op_recipient.unwrap_or(info.sender.to_string()).as_str(),
-    )?;
+    let recipient = deps
+        .api
+        .addr_validate(op_recipient.unwrap_or(info.sender.to_string()).as_str())?;
 
     event = event.add_attribute("recipient", recipient.to_string());
 
@@ -1097,7 +1091,7 @@ pub fn execute_exit_pool(
     }
 
     // Param - address to which tokens are to be transferred
-    let recipient_addr = addr_validate_to_lower(deps.api, &recipient)?;
+    let recipient_addr = deps.api.addr_validate(&recipient)?;
 
     // Response - List of assets to be transferred to the user
     let mut assets_out = vec![];
@@ -1216,8 +1210,13 @@ pub fn execute_exit_pool(
     event = event.add_attribute("liquidity_withdrawn", liquidity_withdrawan_json);
     event = event.add_attribute("fees", fee_breakup_json);
 
-    event = event.add_attribute("sender", sender);
+    event = event.add_attribute("sender", sender.clone());
     event = event.add_attribute("vault_contract_address", env.contract.address);
+
+    // Check - Burn amount cannot be 0
+    if pool_exit_transition.burn_shares.is_zero() {
+        return Err(ContractError::BurnAmountZero {});
+    }
 
     // ExecuteMsg:: Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -1234,7 +1233,7 @@ pub fn execute_exit_pool(
             contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Transfer {
                 amount: lp_to_return,
-                recipient: recipient_addr.to_string(),
+                recipient: sender.clone(),
             })?,
             funds: vec![],
         }));
@@ -1331,6 +1330,13 @@ pub fn execute_swap(
         });
     }
 
+    // Error - If any of the amount_in / amount_out is zero
+    if pool_swap_transition.trade_params.amount_in.is_zero()
+        || pool_swap_transition.trade_params.amount_out.is_zero()
+    {
+        return Err(ContractError::SwapAmountZero {});
+    }
+
     // Params - Create offer and ask assets
     let offer_asset = Asset {
         info: swap_request.asset_in.clone(),
@@ -1402,8 +1408,7 @@ pub fn execute_swap(
     // Param - recipient address
     let mut recipient = info.sender.clone();
     if !op_recipient.is_none() {
-        recipient = addr_validate_to_lower(
-            deps.api,
+        recipient = deps.api.addr_validate(
             op_recipient
                 .unwrap_or(info.sender.clone().to_string())
                 .as_str(),

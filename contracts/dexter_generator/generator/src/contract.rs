@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20ReceiveMsg};
 
-use dexter::asset::{addr_validate_to_lower, AssetInfo};
+use dexter::asset::AssetInfo;
 use dexter::generator::{PoolInfo, UnbondingInfo, UserInfo};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use dexter::querier::query_token_balance;
@@ -37,6 +37,9 @@ use crate::state::{
 const CONTRACT_NAME: &str = "dexter-generator";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Constant for the maximum number of unbonding positions a user can have for an LP token
+const MAX_UNBONDING_PERIODS: u64 = 10;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -65,8 +68,8 @@ pub fn instantiate(
     let allowed_reward_proxies: Vec<Addr> = vec![];
 
     let config = Config {
-        owner: addr_validate_to_lower(deps.api, &msg.owner)?,
-        vault: addr_validate_to_lower(deps.api, &msg.vault)?,
+        owner: deps.api.addr_validate(&msg.owner)?,
+        vault: deps.api.addr_validate(&msg.vault)?,
         dex_token: None,
         tokens_per_block: msg.tokens_per_block,
         total_alloc_point: Uint128::zero(),
@@ -166,7 +169,7 @@ pub fn execute(
             if info.sender != cfg.owner {
                 return Err(ContractError::Unauthorized {});
             }
-            let lp_token_addr = addr_validate_to_lower(deps.api, &lp_token)?;
+            let lp_token_addr = deps.api.addr_validate(&lp_token)?;
             let active_pools: Vec<Addr> =
                 cfg.active_pools.iter().map(|pool| pool.0.clone()).collect();
             mass_update_pools(deps.branch(), &env, &cfg, &active_pools)?;
@@ -194,7 +197,7 @@ pub fn execute(
         ExecuteMsg::ClaimRewards { lp_tokens } => {
             let mut lp_tokens_addr: Vec<Addr> = vec![];
             for lp_token in &lp_tokens {
-                lp_tokens_addr.push(addr_validate_to_lower(deps.api, lp_token)?);
+                lp_tokens_addr.push(deps.api.addr_validate(lp_token)?);
             }
             update_rewards_and_execute(
                 deps,
@@ -207,7 +210,7 @@ pub fn execute(
             )
         }
         ExecuteMsg::Unstake { lp_token, amount } => {
-            let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+            let lp_token = deps.api.addr_validate(&lp_token)?;
 
             update_rewards_and_execute(
                 deps.branch(),
@@ -343,7 +346,7 @@ pub fn execute_update_config(
         if config.dex_token.is_some() {
             return Err(ContractError::DexTokenAlreadySet {});
         }
-        config.dex_token = Some(addr_validate_to_lower(deps.api, dex_token.as_str())?);
+        config.dex_token = Some(deps.api.addr_validate(dex_token.as_str())?);
     }
 
     // Check and update config::vesting_contract
@@ -351,8 +354,7 @@ pub fn execute_update_config(
         if config.vesting_contract.is_some() {
             return Err(ContractError::VestingContractAlreadySet {});
         }
-        config.vesting_contract =
-            Some(addr_validate_to_lower(deps.api, vesting_contract.as_str())?);
+        config.vesting_contract = Some(deps.api.addr_validate(vesting_contract.as_str())?);
     }
 
     // Update unbonding_period
@@ -399,7 +401,7 @@ pub fn execute_setup_pools(
     // Validation check on pools, add them to setup_poools if they are valid
     let mut setup_pools: Vec<(Addr, Uint128)> = vec![];
     for (addr, alloc_point) in pools {
-        let pool_addr = addr_validate_to_lower(deps.api, &addr)?;
+        let pool_addr = deps.api.addr_validate(&addr)?;
         setup_pools.push((pool_addr, alloc_point));
     }
 
@@ -440,8 +442,8 @@ pub fn execute_set_proxy_for_pool(
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
-    let lp_token_addr = addr_validate_to_lower(deps.api, &lp_token)?;
-    let reward_proxy_addr = addr_validate_to_lower(deps.api, &reward_proxy)?;
+    let lp_token_addr = deps.api.addr_validate(&lp_token)?;
+    let reward_proxy_addr = deps.api.addr_validate(&reward_proxy)?;
 
     // Permission check
     if info.sender != cfg.owner {
@@ -545,7 +547,7 @@ fn set_allowed_reward_proxies(
 
     let mut allowed_reward_proxies: Vec<Addr> = vec![];
     for proxy in proxies {
-        allowed_reward_proxies.push(addr_validate_to_lower(deps.api, &proxy)?);
+        allowed_reward_proxies.push(deps.api.addr_validate(&proxy)?);
     }
 
     CONFIG.update::<_, StdError>(deps.storage, |mut v| {
@@ -595,7 +597,7 @@ fn update_allowed_proxies(
     // Add new proxies
     if let Some(add_proxies) = add {
         for add_proxy in add_proxies {
-            let proxy_addr = addr_validate_to_lower(deps.api, &add_proxy)?;
+            let proxy_addr = deps.api.addr_validate(&add_proxy)?;
             if !cfg.allowed_reward_proxies.contains(&proxy_addr) {
                 cfg.allowed_reward_proxies.push(proxy_addr);
             }
@@ -628,9 +630,17 @@ fn add_proxy(
         )));
     }
 
+    accumulate_rewards_per_share(&deps.querier, &env, &lp_token, &mut pool_info, &cfg, None)?;
     pool_info.reward_proxy = Some(proxy.clone());
 
-    accumulate_rewards_per_share(&deps.querier, &env, &lp_token, &mut pool_info, &cfg, None)?;
+    // Store PROXY_REWARD_ASSET
+    if !PROXY_REWARD_ASSET.has(deps.storage, &proxy.clone()) {
+        let proxy_cfg: dexter::generator_proxy::ConfigResponse = deps
+            .querier
+            .query_wasm_smart(proxy.clone(), &dexter::generator_proxy::QueryMsg::Config {})?;
+        let asset = proxy_cfg.reward_token;
+        PROXY_REWARD_ASSET.save(deps.storage, &proxy.clone(), &asset)?;
+    }
 
     // If a reward proxy is set - send LP tokens to the proxy
     let lp_supply = query_token_balance(
@@ -892,6 +902,13 @@ pub fn unstake(
     let updated_amount = user.amount.checked_sub(amount)?;
     let mut user = update_user_balance(user, &pool.clone(), updated_amount)?;
 
+    // Number of unbonding periods cannot exceed maximum
+    if user.unbonding_periods.len() >= MAX_UNBONDING_PERIODS.try_into().unwrap() {
+        return Err(ContractError::MaxUnbondingPeriods {
+            max_unbonding_periods: MAX_UNBONDING_PERIODS,
+        });
+    }
+
     // Create unbonding period
     if amount > Uint128::zero() {
         let unbonding_period = UnbondingInfo {
@@ -964,7 +981,7 @@ pub fn unlock(
     info: MessageInfo,
     lp_token: String,
 ) -> Result<Response, ContractError> {
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
     let mut user = USER_INFO.load(deps.storage, (&lp_token, &info.sender))?;
     let unbonding_sessions = user.unbonding_periods;
 
@@ -1020,7 +1037,7 @@ pub fn emergency_unstake(
     info: MessageInfo,
     lp_token: String,
 ) -> Result<Response, ContractError> {
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
     let cfg = CONFIG.load(deps.storage)?;
 
     let mut pool = POOL_INFO.load(deps.storage, &lp_token)?;
@@ -1049,12 +1066,18 @@ pub fn emergency_unstake(
         });
     }
 
-    // Update user's balance
+    // Update user's balance. All LP tokens are to be unbonded and the user's bonded amount is set to 0.
+    let unbonded_amount = user.amount;
     let mut user = update_user_balance(user, &pool, Uint128::zero())?;
+
+    // Check that amount is non-zero
+    if unbonded_amount == Uint128::zero() {
+        return Err(ContractError::ZeroUnbondAmount {});
+    }
 
     // Create unbonding period
     let unbonding_period = UnbondingInfo {
-        amount: user.amount,
+        amount: unbonded_amount,
         unlock_timestamp: env.block.time.seconds() + cfg.unbonding_period,
     };
 
@@ -1068,7 +1091,7 @@ pub fn emergency_unstake(
     Ok(Response::new()
         .add_messages(transfer_msgs)
         .add_attribute("action", "emergency_withdraw")
-        .add_attribute("amount", user.amount))
+        .add_attribute("amount", unbonded_amount))
 }
 
 /// ## Description
@@ -1093,8 +1116,8 @@ fn send_orphan_proxy_rewards(
         return Err(ContractError::Unauthorized {});
     };
 
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
-    let recipient = addr_validate_to_lower(deps.api, &recipient)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
+    let recipient = deps.api.addr_validate(&recipient)?;
 
     let mut pool = POOL_INFO.load(deps.storage, &lp_token)?;
 
@@ -1237,8 +1260,8 @@ pub fn pool_length(deps: Deps) -> Result<PoolLengthResponse, ContractError> {
 /// * **lp_token** is an object of type [`String`]. This is the LP token for which we query the user's balance for.
 /// * **user** is an object of type [`String`]. This is the user whose balance we query.
 pub fn query_deposit(deps: Deps, lp_token: String, user: String) -> Result<Uint128, ContractError> {
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
-    let user = addr_validate_to_lower(deps.api, &user)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
+    let user = deps.api.addr_validate(&user)?;
 
     let user_info = USER_INFO
         .load(deps.storage, (&lp_token, &user))
@@ -1262,8 +1285,8 @@ pub fn pending_token(
 ) -> Result<PendingTokenResponse, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
-    let user = addr_validate_to_lower(deps.api, &user)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
+    let user = deps.api.addr_validate(&user)?;
 
     let pool = POOL_INFO.load(deps.storage, &lp_token)?;
     let user_info = USER_INFO
@@ -1336,7 +1359,7 @@ pub fn pending_token(
 fn query_reward_info(deps: Deps, lp_token: String) -> Result<RewardInfoResponse, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
     let pool = POOL_INFO.load(deps.storage, &lp_token)?;
 
     let proxy_reward_token = match pool.reward_proxy {
@@ -1365,7 +1388,7 @@ fn query_orphan_proxy_rewards(
     deps: Deps,
     lp_token: String,
 ) -> Result<(AssetInfo, Uint128), ContractError> {
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
 
     let pool = POOL_INFO.load(deps.storage, &lp_token)?;
     if pool.reward_proxy.is_some() {
@@ -1393,7 +1416,7 @@ fn query_pool_info(
 ) -> Result<PoolInfoResponse, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
     let pool = POOL_INFO.load(deps.storage, &lp_token)?;
 
     let lp_supply: Uint128;
@@ -1439,7 +1462,7 @@ fn query_pool_info(
         .tokens_per_block
         .checked_mul(alloc_point)?
         .checked_div(config.total_alloc_point)
-        .unwrap_or_else(|_| Uint128::zero());
+        .unwrap_or(Uint128::zero());
 
     Ok(PoolInfoResponse {
         alloc_point,
@@ -1463,8 +1486,8 @@ pub fn query_user_info(
     lp_token: String,
     user: String,
 ) -> Result<UserInfoResponse, ContractError> {
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
-    let user = addr_validate_to_lower(deps.api, &user)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
+    let user = deps.api.addr_validate(&user)?;
     let user = USER_INFO
         .load(deps.storage, (&lp_token, &user))
         .unwrap_or_default();
@@ -1485,17 +1508,14 @@ pub fn query_simulate_future_reward(
 ) -> Result<Uint128, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
 
-    let lp_token = addr_validate_to_lower(deps.api, &lp_token)?;
+    let lp_token = deps.api.addr_validate(&lp_token)?;
     let alloc_point = get_alloc_point(&cfg.active_pools, &lp_token);
-    let n_blocks = Uint128::from(future_block)
-        .checked_sub(env.block.height.into())
-        .unwrap_or_else(|_| Uint128::zero());
+    let n_blocks = Uint128::from(future_block).checked_sub(env.block.height.into())?;
 
     let simulated_reward = n_blocks
         .checked_mul(cfg.tokens_per_block)?
         .checked_mul(alloc_point)?
-        .checked_div(cfg.total_alloc_point)
-        .unwrap_or_else(|_| Uint128::zero());
+        .checked_div(cfg.total_alloc_point)?;
 
     Ok(simulated_reward)
 }

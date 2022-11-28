@@ -14,6 +14,12 @@ pub enum ContractError {
     #[error("Invalid exit fee. Exit fee cannot be more than 1%")]
     InvalidExitFee {},
 
+    #[error("Weight cannot be 0")]
+    ZeroWeight {},
+
+    #[error("LP token already set")]
+    LpTokenAlreadySet {},
+
     #[error("Number of assets and weights provided do not match")]
     NumberOfAssetsAndWeightsMismatch {},
 

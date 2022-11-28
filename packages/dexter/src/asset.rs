@@ -92,7 +92,7 @@ impl AssetInfo {
     pub fn check(&self, api: &dyn Api) -> StdResult<()> {
         match self {
             AssetInfo::Token { contract_addr } => {
-                addr_validate_to_lower(api, contract_addr.as_str())?;
+                api.addr_validate(contract_addr.as_str())?;
             }
             AssetInfo::NativeToken { denom } => {
                 if !denom.starts_with("ibc/") && denom != &denom.to_lowercase() {
@@ -365,23 +365,12 @@ impl Decimal256Ext for Decimal256 {
 // ----------------x----------------x      Some Helper functions      x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-/// Returns a lowercased, validated address upon success. Otherwise returns [`Err`]
-pub fn addr_validate_to_lower(api: &dyn Api, addr: &str) -> StdResult<Addr> {
-    if addr.to_lowercase() != addr {
-        return Err(StdError::generic_err(format!(
-            "Address {} should be lowercase",
-            addr
-        )));
-    }
-    api.addr_validate(addr)
-}
-
 /// Returns a lowercased, validated address upon success if present. Otherwise returns [`None`].
 /// ## Params
 /// * **addr** is an object of type [`Addr`]
 pub fn addr_opt_validate(api: &dyn Api, addr: &Option<String>) -> StdResult<Option<Addr>> {
     addr.as_ref()
-        .map(|addr| addr_validate_to_lower(api, addr))
+        .map(|addr| api.addr_validate(addr))
         .transpose()
 }
 

@@ -8,7 +8,7 @@ use cosmwasm_std::{
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
-use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
+use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::ResponseType;
 use dexter::router::{
     return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest,
@@ -34,7 +34,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let cfg = Config {
-        dexter_vault: addr_validate_to_lower(deps.api, &msg.dexter_vault)?,
+        dexter_vault: deps.api.addr_validate(&msg.dexter_vault)?,
     };
 
     CONFIG.save(deps.storage, &cfg)?;
@@ -244,8 +244,8 @@ pub fn execute_multihop_swap(
         multiswap_request: multiswap_request,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
-        recipient: recipient.unwrap_or_else(|| info.sender),
-        minimum_receive: minimum_receive.unwrap_or_else(|| Uint128::zero()),
+        recipient: recipient.unwrap_or(info.sender),
+        minimum_receive: minimum_receive.unwrap_or(Uint128::zero()),
     }
     .to_cosmos_msg(&env.contract.address)?;
     execute_msgs.push(arb_chain_msg);

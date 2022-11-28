@@ -6,7 +6,6 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 
-use dexter::asset::addr_validate_to_lower;
 use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use dexter::vesting::{
     ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, OrderBy, QueryMsg,
@@ -44,8 +43,8 @@ pub fn instantiate(
     CONFIG.save(
         deps.storage,
         &Config {
-            owner: addr_validate_to_lower(deps.api, &msg.owner)?,
-            token_addr: addr_validate_to_lower(deps.api, &msg.token_addr)?,
+            owner: deps.api.addr_validate(&msg.owner)?,
+            token_addr: deps.api.addr_validate(&msg.token_addr)?,
         },
     )?;
 
@@ -169,7 +168,7 @@ pub fn register_vesting_accounts(
 
     for mut vesting_account in vesting_accounts {
         let mut released_amount = Uint128::zero();
-        let account_address = addr_validate_to_lower(deps.api, &vesting_account.address)?;
+        let account_address = deps.api.addr_validate(&vesting_account.address)?;
 
         assert_vesting_schedules(&account_address, &vesting_account.schedules)?;
 
@@ -253,7 +252,7 @@ pub fn claim(
                 contract_addr: config.token_addr.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: recipient.unwrap_or_else(|| info.sender.to_string()),
+                    recipient: recipient.unwrap_or(info.sender.to_string()),
                     amount: claim_amount,
                 })?,
             })]);
@@ -336,7 +335,7 @@ pub fn query_timestamp(env: Env) -> StdResult<u64> {
 /// ## Params
 /// * **address** is the object of type [`String`].
 pub fn query_vesting_account(deps: Deps, address: String) -> StdResult<VestingAccountResponse> {
-    let address = addr_validate_to_lower(deps.api, &address)?;
+    let address = deps.api.addr_validate(&address)?;
     let info: VestingInfo = VESTING_INFO.load(deps.storage, &address)?;
 
     let resp = VestingAccountResponse { address, info };
@@ -358,7 +357,7 @@ pub fn query_vesting_accounts(
     order_by: Option<OrderBy>,
 ) -> StdResult<VestingAccountsResponse> {
     let start_after = start_after
-        .map(|v| addr_validate_to_lower(deps.api, &v))
+        .map(|v| deps.api.addr_validate(&v))
         .transpose()?;
 
     let vesting_infos = read_vesting_infos(deps, start_after, limit, order_by)?;
@@ -379,7 +378,7 @@ pub fn query_vesting_accounts(
 /// ## Params
 /// * **address** is the object of type [`String`].
 pub fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> StdResult<Uint128> {
-    let address = addr_validate_to_lower(deps.api, &address)?;
+    let address = deps.api.addr_validate(&address)?;
 
     let info: VestingInfo = VESTING_INFO.load(deps.storage, &address)?;
     let available_amount = compute_available_amount(env.block.time.seconds(), &info)?;

@@ -10,7 +10,6 @@ use cw20_base::msg::{ExecuteMsg, QueryMsg};
 use cw20_base::state::{MinterData, TokenInfo, LOGO, MARKETING_INFO, TOKEN_INFO};
 use cw20_base::ContractError;
 
-use dexter::asset::addr_validate_to_lower;
 use dexter::lp_token::{InstantiateMsg, MigrateMsg};
 
 /// Contract name that is used for migration.
@@ -105,7 +104,7 @@ pub fn instantiate(
 
     let mint = match msg.mint {
         Some(m) => Some(MinterData {
-            minter: addr_validate_to_lower(deps.api, &m.minter)?,
+            minter: deps.api.addr_validate(&m.minter)?,
             cap: m.cap,
         }),
         None => None,

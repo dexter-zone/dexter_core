@@ -209,8 +209,6 @@ fn instantiate_contracts_instance(
             })
             .unwrap(),
         ),
-        lp_token_name: None,
-        lp_token_symbol: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -1387,27 +1385,6 @@ fn test_on_exit_pool() {
         .unwrap_err();
     assert_eq!(res.root_cause().to_string(), "Unauthorized");
 
-    //// -----x----- Check #2 :: Error ::: Burn amount not provided -----x----- ////
-
-    let exit_msg = Cw20ExecuteMsg::Send {
-        contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(50u8),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
-            pool_id: Uint128::from(1u128),
-            recipient: None,
-            assets: None,
-            burn_amount: None,
-        })
-        .unwrap(),
-    };
-    let res = app
-        .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
-        .unwrap_err();
-    assert_eq!(
-        res.root_cause().to_string(),
-        "Pool logic not satisfied. Reason : error : Burn amount is zero"
-    );
-
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(50u8),
@@ -1422,10 +1399,7 @@ fn test_on_exit_pool() {
     let res = app
         .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap_err();
-    assert_eq!(
-        res.root_cause().to_string(),
-        "Pool logic not satisfied. Reason : error : Burn amount is zero"
-    );
+    assert_eq!(res.root_cause().to_string(), "Amount cannot be 0");
 
     //// -----x----- Check #2 :: Success ::: Successfully exit the pool -----x----- ////
 

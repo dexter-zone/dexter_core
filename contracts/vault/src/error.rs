@@ -24,6 +24,12 @@ pub enum ContractError {
     #[error("LP Token address not found")]
     LpTokenNotFound {},
 
+    #[error("Swap in / out amount cannot be 0")]
+    SwapAmountZero {},
+
+    #[error("Number of LP tokens to burn when withdrawing liquidity cannot be 0")]
+    BurnAmountZero {},
+
     #[error("MaxSpendError - offer amount {offer_amount} is more than manimum allowed spent amount {max_spend}")]
     MaxSpendError {
         max_spend: Uint128,

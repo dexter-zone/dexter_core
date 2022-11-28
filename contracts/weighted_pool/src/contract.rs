@@ -106,6 +106,9 @@ pub fn instantiate(
 
     let mut asset_weights: Vec<(AssetInfo, Decimal)> = vec![];
     for asset in weights.iter() {
+        if asset.amount.is_zero() {
+            return Err(ContractError::ZeroWeight {});
+        }
         let normalized_weight = get_normalized_weight(asset.amount.clone(), total_weight);
         asset_weights.push((asset.info.clone(), normalized_weight));
     }
@@ -208,6 +211,10 @@ pub fn set_lp_token(
     // Acess Check :: Only Vault can execute this function
     if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
+    }
+
+    if config.lp_token_addr.is_some() {
+        return Err(ContractError::LpTokenAlreadySet {});
     }
 
     // Update state
@@ -745,23 +752,19 @@ pub fn query_on_swap(
         .collect::<StdResult<Vec<_>>>()?;
 
     // Get the current balances of the Offer and ask assets from the supported assets list
-    let (offer_pool, ask_pool) = select_pools(
+    let (offer_pool, ask_pool) = match select_pools(
         Some(&offer_asset_info.clone()),
         Some(&ask_asset_info),
         &pools,
-    )
-    .unwrap_or_else(|_| {
-        (
-            DecimalAsset {
-                info: pools[0].info.clone(),
-                amount: Decimal256::zero(),
-            },
-            DecimalAsset {
-                info: pools[1].info.clone(),
-                amount: Decimal256::zero(),
-            },
-        )
-    });
+    ) {
+        Ok(res) => res,
+        Err(err) => {
+            return Ok(return_swap_failure(format!(
+                "Error during pool selection: {}",
+                err
+            )))
+        }
+    };
 
     // if there's 0 assets balance return failure response
     if offer_pool.amount.is_zero() || ask_pool.amount.is_zero() {
@@ -792,7 +795,7 @@ pub fn query_on_swap(
             };
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (calc_amount, spread_amount) = compute_swap(
+            (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &offer_asset.to_decimal_asset(offer_precision)?,
@@ -800,8 +803,15 @@ pub fn query_on_swap(
                 offer_weight,
                 &ask_pool,
                 ask_weight,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
@@ -818,7 +828,7 @@ pub fn query_on_swap(
             };
             // Calculate the number of offer_asset tokens to be transferred from the trader to the Vault contract
             let before_commission_deduction: Uint128;
-            (calc_amount, spread_amount, before_commission_deduction) = compute_offer_amount(
+            (calc_amount, spread_amount, before_commission_deduction) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &ask_asset.to_decimal_asset(ask_precision)?,
@@ -827,8 +837,15 @@ pub fn query_on_swap(
                 &offer_pool,
                 offer_weight,
                 config.fee_info.total_fee_bps,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
 
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(
@@ -843,6 +860,12 @@ pub fn query_on_swap(
         SwapType::Custom(_) => {
             return Ok(return_swap_failure("SwapType not supported".to_string()))
         }
+    }
+
+    if calc_amount.is_zero() {
+        return Ok(return_swap_failure(
+            "Computation error - calc_amount is zero".to_string(),
+        ));
     }
 
     Ok(SwapResponse {

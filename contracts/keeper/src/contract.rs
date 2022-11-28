@@ -7,8 +7,10 @@ use cosmwasm_std::{
     StdResult,
 };
 use cw2::set_contract_version;
-use dexter::asset::{addr_validate_to_lower, Asset, AssetInfo};
-use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use dexter::asset::{Asset, AssetInfo};
+use dexter::keeper::{
+    BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
+};
 use dexter::querier::query_vault_config;
 
 /// Contract name that is used for migration.
@@ -40,7 +42,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let cfg = Config {
-        vault_contract: addr_validate_to_lower(deps.api, &msg.vault_contract)?,
+        vault_contract: deps.api.addr_validate(&msg.vault_contract)?,
         dex_token_contract: None,
         staking_contract: None,
     };
@@ -113,7 +115,7 @@ fn update_config(
         if config.dex_token_contract.is_some() {
             return Err(ContractError::DexTokenAlreadySet {});
         }
-        config.dex_token_contract = Some(addr_validate_to_lower(deps.api, &dex_token_contract)?);
+        config.dex_token_contract = Some(deps.api.addr_validate(&dex_token_contract)?);
         attributes.push(Attribute::new("dex_token_contract", &dex_token_contract));
     };
 
@@ -122,7 +124,7 @@ fn update_config(
         if config.staking_contract.is_some() {
             return Err(ContractError::StakingAddrAlreadySet {});
         }
-        config.staking_contract = Some(addr_validate_to_lower(deps.api, &staking_contract)?);
+        config.staking_contract = Some(deps.api.addr_validate(&staking_contract)?);
         attributes.push(Attribute::new("staking_contract", &staking_contract));
     };
 
@@ -188,4 +190,19 @@ fn query_get_balances(deps: Deps, env: Env, assets: Vec<AssetInfo>) -> StdResult
     }
 
     Ok(resp)
+}
+
+// --------x--------x--------x--------x--------x--------x---
+// --------x--------x Migrate Function   x--------x---------
+// --------x--------x--------x--------x--------x--------x---
+
+/// ## Description
+/// Used for migration of contract. Returns the default object of type [`Response`].
+/// ## Params
+/// * **_deps** is the object of type [`DepsMut`].
+/// * **_env** is the object of type [`Env`].
+/// * **_msg** is the object of type [`MigrateMsg`].
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    Ok(Response::default())
 }

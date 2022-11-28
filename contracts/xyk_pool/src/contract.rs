@@ -20,7 +20,7 @@ use dexter::pool::{
     Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
 };
 use dexter::querier::query_supply;
-use dexter::vault::{SwapType, TWAP_PRECISION};
+use dexter::vault::{SwapType, FEE_PRECISION, TWAP_PRECISION};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter::xyk_pool";
@@ -133,6 +133,10 @@ pub fn set_lp_token(
     // Acess Check :: Only Vault can execute this function
     if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
+    }
+
+    if config.lp_token_addr.is_some() {
+        return Err(ContractError::LpTokenAlreadySet {});
     }
 
     // Update state
@@ -481,10 +485,17 @@ pub fn query_on_swap(
         SwapType::GiveIn {} => {
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault
             (calc_amount, spread_amount) =
-                compute_swap(cur_offer_asset_bal, cur_ask_asset_bal, amount)
-                    .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero()));
-            // Calculate the commission fees
+                match compute_swap(cur_offer_asset_bal, cur_ask_asset_bal, amount) {
+                    Ok(res) => res,
+                    Err(err) => {
+                        return Ok(return_swap_failure(format!(
+                            "Error during swap calculation: {}",
+                            err
+                        )))
+                    }
+                };
 
+            // Calculate the commission fees
             total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
 
             offer_asset = Asset {
@@ -499,13 +510,20 @@ pub fn query_on_swap(
         SwapType::GiveOut {} => {
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault
             let before_commission_deduction: Uint128;
-            (calc_amount, spread_amount, before_commission_deduction) = compute_offer_amount(
+            (calc_amount, spread_amount, before_commission_deduction) = match compute_offer_amount(
                 cur_offer_asset_bal,
                 cur_ask_asset_bal,
                 amount,
                 config.fee_info.total_fee_bps,
-            )
-            .unwrap_or_else(|_| (Uint128::zero(), Uint128::zero(), Uint128::zero()));
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_swap_failure(format!(
+                        "Error during swap calculation: {}",
+                        err
+                    )))
+                }
+            };
             // Calculate the commission fees
             total_fee = calculate_underlying_fees(
                 before_commission_deduction,
@@ -523,6 +541,12 @@ pub fn query_on_swap(
         SwapType::Custom(_) => {
             return Ok(return_swap_failure("SwapType not supported".to_string()))
         }
+    }
+
+    if calc_amount.is_zero() {
+        return Ok(return_swap_failure(
+            "Computation error - calc_amount is zero".to_string(),
+        ));
     }
 
     // Check the max spread limit (if it was specified)
@@ -717,8 +741,8 @@ pub fn compute_offer_amount(
     // ask => offer
     // offer_amount = cp / (ask_pool - ask_amount / (1 - commission_rate)) - offer_pool
     let cp = Uint256::from(offer_pool) * Uint256::from(ask_pool);
-    let one_minus_commission =
-        Decimal256::one() - decimal2decimal256(Decimal::from_ratio(commission_rate, 10_000u16))?;
+    let one_minus_commission = Decimal256::one()
+        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let before_commission_deduction = Uint256::from(ask_amount) * inv_one_minus_commission;
@@ -735,7 +759,7 @@ pub fn compute_offer_amount(
 
     let spread_amount = (offer_amount * Decimal::from_ratio(ask_pool, offer_pool))
         .checked_sub(before_commission_deduction.try_into()?)
-        .unwrap_or_else(|_| Uint128::zero());
+        .unwrap_or(Uint128::zero());
 
     Ok((
         offer_amount,
@@ -854,7 +878,7 @@ pub fn assert_max_spread(
         let expected_return = offer_amount * belief_price.inv().unwrap();
         let spread_amount = expected_return
             .checked_sub(return_amount)
-            .unwrap_or_else(|_| Uint128::zero());
+            .unwrap_or(Uint128::zero());
         let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
         if return_amount < expected_return && calc_spread > max_spread {
             return ResponseType::Failure(

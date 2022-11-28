@@ -1,4 +1,4 @@
-use crate::asset::{addr_validate_to_lower, Asset, AssetInfo, DecimalAsset};
+use crate::asset::{Asset, AssetInfo, DecimalAsset};
 use crate::error::ContractError;
 use crate::vault::FEE_PRECISION;
 use cosmwasm_schema::cw_serde;
@@ -42,7 +42,7 @@ pub fn propose_new_owner(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    let new_owner = addr_validate_to_lower(deps.api, new_owner.as_str())?;
+    let new_owner = deps.api.addr_validate(new_owner.as_str())?;
 
     // check that owner is not the same
     if new_owner == owner {
@@ -331,11 +331,8 @@ pub fn adjust_precision(
 /// ## Params
 /// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
 /// * **lp_token_name** is an object of type Option[`String`], provided as an input by the user creating the pool
-pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> String {
-    let mut token_name = pool_id.to_string() + "-Dex-LP".to_string().as_str();
-    if !lp_token_name.is_none() {
-        token_name = pool_id.to_string() + "-" + lp_token_name.unwrap().as_str();
-    }
+pub fn get_lp_token_name(pool_id: Uint128) -> String {
+    let token_name = pool_id.to_string() + "-Dex-LP".to_string().as_str();
     return token_name;
 }
 
@@ -343,14 +340,9 @@ pub fn get_lp_token_name(pool_id: Uint128, lp_token_name: Option<String>) -> Str
 ///
 /// ## Params
 /// * **pool_id** is an object of type [`Uint128`] and is the ID of the pool being created
-/// * **lp_token_symbol** is an object of type Option[`String`], provided as an input by the user creating the pool
-pub fn get_lp_token_symbol(lp_token_symbol: Option<String>) -> String {
+pub fn get_lp_token_symbol() -> String {
     // numbers in symbol not supported
-    let mut token_symbol = "DEX-LP".to_string();
-    if !lp_token_symbol.is_none() {
-        token_symbol = "LP_".to_string() + lp_token_symbol.unwrap().as_str();
-    }
-    return token_symbol;
+    return "DEX-LP".to_string();
 }
 
 pub fn is_valid_name(name: &str) -> bool {
@@ -378,13 +370,12 @@ pub fn is_valid_symbol(symbol: &str) -> bool {
 /// ## Params
 /// * **message_info** is an object of type [`MessageInfo`]
 pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom: &str) -> Uint128 {
-    let empty_coin = Coin::new(0u128, denom);
-    let coin = message_info
+    message_info
         .funds
         .iter()
         .find(|x| x.clone().denom == denom)
-        .unwrap_or_else(|| &empty_coin);
-    coin.amount
+        .map(|x| x.amount)
+        .unwrap_or(Uint128::zero())
 }
 
 // Returns the number of tokens charged as total fee

@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{DivideByZeroError, OverflowError, StdError};
 use thiserror::Error;
 
 /// This enum describes generator contract errors!
@@ -12,6 +12,9 @@ pub enum ContractError {
 
     #[error("Zero amount provided")]
     ZeroAmount {},
+
+    #[error("Number of unbonding periods active for an LP token cannot exceed maximum allowed {max_unbonding_periods}")]
+    MaxUnbondingPeriods { max_unbonding_periods: u64 },
 
     #[error("Dex token already set")]
     DexTokenAlreadySet {},
@@ -40,6 +43,9 @@ pub enum ContractError {
     #[error("Insufficient amount of orphan rewards!")]
     ZeroOrphanRewards {},
 
+    #[error("Amount to unbond cannot be 0!")]
+    ZeroUnbondAmount {},
+
     #[error("Contract can't be migrated!")]
     MigrationError {},
 
@@ -64,6 +70,12 @@ pub enum ContractError {
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
+        StdError::from(o).into()
+    }
+}
+
+impl From<DivideByZeroError> for ContractError {
+    fn from(o: DivideByZeroError) -> Self {
         StdError::from(o).into()
     }
 }
