@@ -113,6 +113,8 @@ pub enum ExecuteMsg {
     SetLpToken { lp_token_addr: Addr },
     /// ## Description - Update updatable parameters related to Pool's configuration
     UpdateConfig { params: Option<Binary> },
+    /// ## Description - Update total fee bps
+    UpdateFee { total_fee_bps: u16 },
     /// ## Description - Executable only by Dexter Vault.  Updates locally stored asset balances state for the pool and updates the TWAP.
     UpdateLiquidity { assets: Vec<Asset> },
 }

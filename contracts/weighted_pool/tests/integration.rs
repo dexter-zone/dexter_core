@@ -11,7 +11,7 @@ use dexter::pool::{
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
-    PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
+    PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
 use weighted_pool::state::{MathConfig, WeightedAsset, WeightedParams};
@@ -85,16 +85,16 @@ fn instantiate_contracts_instance(
     let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: weighted_pool_code_id,
         pool_type: PoolType::Weighted {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
             developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
 
@@ -104,6 +104,7 @@ fn instantiate_contracts_instance(
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     // Initialize Vault contract instance
@@ -209,6 +210,7 @@ fn instantiate_contracts_instance(
             })
             .unwrap(),
         ),
+        fee_info: None
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
         .unwrap();
@@ -1647,7 +1649,7 @@ fn test_swap() {
         .unwrap();
     assert_eq!(
         swap_offer_asset_res.response,
-        ResponseType::Failure("Any of the offer / ask pools cannot be 0".to_string())
+        ResponseType::Failure("Error during pool selection: Source and target assets are the same".to_string())
     );
 
     let swap_offer_asset_res: SwapResponse = app

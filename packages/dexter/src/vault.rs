@@ -116,47 +116,53 @@ impl FeeInfo {
 pub struct Config {
     /// The admin address that controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
+    /// Additional allowed addresses that can create pools. If empty, only owner can create pools
+    pub whitelisted_addresses: Vec<Addr>,
     /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: u64,
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
     pub generator_address: Option<Addr>,
+    /// Fee required for creating a new pool.
+    /// Ideally, it is charged in the base currency of the chain but can be changed to governance token later
+    pub pool_creation_fee: Option<Asset>,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
 }
 
+#[cw_serde]
+pub enum AllowPoolInstantiation {
+    Everyone,
+    OnlyWhitelistedAddresses,
+    Nobody,
+}
+
+impl Display for AllowPoolInstantiation {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        match self {
+            AllowPoolInstantiation::Everyone => fmt.write_str("everyone"),
+            AllowPoolInstantiation::OnlyWhitelistedAddresses => {
+                fmt.write_str("only-whitelisted-addresses")
+            }
+            AllowPoolInstantiation::Nobody => fmt.write_str("nobody"),
+        }
+    }
+}
+
 /// This struct stores a pool type's configuration.
 #[cw_serde]
-pub struct PoolConfig {
+pub struct PoolTypeConfig {
     /// ID of contract which is used to create pools of this type
     pub code_id: u64,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
-    pub fee_info: FeeInfo,
-    /// Whether a pool type is disabled or not. If it is disabled, new pools cannot be
-    /// created, but existing ones can still read the pool configuration
-    pub is_disabled: bool,
+    pub default_fee_info: FeeInfo,
+    /// Controls whether the pool can be created by anyone or only by whitelisted addresses (if any) or not at all
+    pub allow_instantiation: AllowPoolInstantiation,
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
     pub is_generator_disabled: bool,
-}
-
-impl Default for PoolConfig {
-    fn default() -> Self {
-        PoolConfig {
-            code_id: 0u64,
-            pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
-                total_fee_bps: 0,
-                protocol_fee_percent: 0,
-                dev_fee_percent: 0,
-                developer_addr: None,
-            },
-            is_disabled: false,
-            is_generator_disabled: false,
-        }
-    }
 }
 
 /// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
@@ -175,6 +181,8 @@ pub struct PoolInfo {
     pub pool_addr: Option<Addr>,
     /// Address of the LP Token Contract    
     pub lp_token_addr: Option<Addr>,
+    /// Fee charged by the pool for swaps
+    pub fee_info: FeeInfo,
     /// Assets and their respective balances
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
@@ -201,9 +209,10 @@ pub struct SingleSwapRequest {
 pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
-    pub pool_configs: Vec<PoolConfig>,
+    pub pool_configs: Vec<PoolTypeConfig>,
     pub lp_token_code_id: u64,
     pub fee_collector: Option<String>,
+    pub pool_creation_fee: Option<Asset>,
     pub generator_address: Option<String>,
 }
 
@@ -217,27 +226,41 @@ pub enum ExecuteMsg {
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
+        // Fee required for creating a new pool.
+        pool_creation_fee: Option<Asset>,
         generator_address: Option<String>,
+    },
+    AddAddressToWhitelist { 
+        address: String 
+    },
+    RemoveAddressFromWhitelist { 
+        address: String 
     },
     ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set.
     /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
     /// and updating Fee (` pool_config.fee_info`) for new pool instances
-    UpdatePoolConfig {
+    UpdatePoolTypeConfig {
         pool_type: PoolType,
-        is_disabled: Option<bool>,
+        allow_instantiation: Option<AllowPoolInstantiation>,
         new_fee_info: Option<FeeInfo>,
         is_generator_disabled: Option<bool>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {
-        new_pool_config: PoolConfig,
+        new_pool_config: PoolTypeConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
     CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
+        fee_info: Option<FeeInfo>,
         init_params: Option<Binary>,
     },
+    UpdatePoolConfig {
+        pool_id: Uint128,
+        fee_info: FeeInfo,
+    },
+
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
@@ -329,7 +352,7 @@ pub struct AssetFeeBreakup {
     pub dev_fee: Uint128,
 }
 
-pub type PoolConfigResponse = PoolConfig;
+pub type PoolConfigResponse = Option<PoolTypeConfig>;
 
 /// ## Description -  A custom struct for query response that returns the
 /// current stored state of a Pool Instance identified by either pool_id or pool_address.

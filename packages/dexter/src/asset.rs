@@ -112,7 +112,7 @@ impl AssetInfo {
     ///
     /// ## Params
     /// * **recipient** is the address where the funds will be sent.
-    pub fn into_msg(self, recipient: Addr, amount: Uint128) -> StdResult<CosmosMsg> {
+    pub fn create_transfer_msg(self, recipient: Addr, amount: Uint128) -> StdResult<CosmosMsg> {
         match &self {
             AssetInfo::Token { contract_addr } => Ok(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: contract_addr.to_string(),

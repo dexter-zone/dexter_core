@@ -21,9 +21,9 @@ use dexter::helper::{
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
-    AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg,
-    MigrateMsg, PoolConfig, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg,
-    SingleSwapRequest,
+    AllowPoolInstantiation, AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg,
+    FeeInfo, InstantiateMsg, MigrateMsg, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType,
+    PoolTypeConfig, QueryMsg, SingleSwapRequest,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -55,12 +55,20 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    
+    if let Some(pool_creation_fee) = &msg.pool_creation_fee {
+        if pool_creation_fee.amount.is_zero() {
+            return Err(ContractError::InvalidPoolCreationFee {});
+        }
+    }
 
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
+        whitelisted_addresses: vec![],
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
+        pool_creation_fee: msg.pool_creation_fee,
         next_pool_id: Uint128::from(1u128),
     };
 
@@ -71,19 +79,19 @@ pub fn instantiate(
         .collect();
 
     if config_set.len() != msg.pool_configs.len() {
-        return Err(ContractError::PoolConfigDuplicate {});
+        return Err(ContractError::PoolTypeConfigDuplicate {});
     }
 
     // Save Pool Config info
     for pc in msg.pool_configs.iter() {
         // validate fee bps limits
-        if !pc.fee_info.valid_fee_info() {
+        if !pc.default_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
         // Validate dev address (if provided)
-        if pc.fee_info.developer_addr.clone().is_some() {
+        if pc.default_fee_info.developer_addr.clone().is_some() {
             deps.api
-                .addr_validate(pc.fee_info.developer_addr.clone().unwrap().as_str())?;
+                .addr_validate(pc.default_fee_info.developer_addr.clone().unwrap().as_str())?;
         }
         REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
@@ -109,6 +117,7 @@ pub fn execute(
             lp_token_code_id,
             fee_collector,
             generator_address,
+            pool_creation_fee
         } => execute_update_config(
             deps,
             env,
@@ -116,28 +125,47 @@ pub fn execute(
             lp_token_code_id,
             fee_collector,
             generator_address,
+            pool_creation_fee,
         ),
-        ExecuteMsg::UpdatePoolConfig {
+        ExecuteMsg::UpdatePoolTypeConfig {
             pool_type,
-            is_disabled,
+            allow_instantiation,
             new_fee_info,
             is_generator_disabled,
-        } => execute_update_pool_config(
+        } => execute_update_pool_type_config(
             deps,
             info,
             pool_type,
-            is_disabled,
+            allow_instantiation,
             new_fee_info,
             is_generator_disabled,
         ),
+        ExecuteMsg::AddAddressToWhitelist { address } => {
+            execute_add_address_to_whitelist(deps, info, address)
+        }
+        ExecuteMsg::RemoveAddressFromWhitelist { address } => {
+            execute_remove_address_from_whitelist(deps, info, address)
+        }
         ExecuteMsg::AddToRegistry { new_pool_config } => {
             execute_add_to_registry(deps, env, info, new_pool_config)
         }
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
+            fee_info,
             init_params,
-        } => execute_create_pool_instance(deps, env, pool_type, asset_infos, init_params),
+        } => execute_create_pool_instance(
+            deps,
+            env,
+            info,
+            pool_type,
+            asset_infos,
+            fee_info,
+            init_params,
+        ),
+        ExecuteMsg::UpdatePoolConfig { pool_id, fee_info } => {
+            execute_update_pool_config(deps, info, pool_id, fee_info)
+        }
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -275,6 +303,7 @@ pub fn execute_update_config(
     lp_token_code_id: Option<u64>,
     fee_collector: Option<String>,
     generator_address: Option<String>,
+    pool_creation_fee: Option<Asset>
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -295,6 +324,14 @@ pub fn execute_update_config(
         }
     }
 
+    // Validate the pool creation fee
+    if let Some(pool_creation_fee) = &pool_creation_fee {
+        if pool_creation_fee.amount.is_zero() {
+            return Err(ContractError::InvalidPoolCreationFee {});
+        }
+    }
+    config.pool_creation_fee = pool_creation_fee;
+
     // Update LP token code id
     if let Some(lp_token_code_id) = lp_token_code_id {
         config.lp_token_code_id = lp_token_code_id;
@@ -313,18 +350,18 @@ pub fn execute_update_config(
 ///
 /// ## Executor
 /// Only owner can execute it
-pub fn execute_update_pool_config(
+pub fn execute_update_pool_type_config(
     deps: DepsMut,
     info: MessageInfo,
     pool_type: PoolType,
-    is_disabled: Option<bool>,
+    allow_instantiation: Option<AllowPoolInstantiation>,
     new_fee_info: Option<FeeInfo>,
     is_generator_disabled: Option<bool>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool_config = REGISTRY
         .load(deps.storage, pool_type.to_string())
-        .map_err(|_| ContractError::PoolConfigNotFound {})?;
+        .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
 
     // Emit Event
     let mut event = Event::new("dexter-vault::update_pool_config")
@@ -335,10 +372,10 @@ pub fn execute_update_pool_config(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Disable or enable pool instances creation
-    if let Some(is_disabled) = is_disabled {
-        pool_config.is_disabled = is_disabled;
-        event = event.add_attribute("is_disabled", is_disabled.to_string());
+    // Update allow instantiation
+    if let Some(allow_instantiation) = allow_instantiation {
+        event = event.add_attribute("allow_instantiation", allow_instantiation.to_string());
+        pool_config.allow_instantiation = allow_instantiation;
     }
 
     // Disable or enable integration with dexter generator
@@ -358,19 +395,22 @@ pub fn execute_update_pool_config(
                 .addr_validate(new_fee_info.developer_addr.clone().unwrap().as_str())?;
         }
 
-        pool_config.fee_info = new_fee_info;
+        pool_config.default_fee_info = new_fee_info;
         event = event
             .add_attribute(
                 "total_fee_bps",
-                pool_config.fee_info.total_fee_bps.to_string(),
+                pool_config.default_fee_info.total_fee_bps.to_string(),
             )
             .add_attribute(
                 "protocol_fee_percent",
-                pool_config.fee_info.protocol_fee_percent.to_string(),
+                pool_config
+                    .default_fee_info
+                    .protocol_fee_percent
+                    .to_string(),
             )
             .add_attribute(
                 "dev_fee_percent",
-                pool_config.fee_info.dev_fee_percent.to_string(),
+                pool_config.default_fee_info.dev_fee_percent.to_string(),
             );
     }
 
@@ -382,6 +422,119 @@ pub fn execute_update_pool_config(
     )?;
 
     Ok(Response::new().add_event(event))
+}
+
+fn execute_update_pool_config(
+    deps: DepsMut,
+    info: MessageInfo,
+    pool_id: Uint128,
+    fee_info: FeeInfo,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
+
+    // Emit Event
+    let mut event = Event::new("dexter-vault::update_pool_config")
+        .add_attribute("tx_executor", info.sender.to_string());
+
+    // permission check - Owner can update any pool config.
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Update fee info
+    if !fee_info.valid_fee_info() {
+        return Err(ContractError::InvalidFeeInfo {});
+    }
+    // Validate dev address (if provided)
+    if fee_info.developer_addr.clone().is_some() {
+        deps.api
+            .addr_validate(fee_info.developer_addr.clone().unwrap().as_str())?;
+    }
+
+    pool.fee_info = fee_info;
+    event = event
+        .add_attribute("total_fee_bps", pool.fee_info.total_fee_bps.to_string())
+        .add_attribute("protocol_fee_percent", pool.fee_info.protocol_fee_percent.to_string())
+        .add_attribute("dev_fee_percent", pool.fee_info.dev_fee_percent.to_string());
+
+    // update total fee in the actual pool contract by sending a wasm message
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: pool.pool_addr.clone().unwrap().to_string(),
+        funds: vec![],
+        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
+            total_fee_bps: pool.fee_info.total_fee_bps.clone(),
+        })?,
+    });
+
+    // Save pool config
+    ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
+
+    let response = Response::new()
+        .add_event(event)
+        .add_message(msg)
+        .add_attribute("action", "update_pool_config");
+    
+    Ok(response)
+}
+
+fn execute_add_address_to_whitelist(
+    deps: DepsMut,
+    info: MessageInfo,
+    address: String,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // permission check
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate address
+    let address = deps.api.addr_validate(address.as_str())?;
+
+    // check if address to be added is the owner
+    if address == config.owner {
+        return Err(ContractError::CannotAddOwnerToWhitelist);
+    }
+
+    // check if address is already whitelisted
+    if config.whitelisted_addresses.contains(&address) {
+        return Err(ContractError::AddressAlreadyWhitelisted);
+    }
+
+    // Add address to whitelist
+    config.whitelisted_addresses.push(address);
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attribute("action", "add_address_to_whitelist"))
+}
+
+fn execute_remove_address_from_whitelist(
+    deps: DepsMut,
+    info: MessageInfo,
+    address: String,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    // permission check
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate address
+    let address = deps.api.addr_validate(address.as_str())?;
+
+    // check if address is already whitelisted
+    if !config.whitelisted_addresses.contains(&address) {
+        return Err(ContractError::AddressNotWhitelisted);
+    }
+
+    // Remove address from whitelist
+    config.whitelisted_addresses.retain(|x| x != &address);
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attribute("action", "remove_address_from_whitelist"))
 }
 
 //--------x---------------x--------------x-----
@@ -399,7 +552,7 @@ pub fn execute_add_to_registry(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    new_pool_config: PoolConfig,
+    pool_type_config: PoolTypeConfig,
 ) -> Result<Response, ContractError> {
     let config: Config = CONFIG.load(deps.storage)?;
 
@@ -409,31 +562,31 @@ pub fn execute_add_to_registry(
     }
 
     // Check if code id is valid
-    if new_pool_config.code_id == 0 {
+    if pool_type_config.code_id == 0 {
         return Err(ContractError::InvalidCodeId {});
     }
 
     // Check :: If pool type is already registered
-    let mut pool_config = REGISTRY
-        .load(deps.storage, new_pool_config.pool_type.to_string())
-        .unwrap_or_default();
-    if pool_config.code_id != 0u64 {
-        return Err(ContractError::PoolTypeAlreadyExists {});
+    match REGISTRY.load(deps.storage, pool_type_config.pool_type.to_string()) {
+        Ok(_) => return Err(ContractError::PoolTypeAlreadyExists {}),
+        Err(_) => {}
     }
 
-    // Set pool config
-    pool_config = new_pool_config.clone();
-
     // validate fee bps limits
-    if !pool_config.fee_info.valid_fee_info() {
+    if !pool_type_config.default_fee_info.valid_fee_info() {
         return Err(ContractError::InvalidFeeInfo {});
     }
 
     // Validate dev address (if provided)
-    if pool_config.fee_info.developer_addr.clone().is_some() {
+    if pool_type_config
+        .default_fee_info
+        .developer_addr
+        .clone()
+        .is_some()
+    {
         deps.api.addr_validate(
-            pool_config
-                .fee_info
+            pool_type_config
+                .default_fee_info
                 .developer_addr
                 .clone()
                 .unwrap()
@@ -444,40 +597,46 @@ pub fn execute_add_to_registry(
     // Save pool config
     REGISTRY.save(
         deps.storage,
-        pool_config.pool_type.to_string(),
-        &pool_config,
+        pool_type_config.pool_type.to_string(),
+        &pool_type_config,
     )?;
 
     // Emit Event
     let event = Event::new("dexter-vault::add_new_pool")
-        .add_attribute("pool_type", pool_config.pool_type.to_string())
-        .add_attribute("code_id", pool_config.code_id.to_string())
+        .add_attribute("pool_type", pool_type_config.pool_type.to_string())
+        .add_attribute("code_id", pool_type_config.code_id.to_string())
         .add_attribute(
             "developer_addr",
-            pool_config
-                .fee_info
+            pool_type_config
+                .default_fee_info
                 .developer_addr
                 .unwrap_or(Addr::unchecked("None".to_string())),
         )
         .add_attribute(
-            "is_instantiation_disabled",
-            pool_config.is_disabled.to_string(),
+            "allow_instantiation",
+            pool_type_config.allow_instantiation.to_string(),
         )
         .add_attribute(
             "is_generator_disabled",
-            pool_config.is_generator_disabled.to_string(),
+            pool_type_config.is_generator_disabled.to_string(),
         )
         .add_attribute(
             "total_fee_bps",
-            pool_config.fee_info.total_fee_bps.to_string(),
+            pool_type_config.default_fee_info.total_fee_bps.to_string(),
         )
         .add_attribute(
             "protocol_fee_percent",
-            pool_config.fee_info.protocol_fee_percent.to_string(),
+            pool_type_config
+                .default_fee_info
+                .protocol_fee_percent
+                .to_string(),
         )
         .add_attribute(
             "dev_fee_percent",
-            pool_config.fee_info.dev_fee_percent.to_string(),
+            pool_type_config
+                .default_fee_info
+                .dev_fee_percent
+                .to_string(),
         );
 
     Ok(Response::new().add_event(event))
@@ -495,10 +654,75 @@ pub fn execute_add_to_registry(
 pub fn execute_create_pool_instance(
     deps: DepsMut,
     env: Env,
+    info: MessageInfo,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
+    fee_info: Option<FeeInfo>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
+    // Get current pool's config from stored pool configs
+    let pool_type_config = REGISTRY
+        .load(deps.storage, pool_type.to_string())
+        .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
+
+    // Check if creation is allowed
+    match pool_type_config.allow_instantiation {
+        AllowPoolInstantiation::OnlyWhitelistedAddresses => {
+            // Check if sender is whitelisted
+            if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender)  {
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+        AllowPoolInstantiation::Nobody => {
+            return Err(ContractError::PoolTypeCreationDisabled);
+        }
+        AllowPoolInstantiation::Everyone => {}
+    }
+
+    let mut execute_msgs = vec![];
+
+    // Validate if fee is sent for creation of pool
+    if let Some(pool_creation_fee) = config.pool_creation_fee {
+        // Check if sender has sent enough funds to pay for the pool creation fee
+        let fee_amount = pool_creation_fee.amount;
+        match pool_creation_fee.info.clone() {
+            AssetInfo::NativeToken { denom } => {
+                let tokens_received =
+                    find_sent_native_token_balance(&info, &denom);
+                
+                if tokens_received < fee_amount {
+                    return Err(ContractError::InsufficientNativeTokensSent { 
+                        denom,
+                        sent: tokens_received,
+                        needed: fee_amount  
+                    });
+                } else if tokens_received > fee_amount {
+                    // refund the extra tokens
+                    if tokens_received > fee_amount {
+                        let transfer_msg = pool_creation_fee.info.clone().create_transfer_msg(
+                            info.sender.clone(),
+                            tokens_received.checked_sub(fee_amount)?,
+                        )?;
+                        execute_msgs.push(transfer_msg);
+                    }
+                }
+            }
+            AssetInfo::Token { contract_addr } => {
+                if !fee_amount.is_zero() {
+                    execute_msgs.push(build_transfer_cw20_from_user_msg(
+                        contract_addr.to_string(),
+                        info.sender.clone().to_string(),
+                        env.contract.address.to_string(),
+                        fee_amount,
+                    )?);
+                }
+            }
+        }
+    }
+
+
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
         a.to_string()
@@ -526,27 +750,17 @@ pub fn execute_create_pool_instance(
 
     event = event.add_attribute("pool_assets", serde_json_wasm::to_string(&assets).unwrap());
 
-    let config = CONFIG.load(deps.storage)?;
-
-    // Get current pool's config from stored pool configs
-    let pool_config = REGISTRY
-        .load(deps.storage, pool_type.to_string())
-        .map_err(|_| ContractError::PoolConfigNotFound {})?;
-
-    // Check if pool config is disabled
-    if pool_config.is_disabled {
-        return Err(ContractError::PoolConfigDisabled {});
-    }
-
     // Pool Id for the new pool instance
     let pool_id = config.next_pool_id;
 
+    let fee_info = fee_info.unwrap_or(pool_type_config.default_fee_info);
     let tmp_pool_info = PoolInfo {
-        pool_id: pool_id,
+        pool_id,
         pool_addr: None,
         lp_token_addr: None,
-        assets: assets,
-        pool_type: pool_config.pool_type.clone(),
+        assets,
+        fee_info: fee_info.clone(),
+        pool_type: pool_type_config.pool_type.clone(),
     };
 
     // Store the temporary Pool Info
@@ -563,21 +777,14 @@ pub fn execute_create_pool_instance(
         .add_attribute("pool_id", pool_id.to_string())
         .add_attribute("lp_token_name", token_name.clone())
         .add_attribute("lp_token_symbol", token_symbol.clone())
-        .add_attribute(
-            "total_fee_bps",
-            pool_config.fee_info.total_fee_bps.clone().to_string(),
-        )
+        .add_attribute("total_fee_bps", fee_info.total_fee_bps.to_string())
         .add_attribute(
             "protocol_fee_percent",
-            pool_config
-                .fee_info
-                .protocol_fee_percent
-                .clone()
-                .to_string(),
+            fee_info.protocol_fee_percent.to_string(),
         )
         .add_attribute(
             "developer_fee_percent",
-            pool_config.fee_info.dev_fee_percent.clone().to_string(),
+            fee_info.dev_fee_percent.to_string(),
         );
 
     // Sub Msg to initialize the pool instance
@@ -585,14 +792,14 @@ pub fn execute_create_pool_instance(
         id: INSTANTIATE_POOL_REPLY_ID,
         msg: WasmMsg::Instantiate {
             admin: Some(config.owner.to_string()),
-            code_id: pool_config.code_id,
+            code_id: pool_type_config.code_id,
             msg: to_binary(&PoolInstantiateMsg {
                 pool_id: pool_id,
-                pool_type: pool_config.pool_type,
+                pool_type: pool_type_config.pool_type,
                 vault_addr: env.contract.address.clone(),
                 asset_infos: asset_infos.clone(),
                 fee_info: FeeStructs {
-                    total_fee_bps: pool_config.fee_info.total_fee_bps,
+                    total_fee_bps: fee_info.total_fee_bps,
                 },
                 init_params,
             })?,
@@ -632,6 +839,7 @@ pub fn execute_create_pool_instance(
 
     Ok(Response::new()
         .add_submessages([init_pool_sub_msg, init_lp_token_sub_msg])
+        .add_messages(execute_msgs)
         .add_event(event))
 }
 
@@ -849,12 +1057,12 @@ pub fn execute_join_pool(
         // Compute - calculate protocol fee and dev fee based on % of total fee
         if !total_fee.clone().is_zero() {
             (protocol_fee, dev_fee) = pool_config
-                .fee_info
+                .default_fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
         // Compute - Update fee if recipient addresses are not set
-        if !pool_config.fee_info.developer_addr.is_some() {
+        if !pool_config.default_fee_info.developer_addr.is_some() {
             protocol_fee = protocol_fee + dev_fee;
             dev_fee = Uint128::zero();
         }
@@ -911,7 +1119,7 @@ pub fn execute_join_pool(
 
                 // ExecuteMsg -::- Return the extra native tokens sent by the user to the Vault
                 if tokens_received > transfer_in {
-                    execute_msgs.push(stored_asset.info.clone().into_msg(
+                    execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                         info.sender.clone(),
                         tokens_received.checked_sub(transfer_in)?,
                     )?);
@@ -933,13 +1141,13 @@ pub fn execute_join_pool(
                 stored_asset
                     .info
                     .clone()
-                    .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                    .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
             );
         }
         // ExecuteMsg -::- To transfer the dev fee to the developer address
         if !dev_fee.is_zero() {
-            execute_msgs.push(stored_asset.info.clone().into_msg(
-                pool_config.fee_info.developer_addr.clone().unwrap(),
+            execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
+                pool_config.default_fee_info.developer_addr.clone().unwrap(),
                 dev_fee,
             )?);
         }
@@ -1123,12 +1331,12 @@ pub fn execute_exit_pool(
         // Compute - calculate protocol fee and dev fee based on % of total fee
         if !total_fee.clone().is_zero() {
             (protocol_fee, dev_fee) = pool_config
-                .fee_info
+                .default_fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
         // Compute - Update fee if recipient addresses are not set
-        if !pool_config.fee_info.developer_addr.is_some() {
+        if !pool_config.default_fee_info.developer_addr.is_some() {
             protocol_fee = protocol_fee + dev_fee;
             dev_fee = Uint128::zero();
         }
@@ -1174,7 +1382,7 @@ pub fn execute_exit_pool(
                     stored_asset
                         .info
                         .clone()
-                        .into_msg(recipient_addr.clone(), to_transfer)?,
+                        .create_transfer_msg(recipient_addr.clone(), to_transfer)?,
                 );
             }
 
@@ -1184,13 +1392,13 @@ pub fn execute_exit_pool(
                     stored_asset
                         .info
                         .clone()
-                        .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                        .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
                 );
             }
             // ExecuteMsg -::- To transfer the dev fee to the developer address
             if !dev_fee.is_zero() {
-                execute_msgs.push(stored_asset.info.clone().into_msg(
-                    pool_config.fee_info.developer_addr.clone().unwrap(),
+                execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
+                    pool_config.default_fee_info.developer_addr.clone().unwrap(),
                     dev_fee,
                 )?);
             }
@@ -1363,12 +1571,12 @@ pub fn execute_swap(
         );
         // Compute - Protocol Fee and dev fee
         (protocol_fee, dev_fee) = pool_config
-            .fee_info
+            .default_fee_info
             .calculate_total_fee_breakup(pool_swap_transition.fee.clone().unwrap().amount);
     }
 
     // Compute - Update fee if recipient addresses are not set
-    if !pool_config.fee_info.developer_addr.is_some() {
+    if !pool_config.default_fee_info.developer_addr.is_some() {
         protocol_fee = protocol_fee + dev_fee;
         dev_fee = Uint128::zero();
     }
@@ -1462,7 +1670,7 @@ pub fn execute_swap(
                 }
                 // ExecuteMsg - If number of tokens sent are more than what the pool expects, return additional tokens sent
                 if tokens_received > act_amount_in {
-                    execute_msgs.push(stored_asset.info.clone().into_msg(
+                    execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
                         info.sender.clone(),
                         tokens_received.checked_sub(act_amount_in)?,
                     )?);
@@ -1523,20 +1731,16 @@ pub fn execute_swap(
                 .clone()
                 .unwrap()
                 .info
-                .into_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
+                .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
         );
     }
 
     // ExecuteMsg :: Dev Fee transfer to Keeper contract
     if !dev_fee.is_zero() {
-        execute_msgs.push(
-            pool_swap_transition
-                .fee
-                .clone()
-                .unwrap()
-                .info
-                .into_msg(pool_config.fee_info.developer_addr.unwrap(), dev_fee)?,
-        );
+        execute_msgs.push(pool_swap_transition.fee.clone().unwrap().info.create_transfer_msg(
+            pool_config.default_fee_info.developer_addr.unwrap(),
+            dev_fee,
+        )?);
     }
 
     Ok(Response::new().add_messages(execute_msgs).add_event(event))
@@ -1588,10 +1792,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
 pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = REGISTRY
-        .load(deps.storage, pool_type.to_string())
-        .unwrap_or_default();
-    Ok(pool_config)
+    let pool_config = REGISTRY.load(deps.storage, pool_type.to_string())?;
+    Ok(Some(pool_config))
 }
 
 /// ## Description - Returns boolean value indicating if the genarator is disabled or not for the pool
@@ -1607,10 +1809,10 @@ pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResu
         .load(deps.storage, &pool_id.to_string().as_bytes())
         .expect("Invalid Pool Id");
 
-    let pool_config = REGISTRY
+    let pool_type_config = REGISTRY
         .load(deps.storage, pool_info.pool_type.to_string())
-        .unwrap_or_default();
-    Ok(pool_config.is_generator_disabled)
+        .expect("No configuration found for the pool type");
+    Ok(pool_type_config.is_generator_disabled)
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure

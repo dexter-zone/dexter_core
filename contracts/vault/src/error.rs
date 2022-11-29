@@ -83,19 +83,34 @@ pub enum ContractError {
     SwapLimit {},
 
     #[error("Duplicate of Pool Configs")]
-    PoolConfigDuplicate {},
+    PoolTypeConfigDuplicate {},
 
     #[error("Invalid FeeInfo params")]
     InvalidFeeInfo {},
 
-    #[error("Pool config not found")]
-    PoolConfigNotFound {},
+    #[error("Config for pool type not found")]
+    PoolTypeConfigNotFound {},
 
     #[error("Pool is currently disabled. No new pool instances can be created")]
     PoolConfigDisabled {},
 
     #[error("Repeated assets in asset infos")]
     RepeatedAssets {},
+
+    #[error("Address already whitelisted")]
+    AddressAlreadyWhitelisted,
+
+    #[error("Address is not whitelisted currently")]
+    AddressNotWhitelisted,
+
+    #[error("Creation of this pool type is disabled")]
+    PoolTypeCreationDisabled,
+
+    #[error("Cannot add admin to whitelist. Admin is always whitelisted by default")]
+    CannotAddOwnerToWhitelist,
+
+    #[error("Pool creation fee must be null or greater than 0")]
+    InvalidPoolCreationFee,
 }
 
 impl From<OverflowError> for ContractError {

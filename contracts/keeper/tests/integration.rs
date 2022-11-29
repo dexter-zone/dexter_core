@@ -4,7 +4,7 @@ use std::vec;
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
-use dexter::vault::{FeeInfo, PoolConfig, PoolType};
+use dexter::vault::{FeeInfo, PoolTypeConfig, PoolType};
 
 type TerraApp = App;
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
@@ -34,22 +34,23 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
 
     // Instantiate Vault Contract
     let msg = dexter::vault::InstantiateMsg {
-        pool_configs: vec![PoolConfig {
+        pool_configs: vec![PoolTypeConfig {
             code_id: xyk_code_id,
             pool_type: PoolType::Xyk {},
-            fee_info: FeeInfo {
+            default_fee_info: FeeInfo {
                 total_fee_bps: 0u16,
                 protocol_fee_percent: 50u16,
                 dev_fee_percent: 15u16,
                 developer_addr: None,
             },
-            is_disabled: false,
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         }],
         lp_token_code_id: 1u64,
         fee_collector: None,
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None,
     };
     let vault_instance = router
         .instantiate_contract(

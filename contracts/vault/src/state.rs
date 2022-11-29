@@ -1,13 +1,13 @@
 use cosmwasm_std::Uint128;
 use cw_storage_plus::{Item, Map};
 use dexter::helper::OwnershipProposal;
-use dexter::vault::{Config, PoolConfig, PoolInfo};
+use dexter::vault::{Config, PoolTypeConfig, PoolInfo};
 
 // Stores Vault contract's core Configuration parameters in a [`Config`] struct
 pub const CONFIG: Item<Config> = Item::new("config");
 
 // Stores configuration data associated with each [`PoolType`] supported by the Vault in a [`PoolConfig`] struct
-pub const REGISTRY: Map<String, PoolConfig> = Map::new("pool_configs");
+pub const REGISTRY: Map<String, PoolTypeConfig> = Map::new("pool_configs");
 
 // Stores current state of each Pool instance identified by its ID supported by the Vault in a [`PoolInfo`] struc
 pub const ACTIVE_POOLS: Map<&[u8], PoolInfo> = Map::new("pool_info");

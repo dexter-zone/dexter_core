@@ -163,7 +163,7 @@ pub fn execute_multihop_swap(
 
         // ExecuteMsg -if the number of native tokens sent is greater than the offer amount, then send the remaining tokens back to the sender
         if tokens_received > offer_amount {
-            execute_msgs.push(multiswap_request[0].asset_in.clone().into_msg(
+            execute_msgs.push(multiswap_request[0].asset_in.clone().create_transfer_msg(
                 info.sender.clone(),
                 tokens_received.checked_sub(offer_amount)?,
             )?);
@@ -292,7 +292,7 @@ pub fn continue_hop_swap(
                 msg: format!("Minimum receive amount not met. Swap failed. Amount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
             });
         }
-        execute_msgs.push(offer_asset.into_msg(recipient, amount_returned_prev_hop)?);
+        execute_msgs.push(offer_asset.create_transfer_msg(recipient, amount_returned_prev_hop)?);
 
         response = response.add_attribute(
             "amount_returned_last_hop",

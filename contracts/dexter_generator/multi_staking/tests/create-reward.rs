@@ -34,7 +34,7 @@ fn test_allow_lp_token() {
     
     assert!(response.is_err());
     // Check the error is amount insufficied fundsinsufficient funds
-    assert_eq!(response.unwrap_err().root_cause().to_string(), "Generic error: Only admin can allow lp token for reward");
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Unauthorized");
 
     // Allow lp token for reward
    let response =  app.execute_contract(

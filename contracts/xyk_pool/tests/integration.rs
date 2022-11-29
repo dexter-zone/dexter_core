@@ -11,7 +11,7 @@ use dexter::pool::{
 };
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg,
-    PoolConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
+    PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType,
 };
 
@@ -81,16 +81,16 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
 
-    let pool_configs = vec![PoolConfig {
+    let pool_configs = vec![PoolTypeConfig {
         code_id: xyk_pool_code_id,
         pool_type: PoolType::Xyk {},
-        fee_info: FeeInfo {
+        default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
             dev_fee_percent: 15u16,
             developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
-        is_disabled: false,
+        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
     }];
 
@@ -100,6 +100,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None
     };
 
     // Initialize Vault contract instance
@@ -152,6 +153,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         pool_type: PoolType::Xyk {},
         asset_infos: asset_infos.to_vec(),
         init_params: None,
+        fee_info: None,
     };
     let res = app
         .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
