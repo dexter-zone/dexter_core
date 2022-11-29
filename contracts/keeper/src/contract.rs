@@ -193,15 +193,15 @@ fn withdraw(
         return Err(ContractError::InsufficientBalance);
     }
 
-    // Send the funds
+    // Send the funds to the recipient or to the owner if no recipient is specified
     let recipient = recipient.unwrap_or(config.owner);
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
     attributes.push(Attribute::new("recipient", &recipient));
-    return Ok(Response::new()
+
+    Ok(Response::new()
         .add_message(transfer_msg)
-        .add_attributes(attributes));
-    // Send the asset to the recipient
+        .add_attributes(attributes))
 }
 
 

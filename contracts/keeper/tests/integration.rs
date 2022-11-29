@@ -6,15 +6,18 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
 use dexter::vault::{FeeInfo, PoolTypeConfig, PoolType};
 
-type TerraApp = App;
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
-    TerraApp::new(|router, _, storage| {
+    App::new(|router, _, storage| {
         // initialization moved to App construction
         router.bank.init_balance(storage, &owner, coins).unwrap()
     })
 }
 
-fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
+fn instantiate_contracts(
+    router: &mut App,
+    owner: Addr,
+    keeper_admin: Addr
+) -> (Addr, Addr) {
     let vault_contract = Box::new(
         ContractWrapper::new_with_empty(
             dexter_vault::contract::execute,
@@ -71,7 +74,7 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
     ));
     let keeper_code_id = router.store_code(keeper_contract);
     let k_msg = dexter::keeper::InstantiateMsg {
-        owner,
+        owner: keeper_admin,
         vault_contract: vault_instance.to_string(),
     };
     let keeper_instance = router
@@ -91,6 +94,8 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
 #[test]
 fn update_config() {
     let owner = Addr::unchecked("owner");
+    let keeper_admin = Addr::unchecked("keeper_admin");
+
     let mut router = mock_app(
         owner.clone(),
         vec![
@@ -105,7 +110,7 @@ fn update_config() {
         ],
     );
 
-    let (vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone());
+    let (vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
 
     // #########---- Check if Keeper contract is initialzied properly ----#########
 
@@ -139,13 +144,13 @@ fn update_config() {
         )
         .unwrap_err();
 
+        // Assert cannot update with improper owner
     assert_eq!(e.root_cause().to_string(), "Unauthorized");
 
     // #########---- Success :: Check if config updated successfully  ----#########
 
-    // Assert cannot update with improper owner
     router
-        .execute_contract(owner.clone(), keeper_instance.clone(), &msg, &[])
+        .execute_contract(keeper_admin.clone(), keeper_instance.clone(), &msg, &[])
         .unwrap();
 
     let msg = QueryMsg::Config {};
@@ -210,4 +215,161 @@ fn update_config() {
     });
 
     assert_eq!(res.balances, assets_res);
+}
+
+
+#[test]
+fn withdraw_funds() {
+    let owner = Addr::unchecked("owner");
+    let keeper_admin = Addr::unchecked("keeper_admin");
+
+    let mut router = mock_app(
+        owner.clone(),
+        vec![
+            Coin {
+                denom: "ibc/axlusdc".to_string(),
+                amount: Uint128::new(100_000_000_000u128),
+            },
+            Coin {
+                denom: "xprt".to_string(),
+                amount: Uint128::new(100_000_000_000u128),
+            },
+        ],
+    );
+
+    let (vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
+
+    router
+        .send_tokens(
+            owner.clone(),
+            keeper_instance.clone(),
+            &[Coin {
+                denom: "ibc/axlusdc".to_string(),
+                amount: Uint128::new(100_000_000u128),
+            }],
+        )
+        .unwrap();
+
+    // Check balance query
+    let msg = QueryMsg::Balances { assets: vec![AssetInfo::NativeToken { denom: "ibc/axlusdc".to_string() }] };
+    let res: BalancesResponse = router
+        .wrap()
+        .query_wasm_smart(&keeper_instance, &msg)
+        .unwrap();
+
+    let mut assets_res = vec![];
+    assets_res.push(Asset {
+        info: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(100_000_000u128),
+    });
+
+    assert_eq!(res.balances, assets_res);
+
+    // try withdrawing from a different address
+    let msg = ExecuteMsg::Withdraw {
+        asset: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(50_000_000u128),
+        recipient: None,
+    };
+
+    let res = router
+        .execute_contract(
+            owner.clone(),
+            keeper_instance.clone(),
+            &msg,
+            &[],
+        );
+    
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
+
+    // try withdrawing more than available
+    let msg = ExecuteMsg::Withdraw {
+        asset: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(150_000_000u128),
+        recipient: None,
+    };
+
+    let res = router
+        .execute_contract(
+            keeper_admin.clone(),
+            keeper_instance.clone(),
+            &msg,
+            &[],
+        );
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Insufficient funds to execute this transaction");
+
+    // try withdrawing correct amount
+    let msg = ExecuteMsg::Withdraw {
+        asset: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(50_000_000u128),
+        recipient: None,
+    };
+
+    router
+        .execute_contract(
+            keeper_admin.clone(),
+            keeper_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap();
+
+    // Check balance query
+    let msg = QueryMsg::Balances { assets: vec![AssetInfo::NativeToken { denom: "ibc/axlusdc".to_string() }] };
+    let res: BalancesResponse = router
+        .wrap()
+        .query_wasm_smart(&keeper_instance, &msg)
+        .unwrap();
+
+    let mut assets_res = vec![];
+    assets_res.push(Asset {
+        info: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(50_000_000u128),
+    });
+
+    assert_eq!(res.balances, assets_res);
+
+    // validate user balances
+    let res = router.wrap().query_all_balances(&keeper_admin).unwrap();
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].amount, Uint128::new(50_000_000u128));
+    assert_eq!(res[0].denom, "ibc/axlusdc");
+
+    // try withdrawing correct amount to a different address
+    let msg = ExecuteMsg::Withdraw {
+        asset: AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        },
+        amount: Uint128::new(50_000_000u128),
+        recipient: Some(Addr::unchecked("recipient")),
+    };
+
+    router
+        .execute_contract(
+            keeper_admin.clone(),
+            keeper_instance.clone(),
+            &msg,
+            &[],
+        )
+        .unwrap();
+
+    // Validate if the funds were sent to the recipient
+    let res = router.wrap().query_all_balances(Addr::unchecked("recipient")).unwrap();
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].amount, Uint128::new(50_000_000u128));
+    assert_eq!(res[0].denom, "ibc/axlusdc");
+
 }
