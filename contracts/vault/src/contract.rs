@@ -671,12 +671,12 @@ pub fn execute_create_pool_instance(
     match pool_type_config.allow_instantiation {
         AllowPoolInstantiation::OnlyWhitelistedAddresses => {
             // Check if sender is whitelisted
-            if !config.whitelisted_addresses.contains(&info.sender) || info.sender != config.owner {
+            if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender)  {
                 return Err(ContractError::Unauthorized {});
             }
         }
         AllowPoolInstantiation::Nobody => {
-            return Err(ContractError::PoolTypeInstantiationDisabled);
+            return Err(ContractError::PoolTypeCreationDisabled);
         }
         AllowPoolInstantiation::Everyone => {}
     }

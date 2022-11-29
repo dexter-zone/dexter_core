@@ -1649,7 +1649,7 @@ fn test_swap() {
         .unwrap();
     assert_eq!(
         swap_offer_asset_res.response,
-        ResponseType::Failure("Any of the offer / ask pools cannot be 0".to_string())
+        ResponseType::Failure("Error during pool selection: Source and target assets are the same".to_string())
     );
 
     let swap_offer_asset_res: SwapResponse = app

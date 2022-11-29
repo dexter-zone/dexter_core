@@ -608,7 +608,7 @@ fn test_multi_user_multi_reward_schedule() {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
                 "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(29_870_129 as u64)),
-                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(12_770_562 as u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(12_770_561 as u64)),
                 _ => panic!("Unexpected denom"),
             }
         } else {
@@ -642,7 +642,7 @@ fn test_multi_user_multi_reward_schedule() {
     let user1_uatom_balance = user_1_balance.iter().find(|b| b.denom == "uatom").unwrap();
 
     assert_eq!(user1_uxprt_balance.amount, Uint128::from(29_870_129 as u64));
-    assert_eq!(user1_uatom_balance.amount, Uint128::from(12_770_562 as u64));
+    assert_eq!(user1_uatom_balance.amount, Uint128::from(12_770_561 as u64));
 
     withdraw_unclaimed_rewards(
         &mut app,

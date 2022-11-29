@@ -244,7 +244,7 @@ pub fn update_config(
     let params = params.unwrap();
 
     // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner {
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 

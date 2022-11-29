@@ -103,8 +103,8 @@ pub enum ContractError {
     #[error("Address is not whitelisted currently")]
     AddressNotWhitelisted,
 
-    #[error("Instantiation of this pool type is disabled")]
-    PoolTypeInstantiationDisabled,
+    #[error("Creation of this pool type is disabled")]
+    PoolTypeCreationDisabled,
 
     #[error("Cannot add admin to whitelist. Admin is always whitelisted by default")]
     CannotAddOwnerToWhitelist,

@@ -106,6 +106,7 @@ fn instantiate_contracts_instance(
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None,
     };
 
     // Initialize Vault contract instance
@@ -2061,7 +2062,7 @@ fn test_swap() {
         .unwrap();
     assert_eq!(
         swap_offer_asset_res.response,
-        ResponseType::Failure("assets mismatch".to_string())
+        ResponseType::Failure("Error during pool selection: Source and target assets are the same".to_string())
     );
 
     let swap_offer_asset_res: SwapResponse = app

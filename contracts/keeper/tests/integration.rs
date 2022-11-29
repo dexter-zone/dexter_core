@@ -50,6 +50,7 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
         fee_collector: None,
         owner: owner.to_string(),
         generator_address: None,
+        pool_creation_fee: None,
     };
     let vault_instance = router
         .instantiate_contract(

@@ -237,7 +237,7 @@ pub fn update_total_fee_bps(
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
 
     // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner {
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 

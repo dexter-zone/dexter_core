@@ -1,16 +1,16 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, coin};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{
-    AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
+    AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg, FeeResponse,
 };
 use dexter::vault::{
     ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, PoolTypeConfig,
     PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, QueryMsg, SingleSwapRequest,
-    SwapType,
+    SwapType, AllowPoolInstantiation,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -85,7 +85,10 @@ fn store_xyk_pool_code(app: &mut App) -> u64 {
 }
 
 // Initialize a vault with XYK, Stable, Stable5, Weighted pools
-fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
+fn instantiate_contract(
+    app: &mut App,
+    owner: &Addr,
+) -> Addr {
     let xyk_pool_code_id = store_xyk_pool_code(app);
     let stable_pool_code_id = store_stable_pool_code(app);
     let weighted_pool_code_id = store_weighted_pool_code(app);
@@ -243,6 +246,20 @@ fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Ui
     };
     app.execute_contract(owner.clone(), token_instance.clone(), &msg, &[])
         .unwrap();
+}
+
+fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
+   ExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Xyk {},
+        asset_infos: asset_infos.to_vec(),
+        init_params: None,
+        fee_info: Some(FeeInfo {
+            total_fee_bps: 1_001u16,
+            protocol_fee_percent: 49u16,
+            dev_fee_percent: 15u16,
+            developer_addr: None,
+        }),
+    }
 }
 
 /// Initialize a STABLE-5-POOL
@@ -1016,7 +1033,22 @@ fn test_add_to_registery() {
 #[test]
 fn test_create_pool_instance() {
     let owner = String::from("owner");
-    let mut app = mock_app(Addr::unchecked(owner.clone()), vec![]);
+    let mut app = mock_app(Addr::unchecked(owner.clone()), vec![
+        Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::from(1_000_000_000u64),
+        }
+    ]);
+
+    let owner_addr = Addr::unchecked(owner.clone());
+    let user_addr = Addr::unchecked("user".to_string());
+
+    // Send some funds from owner to user
+    app.send_tokens(
+        owner_addr.clone(),
+        user_addr.clone(),
+        &[coin(200_000_000u128, "uxprt")],
+    ).unwrap();
 
     let token_code_id = store_token_code(&mut app);
     let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
@@ -1084,7 +1116,7 @@ fn test_create_pool_instance() {
     };
 
     let res = app
-        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
+        .execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(), &msg, &[])
         .unwrap();
 
     assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
@@ -1125,6 +1157,469 @@ fn test_create_pool_instance() {
     );
     assert_eq!(assets, pool_res.assets);
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
+}
+
+#[test]
+fn test_pool_creation_fee() {
+    let owner = String::from("owner");
+    let mut app = mock_app(Addr::unchecked(owner.clone()), vec![
+        Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::from(1_000_000_000u64),
+        }
+    ]);
+
+    let owner_addr = Addr::unchecked(owner.clone());
+    let user_addr = Addr::unchecked("user".to_string());
+
+    // Send some funds from owner to user
+    app.send_tokens(
+        owner_addr.clone(),
+        user_addr.clone(),
+        &[coin(200_000_000u128, "uxprt")],
+    ).unwrap();
+
+    let token_code_id = store_token_code(&mut app);
+    let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
+
+    // Create Token X
+    let init_msg = TokenInstantiateMsg {
+        name: "x_token".to_string(),
+        symbol: "X-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance0 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "x_token",
+            None,
+        )
+        .unwrap();
+
+    // Create Token Y
+    let init_msg = TokenInstantiateMsg {
+        name: "y_token".to_string(),
+        symbol: "Y-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance1 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "y_token",
+            None,
+        )
+        .unwrap();
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        },
+    ];
+
+    // No pool creation fee
+    let msg = ExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Xyk {},
+        asset_infos: asset_infos.to_vec(),
+        init_params: None,
+        fee_info: None,
+    };
+
+    let res = app
+        .execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(), &msg, &[])
+        .unwrap();
+
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+
+    // Add fee for pool creation
+    let msg = ExecuteMsg::UpdateConfig { 
+        lp_token_code_id: None, 
+        fee_collector: None,
+        pool_creation_fee: Some(Asset {
+             info: AssetInfo::NativeToken { denom: "uxprt".to_string() },
+             amount: Uint128::from(100_000_000u128),
+        }),
+        generator_address: None 
+    };
+
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[])
+        .unwrap();
+    
+    // try creating another pool without passing fee
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(), &msg, &[]);
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Insufficient number of uxprt tokens sent. Tokens sent = 0. Tokens needed = 100000000");
+    
+    // try creating another pool with passing fee
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        )
+        .unwrap();
+
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+}
+
+#[test]
+fn test_pool_creation_whitelist() {
+    let owner = String::from("owner");
+    let mut app = mock_app(Addr::unchecked(owner.clone()), vec![
+        Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::from(1_000_000_000u64),
+        }
+    ]);
+
+    let owner_addr = Addr::unchecked(owner.clone());
+    let user_addr = Addr::unchecked("user".to_string());
+
+    // Send some funds from owner to user
+    app.send_tokens(
+        owner_addr.clone(),
+        user_addr.clone(),
+        &[coin(300_000_000u128, "uxprt")],
+    ).unwrap();
+
+    let token_code_id = store_token_code(&mut app);
+    let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
+
+    // Create Token X
+    let init_msg = TokenInstantiateMsg {
+        name: "x_token".to_string(),
+        symbol: "X-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance0 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "x_token",
+            None,
+        )
+        .unwrap();
+
+    // Create Token Y
+    let init_msg = TokenInstantiateMsg {
+        name: "y_token".to_string(),
+        symbol: "Y-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance1 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "y_token",
+            None,
+        )
+        .unwrap();
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        },
+    ];
+
+    // Set a pool creation fee
+    let msg = ExecuteMsg::UpdateConfig { 
+        lp_token_code_id: None, 
+        fee_collector: None,
+        pool_creation_fee: Some(Asset {
+             info: AssetInfo::NativeToken { denom: "uxprt".to_string() },
+             amount: Uint128::from(100_000_000u128),
+        }),
+        generator_address: None 
+    };
+
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[])
+        .unwrap();
+
+    // Pool creation allowed to anyone scenarion
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+
+    assert!(res.is_ok());
+    
+    // disable pool creation for everyone
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Xyk {},
+        allow_instantiation: Some(AllowPoolInstantiation::Nobody),
+        is_generator_disabled: None,
+        new_fee_info: None,
+    };
+
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[]).unwrap();
+
+    // try creating another pool
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+    
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Creation of this pool type is disabled");
+
+    // enable pool creation for only whitelisted addresses
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Xyk {},
+        allow_instantiation: Some(AllowPoolInstantiation::OnlyWhitelistedAddresses),
+        is_generator_disabled: None,
+        new_fee_info: None,
+    };
+
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[]).unwrap();
+
+    // Pool instantiation from admin
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+    
+    // Pool instantiation from admin should work regardless of empty whitelist
+    assert!(res.is_ok());
+
+    // Pool instantiation from non-admin non-whitelisted address
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
+
+    // Add user to whitelist
+    let msg = ExecuteMsg::AddAddressToWhitelist { address: user_addr.to_string() };
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[]).unwrap();
+
+    // Pool instantiation from non-admin whitelisted address
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+
+    assert!(res.is_ok());
+
+    // Remove user from whitelist and test again
+    let msg = ExecuteMsg::RemoveAddressFromWhitelist { address: user_addr.to_string() };
+    app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[]).unwrap();
+
+    // Pool instantiation from non-admin non-whitelisted address
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        );
+    
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
+}
+
+#[test]
+fn test_pool_fee_update() {
+    let owner = String::from("owner");
+    let mut app = mock_app(Addr::unchecked(owner.clone()), vec![
+        Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::from(1_000_000_000u64),
+        }
+    ]);
+
+    let owner_addr = Addr::unchecked(owner.clone());
+    let user_addr = Addr::unchecked("user".to_string());
+
+    // Send some funds from owner to user
+    app.send_tokens(
+        owner_addr.clone(),
+        user_addr.clone(),
+        &[coin(200_000_000u128, "uxprt")],
+    ).unwrap();
+
+    let token_code_id = store_token_code(&mut app);
+    let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
+
+    // Create Token X
+    let init_msg = TokenInstantiateMsg {
+        name: "x_token".to_string(),
+        symbol: "X-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance0 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "x_token",
+            None,
+        )
+        .unwrap();
+
+    // Create Token Y
+    let init_msg = TokenInstantiateMsg {
+        name: "y_token".to_string(),
+        symbol: "Y-Tok".to_string(),
+        decimals: 18,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance1 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            "y_token",
+            None,
+        )
+        .unwrap();
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: token_instance1.clone(),
+        },
+    ];
+
+    let msg = ExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Xyk {},
+        asset_infos: asset_infos.to_vec(),
+        init_params: None,
+        fee_info: None,
+    };
+
+    let res = app
+        .execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(), &msg, &[])
+        .unwrap();
+    
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+        
+    let pool_id : u64 = 1;
+
+    // get pool address from vault contract
+    let query_msg = QueryMsg::GetPoolById { pool_id: Uint128::from(pool_id) };
+    let res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(vault_instance.clone(), &query_msg)
+        .unwrap();
+    let pool_address = res.pool_addr.unwrap();
+
+    // update fee for this pool now
+    let msg = ExecuteMsg::UpdatePoolConfig {
+        pool_id: Uint128::from(pool_id),
+        fee_info: FeeInfo { 
+            total_fee_bps: 400u16,
+            protocol_fee_percent: 40u16,
+            dev_fee_percent: 0u16,
+            developer_addr: None 
+        },
+    };
+
+   let res = app
+        .execute_contract(Addr::unchecked(owner.clone()), vault_instance.clone(), &msg, &[]);
+
+    assert!(res.is_ok());
+
+    // Fetch pool info
+    let msg = QueryMsg::GetPoolById { pool_id: Uint128::from(pool_id) };
+    let res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(vault_instance.clone(), &msg)
+        .unwrap();
+
+    assert_eq!(res.fee_info.total_fee_bps, 400u16);
+    assert_eq!(res.fee_info.protocol_fee_percent, 40u16);
+    assert_eq!(res.fee_info.dev_fee_percent, 0u16);
+
+    // Fetch fee from the pool contract too to see if total fee is updated
+    let msg = PoolQueryMsg::FeeParams{};
+    let res: FeeResponse = app
+        .wrap()
+        .query_wasm_smart(pool_address, &msg)
+        .unwrap();
+
+    assert_eq!(res.total_fee_bps, 400u16);
 }
 
 #[test]
