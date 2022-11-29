@@ -16,6 +16,9 @@ pub enum ContractError {
 
     #[error("Staking contract already set")]
     StakingAddrAlreadySet {},
+
+    #[error("Insufficient funds to execute this transaction")]
+    InsufficientBalance,
 }
 
 impl From<OverflowError> for ContractError {

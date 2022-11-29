@@ -71,6 +71,7 @@ fn instantiate_contracts(router: &mut TerraApp, owner: Addr) -> (Addr, Addr) {
     ));
     let keeper_code_id = router.store_code(keeper_contract);
     let k_msg = dexter::keeper::InstantiateMsg {
+        owner,
         vault_contract: vault_instance.to_string(),
     };
     let keeper_instance = router
