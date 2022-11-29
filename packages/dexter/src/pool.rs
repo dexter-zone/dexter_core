@@ -109,6 +109,8 @@ pub struct InstantiateMsg {
 /// ## Description
 ///
 /// This struct describes the execute messages of the contract.
+/// Each msg's params should be kept generic to allow addition of new pool types later, allow addition
+/// of logic which may need those variables, even though those params might not be used by the current pools.
 #[cw_serde]
 pub enum ExecuteMsg {
     /// ## Description - Update updatable parameters related to Pool's configuration
@@ -121,6 +123,8 @@ pub enum ExecuteMsg {
 
 /// ## Description
 /// This struct describes the query messages of the contract.
+/// Each msg's params should be kept generic to allow addition of new pool types later, allow addition
+/// of logic which may need those variables, even though those params might not be used by the current pools.
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
@@ -193,7 +197,7 @@ pub struct ConfigResponse {
     pub fee_info: FeeStructs,
     /// The last time block
     pub block_time_last: u64,
-    /// Custom Math Config parameters are reutrned in binary format here
+    /// Custom Math Config parameters are returned in binary format here
     pub math_params: Option<Binary>,
     pub additional_params: Option<Binary>,
 }

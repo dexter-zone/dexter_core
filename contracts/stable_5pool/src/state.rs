@@ -36,6 +36,10 @@ pub struct MathConfig {
 pub struct Twap {
     /// The vector contains cumulative prices for each pair of assets in the pool
     pub cumulative_prices: Vec<(AssetInfo, AssetInfo, Uint128)>,
+    /// The latest timestamp when TWAP prices of asset pairs were last updated.
+    /// Although it seems same as the param inside CONFIG, but it is different. As the TWAP price
+    /// accumulation not always succeeds, so this might be different than the one in config.
+    /// So, better to keep it here.
     pub block_time_last: u64,
 }
 
