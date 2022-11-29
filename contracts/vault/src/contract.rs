@@ -1208,9 +1208,6 @@ pub fn execute_join_pool(
 
     Ok(Response::new()
         .add_messages(execute_msgs)
-        // TODO(discuss): action isn't there for others. It should be consistent. Should it be removed from here or kept everywhere?
-        // What benefit does it give? We are anyways emitting the event already that can be used to differentiate.
-        .add_attribute("action", "dexter-vault/execute/join_pool")
         .add_event(event))
 }
 
@@ -1274,7 +1271,10 @@ pub fn execute_exit_pool(
         });
     }
 
-    // TODO(discuss): the check for transition assets_out len matching the pool_info assets is missing??
+    // Error - Number of Assets should match
+    if pool_exit_transition.assets_out.len() != pool_info.assets.len() {
+        return Err(ContractError::InvalidNumberOfAssets {});
+    }
 
     // Param - Number of LP shares to be returned to the user
     let lp_to_return: Uint128;
@@ -1283,11 +1283,9 @@ pub fn execute_exit_pool(
     if pool_exit_transition.burn_shares > burn_amount.unwrap() {
         return Err(ContractError::InsufficientLpTokensToExit {});
     } else {
-        // TODO(discuss):
-        // 1. yeah! we are only returning this, not the extra that we would have actually received.
-        //    We should be returning that extra too.
-        // 2. Somehow by the above if check we are enforcing that the burn_amount must always be provided.
-        //    So, why keep burn_amount as optional?
+        // TODO: Somehow by the above if check we are enforcing that the burn_amount must always be provided.
+        //  So, why keep burn_amount as optional?
+        //  Once we are sure we don't need this for any future versions, maybe we can make it required.
         lp_to_return = burn_amount
             .unwrap()
             .checked_sub(pool_exit_transition.burn_shares)?;
@@ -1505,6 +1503,12 @@ pub fn execute_swap(
     min_receive: Option<Uint128>,
     max_spend: Option<Uint128>,
 ) -> Result<Response, ContractError> {
+    // Param - recipient address
+    let mut recipient = info.sender.clone();
+    if !op_recipient.is_none() {
+        recipient = deps.api.addr_validate(op_recipient.unwrap().as_str())?;
+    }
+
     //  Read -  Get PoolInfo {} for the pool
     let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
@@ -1533,7 +1537,9 @@ pub fn execute_swap(
             "pool_addr",
             pool_info.pool_addr.clone().unwrap().to_string(),
         )
-        .add_attribute("swap_type", swap_request.swap_type.to_string());
+        .add_attribute("swap_type", swap_request.swap_type.to_string())
+        .add_attribute("recipient", recipient.to_string())
+        .add_attribute("sender", info.sender.clone());
 
     // Query - Query Pool Instance  to get the state transition to be handled
     // SwapResponse {}  is the response from the pool contract and has the following parameters,
@@ -1634,20 +1640,6 @@ pub fn execute_swap(
             serde_json_wasm::to_string(&ask_asset.info).unwrap(),
         )
         .add_attribute("ask_amount", ask_asset.amount.to_string());
-
-    // TODO(discuss): this validation should be moved up, better to fail early than doing all the compute then fail.
-    // Param - recipient address
-    let mut recipient = info.sender.clone();
-    if !op_recipient.is_none() {
-        recipient = deps.api.addr_validate(
-            op_recipient
-                .unwrap_or(info.sender.clone().to_string())
-                .as_str(),
-        )?;
-    }
-
-    event = event.add_attribute("recipient", recipient.to_string());
-    event = event.add_attribute("sender", info.sender.clone());
 
     // Update asset balances
     let mut offer_asset_updated: bool = false;
@@ -1817,7 +1809,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
 pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = REGISTRY.load(deps.storage, pool_type.to_string())?;
+    let pool_config = REGISTRY.load(deps.storage, pool_type.to_string())
+        .or(Err(StdError::generic_err(ContractError::PoolTypeConfigNotFound {}.to_string())))?;
     Ok(Some(pool_config))
 }
 
@@ -1836,7 +1829,7 @@ pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResu
 
     let pool_type_config = REGISTRY
         .load(deps.storage, pool_info.pool_type.to_string())
-        .expect("No configuration found for the pool type");
+        .or(Err(StdError::generic_err(ContractError::PoolTypeConfigNotFound {}.to_string())))?;
     Ok(pool_type_config.is_generator_disabled)
 }
 
