@@ -246,9 +246,7 @@ pub fn create_reward_schedule(
                 admin_addr.clone(), 
                 multistaking_contract.clone(), 
                 &ExecuteMsg::AddRewardSchedule { 
-                        lp_token: lp_token.clone(), 
-                        denom: denom.clone(), 
-                        amount: amount.clone(), 
+                        lp_token: lp_token.clone(),
                         start_block_time, 
                         end_block_time 
                 },

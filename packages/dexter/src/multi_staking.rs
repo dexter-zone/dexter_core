@@ -38,14 +38,14 @@ pub struct RewardSchedule {
 
 #[cw_serde]
 pub struct Config {
+    /// owner has privilege to add/remove allowed lp tokens for reward
+    pub owner: Addr,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
-    // owner has privilege to add remove allowed lp tokens for reward
-    pub owner: Addr,
 }
 
 #[cw_serde]
@@ -134,13 +134,12 @@ pub enum Cw20HookMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// Adds a new reward schedule for rewarding LP token holders a specific asset. 
-    /// Asset is distributed linearly over the duration of the reward schedule. 
-    /// Reward received by an LP
+    /// Adds a new reward schedule for rewarding LP token holders a specific asset.
+    /// Asset is distributed linearly over the duration of the reward schedule.
+    /// This entry point is strictly meant for creating reward schedules with native tokens.
+    /// For creating reward schedules with CW20 tokens, CW20 transfer with AddRewardSchedule HookMsg is used.
     AddRewardSchedule {
         lp_token: Addr,
-        denom: String,
-        amount: Uint128,
         start_block_time: u64,
         end_block_time: u64,
     },
@@ -149,7 +148,7 @@ pub enum ExecuteMsg {
     AllowLpToken {
         lp_token: Addr,
     },
-    //. Allows an admin to remove an LP token from being rewarded.
+    ///. Allows an admin to remove an LP token from being rewarded.
     /// Existing reward schedules for the LP token will still be valid.
     RemoveLpToken {
         lp_token: Addr,
@@ -172,6 +171,8 @@ pub enum ExecuteMsg {
         lp_token: Addr,
         amount: Uint128,
     },
+    /// Unlocks the tokens which are locked for a locking period.
+    /// After unlocking, the tokens are withdrawn from the contract and sent to the user.
     Unlock {
         lp_token: Addr,
     },

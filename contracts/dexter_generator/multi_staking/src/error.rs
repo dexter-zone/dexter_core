@@ -43,12 +43,14 @@ pub enum ContractError {
         end_block_time: u64,
     },
 
-    #[error("Impoosible contract state: {error}")]
+    #[error("Impossible contract state: {error}")]
     ImpossibleContractState {
         error: String,
     },
+
     #[error("No reward state found for the asset since the reward is not distributed for it yet")]
     NoRewardState,
+    
     #[error("No reward state found for the asset for the user since the reward is not distributed to the user yet")]
     NoUserRewardState,
 }

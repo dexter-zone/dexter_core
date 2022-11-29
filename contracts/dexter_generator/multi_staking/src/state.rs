@@ -33,7 +33,7 @@ pub const USER_BONDED_LP_TOKENS: Map<(&Addr, &Addr), Uint128> = Map::new("user_b
 /// The rewards are calculated based on the difference between the current asset's reward index and the user's last reward index.
 pub const ASSET_LP_REWARD_STATE: Map<(&str, &Addr), AssetRewardState> = Map::new("asset_lp_reward_state");
 
-/// This is used to keep track of the global state of the for a particular LP token.
+/// This is used to keep track of the global state of the reward for a particular LP token.
 /// It tracks total bonded amount of the LP token across all users and also the assets that are currently
 /// being rewarded for the LP token.
 pub const LP_GLOBAL_STATE: Map<&Addr, LpGlobalState> = Map::new("lp_global_state");

@@ -63,12 +63,10 @@ pub fn execute(
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::AddRewardSchedule {
             lp_token,
-            denom,
-            amount,
             start_block_time,
             end_block_time,
         } => {
-            // Verify that the asset for reward was sent with the message
+            // Verify that no more than one asset is sent with the message for reward distribution
             if info.funds.len() != 1 {
                 return Err(ContractError::InvalidNumberOfAssets {
                     correct_number: 1,
@@ -76,50 +74,20 @@ pub fn execute(
                 });
             }
 
-            let sender = info.sender.clone();
             let sent_asset = info.funds[0].clone();
 
-            if sent_asset.denom == denom {
-                let asset = AssetInfo::NativeToken {
-                    denom: denom.clone(),
-                };
-                // verify that enough amount was sent
-                if sent_asset.amount >= amount {
-                    let mut response = add_reward_schedule(
-                        deps,
-                        env,
-                        info,
-                        lp_token,
-                        asset.clone(),
-                        amount,
-                        start_block_time,
-                        end_block_time,
-                    )?;
-
-                    let extra_amount = sent_asset.amount.checked_sub(amount)?;
-
-                    if extra_amount > Uint128::zero() {
-                        response = response.add_message(build_transfer_token_to_user_msg(
-                            asset,
-                            sender,
-                            extra_amount,
-                        )?);
-                    }
-
-                    Ok(response)
-                } else {
-                    Err(ContractError::LessAmountReceived {
-                        asset: denom,
-                        correct_amount: amount,
-                        received_amount: sent_asset.amount,
-                    })
-                }
-            } else {
-                Err(ContractError::InvalidAsset {
-                    correct_asset: denom,
-                    received_asset: sent_asset.denom,
-                })
-            }
+            add_reward_schedule(
+                deps,
+                env,
+                info,
+                lp_token,
+                AssetInfo::NativeToken { 
+                    denom: sent_asset.denom,
+                },
+                sent_asset.amount,
+                start_block_time,
+                end_block_time,
+            )
         }
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
@@ -557,10 +525,6 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
         .iter()
         .filter(|lock| lock.unlock_time <= env.block.time.seconds())
         .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
-    
-    if total_unlocked_amount.is_zero() {
-        return Ok(response);
-    }
 
     let updated_unlocks = locks
         .into_iter()
@@ -568,18 +532,20 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
         .collect::<Vec<TokenLock>>();
 
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &sender), &updated_unlocks)?;
+    
+    if total_unlocked_amount.is_zero() {
+        return Ok(response);
+    } 
 
-    if total_unlocked_amount > Uint128::zero() {
-        response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: lp_token.to_string(),
-            funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                recipient: sender.to_string(),
-                amount: total_unlocked_amount,
-            })?,
-        }));
-    }
-
+    response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lp_token.to_string(),
+        funds: vec![],
+        msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            recipient: sender.to_string(),
+            amount: total_unlocked_amount,
+        })?,
+    }));
+    
     Ok(response)
 }
 
