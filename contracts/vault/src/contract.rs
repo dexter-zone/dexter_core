@@ -130,7 +130,7 @@ pub fn execute(
             pool_creation_fee,
             auto_stake_impl,
             generator_address,
-            multistaking_address
+            multistaking_address,
         } => execute_update_config(
             deps,
             env,
@@ -488,7 +488,10 @@ fn execute_update_pool_config(
     pool.fee_info = fee_info;
     event = event
         .add_attribute("total_fee_bps", pool.fee_info.total_fee_bps.to_string())
-        .add_attribute("protocol_fee_percent", pool.fee_info.protocol_fee_percent.to_string())
+        .add_attribute(
+            "protocol_fee_percent",
+            pool.fee_info.protocol_fee_percent.to_string(),
+        )
         .add_attribute("dev_fee_percent", pool.fee_info.dev_fee_percent.to_string());
 
     // update total fee in the actual pool contract by sending a wasm message
@@ -505,7 +508,8 @@ fn execute_update_pool_config(
 
     let response = Response::new()
         .add_event(event)
-        .add_message(msg);
+        .add_message(msg)
+        .add_attribute("action", "update_pool_config");
 
     Ok(response)
 }
@@ -703,7 +707,7 @@ pub fn execute_create_pool_instance(
     match pool_type_config.allow_instantiation {
         AllowPoolInstantiation::OnlyWhitelistedAddresses => {
             // Check if sender is whitelisted
-            if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender)  {
+            if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender) {
                 return Err(ContractError::Unauthorized {});
             }
         }
@@ -721,14 +725,13 @@ pub fn execute_create_pool_instance(
         let fee_amount = pool_creation_fee.amount;
         match pool_creation_fee.info.clone() {
             AssetInfo::NativeToken { denom } => {
-                let tokens_received =
-                    find_sent_native_token_balance(&info, &denom);
+                let tokens_received = find_sent_native_token_balance(&info, &denom);
 
                 if tokens_received < fee_amount {
                     return Err(ContractError::InsufficientNativeTokensSent {
                         denom,
                         sent: tokens_received,
-                        needed: fee_amount
+                        needed: fee_amount,
                     });
                 } else if tokens_received > fee_amount {
                     // refund the extra tokens
@@ -753,7 +756,6 @@ pub fn execute_create_pool_instance(
             }
         }
     }
-
 
     // Sort Assets List
     asset_infos.sort_by(|a, b| {
@@ -1005,15 +1007,15 @@ pub fn execute_join_pool(
                     if config.generator_address.is_none() {
                         return Err(ContractError::GeneratorAddrNotSet);
                     }
-                 },
+                }
                 AutoStakeImpl::Multistaking => {
                     // Validate multistaking contract address is set
                     if config.multistaking_address.is_none() {
                         return Err(ContractError::MultistakingAddrNotSet);
                     }
                 }
-            }
-        }   
+            },
+        }
     }
 
     // Query - Query the Pool Contract to get the state transition to be handled
@@ -1792,10 +1794,17 @@ pub fn execute_swap(
 
     // ExecuteMsg :: Dev Fee transfer to Keeper contract
     if !dev_fee.is_zero() {
-        execute_msgs.push(pool_swap_transition.fee.clone().unwrap().info.create_transfer_msg(
-            pool_config.default_fee_info.developer_addr.unwrap(),
-            dev_fee,
-        )?);
+        execute_msgs.push(
+            pool_swap_transition
+                .fee
+                .clone()
+                .unwrap()
+                .info
+                .create_transfer_msg(
+                    pool_config.default_fee_info.developer_addr.unwrap(),
+                    dev_fee,
+                )?,
+        );
     }
 
     Ok(Response::new().add_messages(execute_msgs).add_event(event))
@@ -1944,16 +1953,14 @@ fn build_mint_lp_token_msg(
         })]);
     }
 
-    let mut msgs = vec![
-        CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Mint {
-                recipient: env.contract.address.to_string(),
-                amount,
-            })?,
-            funds: vec![],
-        })
-    ];
+    let mut msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lp_token.to_string(),
+        msg: to_binary(&Cw20ExecuteMsg::Mint {
+            recipient: env.contract.address.to_string(),
+            amount,
+        })?,
+        funds: vec![],
+    })];
 
     // Safe to do since it is validated at the caller
     let auto_stake_impl = auto_stake_impl.unwrap();
@@ -1972,7 +1979,7 @@ fn build_mint_lp_token_msg(
                 })?,
                 funds: vec![],
             })
-        },
+        }
         AutoStakeImpl::Multistaking => {
             // Address of multistaking
             let multistaking_address = multistaking_address.unwrap();
