@@ -29,7 +29,7 @@ pub struct Config {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
     /// The address of the LP token associated with this pool
-    pub lp_token_addr: Option<Addr>,
+    pub lp_token_addr: Addr,
     /// the vault contract address
     pub vault_addr: Addr,
     /// Assets supported by the pool
@@ -97,6 +97,8 @@ pub struct InstantiateMsg {
     pub pool_type: PoolType,
     /// the vault contract address
     pub vault_addr: Addr,
+    /// Address of the LP Token Contract
+    pub lp_token_addr: Addr,
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
     pub fee_info: FeeStructs,
@@ -109,8 +111,6 @@ pub struct InstantiateMsg {
 /// This struct describes the execute messages of the contract.
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// ## Description - Set  updatable parameters related to Pool's configuration
-    SetLpToken { lp_token_addr: Addr },
     /// ## Description - Update updatable parameters related to Pool's configuration
     UpdateConfig { params: Option<Binary> },
     /// ## Description - Update total fee bps
@@ -183,7 +183,7 @@ pub struct MigrateMsg {}
 pub struct ConfigResponse {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
-    pub lp_token_addr: Option<Addr>,
+    pub lp_token_addr: Addr,
     /// the vault contract address
     pub vault_addr: Addr,
     /// Assets supported by the pool

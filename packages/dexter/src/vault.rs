@@ -165,11 +165,23 @@ pub struct PoolTypeConfig {
     pub is_generator_disabled: bool,
 }
 
-/// ## Description - This is an intermediate struct for storing the key of a pair and used in reply of submessage.
+/// ## Description - This is an intermediate struct for storing the pool config during pool creation and used in reply of submessage.
 #[cw_serde]
 pub struct TmpPoolInfo {
+    /// ID of contract which is used to create pools of this type
+    pub code_id: u64,
+    /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
-    pub assets: Vec<AssetInfo>,
+    /// Address of the LP Token Contract
+    pub lp_token_addr: Option<Addr>,
+    /// Fee charged by the pool for swaps
+    pub fee_info: FeeInfo,
+    /// Assets and their respective balances
+    pub assets: Vec<Asset>,
+    /// The pools type (provided in a [`PoolType`])
+    pub pool_type: PoolType,
+    /// Object of type [`Binary`] which contains any custom params required by the Pool instance for its initialization.
+    pub init_params: Option<Binary>,
 }
 
 /// This struct stores a pool type's configuration.
@@ -178,9 +190,9 @@ pub struct PoolInfo {
     /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
     /// Address of the Pool Contract    
-    pub pool_addr: Option<Addr>,
+    pub pool_addr: Addr,
     /// Address of the LP Token Contract    
-    pub lp_token_addr: Option<Addr>,
+    pub lp_token_addr: Addr,
     /// Fee charged by the pool for swaps
     pub fee_info: FeeInfo,
     /// Assets and their respective balances

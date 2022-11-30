@@ -1,6 +1,6 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
+    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
     Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
@@ -88,7 +88,7 @@ pub fn instantiate(
 
     let config = Config {
         pool_id: msg.pool_id.clone(),
-        lp_token_addr: None,
+        lp_token_addr: msg.lp_token_addr,
         vault_addr: msg.vault_addr.clone(),
         assets,
         pool_type: msg.pool_type.clone(),
@@ -137,47 +137,12 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::SetLpToken { lp_token_addr } => set_lp_token(deps, env, info, lp_token_addr),
         ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
         ExecuteMsg::UpdateFee { total_fee_bps } => update_total_fee_bps(deps, env, info, total_fee_bps),
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
-}
-
-/// ## Description
-/// Admin Access by Vault :: Callable only by Dexter::Vault --> Sets LP token address once it is instiantiated.
-///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
-///
-/// ## Params
-/// * **lp_token_addr** is a field of type [`Addr`]. It is the address of the LP token.
-pub fn set_lp_token(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    lp_token_addr: Addr,
-) -> Result<Response, ContractError> {
-    // Get config
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    // Acess Check :: Only Vault can execute this function
-    if info.sender != config.vault_addr {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    if config.lp_token_addr.is_some() {
-        return Err(ContractError::LpTokenAlreadySet {});
-    }
-
-    // Update state
-    config.lp_token_addr = Some(lp_token_addr);
-    CONFIG.save(deps.storage, &config)?;
-
-    let event = Event::new("dexter-pool::set_lp_token")
-        .add_attribute("pool_id", config.pool_id)
-        .add_attribute("lp_token_addr", config.lp_token_addr.unwrap().to_string());
-    Ok(Response::new().add_event(event))
 }
 
 /// ## Description
@@ -559,7 +524,7 @@ pub fn query_on_join_pool(
     let deposit_d = compute_d(amp.into(), &new_balances, math_config.greatest_precision)?;
 
     // Total share of LP tokens minted by the pool
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
 
     // Tokens to be charged as Fee
     let mut fee_tokens: Vec<Asset> = vec![];
@@ -653,7 +618,7 @@ pub fn query_on_exit_pool(
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // Total share of LP tokens minted by the pool
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
     // Check asset definations and make sure no asset is repeated
     if assets_out.clone().is_some() {
@@ -921,7 +886,7 @@ pub fn query_cumulative_price(
     let mut config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap().clone())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
@@ -969,7 +934,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let mut config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
-    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone().unwrap())?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets.clone());
@@ -1224,7 +1189,7 @@ fn imbalanced_withdraw(
 
     let total_share = Uint256::from(query_supply(
         &deps.querier,
-        config.lp_token_addr.clone().unwrap(),
+        config.lp_token_addr.clone(),
     )?);
 
     // How many tokens do we need to burn to withdraw asked assets?

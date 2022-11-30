@@ -192,7 +192,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
 
     let pool_config_res: ConfigResponse = app
         .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::Config {})
+        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
     assert_eq!(
         FeeStructs {
@@ -202,8 +202,8 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     );
     assert_eq!(Uint128::from(1u128), pool_config_res.pool_id);
     assert_eq!(
-        pool_res.lp_token_addr.clone().unwrap(),
-        pool_config_res.lp_token_addr.unwrap()
+        pool_res.lp_token_addr,
+        pool_config_res.lp_token_addr
     );
     assert_eq!(vault_instance, pool_config_res.vault_addr);
     assert_eq!(assets, pool_config_res.assets);
@@ -216,21 +216,21 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
     //// -----x----- Check :: FeeResponse for XYK Pool -----x----- ////
     let pool_fee_res: FeeResponse = app
         .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::FeeParams {})
+        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::FeeParams {})
         .unwrap();
     assert_eq!(300u16, pool_fee_res.total_fee_bps);
 
     //// -----x----- Check :: Pool-ID for XYK Pool -----x----- ////
     let pool_id_res: Uint128 = app
         .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone().unwrap(), &QueryMsg::PoolId {})
+        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::PoolId {})
         .unwrap();
     assert_eq!(Uint128::from(1u128), pool_id_res);
 
     return (
         vault_instance,
-        pool_res.pool_addr.unwrap(),
-        pool_res.lp_token_addr.unwrap(),
+        pool_res.pool_addr,
+        pool_res.lp_token_addr,
         token_instance0,
         current_block.time.seconds() as u128,
     );

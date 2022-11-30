@@ -23,7 +23,7 @@ use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     AllowPoolInstantiation, AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg,
     FeeInfo, InstantiateMsg, MigrateMsg, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType,
-    PoolTypeConfig, QueryMsg, SingleSwapRequest,
+    PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -34,8 +34,8 @@ const CONTRACT_NAME: &str = "crates.io:dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
-const INSTANTIATE_POOL_REPLY_ID: u64 = 1;
-const INSTANTIATE_LP_REPLY_ID: u64 = 2;
+const INSTANTIATE_LP_REPLY_ID: u64 = 1;
+const INSTANTIATE_POOL_REPLY_ID: u64 = 2;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -474,7 +474,7 @@ fn execute_update_pool_config(
 
     // update total fee in the actual pool contract by sending a wasm message
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: pool.pool_addr.clone().unwrap().to_string(),
+        contract_addr: pool.pool_addr.to_string(),
         funds: vec![],
         msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
             total_fee_bps: pool.fee_info.total_fee_bps.clone(),
@@ -768,13 +768,14 @@ pub fn execute_create_pool_instance(
     let pool_id = config.next_pool_id;
 
     let fee_info = fee_info.unwrap_or(pool_type_config.default_fee_info);
-    let tmp_pool_info = PoolInfo {
+    let tmp_pool_info = TmpPoolInfo {
+        code_id: pool_type_config.code_id,
         pool_id,
-        pool_addr: None,
         lp_token_addr: None,
-        assets,
         fee_info: fee_info.clone(),
+        assets,
         pool_type: pool_type_config.pool_type.clone(),
+        init_params
     };
 
     // Store the temporary Pool Info
@@ -800,30 +801,6 @@ pub fn execute_create_pool_instance(
             "developer_fee_percent",
             fee_info.dev_fee_percent.to_string(),
         );
-
-    // Sub Msg to initialize the pool instance
-    let init_pool_sub_msg: SubMsg = SubMsg {
-        id: INSTANTIATE_POOL_REPLY_ID,
-        msg: WasmMsg::Instantiate {
-            admin: Some(config.owner.to_string()),
-            code_id: pool_type_config.code_id,
-            msg: to_binary(&PoolInstantiateMsg {
-                pool_id: pool_id,
-                pool_type: pool_type_config.pool_type,
-                vault_addr: env.contract.address.clone(),
-                asset_infos: asset_infos.clone(),
-                fee_info: FeeStructs {
-                    total_fee_bps: fee_info.total_fee_bps,
-                },
-                init_params,
-            })?,
-            funds: vec![],
-            label: "dexter-pool-".to_string() + &pool_id.to_string(),
-        }
-        .into(),
-        gas_limit: None,
-        reply_on: ReplyOn::Success,
-    };
 
     // Sub Msg to initialize the LP token instance
     let init_lp_token_sub_msg: SubMsg = SubMsg {
@@ -852,7 +829,7 @@ pub fn execute_create_pool_instance(
     };
 
     Ok(Response::new()
-        .add_submessages([init_pool_sub_msg, init_lp_token_sub_msg])
+        .add_submessages([init_lp_token_sub_msg])
         .add_messages(execute_msgs)
         .add_event(event))
 }
@@ -862,7 +839,7 @@ pub fn execute_create_pool_instance(
 /// # Params
 /// * **msg** is the object of type [`Reply`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractError> {
     // Load stored temporary pool info
     let mut tmp_pool_info = TMP_POOL_INFO.load(deps.storage)?;
     let mut event = Event::new("dexter-vault::add_pool_reply");
@@ -877,59 +854,79 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     let mut response = Response::new();
 
     match msg.id {
-        // Reply from the submessage to instantiate the pool instance
-        INSTANTIATE_POOL_REPLY_ID => {
-            // Update the pool address in the temporary pool info
-            tmp_pool_info.pool_addr = Some(deps.api.addr_validate(res.get_contract_address())?);
-            response = response.add_attributes(vec![
-                attr("action", "reply"),
-                attr("pool_addr", tmp_pool_info.clone().pool_addr.unwrap()),
-            ]);
-
-            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
-
-            // Store the temporary Pool Info
-            TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
-            event = event.add_attribute("pool_addr", tmp_pool_info.clone().pool_addr.unwrap());
-        }
         // Reply from the submessage to instantiate the LP token instance
         INSTANTIATE_LP_REPLY_ID => {
             // Update the LP token address in the temporary pool info
-            tmp_pool_info.lp_token_addr = Some(deps.api.addr_validate(res.get_contract_address())?);
+            let lp_token_addr = deps.api.addr_validate(res.get_contract_address())?;
+            tmp_pool_info.lp_token_addr = Some(lp_token_addr.clone());
+            // Store the temporary Pool Info
+            TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
+
             response = response.add_attributes(vec![
                 attr("action", "reply"),
-                attr(
-                    "lp_token_addr",
-                    tmp_pool_info.lp_token_addr.clone().unwrap(),
-                ),
+                attr("lp_token_addr", lp_token_addr.clone()),
             ]);
-            // TODO(discuss): If you create the LP token before you create the pool, then this doesn't need to happen.
-            // We can minimize the execute msgs for pool types and just set the LP token during pool init itself.
-            response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: tmp_pool_info.pool_addr.clone().unwrap().to_string(),
-                funds: vec![],
-                msg: to_binary(&dexter::pool::ExecuteMsg::SetLpToken {
-                    lp_token_addr: tmp_pool_info.lp_token_addr.clone().unwrap(),
-                })?,
-            }));
-            // Save the temporary pool info as permanent pool info mapped with the Pool Id
-            ACTIVE_POOLS.save(
-                deps.storage,
-                &tmp_pool_info.pool_id.to_string().as_bytes(),
-                &tmp_pool_info,
-            )?;
+
             // Store LP token addr _> Pool Id mapping in the LP token map
             LP_TOKEN_TO_POOL_ID.save(
                 deps.storage,
-                &tmp_pool_info.lp_token_addr.clone().unwrap().as_bytes(),
+                &lp_token_addr.clone().as_bytes(),
                 &tmp_pool_info.pool_id.clone(),
             )?;
 
             event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
-            event = event.add_attribute(
-                "lp_token_addr",
-                tmp_pool_info.clone().lp_token_addr.unwrap(),
-            );
+            event = event.add_attribute("lp_token_addr", lp_token_addr.clone());
+
+            // Sub Msg to initialize the pool instance
+            let init_pool_sub_msg: SubMsg = SubMsg {
+                id: INSTANTIATE_POOL_REPLY_ID,
+                msg: WasmMsg::Instantiate {
+                    admin: Some( CONFIG.load(deps.storage)?.owner.to_string()),
+                    code_id: tmp_pool_info.code_id,
+                    msg: to_binary(&PoolInstantiateMsg {
+                        pool_id: tmp_pool_info.pool_id,
+                        pool_type: tmp_pool_info.pool_type,
+                        vault_addr: env.contract.address,
+                        lp_token_addr,
+                        asset_infos: tmp_pool_info.assets.iter().map(|a| a.info.clone()).collect(),
+                        fee_info: FeeStructs {
+                            total_fee_bps: tmp_pool_info.fee_info.total_fee_bps,
+                        },
+                        init_params: tmp_pool_info.init_params,
+                    })?,
+                    funds: vec![],
+                    label: "dexter-pool-".to_string() + &tmp_pool_info.pool_id.to_string(),
+                }
+                    .into(),
+                gas_limit: None,
+                reply_on: ReplyOn::Success,
+            };
+            response = response.add_submessage(init_pool_sub_msg);
+        }
+        // Reply from the submessage to instantiate the pool instance
+        INSTANTIATE_POOL_REPLY_ID => {
+            let pool_addr = deps.api.addr_validate(res.get_contract_address())?;
+            response = response.add_attributes(vec![
+                attr("action", "reply"),
+                attr("pool_addr", pool_addr.clone()),
+            ]);
+
+            // Save the temporary pool info as permanent pool info mapped with the Pool Id
+            ACTIVE_POOLS.save(
+                deps.storage,
+                &tmp_pool_info.pool_id.to_string().as_bytes(),
+                &PoolInfo{
+                    pool_id: tmp_pool_info.pool_id,
+                    pool_addr: pool_addr.clone(),
+                    lp_token_addr: tmp_pool_info.lp_token_addr.unwrap(),
+                    fee_info: tmp_pool_info.fee_info,
+                    assets: tmp_pool_info.assets,
+                    pool_type: tmp_pool_info.pool_type,
+                },
+            )?;
+
+            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
+            event = event.add_attribute("pool_addr", pool_addr);
 
             // Update the next pool id in the config and save it
             let mut config = CONFIG.load(deps.storage)?;
@@ -991,7 +988,7 @@ pub fn execute_join_pool(
     //       - When updating pool liquidity, we subtract the protocol_fee and developer_fee from the provided_assets.
     let pool_join_transition: dexter::pool::AfterJoinResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
+            contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
                 assets_in: assets_in.clone(),
                 mint_amount: lp_to_mint,
@@ -1023,7 +1020,7 @@ pub fn execute_join_pool(
         .add_attribute("pool_id", pool_id.to_string())
         .add_attribute(
             "pool_addr",
-            pool_info.pool_addr.clone().unwrap().to_string(),
+            pool_info.pool_addr.to_string(),
         )
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
@@ -1185,7 +1182,7 @@ pub fn execute_join_pool(
 
     // ExecuteMsg:: Updated Pool's stored liquidity state
     execute_msgs.push(build_update_pool_state_msg(
-        pool_info.pool_addr.clone().unwrap().to_string(),
+        pool_info.pool_addr.to_string(),
         pool_info.assets.clone(),
     )?);
 
@@ -1193,7 +1190,7 @@ pub fn execute_join_pool(
     let mint_msgs = build_mint_lp_token_msg(
         deps.as_ref(),
         env.clone(),
-        pool_info.lp_token_addr.clone().unwrap(),
+        pool_info.lp_token_addr.clone(),
         recipient,
         new_shares,
         config.generator_address.clone(),
@@ -1242,7 +1239,7 @@ pub fn execute_exit_pool(
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
 
     // Error - Check if the LP token sent is valid
-    if info.sender != pool_info.lp_token_addr.clone().unwrap() {
+    if info.sender != pool_info.lp_token_addr {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -1257,7 +1254,7 @@ pub fn execute_exit_pool(
     //       - When updating pool liquidity, we add the protocol_fee and developer_fee to the assets_out.
     let pool_exit_transition: dexter::pool::AfterExitResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
+            contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnExitPool {
                 assets_out: assets_out.clone(),
                 burn_amount,
@@ -1299,7 +1296,7 @@ pub fn execute_exit_pool(
         .add_attribute("pool_id", pool_id.to_string())
         .add_attribute(
             "pool_addr",
-            pool_info.pool_addr.clone().unwrap().to_string(),
+            pool_info.pool_addr.to_string(),
         )
         .add_attribute(
             "lp_tokens_burnt",
@@ -1448,7 +1445,7 @@ pub fn execute_exit_pool(
 
     // ExecuteMsg:: Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
+        contract_addr: pool_info.lp_token_addr.to_string(),
         msg: to_binary(&Cw20ExecuteMsg::Burn {
             amount: pool_exit_transition.burn_shares.clone(),
         })?,
@@ -1458,7 +1455,7 @@ pub fn execute_exit_pool(
     // ExecuteMsg:: Return LP shares in case some of the LP tokens transferred are to be returned
     if !lp_to_return.is_zero() {
         execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: pool_info.lp_token_addr.clone().unwrap().to_string(),
+            contract_addr: pool_info.lp_token_addr.to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Transfer {
                 amount: lp_to_return,
                 recipient: sender.clone(),
@@ -1471,7 +1468,7 @@ pub fn execute_exit_pool(
 
     // ExecuteMsg:: Updated Pool's stored liquidity state
     execute_msgs.push(build_update_pool_state_msg(
-        pool_info.pool_addr.clone().unwrap().to_string(),
+        pool_info.pool_addr.to_string(),
         pool_info.assets.clone(),
     )?);
 
@@ -1535,7 +1532,7 @@ pub fn execute_swap(
         .add_attribute("pool_id", swap_request.pool_id.to_string())
         .add_attribute(
             "pool_addr",
-            pool_info.pool_addr.clone().unwrap().to_string(),
+            pool_info.pool_addr.to_string(),
         )
         .add_attribute("swap_type", swap_request.swap_type.to_string())
         .add_attribute("recipient", recipient.to_string())
@@ -1548,7 +1545,7 @@ pub fn execute_swap(
     // * **fee** of type [`Option<Asset>`] - Optional Fee to be charged as fees to the user.  If it is null then no fee is charged
     let pool_swap_transition: dexter::pool::SwapResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-            contract_addr: pool_info.pool_addr.clone().unwrap().to_string(),
+            contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
                 swap_type: swap_request.swap_type,
                 offer_asset: swap_request.asset_in.clone(),
@@ -1733,7 +1730,7 @@ pub fn execute_swap(
 
     // ExecuteMsg :: Update Pool Instance state
     execute_msgs.push(build_update_pool_state_msg(
-        pool_info.pool_addr.unwrap().to_string(),
+        pool_info.pool_addr.to_string(),
         pool_info.assets,
     )?);
 
