@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128, BlockInfo, Uint64};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
@@ -167,6 +167,80 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     return vault_instance;
 }
 
+pub fn store_generator_code(app: &mut App) -> u64 {
+    let generator_contract = Box::new(ContractWrapper::new_with_empty(
+        dexter_generator::contract::execute,
+        dexter_generator::contract::instantiate,
+        dexter_generator::contract::query,
+    ));
+    app.store_code(generator_contract)
+}
+
+pub fn store_multistaking_code(app: &mut App) -> u64 {
+    let multistaking_contract = Box::new(ContractWrapper::new_with_empty(
+        dexter_multi_staking::contract::execute,
+        dexter_multi_staking::contract::instantiate,
+        dexter_multi_staking::contract::query,
+    ));
+    app.store_code(multistaking_contract)
+}
+
+pub fn initialize_generator_contract(
+    app: &mut App,
+    owner: &Addr,
+    vault: &Addr,
+    current_block: BlockInfo,
+) -> Addr {
+    let generator_code_id = store_generator_code(app);
+
+    let generator_init_msg = dexter::generator::InstantiateMsg {
+        owner: owner.to_string(),
+        vault: vault.clone().to_string(),
+        dex_token: None,
+        tokens_per_block: Uint128::zero(),
+        start_block: Uint64::from(current_block.height),
+        unbonding_period: 8640u64,
+    };
+
+    let generator_instance = app
+        .instantiate_contract(
+            generator_code_id,
+            owner.to_owned(),
+            &generator_init_msg,
+            &[],
+            "generator",
+            None,
+        )
+        .unwrap();
+
+    return generator_instance;
+}
+
+pub fn initialize_multistaking_contract(
+    app: &mut App,
+    owner: &Addr,
+) -> Addr {
+    let multistaking_code_id = store_multistaking_code(app);
+
+    let multistaking_init_msg = dexter::multi_staking::InstantiateMsg {
+        owner: owner.clone(),
+        unlock_period: 86400u64,
+    };
+
+    let multistaking_instance = app
+        .instantiate_contract(
+            multistaking_code_id,
+            owner.to_owned(),
+            &multistaking_init_msg,
+            &[],
+            "multistaking",
+            None,
+        )
+        .unwrap();
+
+    return multistaking_instance;
+}
+
 pub fn initialize_3_tokens(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr) {
     let token_code_id = store_token_code(app);
 
@@ -245,6 +319,23 @@ pub fn mint_some_tokens(
     let msg = cw20::Cw20ExecuteMsg::Mint {
         recipient: to.clone(),
         amount: amount,
+    };
+    app.execute_contract(owner.clone(), token_instance.clone(), &msg, &[])
+        .unwrap();
+}
+
+// increase token allowance
+pub fn increase_token_allowance(
+    app: &mut App,
+    owner: Addr,
+    token_instance: Addr,
+    spender: String,
+    amount: Uint128,
+) {
+    let msg = cw20::Cw20ExecuteMsg::IncreaseAllowance {
+        spender: spender.clone(),
+        amount: amount,
+        expires: None,
     };
     app.execute_contract(owner.clone(), token_instance.clone(), &msg, &[])
         .unwrap();

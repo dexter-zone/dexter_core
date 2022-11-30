@@ -1,19 +1,21 @@
 pub mod utils;
 
 use cosmwasm_std::{Addr, Coin, Decimal, Uint128};
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
+use cw20::{BalanceResponse, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
+use dexter::generator::UserInfoResponse;
 use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
 use dexter::vault::ExecuteMsg;
 
 use crate::utils::{
-    initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
-    initialize_weighted_pool, initialize_xyk_pool, instantiate_contract, mint_some_tokens,
-    mock_app,
+    increase_token_allowance, initialize_3_tokens, initialize_generator_contract,
+    initialize_multistaking_contract,
+    initialize_stable_5_pool, initialize_stable_pool, initialize_weighted_pool,
+    initialize_xyk_pool, instantiate_contract, mint_some_tokens, mock_app,
 };
 
 #[test]
@@ -64,39 +66,29 @@ fn test_join_pool() {
     );
 
     // Increase Allowances
-    app.execute_contract(
+    increase_token_allowance(
+        &mut app,
         owner.clone(),
         token_instance1.clone(),
-        &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vault_instance.clone().to_string(),
-            amount: Uint128::from(1000000_000000u128),
-            expires: None,
-        },
-        &[],
-    )
-    .unwrap();
-    app.execute_contract(
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
+
+    increase_token_allowance(
+        &mut app,
         owner.clone(),
         token_instance2.clone(),
-        &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vault_instance.clone().to_string(),
-            amount: Uint128::from(1000000_000000u128),
-            expires: None,
-        },
-        &[],
-    )
-    .unwrap();
-    app.execute_contract(
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
+
+    increase_token_allowance(
+        &mut app,
         owner.clone(),
         token_instance3.clone(),
-        &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vault_instance.clone().to_string(),
-            amount: Uint128::from(1000000_000000u128),
-            expires: None,
-        },
-        &[],
-    )
-    .unwrap();
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
 
     // Create STABLE-5-POOL pool
     let (stable5_pool_addr, stable5_lp_token_addr, stable5_pool_id) = initialize_stable_5_pool(
@@ -988,4 +980,327 @@ fn test_join_pool() {
         }],
     )
     .unwrap();
+}
+
+/// This test is for testing the following:
+/// 1. Create a new pool
+/// 2. Provide liquidity to the pool with auto-stake enabled
+#[test]
+fn test_join_auto_stake() {
+    let owner = Addr::unchecked("owner".to_string());
+    let denom0 = "token0".to_string();
+    let denom1 = "token1".to_string();
+
+    let mut app = mock_app(
+        owner.clone(),
+        vec![
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(100000000_000_000_000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(100000000_000_000_000u128),
+            },
+        ],
+    );
+    let vault_instance = instantiate_contract(&mut app, &owner.clone());
+
+    let (token_instance1, token_instance2, token_instance3) =
+        initialize_3_tokens(&mut app, &owner.clone());
+
+    // Mint Tokens
+    mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token_instance1.clone(),
+        Uint128::new(10000000_000000u128),
+        owner.clone().to_string(),
+    );
+    mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token_instance2.clone(),
+        Uint128::new(10000000_000000u128),
+        owner.clone().to_string(),
+    );
+    mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token_instance3.clone(),
+        Uint128::new(10000000_000000u128),
+        owner.clone().to_string(),
+    );
+
+    // Increase Allowances
+    increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token_instance1.clone(),
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
+
+    increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token_instance2.clone(),
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
+
+    increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token_instance3.clone(),
+        vault_instance.clone().into_string(),
+        Uint128::new(10000000_000000u128),
+    );
+
+    // Create a WEIGHTED pool
+    let (_, weighted_lp_token_addr, weighted_pool_id) = initialize_weighted_pool(
+        &mut app,
+        &Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        token_instance1.clone(),
+        token_instance2.clone(),
+        token_instance3.clone(),
+        denom0.clone(),
+        denom1.clone(),
+    );
+
+    let current_block = app.block_info();
+    let generator_contract_address = initialize_generator_contract(
+        &mut app,
+        &Addr::unchecked(owner.clone()),
+        &vault_instance.clone(),
+        current_block,
+    );
+
+    // setup weighted pool in generator
+    let setup_pool_msg = dexter::generator::ExecuteMsg::SetupPools { 
+        pools: vec![(weighted_lp_token_addr.to_string(), Uint128::from(100u64))],
+    };
+    app.execute_contract(
+        owner.clone(),
+        generator_contract_address.clone(),
+        &setup_pool_msg,
+        &[],
+    ).unwrap();
+
+    // Update vault config to set generator
+    let config_update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Generator),
+        generator_address: Some(generator_contract_address.to_string()),
+        multistaking_address: None,
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &config_update_msg,
+        &[],
+    )
+    .unwrap();
+
+    // -------x---------- WEIGHTED-POOL -::- PROVIDE LIQUIDITY -------x---------
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: denom0.clone(),
+            },
+            amount: Uint128::from(1000_000000u128),
+        },
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: denom1.clone(),
+            },
+            amount: Uint128::from(1000_000000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance1.clone(),
+            },
+            amount: Uint128::from(1000_000000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance2.clone(),
+            },
+            amount: Uint128::from(1000_000000u128),
+        },
+        Asset {
+            info: AssetInfo::Token {
+                contract_addr: token_instance3.clone(),
+            },
+            amount: Uint128::from(1000_000000u128),
+        },
+    ];
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::JoinPool {
+            pool_id: Uint128::from(weighted_pool_id),
+            recipient: None,
+            lp_to_mint: None,
+            auto_stake: None,
+            slippage_tolerance: None,
+            assets: Some(assets_msg.clone()),
+        },
+        &[
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+        ],
+    )
+    .unwrap();
+
+    // Check if LP tokens are minted to user when auto-stake is disabled
+    let new_user_lp_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &weighted_lp_token_addr.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
+
+    // Check if LP tokens are minted and staked to generator when auto-stake is enabled
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::JoinPool {
+            pool_id: Uint128::from(weighted_pool_id),
+            recipient: None,
+            lp_to_mint: None,
+            auto_stake: Some(true),
+            slippage_tolerance: None,
+            assets: Some(assets_msg.clone()),
+        },
+        &[
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+        ],
+    )
+    .unwrap();
+
+    // fetch user staked tokens in generator
+    let user_info: UserInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &generator_contract_address.clone(),
+            &dexter::generator::QueryMsg::UserInfo {
+                user: owner.clone().to_string(),
+                lp_token: weighted_lp_token_addr.clone().into_string(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(user_info.amount, Uint128::from(100_000_000u128));
+
+    // setup multistaking contract
+    let multistaking_contract_address = initialize_multistaking_contract(
+        &mut app,
+        &Addr::unchecked(owner.clone())
+    );
+
+    // Update vault config to set multistaking
+    let config_update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Multistaking),
+        generator_address: None,
+        multistaking_address: Some(multistaking_contract_address.to_string()),
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &config_update_msg,
+        &[],
+    ).unwrap();
+
+    // Allow LP tokens to be staked in multistaking contract
+    let allow_lp_token_msg = dexter::multi_staking::ExecuteMsg::AllowLpToken {
+        lp_token: weighted_lp_token_addr.clone(),
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        multistaking_contract_address.clone(),
+        &allow_lp_token_msg,
+        &[],
+    ).unwrap();
+
+    // Check if LP tokens are minted and staked to multistaking when auto-stake is enabled
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::JoinPool {
+            pool_id: Uint128::from(weighted_pool_id),
+            recipient: None,
+            lp_to_mint: None,
+            auto_stake: Some(true),
+            slippage_tolerance: None,
+            assets: Some(assets_msg.clone()),
+        },
+        &[
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+        ],
+    ).unwrap();
+
+    // fetch user staked tokens in multistaking
+    let bonded_amount: Uint128 = app
+        .wrap()
+        .query_wasm_smart(
+            &multistaking_contract_address.clone(),
+            &dexter::multi_staking::QueryMsg::BondedLpTokens {
+                lp_token: weighted_lp_token_addr.clone(),
+                user: owner.clone(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(bonded_amount, Uint128::from(100_000_000u128));
+
+    // Check user LP balance is still same
+    let new_user_lp_balance: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &weighted_lp_token_addr.clone(),
+            &Cw20QueryMsg::Balance {
+                address: owner.clone().to_string(),
+            },
+        )
+        .unwrap();
+
+    // This means auto-stake didn't make any changes to user's LP balance but staked it in multistaking or generator
+    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
+
+    // Create a generator contract
 }
