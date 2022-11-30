@@ -135,12 +135,12 @@ fn test_create_pool_instance() {
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(
-        Some(Addr::unchecked("contract3".to_string())),
-        pool_res.pool_addr
+        Addr::unchecked("contract3".to_string()),
+        pool_res.lp_token_addr
     );
     assert_eq!(
-        Some(Addr::unchecked("contract4".to_string())),
-        pool_res.lp_token_addr
+        Addr::unchecked("contract4".to_string()),
+        pool_res.pool_addr
     );
     assert_eq!(assets, pool_res.assets);
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);

@@ -662,7 +662,7 @@ fn test_pool_fee_update() {
         .wrap()
         .query_wasm_smart(vault_instance.clone(), &query_msg)
         .unwrap();
-    let pool_address = res.pool_addr.unwrap();
+    let pool_address = res.pool_addr;
 
     // update fee for this pool now
     let msg = ExecuteMsg::UpdatePoolConfig {
