@@ -1,9 +1,9 @@
 [package]
-name = "stable5pool"
+name = "xyk-pool"
 version = "1.0.0"
 authors = ["AstroTechLabs"]
 edition = "2021"
-description = "A Dexter DEX pool implementing the stable 3-pool AMM type"
+description = "A Dexter DEX pool implementing the standard constant product (XYK) AMM type"
 license = "MIT"
 
 exclude = [
@@ -24,7 +24,7 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 integer-sqrt = "0.1.5"
-dexter = { path = "../../packages/dexter", default-features = false }
+dexter = { path = "../../../packages/dexter", default-features = false }
 cw2 = "0.15"
 cw20 = { version = "0.15" }
 cosmwasm-std = { version = "1.1" }
@@ -33,14 +33,11 @@ schemars = "0.8.1"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.20" }
 protobuf = { version = "2", features = ["with-bytes"] }
-itertools = "0.10"
 serde-json-wasm = "0.4.1"
 cosmwasm-schema = "1.1"
 
 [dev-dependencies]
-anyhow = "1.0"
-sim = { git = "https://github.com/dexter-zone/stableswap_simulations.git", rev = "d40f0e77f6b21cccdd8415f6f36db31f76be2f3f", package = "sim" }
-lp-token = {path = "../lp_token"}
 cw-multi-test = "0.13.2"
-dexter-vault = {path = "../vault"}
 proptest = "0.10.1"
+dexter-vault = { path = "../../vault"}
+lp-token = {path = "../../lp_token"}

@@ -39,4 +39,4 @@ dexter-generator-proxy = { path = "../generator_proxy"}
 dexter-vesting = {path = "../vesting"}
 lp-token = {path = "../../lp_token"}
 dexter-vault = { path = "../../vault"}
-xyk-pool = { path = "../../xyk_pool"}
+xyk-pool = { path = "../../pools/xyk_pool"}
