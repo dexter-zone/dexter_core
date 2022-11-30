@@ -181,8 +181,8 @@ pub fn execute_update_pool_liquidity(
     )
     .is_ok()
     // TWAP computation can fail in certain edge cases (when pool is empty for eg), for which you need
-    // to allow tx to be successful rather than failing failing the tx. Accumulated prices can be used
-    // to calculate TWAP oracle prices later and letting the tx be successful even when price accumulation
+    // to allow tx to be successful rather than failing the tx. Accumulated prices can be used to
+    // calculate TWAP oracle prices later and letting the tx be successful even when price accumulation
     // fails doesn't cause any issues.
     {
         TWAPINFO.save(deps.storage, &twap)?;
