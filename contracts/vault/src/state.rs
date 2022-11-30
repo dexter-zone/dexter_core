@@ -1,7 +1,7 @@
 use cosmwasm_std::Uint128;
 use cw_storage_plus::{Item, Map};
 use dexter::helper::OwnershipProposal;
-use dexter::vault::{Config, PoolTypeConfig, PoolInfo, TmpPoolInfo};
+use dexter::vault::{Config, PoolInfo, PoolTypeConfig, TmpPoolInfo};
 
 // Stores Vault contract's core Configuration parameters in a [`Config`] struct
 pub const CONFIG: Item<Config> = Item::new("config");
