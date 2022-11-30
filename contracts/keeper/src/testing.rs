@@ -12,8 +12,10 @@ fn proper_initialization() {
 
     let env = mock_env();
     let vault = Addr::unchecked("vault");
+    let admin = Addr::unchecked("admin");
 
     let instantiate_msg = InstantiateMsg {
+        owner: admin.clone(),
         vault_contract: vault.to_string(),
     };
     let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
@@ -23,6 +25,7 @@ fn proper_initialization() {
     assert_eq!(
         state,
         Config {
+            owner: admin,
             vault_contract: Addr::unchecked("vault"),
             staking_contract: None,
             dex_token_contract: None,

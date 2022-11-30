@@ -1,6 +1,6 @@
 use crate::asset::{Asset, AssetInfo};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Uint128};
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
@@ -9,6 +9,8 @@ use cosmwasm_std::Addr;
 /// This struct describes the Msg used to instantiate in this contract.
 #[cw_serde]
 pub struct InstantiateMsg {
+    /// Owner address
+    pub owner: Addr,
     /// The vault contract address
     pub vault_contract: String,
 }
@@ -23,6 +25,25 @@ pub enum ExecuteMsg {
         /// The DEX token staking contract address
         staking_contract: Option<String>,
     },
+    /// Withdraws an asset from the contract
+    /// This is used to withdraw the fees collected by the contract by the owner
+    Withdraw {
+        /// The asset to withdraw
+        asset: AssetInfo,
+        /// The amount to withdraw
+        amount: Uint128,
+        /// The recipient address. If None, the owner address will be used
+        recipient: Option<Addr>,
+    },
+    /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
+    ProposeNewOwner {
+        owner: String,
+        expires_in: u64,
+    },
+    /// DropOwnershipProposal removes the existing offer for the new owner.
+    DropOwnershipProposal {},
+    /// Used to claim(approve) new owner proposal, thus changing contract's owner
+    ClaimOwnership {},
 }
 
 /// This struct describes the query functions available in the contract.

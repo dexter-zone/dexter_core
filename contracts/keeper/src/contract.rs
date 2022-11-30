@@ -1,17 +1,17 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
-use crate::state::{Config, CONFIG};
+use crate::state::{Config, CONFIG, OWNERSHIP_PROPOSAL};
 
 use cosmwasm_std::{
     attr, entry_point, to_binary, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult,
+    StdResult, Uint128, Addr, StdError,
 };
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{
     BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
 };
-use dexter::querier::query_vault_config;
+use dexter::helper::{propose_new_owner, drop_ownership_proposal, claim_ownership};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -42,6 +42,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let cfg = Config {
+        owner: msg.owner,
         vault_contract: deps.api.addr_validate(&msg.vault_contract)?,
         dex_token_contract: None,
         staking_contract: None,
@@ -72,7 +73,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -81,6 +82,41 @@ pub fn execute(
             dex_token_contract,
             staking_contract,
         } => update_config(deps, info, dex_token_contract, staking_contract),
+        ExecuteMsg::Withdraw {
+            asset,
+            amount,
+            recipient,
+        } => withdraw(deps, env, info, asset, amount, recipient),
+        ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
+            let config: Config = CONFIG.load(deps.storage)?;
+            propose_new_owner(
+                deps,
+                info,
+                env,
+                owner,
+                expires_in,
+                config.owner,
+                OWNERSHIP_PROPOSAL,
+            )
+            .map_err(|e| e.into())
+        }
+        ExecuteMsg::DropOwnershipProposal {} => {
+            let config: Config = CONFIG.load(deps.storage)?;
+
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+                .map_err(|e| e.into())
+        }
+        ExecuteMsg::ClaimOwnership {} => {
+            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+                CONFIG.update::<_, StdError>(deps.storage, |mut v| {
+                    v.owner = new_owner;
+                    Ok(v)
+                })?;
+
+                Ok(())
+            })
+            .map_err(|e| e.into())
+        }
     }
 }
 
@@ -103,10 +139,9 @@ fn update_config(
     let mut attributes = vec![attr("action", "set_config")];
 
     let mut config = CONFIG.load(deps.storage)?;
-    let vault_config_res = query_vault_config(&deps.querier, config.vault_contract.to_string())?;
 
     // Permission check
-    if info.sender != vault_config_res.owner {
+    if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -131,6 +166,44 @@ fn update_config(
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
 }
+
+/// ## Description
+/// Withdraws the specified amount of the specified asset from the contract.
+/// Returns a [`ContractError`] on failure.
+fn withdraw(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    asset: AssetInfo,
+    amount: Uint128,
+    recipient: Option<Addr>,
+) -> Result<Response, ContractError> {
+    let mut attributes = vec![attr("action", "withdraw")];
+
+    let config = CONFIG.load(deps.storage)?;
+
+    // Permission check
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate if we have enough balance
+    let balance = asset.query_for_balance(&deps.querier, env.contract.address.clone())?;
+    if balance < amount {
+        return Err(ContractError::InsufficientBalance);
+    }
+
+    // Send the funds to the recipient or to the owner if no recipient is specified
+    let recipient = recipient.unwrap_or(config.owner);
+    let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
+
+    attributes.push(Attribute::new("recipient", &recipient));
+
+    Ok(Response::new()
+        .add_message(transfer_msg)
+        .add_attributes(attributes))
+}
+
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 // ----------------x----------------x  :::: Keeper::QUERIES Implementation   ::::  x----------------x----------------
