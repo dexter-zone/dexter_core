@@ -486,8 +486,7 @@ fn execute_update_pool_config(
 
     let response = Response::new()
         .add_event(event)
-        .add_message(msg)
-        .add_attribute("action", "update_pool_config");
+        .add_message(msg);
 
     Ok(response)
 }
