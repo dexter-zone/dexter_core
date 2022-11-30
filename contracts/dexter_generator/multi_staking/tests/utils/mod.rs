@@ -55,7 +55,6 @@ pub fn store_multi_staking_contract(
     return code_id;
 }
 
-#[allow(dead_code)]
 pub fn store_cw20_contract(
     app: &mut App
 ) -> u64 {
@@ -70,7 +69,6 @@ pub fn store_cw20_contract(
     return code_id;
 }
 
-#[allow(dead_code)]
 pub fn create_dummy_cw20_token(
     app: &mut App,
     admin: &Addr,
@@ -180,7 +178,6 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
     return (multi_staking_instance, lp_token_addr);
 }
 
-#[allow(dead_code)]
 pub fn create_reward_schedule(
     app: &mut App,
     admin_addr: &Addr,
@@ -224,7 +221,6 @@ pub fn create_reward_schedule(
     }
 }
 
-#[allow(dead_code)]
 pub fn mint_lp_tokens_to_addr(
     app: &mut App,
     admin_addr: &Addr,
@@ -244,7 +240,6 @@ pub fn mint_lp_tokens_to_addr(
     .unwrap();
 }
 
-#[allow(dead_code)]
 pub fn mint_cw20_tokens_to_addr(
     app: &mut App,
     admin_addr: &Addr,
@@ -264,7 +259,6 @@ pub fn mint_cw20_tokens_to_addr(
     .unwrap();
 }
 
-#[allow(dead_code)]
 pub fn bond_lp_tokens(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -284,7 +278,6 @@ pub fn bond_lp_tokens(
     )
 }
 
-#[allow(dead_code)]
 pub fn unbond_lp_tokens(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -300,7 +293,6 @@ pub fn unbond_lp_tokens(
     )
 }
 
-#[allow(dead_code)]
 pub fn unlock_lp_tokens(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -315,7 +307,6 @@ pub fn unlock_lp_tokens(
     ).unwrap();
 }
 
-#[allow(dead_code)]
 pub fn disallow_lp_token(
     app: &mut App,
     admin_addr: &Addr,
@@ -330,7 +321,6 @@ pub fn disallow_lp_token(
     ).unwrap();
 }
 
-#[allow(dead_code)]
 pub fn query_unclaimed_rewards(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -350,7 +340,6 @@ pub fn query_unclaimed_rewards(
         .unwrap()
 }
 
-#[allow(dead_code)]
 pub fn query_bonded_lp_tokens(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -369,7 +358,6 @@ pub fn query_bonded_lp_tokens(
         .unwrap()
 }
 
-#[allow(dead_code)]
 pub fn query_token_locks(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -390,7 +378,6 @@ pub fn query_token_locks(
         .unwrap()
 }
 
-#[allow(dead_code)]
 pub fn withdraw_unclaimed_rewards(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -408,7 +395,6 @@ pub fn withdraw_unclaimed_rewards(
     .unwrap();
 }
 
-#[allow(dead_code)]
 pub fn assert_user_lp_token_balance(
     app: &mut App,
     user_addr: &Addr,
@@ -425,7 +411,6 @@ pub fn assert_user_lp_token_balance(
     assert_eq!(user_lp_token_balance, expected_balance);
 }
 
-#[allow(dead_code)]
 pub fn query_cw20_balance(
     app: &mut App,
     cw20_addr: &Addr,
@@ -443,7 +428,6 @@ pub fn query_cw20_balance(
         .unwrap()
 }
 
-#[allow(dead_code)]
 pub fn query_balance(
     app: &mut App,
     user_addr: &Addr,

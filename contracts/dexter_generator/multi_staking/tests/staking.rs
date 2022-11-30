@@ -11,7 +11,7 @@ use crate::utils::{
     withdraw_unclaimed_rewards, mint_cw20_tokens_to_addr, query_cw20_balance, disallow_lp_token,
     query_balance
 };
-mod utils;
+pub mod utils;
 
 #[test]
 fn test_staking() {

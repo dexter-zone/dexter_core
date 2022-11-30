@@ -3,7 +3,7 @@ use cw_multi_test::Executor;
 use dexter::multi_staking::{ExecuteMsg, QueryMsg};
 use crate::utils::{setup, mock_app};
 
-mod utils;
+pub mod utils;
 
 
 #[test]
