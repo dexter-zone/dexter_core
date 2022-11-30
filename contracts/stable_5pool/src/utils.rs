@@ -2,7 +2,6 @@ use cosmwasm_std::{Decimal, Decimal256, Deps, Env, Fraction, StdResult, Storage,
 
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
 use dexter::helper::{adjust_precision, select_pools};
-use dexter::pool::Config;
 use dexter::vault::FEE_PRECISION;
 use dexter::DecimalCheckedOps;
 
@@ -16,7 +15,7 @@ use crate::state::{get_precision, Twap};
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 
 /// ## Description
-///  Returns the result of a swap, if erros then returns [`ContractError`].
+///  Returns the result of a swap, if errors then returns [`ContractError`].
 ///
 /// ## Params
 /// * **config** is an object of type [`Config`].
@@ -33,7 +32,7 @@ pub(crate) fn compute_swap(
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
 ) -> StdResult<(Uint128, Uint128)> {
-    // get ask asset precisison
+    // get ask asset precision
     let token_precision = get_precision(storage, &ask_pool.info)?;
 
     let new_ask_pool = calc_y(
@@ -167,21 +166,19 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 /// Accumulate token prices for the asset pairs in the pool.
 ///
 /// ## Params
-/// * **config** is an object of type [`Config`].
 /// * **math_config** is an object of type [`MathConfig`]
 /// * **twap** is of [`Twap`] type. It consists of cumulative_prices of type [`Vec<(AssetInfo, AssetInfo, Uint128)>`] and block_time_last of type [`u64`] which is the latest timestamp when TWAP prices of asset pairs were last updated.
 /// * **pools** is an array of [`DecimalAsset`] type items. These are the assets available in the pool.
 pub fn accumulate_prices(
     deps: Deps,
     env: Env,
-    config: &mut Config,
     math_config: MathConfig,
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
-    if block_time <= config.block_time_last {
+    if block_time <= twap.block_time_last {
         return Ok(());
     }
     let time_elapsed = Uint128::from(block_time - twap.block_time_last);

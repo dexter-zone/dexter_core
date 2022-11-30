@@ -1,5 +1,6 @@
 use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Uint64};
 use dexter::asset::{AssetInfo, Decimal256Ext, DecimalAsset};
+use dexter::error::ContractError;
 use itertools::Itertools;
 
 /// The maximum number of calculation steps for Newton's method.
@@ -42,52 +43,47 @@ pub(crate) fn compute_d(
     // Sum of all the pools liquidity,  Eq - xp: [1242000000, 1542000000, 1456000000] = 4240000000
     let sum_x = pools.iter().fold(Decimal256::zero(), |acc, x| acc + (*x));
 
-    if sum_x.is_zero() {
-        Ok(Decimal256::zero())
-    } else {
-        let n_coins = pools.len() as u8;
+    let n_coins = pools.len() as u8;
 
-        // ann = amp * n                Eq - 100 * 3 = 300
-        let ann = Decimal256::from_integer(amp.checked_mul(n_coins.into())?.u64() / AMP_PRECISION);
-        let n_coins = Uint64::from(n_coins);
+    // ann = amp * n                Eq - 100 * 3 = 300
+    let ann = Decimal256::from_integer(amp.checked_mul(n_coins.into())?.u64() / AMP_PRECISION);
+    let n_coins = Uint64::from(n_coins);
 
-        // Initial D = sum_x, which is the sum of all the pools liquidity
-        let mut d = sum_x;
+    // Initial D = sum_x, which is the sum of all the pools liquidity
+    let mut d = sum_x;
 
-        // ann_sum_x = ann * sum_x
-        let ann_sum_x = ann * sum_x;
+    // ann_sum_x = ann * sum_x
+    let ann_sum_x = ann * sum_x;
 
-        // while abs(D - Dprev) > 1:
-        for _ in 0..ITERATIONS {
-            // Start loop: D_P = D_P * D / (_x * N_COINS)
-            let d_p = pools
-                .iter()
-                .try_fold::<_, _, StdResult<_>>(d, |acc, pool| {
-                    let denominator = pool.atomics().checked_mul(n_coins.into())?;
-                    let print_calc_ = acc.checked_multiply_ratio(d, Decimal256::new(denominator));
-                    print_calc_
-                })?;
+    // while abs(D - Dprev) > 1:
+    for _ in 0..ITERATIONS {
+        // Start loop: D_P = D_P * D / (_x * N_COINS)
+        let d_p = pools
+            .iter()
+            .try_fold::<_, _, StdResult<_>>(d, |acc, pool| {
+                let denominator = pool.atomics().checked_mul(n_coins.into())?;
+                let print_calc_ = acc.checked_multiply_ratio(d, Decimal256::new(denominator));
+                print_calc_
+            })?;
 
-            let d_prev = d;
+        let d_prev = d;
 
-            d = (ann_sum_x + d_p * Decimal256::from_integer(n_coins.u64())) * d
-                / ((ann - Decimal256::one()) * d
-                    + (Decimal256::from_integer(n_coins.u64()) + Decimal256::one()) * d_p);
+        d = (ann_sum_x + d_p * Decimal256::from_integer(n_coins.u64())) * d
+            / ((ann - Decimal256::one()) * d
+                + (Decimal256::from_integer(n_coins.u64()) + Decimal256::one()) * d_p);
 
-            if d >= d_prev {
-                if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
-                {
-                    return Ok(d);
-                }
-            } else if d < d_prev
-                && d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
+        if d >= d_prev {
+            if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
             {
                 return Ok(d);
             }
+        } else if d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
+        {
+            return Ok(d);
         }
-
-        Ok(d)
     }
+
+    Ok(d)
 }
 
 /// ## Description
@@ -109,9 +105,7 @@ pub(crate) fn calc_y(
     let amp = Uint64::from(amp_);
 
     if from_asset.info.equal(to) {
-        return Err(StdError::generic_err(
-            "The offer asset and ask asset cannot be the same.",
-        ));
+        return Err(StdError::generic_err(ContractError::SameAssets {}.to_string()));
     }
 
     let n_coins = Uint64::from(pools.len() as u8);
@@ -158,7 +152,7 @@ pub(crate) fn calc_y(
             if y - y_prev <= Uint256::from(1u8) {
                 return Ok(y.try_into()?);
             }
-        } else if y < y_prev && y_prev - y <= Uint256::from(1u8) {
+        } else if y_prev - y <= Uint256::from(1u8) {
             return Ok(y.try_into()?);
         }
     }
@@ -351,7 +345,7 @@ mod tests {
             vec![pool1.u128(), pool2.u128(), pool3.u128()],
             3,
         );
-        let sim_y = model.sim_y(0, 1, pool2.u128() + offer_amount.u128());
+        let sim_y = model.sim_y(0, 1, pool1.u128() + offer_amount.u128());
 
         assert_eq!(sim_y, y);
 
@@ -386,6 +380,8 @@ mod tests {
         //     native_asset("test2".to_string(), pool2),
         //     native_asset("test3".to_string(), pool3),
         // ];
+
+        // The comments above aren't exactly for the tests below. But, better to keep them for easy remembering purposes.
 
         let offer_amount = Uint128::from(673_000000u128);
         let y = calc_y(

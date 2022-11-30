@@ -746,7 +746,7 @@ pub fn execute_create_pool_instance(
     let mut assets: Vec<Asset> = vec![];
     let mut event = Event::new("dexter-vault::add_pool");
 
-    // Check asset definations and make sure no asset is repeated
+    // Check asset definitions and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
     for asset in asset_infos.iter() {
         asset.check(deps.api)?; // Asset naming should be lower case
@@ -989,9 +989,9 @@ pub fn execute_join_pool(
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
-                assets_in: assets_in.clone(),
+                assets_in,
                 mint_amount: lp_to_mint,
-                slippage_tolerance: slippage_tolerance.clone(),
+                slippage_tolerance,
             })?,
         }))?;
 
@@ -1255,7 +1255,7 @@ pub fn execute_exit_pool(
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnExitPool {
-                assets_out: assets_out.clone(),
+                assets_out,
                 burn_amount,
             })?,
         }))?;
