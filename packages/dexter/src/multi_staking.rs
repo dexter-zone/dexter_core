@@ -123,6 +123,8 @@ pub enum Cw20HookMsg {
     /// This hook message is called from LP token contract when user wants to bond it.
     /// This is a single message flow vs. two message allowance flow. 
     Bond {},
+    /// This hook message is called when a different address is bonding on user's behalf.
+    BondForBeneficiary { beneficiary: Addr },
     /// This hook message is sent from a CW20 asset contract to create a reward schedule for some LP.
     /// The LP Token contract must be in the allowed_lp_tokens list.
     AddRewardSchedule {

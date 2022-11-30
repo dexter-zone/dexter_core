@@ -114,6 +114,15 @@ pub enum ContractError {
 
     #[error("Pool creation fee must be null or greater than 0")]
     InvalidPoolCreationFee,
+
+    #[error("Auto staking is disabled for vault")]
+    AutoStakeDisabled,
+
+    #[error("Generator address is not configured")]
+    GeneratorAddrNotSet,
+
+    #[error("Multistaking address is not configured")]
+    MultistakingAddrNotSet,
 }
 
 impl From<OverflowError> for ContractError {

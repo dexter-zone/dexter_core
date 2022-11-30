@@ -122,8 +122,17 @@ pub struct Config {
     pub lp_token_code_id: u64,
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
-    /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
-    pub generator_address: Option<Addr>,
+    /// Which auto-stake feature is enabled for the pool
+    /// Generator allows for generating DEX token and dual farming of 3rd party tokens/assets
+    /// Multistaking allows for staking of LP tokens with N-different rewards in a single contract.
+    /// If none, it will disable auto-staking feature
+    pub auto_stake_impl: Option<AutoStakeImpl>,
+     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
+     pub generator_address: Option<Addr>,
+    /// The contract where users can stake LP tokens for N-asset rewards. Used for `auto-stake` feature.
+    /// The usage between `generator_address` and `multistaking_address` is mutually exclusive depending
+    /// on the current set auto-stake impl
+    pub multistaking_address: Option<Addr>,
     /// Fee required for creating a new pool.
     /// Ideally, it is charged in the base currency of the chain but can be changed to governance token later
     pub pool_creation_fee: Option<Asset>,
@@ -216,6 +225,14 @@ pub struct SingleSwapRequest {
 // ----------------x----------------x    Instantiate, Execute Msgs and Queries      x----------------x--
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
+#[cw_serde]
+pub enum AutoStakeImpl {
+    // This will enable auto-staking feature for generating DEX token and dual farming of 3rd party tokens/assets
+    Generator,
+    // This will enable auto-staking feature for staking of LP tokens with N-different rewards in a single contract
+    Multistaking
+}
+
 /// This struct describes the Msg used to instantiate in this contract.
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -225,7 +242,13 @@ pub struct InstantiateMsg {
     pub lp_token_code_id: u64,
     pub fee_collector: Option<String>,
     pub pool_creation_fee: Option<Asset>,
+    /// Specifies which auto-stake implementation has to be used.
+    pub auto_stake_impl: Option<AutoStakeImpl>,
+    // Keeping both generator and multistaking.
+    // Generator is kept to be able to upgrade to Generator + Proxy multistaking based reward implementation
+    // from the vault without needing to upgrade the contract.
     pub generator_address: Option<String>,
+    pub multistaking_address: Option<String>
 }
 
 /// This struct describes the functions that can be executed in this contract.
@@ -240,7 +263,9 @@ pub enum ExecuteMsg {
         fee_collector: Option<String>,
         // Fee required for creating a new pool.
         pool_creation_fee: Option<Asset>,
+        auto_stake_impl: Option<AutoStakeImpl>,
         generator_address: Option<String>,
+        multistaking_address: Option<String>,
     },
     AddAddressToWhitelist { 
         address: String 
