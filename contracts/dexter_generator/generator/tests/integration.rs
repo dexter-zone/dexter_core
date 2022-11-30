@@ -237,7 +237,7 @@ fn create_pool_instance(
         )
         .unwrap();
 
-    (pool_res.lp_token_addr.unwrap(), pool_res.pool_addr.unwrap())
+    (pool_res.lp_token_addr, pool_res.pool_addr)
 }
 
 // Setup DEX token vesting for generator contract

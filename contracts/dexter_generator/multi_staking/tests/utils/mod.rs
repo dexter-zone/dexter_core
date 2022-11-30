@@ -1,7 +1,7 @@
 use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
 use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
 use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward}, asset::AssetInfo};
-use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse, Cw20Coin};
+use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
 
 const EPOCH_START: u64 = 1_000_000_000;
 
@@ -15,22 +15,6 @@ pub fn mock_app(admin: Addr, coins: Vec<Coin>) -> App {
     });
     app.set_block(env.block);
     app
-}
-
-#[allow(dead_code)]
-pub fn forward_block_time_by_seconds(app: &mut App, seconds: u64) {
-    app.update_block(|b| {
-        b.time = b.time.plus_seconds(seconds);
-        b.height = b.height + 100;
-    });
-}
-
-#[allow(dead_code)]
-pub fn forward_block_time_to_seconds(app: &mut App, seconds: u64) {
-    app.update_block(|b| {
-        b.time = Timestamp::from_seconds(seconds);
-        b.height = b.height + 100;
-    });
 }
 
 pub fn instantiate_multi_staking_contract(
@@ -71,7 +55,6 @@ pub fn store_multi_staking_contract(
     return code_id;
 }
 
-#[allow(dead_code)]
 pub fn store_cw20_contract(
     app: &mut App
 ) -> u64 {
@@ -84,39 +67,6 @@ pub fn store_cw20_contract(
     );
     let code_id = app.store_code(cw20_contract);
     return code_id;
-}
-
-pub fn create_cw20_token(
-    app: &mut App,
-    code_id: u64,
-    creator: Addr,
-    name: String,
-    symbol: String,
-    decimals: u8,
-    initial_balances: Vec<Cw20Coin>,
-    mint: Option<MinterResponse>,
-) -> Addr {
-    let cw20_instantiate_msg = cw20_base::msg::InstantiateMsg {
-        name,
-        symbol,
-        decimals,
-        initial_balances,
-        marketing: None,
-        mint,
-    };
-
-    let cw20_instance = app
-        .instantiate_contract(
-            code_id,
-            creator.to_owned(),
-            &cw20_instantiate_msg,
-            &[],
-            "cw20",
-            None,
-        )
-        .unwrap();
-
-    return cw20_instance;
 }
 
 pub fn create_dummy_cw20_token(
@@ -228,7 +178,6 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
     return (multi_staking_instance, lp_token_addr);
 }
 
-#[allow(dead_code)]
 pub fn create_reward_schedule(
     app: &mut App,
     admin_addr: &Addr,
@@ -391,22 +340,6 @@ pub fn query_unclaimed_rewards(
         .unwrap()
 }
 
-pub fn query_lp_token_balance(
-    app: &mut App,
-    lp_token_addr: &Addr,
-    user_addr: &Addr,
-) -> Uint128 {
-    app
-        .wrap()
-        .query_wasm_smart(
-            lp_token_addr.clone(),
-            &Cw20QueryMsg::Balance {
-                address: user_addr.to_string(),
-            },
-        )
-        .unwrap()
-}
-
 pub fn query_bonded_lp_tokens(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -470,7 +403,7 @@ pub fn assert_user_lp_token_balance(
 ) {
     let response: BalanceResponse = app.wrap().query_wasm_smart(
         lp_token_addr.clone(),
-        &cw20::Cw20QueryMsg::Balance {
+        &Cw20QueryMsg::Balance {
             address: user_addr.to_string(),
         },
     ).unwrap();

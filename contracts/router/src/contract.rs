@@ -475,7 +475,7 @@ fn query_simulate_multihop(
                 // Query pool to get the amount of tokens that will be received
                 let pool_swap_transition: dexter::pool::SwapResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-                        contract_addr: pool_response.pool_addr.clone().unwrap().to_string(),
+                        contract_addr: pool_response.pool_addr.to_string(),
                         msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
                             swap_type: SwapType::GiveIn {},
                             offer_asset: next_token_in.clone(),
@@ -544,7 +544,7 @@ fn query_simulate_multihop(
                 // Query pool to get the swap transition response
                 let pool_swap_transition: dexter::pool::SwapResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
-                        contract_addr: pool_response.pool_addr.clone().unwrap().to_string(),
+                        contract_addr: pool_response.pool_addr.to_string(),
                         msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
                             swap_type: SwapType::GiveOut {},
                             offer_asset: hop.asset_in.clone(),

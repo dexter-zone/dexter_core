@@ -309,8 +309,8 @@ fn initialize_stable_5_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -406,8 +406,8 @@ fn initialize_weighted_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -458,8 +458,8 @@ fn initialize_stable_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -510,8 +510,8 @@ fn initialize_xyk_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);

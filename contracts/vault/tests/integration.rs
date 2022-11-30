@@ -315,8 +315,8 @@ fn initialize_stable_5_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -412,8 +412,8 @@ fn initialize_weighted_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -464,8 +464,8 @@ fn initialize_stable_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -516,8 +516,8 @@ fn initialize_xyk_pool(
         )
         .unwrap();
 
-    let pool_addr = pool_info_res.pool_addr.unwrap();
-    let lp_token_addr = pool_info_res.lp_token_addr.unwrap();
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
@@ -1148,12 +1148,12 @@ fn test_create_pool_instance() {
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(
-        Some(Addr::unchecked("contract3".to_string())),
-        pool_res.pool_addr
+        Addr::unchecked("contract3".to_string()),
+        pool_res.lp_token_addr
     );
     assert_eq!(
-        Some(Addr::unchecked("contract4".to_string())),
-        pool_res.lp_token_addr
+        Addr::unchecked("contract4".to_string()),
+        pool_res.pool_addr
     );
     assert_eq!(assets, pool_res.assets);
     assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
@@ -1583,7 +1583,7 @@ fn test_pool_fee_update() {
         .wrap()
         .query_wasm_smart(vault_instance.clone(), &query_msg)
         .unwrap();
-    let pool_address = res.pool_addr.unwrap();
+    let pool_address = res.pool_addr;
 
     // update fee for this pool now
     let msg = ExecuteMsg::UpdatePoolConfig {

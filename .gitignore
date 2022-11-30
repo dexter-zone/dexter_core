@@ -12,3 +12,4 @@ Cargo.lock
 env
 scripts/node_modules
 scripts/persistenceJS
+.idea

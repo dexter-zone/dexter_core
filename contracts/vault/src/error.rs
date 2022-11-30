@@ -18,8 +18,11 @@ pub enum ContractError {
     #[error("Invalid lp token name")]
     InvalidLpTokenName {},
 
-    #[error("Invalid lp token name")]
+    #[error("Invalid lp token symbol")]
     InvalidLpTokenSymbol {},
+
+    #[error("Invalid PoolId")]
+    InvalidPoolId {},
 
     #[error("LP Token address not found")]
     LpTokenNotFound {},
@@ -30,7 +33,7 @@ pub enum ContractError {
     #[error("Number of LP tokens to burn when withdrawing liquidity cannot be 0")]
     BurnAmountZero {},
 
-    #[error("MaxSpendError - offer amount {offer_amount} is more than manimum allowed spent amount {max_spend}")]
+    #[error("MaxSpendError - offer amount {offer_amount} is more than maximum allowed spent amount {max_spend}")]
     MaxSpendError {
         max_spend: Uint128,
         offer_amount: Uint128,
