@@ -37,13 +37,13 @@ serde-json-wasm = "0.4.1"
 cosmwasm-schema = "1.1"
 
 [dev-dependencies]
-stable5pool = { path = "../stable_5pool"}
-weighted-pool = { path = "../weighted_pool"}
-stableswap-pool = { path = "../stable_pool"}
-xyk-pool = { path = "../xyk_pool"}
+stable5pool = { path = "../pools/stable_5pool"}
+weighted-pool = { path = "../pools/weighted_pool"}
+stableswap-pool = { path = "../pools/stable_pool"}
+xyk-pool = { path = "../pools/xyk_pool"}
 lp-token = { path = "../lp_token"}
 dexter-generator = { path = "../dexter_generator/generator"}
-dexter-multi-staking = { path = "../dexter_generator/multi_staking"}
+dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.13.2"
 cw20 = { version = "0.15" }

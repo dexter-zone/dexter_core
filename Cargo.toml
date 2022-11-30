@@ -2,12 +2,10 @@
 members = [
     "contracts/keeper", 
     "contracts/vault", 
-    "contracts/lp_token", 
-    "contracts/stable_5pool", 
-    "contracts/stable_pool", 
-    "contracts/xyk_pool", 
-    "contracts/weighted_pool", 
+    "contracts/lp_token",  
     "contracts/dexter_generator/*", 
+    "contracts/pools/*",
+    "contracts/multi_staking",
     "contracts/router",
     "packages/*"
 ]

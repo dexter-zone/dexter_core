@@ -35,5 +35,5 @@ serde-json-wasm = "0.4.1"
 [dev-dependencies]
 cosmwasm-schema = { version = "1.0.0" }
 dexter-vault = {path = "../vault"}
-xyk-pool = {path = "../xyk_pool"}
+xyk-pool = {path = "../pools/xyk_pool"}
 cw-multi-test = "0.13.2"
