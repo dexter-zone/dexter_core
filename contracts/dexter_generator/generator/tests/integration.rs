@@ -164,8 +164,10 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None,
-        pool_creation_fee: None
     };
     let vault_instance = app
         .instantiate_contract(

@@ -250,6 +250,10 @@ pub fn receive_cw20(
             let token_address = deps.api.addr_validate(info.sender.as_str())?;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
             bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
+        },
+        Cw20HookMsg::BondForBeneficiary { beneficiary } => {
+            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            bond(deps, env, beneficiary, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::AddRewardSchedule {
             lp_token,
@@ -328,7 +332,7 @@ fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult
 pub fn bond(
     mut deps: DepsMut,
     env: Env,
-    sender: Addr,
+    user: Addr,
     lp_token: Addr,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
@@ -336,7 +340,7 @@ pub fn bond(
     check_if_lp_token_allowed(&config, &lp_token)?;
 
     let current_bond_amount = USER_BONDED_LP_TOKENS
-        .may_load(deps.storage, (&lp_token, &sender))?
+        .may_load(deps.storage, (&lp_token, &user))?
         .unwrap_or_default();
 
     let mut lp_global_state = LP_GLOBAL_STATE.may_load(deps.storage, &lp_token)?.unwrap_or_default();
@@ -346,7 +350,7 @@ pub fn bond(
         update_staking_rewards(
             asset,
             &lp_token,
-            &sender,
+            &user,
             lp_global_state.total_bond_amount,
             current_bond_amount,
             env.block.time.seconds(),
@@ -363,7 +367,7 @@ pub fn bond(
     // Increase user bond amount
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
-        (&lp_token, &sender),
+        (&lp_token, &user),
         &(current_bond_amount.checked_add(amount)?),
     )?;
 

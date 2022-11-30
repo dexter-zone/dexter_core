@@ -52,8 +52,10 @@ fn instantiate_contracts(
         lp_token_code_id: 1u64,
         fee_collector: None,
         owner: owner.to_string(),
-        generator_address: None,
         pool_creation_fee: None,
+        generator_address: None,
+        auto_stake_impl: None,
+        multistaking_address: None,
     };
     let vault_instance = router
         .instantiate_contract(

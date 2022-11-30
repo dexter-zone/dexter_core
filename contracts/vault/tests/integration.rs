@@ -153,6 +153,8 @@ fn instantiate_contract(
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None,
         pool_creation_fee: None
     };
@@ -592,6 +594,8 @@ fn proper_initialization() {
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None,
         pool_creation_fee: None
     };
@@ -752,6 +756,8 @@ fn proper_initialization() {
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None,
         pool_creation_fee: None
     };
@@ -788,6 +794,8 @@ fn proper_initialization() {
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None,
         pool_creation_fee: None
     };
@@ -828,6 +836,8 @@ fn update_config() {
         lp_token_code_id: None,
         fee_collector: Some("fee_address".to_string()),
         generator_address: Some("generator_address".to_string()),
+        auto_stake_impl: None,
+        multistaking_address: None,
         pool_creation_fee: None
     };
 
@@ -885,7 +895,9 @@ fn test_add_to_registery() {
         lp_token_code_id: token_code_id,
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
+        auto_stake_impl: None,
         generator_address: None,
+        multistaking_address: None,
         pool_creation_fee: None
     };
 
@@ -1259,7 +1271,9 @@ fn test_pool_creation_fee() {
              info: AssetInfo::NativeToken { denom: "uxprt".to_string() },
              amount: Uint128::from(100_000_000u128),
         }),
-        generator_address: None 
+        auto_stake_impl: None,
+        generator_address: None,
+        multistaking_address: None
     };
 
     app.execute_contract(Addr::unchecked(owner.clone()),vault_instance.clone(), &msg,&[])
@@ -1373,6 +1387,8 @@ fn test_pool_creation_whitelist() {
              info: AssetInfo::NativeToken { denom: "uxprt".to_string() },
              amount: Uint128::from(100_000_000u128),
         }),
+        auto_stake_impl: None,
+        multistaking_address: None,
         generator_address: None 
     };
 
