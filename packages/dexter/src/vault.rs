@@ -138,6 +138,8 @@ pub struct Config {
     pub pool_creation_fee: Option<Asset>,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
+    /// The global pause status for the vault. This overrides the pause status of any pool.
+    pub paused: PauseInfo,
 }
 
 #[cw_serde]
@@ -179,7 +181,7 @@ pub struct PoolTypeConfig {
 pub struct TmpPoolInfo {
     /// ID of contract which is used to create pools of this type
     pub code_id: u64,
-    /// ID of contract which is allowed to create pools of this type
+    /// ID of this pool
     pub pool_id: Uint128,
     /// Address of the LP Token Contract
     pub lp_token_addr: Option<Addr>,
@@ -196,7 +198,7 @@ pub struct TmpPoolInfo {
 /// This struct stores a pool type's configuration.
 #[cw_serde]
 pub struct PoolInfo {
-    /// ID of contract which is allowed to create pools of this type
+    /// ID of this pool
     pub pool_id: Uint128,
     /// Address of the Pool Contract    
     pub pool_addr: Addr,
@@ -208,6 +210,24 @@ pub struct PoolInfo {
     pub assets: Vec<Asset>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
+    /// Pause status for this pool
+    pub paused: PauseInfo,
+}
+
+#[cw_serde]
+#[derive(Default)]
+pub struct PauseInfo {
+    /// True if swaps are paused
+    pub swap: bool,
+    /// True if deposits are paused
+    pub deposit: bool,
+    // We aren't allowing pause for withdrawals as of now.
+}
+
+impl Display for PauseInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str(format!("swap: {}, deposit: {}", self.swap, self.deposit).as_str())
+    }
 }
 
 #[cw_serde]
@@ -266,6 +286,7 @@ pub enum ExecuteMsg {
         auto_stake_impl: Option<AutoStakeImpl>,
         generator_address: Option<String>,
         multistaking_address: Option<String>,
+        paused: Option<PauseInfo>,
     },
     AddAddressToWhitelist { 
         address: String 
@@ -295,7 +316,8 @@ pub enum ExecuteMsg {
     },
     UpdatePoolConfig {
         pool_id: Uint128,
-        fee_info: FeeInfo,
+        fee_info: Option<FeeInfo>,
+        paused: Option<PauseInfo>
     },
 
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and

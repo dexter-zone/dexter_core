@@ -526,6 +526,7 @@ fn update_config() {
         auto_stake_impl: None,
         multistaking_address: None,
         pool_creation_fee: None,
+        paused: None,
     };
 
     app.execute_contract(
@@ -667,12 +668,13 @@ fn test_pool_fee_update() {
     // update fee for this pool now
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: Uint128::from(pool_id),
-        fee_info: FeeInfo {
+        fee_info: Some(FeeInfo {
             total_fee_bps: 400u16,
             protocol_fee_percent: 40u16,
             dev_fee_percent: 0u16,
             developer_addr: None,
-        },
+        }),
+        paused: None,
     };
 
     let res = app.execute_contract(

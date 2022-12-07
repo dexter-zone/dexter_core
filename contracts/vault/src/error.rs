@@ -123,6 +123,12 @@ pub enum ContractError {
 
     #[error("Multistaking address is not configured")]
     MultistakingAddrNotSet,
+
+    #[error("Deposits are paused")]
+    PausedDeposit,
+
+    #[error("Swaps are paused")]
+    PausedSwap,
 }
 
 impl From<OverflowError> for ContractError {

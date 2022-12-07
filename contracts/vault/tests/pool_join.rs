@@ -1096,6 +1096,7 @@ fn test_join_auto_stake() {
         auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Generator),
         generator_address: Some(generator_contract_address.to_string()),
         multistaking_address: None,
+        paused: None,
     };
 
     app.execute_contract(
@@ -1229,6 +1230,7 @@ fn test_join_auto_stake() {
         auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Multistaking),
         generator_address: None,
         multistaking_address: Some(multistaking_contract_address.to_string()),
+        paused: None,
     };
 
     app.execute_contract(
