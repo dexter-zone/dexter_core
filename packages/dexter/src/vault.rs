@@ -393,15 +393,7 @@ pub struct MigrateMsg {}
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 /// ## Description -  A custom struct for each query response that returns controls settings of contract.
-#[cw_serde]
-pub struct ConfigResponse {
-    pub owner: Addr,
-    pub lp_token_code_id: u64,
-    pub fee_collector: Option<Addr>,
-    pub generator_address: Option<Addr>,
-    /// The next pool ID to be used for creating new pools
-    pub next_pool_id: Uint128,
-}
+pub type ConfigResponse = Config;
 
 #[cw_serde]
 pub struct AssetFeeBreakup {

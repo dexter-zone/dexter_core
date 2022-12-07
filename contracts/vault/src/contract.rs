@@ -1871,14 +1871,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// ## Description - Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let resp = ConfigResponse {
-        owner: config.owner,
-        lp_token_code_id: config.lp_token_code_id,
-        fee_collector: config.fee_collector,
-        generator_address: config.generator_address,
-        next_pool_id: config.next_pool_id,
-    };
-    Ok(resp)
+    Ok(config)
 }
 
 /// ## Description - Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] structure

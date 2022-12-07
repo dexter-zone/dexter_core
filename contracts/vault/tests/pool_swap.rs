@@ -5,7 +5,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::vault::{ExecuteMsg, SingleSwapRequest, SwapType};
+use dexter::vault::{ExecuteMsg, PauseInfo, SingleSwapRequest, SwapType};
 
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
@@ -134,6 +134,24 @@ fn test_swap() {
         token_instance1.clone(),
         denom0.clone(),
     );
+
+    // pause swaps for all pools
+    let msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        generator_address: None,
+        auto_stake_impl: None,
+        multistaking_address: None,
+        pool_creation_fee: None,
+        paused: Some(PauseInfo{deposit: false, swap: true}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
 
     // Provide liquidity to empty stable 5 pool. No fee is charged
     let assets_msg = vec![
@@ -355,6 +373,78 @@ fn test_swap() {
         min_receive: None,
         max_spend: None,
     };
+
+    // swap should fail because of the pause
+    assert_eq!("Swaps are paused", app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &swap_msg,
+        &[Coin {
+            denom: denom1.to_string(),
+            amount: Uint128::new(252_000000u128),
+        }],
+    )
+    .unwrap_err().root_cause().to_string());
+
+    // resume swaps for all pools
+    let msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        generator_address: None,
+        auto_stake_impl: None,
+        multistaking_address: None,
+        pool_creation_fee: None,
+        paused: Some(PauseInfo{deposit: false, swap: false}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // pause swaps specifically for stable 5 pool
+    let msg = ExecuteMsg::UpdatePoolConfig {
+        pool_id: stable5_pool_id,
+        fee_info: None,
+        paused: Some(PauseInfo{deposit: false, swap: true}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // swap should still fail because of the pause
+    assert_eq!("Swaps are paused", app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &swap_msg,
+        &[Coin {
+            denom: denom1.to_string(),
+            amount: Uint128::new(252_000000u128),
+        }],
+    )
+        .unwrap_err().root_cause().to_string());
+
+    // resume swaps specifically for stable 5 pool
+    let msg = ExecuteMsg::UpdatePoolConfig {
+        pool_id: stable5_pool_id,
+        fee_info: None,
+        paused: Some(PauseInfo{deposit: false, swap: false}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // swapping now should work
     app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
