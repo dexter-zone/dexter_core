@@ -22,8 +22,8 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     AllowPoolInstantiation, AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg,
-    FeeInfo, InstantiateMsg, MigrateMsg, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType,
-    PoolTypeConfig, QueryMsg, SingleSwapRequest, AutoStakeImpl, TmpPoolInfo
+    FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse,
+    PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, AutoStakeImpl, TmpPoolInfo
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -77,6 +77,7 @@ pub fn instantiate(
         generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
         pool_creation_fee: msg.pool_creation_fee,
         next_pool_id: Uint128::from(1u128),
+        paused: PauseInfo::default(),
     };
 
     let config_set: HashSet<String> = msg
@@ -131,6 +132,7 @@ pub fn execute(
             auto_stake_impl,
             generator_address,
             multistaking_address,
+            paused,
         } => execute_update_config(
             deps,
             env,
@@ -141,6 +143,7 @@ pub fn execute(
             auto_stake_impl,
             generator_address,
             multistaking_address,
+            paused,
         ),
         ExecuteMsg::UpdatePoolTypeConfig {
             pool_type,
@@ -178,8 +181,8 @@ pub fn execute(
             fee_info,
             init_params,
         ),
-        ExecuteMsg::UpdatePoolConfig { pool_id, fee_info } => {
-            execute_update_pool_config(deps, info, pool_id, fee_info)
+        ExecuteMsg::UpdatePoolConfig { pool_id, fee_info, paused } => {
+            execute_update_pool_config(deps, info, pool_id, fee_info, paused)
         }
         ExecuteMsg::JoinPool {
             pool_id,
@@ -321,6 +324,7 @@ pub fn execute_update_config(
     auto_stake_impl: Option<AutoStakeImpl>,
     generator_address: Option<String>,
     multistaking_address: Option<String>,
+    paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -329,10 +333,30 @@ pub fn execute_update_config(
         return Err(ContractError::Unauthorized {});
     }
 
+    // Update LP token code id
+    if let Some(lp_token_code_id) = lp_token_code_id {
+        // Check if code id is valid
+        if lp_token_code_id == 0 {
+            return Err(ContractError::InvalidCodeId {});
+        }
+        config.lp_token_code_id = lp_token_code_id;
+    }
+
     // Update fee collector
     if let Some(fee_collector) = fee_collector {
         config.fee_collector = Some(deps.api.addr_validate(fee_collector.as_str())?);
     }
+
+    // Validate the pool creation fee
+    if let Some(pool_creation_fee) = &pool_creation_fee {
+        if pool_creation_fee.amount.is_zero() {
+            return Err(ContractError::InvalidPoolCreationFee {});
+        }
+    }
+    config.pool_creation_fee = pool_creation_fee;
+
+    // set auto stake implementation
+    config.auto_stake_impl = auto_stake_impl;
 
     // Set generator only if its not set
     if !config.generator_address.is_some() {
@@ -349,25 +373,11 @@ pub fn execute_update_config(
         }
     }
 
-    // set auto stake implementation
-    config.auto_stake_impl = auto_stake_impl;
-
-    // Validate the pool creation fee
-    if let Some(pool_creation_fee) = &pool_creation_fee {
-        if pool_creation_fee.amount.is_zero() {
-            return Err(ContractError::InvalidPoolCreationFee {});
-        }
+    // update the pause status
+    if let Some(paused) = paused {
+        config.paused = paused;
     }
-    config.pool_creation_fee = pool_creation_fee;
 
-    // Update LP token code id
-    if let Some(lp_token_code_id) = lp_token_code_id {
-        // Check if code id is valid
-        if lp_token_code_id == 0 {
-            return Err(ContractError::InvalidCodeId {});
-        }
-        config.lp_token_code_id = lp_token_code_id;
-    }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attribute("action", "update_config"))
@@ -461,7 +471,8 @@ fn execute_update_pool_config(
     deps: DepsMut,
     info: MessageInfo,
     pool_id: Uint128,
-    fee_info: FeeInfo,
+    fee_info: Option<FeeInfo>,
+    paused: Option<PauseInfo>
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
@@ -475,40 +486,51 @@ fn execute_update_pool_config(
         return Err(ContractError::Unauthorized {});
     }
 
+    let mut msgs: Vec<CosmosMsg> = vec![];
+
     // Update fee info
-    if !fee_info.valid_fee_info() {
-        return Err(ContractError::InvalidFeeInfo {});
-    }
-    // Validate dev address (if provided)
-    if fee_info.developer_addr.clone().is_some() {
-        deps.api
-            .addr_validate(fee_info.developer_addr.clone().unwrap().as_str())?;
+    if let Some(fee_info) = fee_info {
+        if !fee_info.valid_fee_info() {
+            return Err(ContractError::InvalidFeeInfo {});
+        }
+        // Validate dev address (if provided)
+        if fee_info.developer_addr.clone().is_some() {
+            deps.api
+                .addr_validate(fee_info.developer_addr.clone().unwrap().as_str())?;
+        }
+
+        pool.fee_info = fee_info;
+        event = event
+            .add_attribute("total_fee_bps", pool.fee_info.total_fee_bps.to_string())
+            .add_attribute(
+                "protocol_fee_percent",
+                pool.fee_info.protocol_fee_percent.to_string(),
+            )
+            .add_attribute("dev_fee_percent", pool.fee_info.dev_fee_percent.to_string());
+
+        // update total fee in the actual pool contract by sending a wasm message
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: pool.pool_addr.to_string(),
+            funds: vec![],
+            msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
+                total_fee_bps: pool.fee_info.total_fee_bps.clone(),
+            })?,
+        }));
     }
 
-    pool.fee_info = fee_info;
-    event = event
-        .add_attribute("total_fee_bps", pool.fee_info.total_fee_bps.to_string())
-        .add_attribute(
-            "protocol_fee_percent",
-            pool.fee_info.protocol_fee_percent.to_string(),
-        )
-        .add_attribute("dev_fee_percent", pool.fee_info.dev_fee_percent.to_string());
+    // update pause status
+    if let Some(paused) = paused {
+        pool.paused = paused.clone();
 
-    // update total fee in the actual pool contract by sending a wasm message
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: pool.pool_addr.to_string(),
-        funds: vec![],
-        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
-            total_fee_bps: pool.fee_info.total_fee_bps.clone(),
-        })?,
-    });
+        event = event.add_attribute("paused", paused.to_string());
+    }
 
     // Save pool config
     ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
 
     let response = Response::new()
         .add_event(event)
-        .add_message(msg);
+        .add_messages(msgs);
 
     Ok(response)
 }
@@ -941,6 +963,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                     fee_info: tmp_pool_info.fee_info,
                     assets: tmp_pool_info.assets,
                     pool_type: tmp_pool_info.pool_type,
+                    paused: PauseInfo::default(),
                 },
             )?;
 
@@ -992,6 +1015,10 @@ pub fn execute_join_pool(
     let mut pool_info = ACTIVE_POOLS
         .load(deps.storage, pool_id.to_string().as_bytes())
         .or(Err(ContractError::InvalidPoolId {}))?;
+
+    if config.paused.deposit || pool_info.paused.deposit {
+        return Err(ContractError::PausedDeposit {});
+    }
 
     // Read -  Get PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1548,17 +1575,6 @@ pub fn execute_swap(
         recipient = deps.api.addr_validate(op_recipient.unwrap().as_str())?;
     }
 
-    //  Read -  Get PoolInfo {} for the pool
-    let mut pool_info = ACTIVE_POOLS
-        .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
-        .or(Err(ContractError::InvalidPoolId {}))?;
-
-    // Read - Get the PoolConfig {} for the pool
-    let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
-
-    // Read - Get the Config {}
-    let config = CONFIG.load(deps.storage)?;
-
     // Error - Amount cannot be zero
     if swap_request.amount.is_zero() {
         return Err(ContractError::InvalidAmount {});
@@ -1568,6 +1584,21 @@ pub fn execute_swap(
     if swap_request.asset_in == swap_request.asset_out {
         return Err(ContractError::SameTokenError {});
     }
+
+    // Read - Get the Config {}
+    let config = CONFIG.load(deps.storage)?;
+
+    //  Read -  Get PoolInfo {} for the pool
+    let mut pool_info = ACTIVE_POOLS
+    .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
+    .or(Err(ContractError::InvalidPoolId {}))?;
+
+    if config.paused.swap || pool_info.paused.swap {
+        return Err(ContractError::PausedSwap {});
+    }
+
+    // Read - Get the PoolConfig {} for the pool
+    let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
 
     // Indexing - Make Event for indexing support
     let mut event = Event::new("dexter-vault::swap")
@@ -1840,14 +1871,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// ## Description - Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
-    let resp = ConfigResponse {
-        owner: config.owner,
-        lp_token_code_id: config.lp_token_code_id,
-        fee_collector: config.fee_collector,
-        generator_address: config.generator_address,
-        next_pool_id: config.next_pool_id,
-    };
-    Ok(resp)
+    Ok(config)
 }
 
 /// ## Description - Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] structure

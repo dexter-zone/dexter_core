@@ -7,7 +7,7 @@ use dexter::asset::AssetInfo;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolConfigResponse, PoolInfoResponse,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
     PoolType, PoolTypeConfig, QueryMsg,
 };
 
@@ -112,6 +112,10 @@ fn proper_initialization() {
         config_res.fee_collector
     );
     assert_eq!(None, config_res.generator_address);
+    assert_eq!(PauseInfo {
+        deposit: false,
+        swap: false,
+    }, config_res.paused);
 
     // Check XYK Pool Config
     // ---------------------
@@ -516,8 +520,14 @@ fn update_config() {
         after_init_config_res.fee_collector
     );
     assert_eq!(None, after_init_config_res.generator_address);
+    assert_eq!(PauseInfo::default(), after_init_config_res.paused);
 
     //// -----x----- Success :: update config -----x----- ////
+
+    let pause_info = PauseInfo{
+        swap: true,
+        deposit: false,
+    };
 
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
@@ -526,6 +536,7 @@ fn update_config() {
         auto_stake_impl: None,
         multistaking_address: None,
         pool_creation_fee: None,
+        paused: Some(pause_info.clone()),
     };
 
     app.execute_contract(
@@ -552,10 +563,11 @@ fn update_config() {
         after_init_config_res.lp_token_code_id,
         config_res.lp_token_code_id
     );
+    assert_eq!(pause_info, config_res.paused);
 }
 
 #[test]
-fn test_pool_fee_update() {
+fn test_pool_config_update() {
     let owner = String::from("owner");
     let mut app = mock_app(
         Addr::unchecked(owner.clone()),
@@ -664,15 +676,21 @@ fn test_pool_fee_update() {
         .unwrap();
     let pool_address = res.pool_addr;
 
-    // update fee for this pool now
+    let pause_info = PauseInfo {
+        swap: true,
+        deposit: true,
+    };
+
+    // update config for this pool now
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: Uint128::from(pool_id),
-        fee_info: FeeInfo {
+        fee_info: Some(FeeInfo {
             total_fee_bps: 400u16,
             protocol_fee_percent: 40u16,
             dev_fee_percent: 0u16,
             developer_addr: None,
-        },
+        }),
+        paused: Some(pause_info.clone()),
     };
 
     let res = app.execute_contract(
@@ -696,6 +714,7 @@ fn test_pool_fee_update() {
     assert_eq!(res.fee_info.total_fee_bps, 400u16);
     assert_eq!(res.fee_info.protocol_fee_percent, 40u16);
     assert_eq!(res.fee_info.dev_fee_percent, 0u16);
+    assert_eq!(res.paused, pause_info);
 
     // Fetch fee from the pool contract too to see if total fee is updated
     let msg = PoolQueryMsg::FeeParams {};

@@ -196,7 +196,7 @@ fn update_config() {
         denom: "xprt".to_string(),
     });
 
-    let msg = QueryMsg::Balances { assets: assets };
+    let msg = QueryMsg::Balances { assets };
     let res: BalancesResponse = router
         .wrap()
         .query_wasm_smart(&keeper_instance, &msg)
@@ -239,7 +239,7 @@ fn withdraw_funds() {
         ],
     );
 
-    let (vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
+    let (_vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
 
     router
         .send_tokens(

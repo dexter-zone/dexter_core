@@ -239,6 +239,7 @@ fn test_pool_creation_whitelist() {
         auto_stake_impl: None,
         multistaking_address: None,
         generator_address: None,
+        paused: None,
     };
 
     app.execute_contract(
@@ -491,6 +492,7 @@ fn test_pool_creation_fee() {
         auto_stake_impl: None,
         generator_address: None,
         multistaking_address: None,
+        paused: None,
     };
 
     app.execute_contract(
