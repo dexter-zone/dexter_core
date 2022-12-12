@@ -22,12 +22,14 @@ pub fn calculate_pow(
     precision: Option<Decimal>,
 ) -> StdResult<Decimal> {
     let precision = precision.unwrap_or(Decimal::from_str("0.00000001").unwrap());
-    if exp.is_zero() || base.is_zero() {
-        return Ok(base);
+    if base <= Decimal::zero() {
+        return Err(StdError::generic_err(
+            "calculate_pow : base must be greater than 0",
+        ))
     };
 
     // we can adjust the algorithm in this setting.
-    if base > Decimal::from_str("2").unwrap() {
+    if base > Decimal::from_ratio(2u128, 1u128) { // 2 / 1 = 2
         return Err(StdError::generic_err(
             "calculate_pow : base must be less than 2",
         ));
@@ -47,14 +49,24 @@ pub fn calculate_pow(
 
     // Contract: 0 < base <= 2
     // 0 <= exp < 1.
-    let fractional_pow = pow_approx(base, Decimal::from_str(&fractional.to_string())?, precision)?;
-    let result = integer_pow * fractional_pow;
+    let fractional_pow = pow_approx(base, fractional, precision)?;
+    let result = integer_pow.checked_mul(fractional_pow)?;
     Ok(result)
 }
 
 // Contract: 0 < base <= 2
 // 0 <= exp < 1.
 pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<Decimal> {
+    if exp.is_zero() {
+        return Ok(Decimal::one())
+    }
+
+    // Common case optimization
+    // Optimize for it being equal to one-half
+    if exp.eq(&Decimal::from_ratio(1u128,2u128)) {
+        return Ok(base.sqrt())
+    }
+
     // We compute this via taking the maclaurin series of (1 + x)^a
     // where x = base - 1.
     // The maclaurin series of (1 + x)^a = sum_{k=0}^{infty} binom(a, k) x^k
@@ -85,10 +97,10 @@ pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<
     let base = base.clone();
     let (x, xneg) = sub_sign(base, Decimal::one());
     let mut term = Decimal::one();
-    let mut sum = term;
+    let mut sum = Decimal::one();
     let mut negative = false;
 
-    let a = exp.clone();
+    let a = exp;
     let mut big_k = Decimal::zero();
 
     let mut i = 1u128;
@@ -98,8 +110,7 @@ pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<
         let (c, cneg) = sub_sign(a, big_k);
 
         // On this line, bigK == i.
-        big_k = Decimal::from_atomics(Uint128::from(i), 0)
-            .map_err(|e| StdError::generic_err(e.to_string()))?;
+        big_k = Decimal::from_ratio(Uint128::from(i), 1u128); // i = i / 1
 
         term = term
             .checked_mul(c)?

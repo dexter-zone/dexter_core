@@ -667,7 +667,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                rate: Uint128::from(44296110000u128)
+                rate: Uint128::from(536475110000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -676,7 +676,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string()
                 },
-                rate: Uint128::from(74138940000u128)
+                rate: Uint128::from(897904940000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -685,7 +685,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone()
                 },
-                rate: Uint128::from(182850660000u128)
+                rate: Uint128::from(2214524660000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -694,7 +694,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string()
                 },
-                rate: Uint128::from(150628950000u128)
+                rate: Uint128::from(1824283950000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -703,7 +703,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone()
                 },
-                rate: Uint128::from(109249920000u128)
+                rate: Uint128::from(1323137920000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -712,7 +712,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                rate: Uint128::from(53771400000u128)
+                rate: Uint128::from(651231400000u128)
             }
         ],
         pool_twap_res.exchange_infos
@@ -1053,7 +1053,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                rate: Uint128::from(118599230000u128)
+                rate: Uint128::from(610778230000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1062,7 +1062,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string()
                 },
-                rate: Uint128::from(142576390000u128)
+                rate: Uint128::from(966342390000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1071,7 +1071,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone()
                 },
-                rate: Uint128::from(268981680000u128)
+                rate: Uint128::from(2300655680000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1080,7 +1080,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "xprt".to_string()
                 },
-                rate: Uint128::from(224309220000u128)
+                rate: Uint128::from(1897964220000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -1089,7 +1089,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone()
                 },
-                rate: Uint128::from(202844490000u128)
+                rate: Uint128::from(1416732490000u128)
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -1098,7 +1098,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                rate: Uint128::from(140698510000u128)
+                rate: Uint128::from(738158510000u128)
             }
         ],
         pool_twap_res.exchange_infos
