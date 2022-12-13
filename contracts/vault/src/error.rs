@@ -129,6 +129,9 @@ pub enum ContractError {
 
     #[error("Swaps are paused")]
     PausedSwap,
+
+    #[error("LP Token ID is not configured")]
+    LpTokenCodeIdNotSet,
 }
 
 impl From<OverflowError> for ContractError {

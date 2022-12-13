@@ -11,6 +11,9 @@ pub struct InstantiateMsg {
 }
 
 #[cw_serde]
+pub struct MigrateMsg {}
+
+#[cw_serde]
 pub struct AssetRewardState {
     pub reward_index: Decimal,
     pub last_distributed: u64,

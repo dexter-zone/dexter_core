@@ -49,7 +49,7 @@ fn instantiate_contracts(
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
         }],
-        lp_token_code_id: 1u64,
+        lp_token_code_id: Some(1u64),
         fee_collector: None,
         owner: owner.to_string(),
         pool_creation_fee: None,

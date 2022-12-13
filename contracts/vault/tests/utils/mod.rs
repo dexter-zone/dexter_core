@@ -144,7 +144,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
 
     let vault_init_msg = InstantiateMsg {
         pool_configs: pool_configs.clone(),
-        lp_token_code_id: token_code_id,
+        lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: None,
