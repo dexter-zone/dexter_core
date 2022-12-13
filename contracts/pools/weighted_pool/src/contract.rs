@@ -545,9 +545,6 @@ pub fn query_on_join_pool(
     // if remaining coins is empty, logic is done (we joined all tokensIn)
     let (mut num_shares, remaining_tokens_in, err): (Uint128, Vec<Asset>, ResponseType) =
         if total_share.is_zero() {
-            // TODO:
-            //  1. shouldn't we ensure that the act_assets_in ratio here is as the weights set during init?
-            //  2. shouldn't we be generating the LP tokens as per the value function invariant instead of always minting 100 on the first join?
             let num_shares = Uint128::from(INIT_LP_TOKENS);
             (num_shares, vec![], ResponseType::Success {})
         } else {

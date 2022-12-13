@@ -22,11 +22,9 @@ pub fn calculate_pow(
     precision: Option<Decimal>,
 ) -> StdResult<Decimal> {
     let precision = precision.unwrap_or(Decimal::from_str("0.00000001").unwrap());
-    if base <= Decimal::zero() {
-        return Err(StdError::generic_err(
-            "calculate_pow : base must be greater than 0",
-        ))
-    };
+    if base.is_zero() && !exp.is_zero(){
+        return Ok(base)
+    }
 
     // we can adjust the algorithm in this setting.
     if base > Decimal::from_ratio(2u128, 1u128) { // 2 / 1 = 2
@@ -57,10 +55,6 @@ pub fn calculate_pow(
 // Contract: 0 < base <= 2
 // 0 <= exp < 1.
 pub fn pow_approx(base: Decimal, exp: Decimal, precision: Decimal) -> StdResult<Decimal> {
-    if exp.is_zero() {
-        return Ok(Decimal::one())
-    }
-
     // Common case optimization
     // Optimize for it being equal to one-half
     if exp.eq(&Decimal::from_ratio(1u128,2u128)) {
