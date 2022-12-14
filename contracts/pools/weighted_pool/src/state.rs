@@ -18,7 +18,7 @@ pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
 /// Stores map of AssetInfo (as String) -> precision
 pub const PRECISIONS: Map<String, u8> = Map::new("precisions");
 
-/// Stores map of AssetInfo (as String) -> precision
+/// Stores map of AssetInfo (as String) -> weight
 pub const WEIGHTS: Map<String, Decimal> = Map::new("weights");
 
 /// ## Description

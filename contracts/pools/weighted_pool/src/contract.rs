@@ -35,8 +35,12 @@ const CONTRACT_NAME: &str = "dexter::fixed_weighted_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// Number of LP tokens to mint when liquidiity is provided for the first time to the pool
+/// Number of LP tokens to mint when liquidity is provided for the first time to the pool
 const INIT_LP_TOKENS: u128 = 100_000000;
+/// Maximum number of assets supported by the pool
+const MAX_ASSETS: usize = 8;
+/// Minimum number of assets supported by the pool
+const MIN_ASSETS: usize = 2;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -60,7 +64,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // Validate number of assets
-    if msg.asset_infos.len() > 8 || msg.asset_infos.len() < 2 {
+    if msg.asset_infos.len() > MAX_ASSETS || msg.asset_infos.len() < MIN_ASSETS {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
@@ -148,7 +152,7 @@ pub fn instantiate(
     };
 
     let twap = Twap {
-        cumulative_prices: cumulative_prices,
+        cumulative_prices,
         block_time_last: 0,
     };
 
@@ -229,10 +233,9 @@ pub fn execute_update_pool_liquidity(
 ) -> Result<Response, ContractError> {
     // Get config and twap info
     let mut config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let mut twap: Twap = TWAPINFO.load(deps.storage)?;
 
-    // Acess Check :: Only Vault can execute this function
+    // Access Check :: Only Vault can execute this function
     if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
@@ -245,8 +248,6 @@ pub fn execute_update_pool_liquidity(
     if accumulate_prices(
         deps.as_ref(),
         env.clone(),
-        &mut config,
-        math_config,
         &mut twap,
         &decimal_assets,
     )
@@ -669,7 +670,7 @@ pub fn query_on_exit_pool(
     // refundedShares = act_burn_shares * (1 - exit fee) with 0 exit fee optimization
 
     // Calculate number of LP tokens to be refunded to the user
-    // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 3%
+    // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 1%
     let mut refunded_shares = act_burn_shares;
     if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
         let one_sub_exit_fee = Decimal::one() - math_config.exit_fee.unwrap();
@@ -705,7 +706,7 @@ pub fn query_on_exit_pool(
 /// ## Description
 /// Returns [`SwapResponse`] type which contains -  
 /// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
-/// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
+/// response - A [`ResponseType`] which is either `Success` or `Failure`, determining if the tx is accepted by the Pool's math computations or not
 ///
 /// ## Params
 ///  swap_type - Is of type [`SwapType`] which is either `GiveIn`, `GiveOut` or `Custom`
@@ -742,7 +743,7 @@ pub fn query_on_swap(
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
-        Some(&offer_asset_info.clone()),
+        Some(&offer_asset_info),
         Some(&ask_asset_info),
         &pools,
     ) {
@@ -779,7 +780,7 @@ pub fn query_on_swap(
     match swap_type {
         SwapType::GiveIn {} => {
             offer_asset = Asset {
-                info: offer_asset_info.clone(),
+                info: offer_asset_info,
                 amount,
             };
 
@@ -830,7 +831,7 @@ pub fn query_on_swap(
                 Ok(res) => res,
                 Err(err) => {
                     return Ok(return_swap_failure(format!(
-                        "Error during swap calculation: {}",
+                        "Error during offer amount calculation: {}",
                         err
                     )))
                 }
@@ -842,7 +843,7 @@ pub fn query_on_swap(
                 config.fee_info.total_fee_bps,
             );
             offer_asset = Asset {
-                info: offer_asset_info.clone(),
+                info: offer_asset_info,
                 amount: calc_amount,
             };
         }
@@ -865,7 +866,7 @@ pub fn query_on_swap(
         },
         response: ResponseType::Success {},
         fee: Some(Asset {
-            info: ask_asset_info.clone(),
+            info: ask_asset_info,
             amount: total_fee,
         }),
     })
@@ -886,8 +887,7 @@ pub fn query_cumulative_price(
 ) -> StdResult<CumulativePriceResponse> {
     // Load the config, mathconfig  and twap from the storage
     let mut twap: Twap = TWAPINFO.load(deps.storage)?;
-    let mut config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
 
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
@@ -899,8 +899,6 @@ pub fn query_cumulative_price(
     accumulate_prices(
         deps,
         env,
-        &mut config,
-        math_config,
         &mut twap,
         &decimal_assets,
     )
@@ -935,8 +933,7 @@ pub fn query_cumulative_price(
 /// * **env** is the object of type [`Env`].
 pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePricesResponse> {
     let mut twap: Twap = TWAPINFO.load(deps.storage)?;
-    let mut config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
 
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
@@ -947,8 +944,6 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     accumulate_prices(
         deps,
         env,
-        &mut config,
-        math_config,
         &mut twap,
         &decimal_assets,
     )

@@ -3,11 +3,11 @@ use std::str::FromStr;
 use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128};
 use dexter::asset::{Asset, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
-use dexter::pool::{Config, ResponseType};
+use dexter::pool::{ResponseType};
 
 use crate::error::ContractError;
 use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
-use crate::state::{get_precision, get_weight, MathConfig, Twap, WeightedAsset};
+use crate::state::{get_precision, get_weight, Twap, WeightedAsset};
 use dexter::vault::FEE_PRECISION;
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -126,13 +126,13 @@ pub(crate) fn compute_offer_amount(
         token_precision,
     )?;
 
-    let before_commission_deduction_ = adjust_precision(
+    let before_commission_deduction = adjust_precision(
         before_commission_deduction.atomics(),
         before_commission_deduction.decimal_places() as u8,
         token_precision,
     )?;
 
-    Ok((real_offer, Uint128::zero(), before_commission_deduction_))
+    Ok((real_offer, Uint128::zero(), before_commission_deduction))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -151,17 +151,15 @@ pub(crate) fn compute_offer_amount(
 pub fn accumulate_prices(
     deps: Deps,
     env: Env,
-    config: &mut Config,
-    _math_config: MathConfig,
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
-    if block_time <= config.block_time_last {
+    if block_time <= twap.block_time_last {
         return Ok(());
     }
-    let time_elapsed = Uint128::from(block_time - config.block_time_last);
+    let time_elapsed = Uint128::from(block_time - twap.block_time_last);
 
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
@@ -173,7 +171,7 @@ pub fn accumulate_prices(
         let from_weight = get_weight(deps.storage, from)?;
         let to_weight = get_weight(deps.storage, to)?;
 
-        // retrive the offer and ask asset pool's latest balances
+        // retrieve the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
 
         // Compute the current price of ask asset in base asset
@@ -192,7 +190,7 @@ pub fn accumulate_prices(
     }
 
     // Update last block time.
-    config.block_time_last = block_time;
+    twap.block_time_last = block_time;
     Ok(())
 }
 
