@@ -391,6 +391,16 @@
                   "null"
                 ]
               },
+              "paused": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/PauseInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "pool_creation_fee": {
                 "anyOf": [
                   {
@@ -577,12 +587,28 @@
           "update_pool_config": {
             "type": "object",
             "required": [
-              "fee_info",
               "pool_id"
             ],
             "properties": {
               "fee_info": {
-                "$ref": "#/definitions/FeeInfo"
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/FeeInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "paused": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/PauseInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "pool_id": {
                 "$ref": "#/definitions/Uint128"
@@ -917,6 +943,24 @@
             "type": "integer",
             "format": "uint16",
             "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
+      },
+      "PauseInfo": {
+        "type": "object",
+        "required": [
+          "deposit",
+          "swap"
+        ],
+        "properties": {
+          "deposit": {
+            "description": "True if deposits are paused",
+            "type": "boolean"
+          },
+          "swap": {
+            "description": "True if swaps are paused",
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -1335,14 +1379,28 @@
   "responses": {
     "config": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Description -  A custom struct for each query response that returns controls settings of contract.",
+      "title": "Description - This struct describes the main control config of Vault.",
       "type": "object",
       "required": [
         "next_pool_id",
-        "owner"
+        "owner",
+        "paused",
+        "whitelisted_addresses"
       ],
       "properties": {
+        "auto_stake_impl": {
+          "description": "Which auto-stake feature is enabled for the pool Generator allows for generating DEX token and dual farming of 3rd party tokens/assets Multistaking allows for staking of LP tokens with N-different rewards in a single contract. If none, it will disable auto-staking feature",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AutoStakeImpl"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "fee_collector": {
+          "description": "The contract address to which protocol fees are sent",
           "anyOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -1353,6 +1411,7 @@
           ]
         },
         "generator_address": {
+          "description": "The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature",
           "anyOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -1363,12 +1422,24 @@
           ]
         },
         "lp_token_code_id": {
+          "description": "The Contract ID that is used for instantiating LP tokens for new pools",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "multistaking_address": {
+          "description": "The contract where users can stake LP tokens for N-asset rewards. Used for `auto-stake` feature. The usage between `generator_address` and `multistaking_address` is mutually exclusive depending on the current set auto-stake impl",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "next_pool_id": {
           "description": "The next pool ID to be used for creating new pools",
@@ -1379,7 +1450,38 @@
           ]
         },
         "owner": {
-          "$ref": "#/definitions/Addr"
+          "description": "The admin address that controls settings for factory, pools and tokenomics contracts",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "paused": {
+          "description": "The global pause status for the vault. This overrides the pause status of any pool.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PauseInfo"
+            }
+          ]
+        },
+        "pool_creation_fee": {
+          "description": "Fee required for creating a new pool. Ideally, it is charged in the base currency of the chain but can be changed to governance token later",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Asset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "whitelisted_addresses": {
+          "description": "Additional allowed addresses that can create pools. If empty, only owner can create pools",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Addr"
+          }
         }
       },
       "additionalProperties": false,
@@ -1387,6 +1489,107 @@
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
           "type": "string"
+        },
+        "Asset": {
+          "title": "Description - This enum describes a asset (native or CW20).",
+          "type": "object",
+          "required": [
+            "amount",
+            "info"
+          ],
+          "properties": {
+            "amount": {
+              "description": "A token amount",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                }
+              ]
+            },
+            "info": {
+              "description": "Information about an asset stored in a [`AssetInfo`] struct",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/AssetInfo"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "AssetInfo": {
+          "description": "This enum describes available Token types.",
+          "oneOf": [
+            {
+              "description": "Non-native Token",
+              "type": "object",
+              "required": [
+                "token"
+              ],
+              "properties": {
+                "token": {
+                  "type": "object",
+                  "required": [
+                    "contract_addr"
+                  ],
+                  "properties": {
+                    "contract_addr": {
+                      "$ref": "#/definitions/Addr"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "description": "Native token",
+              "type": "object",
+              "required": [
+                "native_token"
+              ],
+              "properties": {
+                "native_token": {
+                  "type": "object",
+                  "required": [
+                    "denom"
+                  ],
+                  "properties": {
+                    "denom": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "AutoStakeImpl": {
+          "type": "string",
+          "enum": [
+            "generator",
+            "multistaking"
+          ]
+        },
+        "PauseInfo": {
+          "type": "object",
+          "required": [
+            "deposit",
+            "swap"
+          ],
+          "properties": {
+            "deposit": {
+              "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "swap": {
+              "description": "True if swaps are paused",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         },
         "Uint128": {
           "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
@@ -1403,6 +1606,7 @@
         "assets",
         "fee_info",
         "lp_token_addr",
+        "paused",
         "pool_addr",
         "pool_id",
         "pool_type"
@@ -1431,6 +1635,14 @@
             }
           ]
         },
+        "paused": {
+          "description": "Pause status for this pool",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PauseInfo"
+            }
+          ]
+        },
         "pool_addr": {
           "description": "Address of the Pool Contract",
           "allOf": [
@@ -1440,7 +1652,7 @@
           ]
         },
         "pool_id": {
-          "description": "ID of contract which is allowed to create pools of this type",
+          "description": "ID of this pool",
           "allOf": [
             {
               "$ref": "#/definitions/Uint128"
@@ -1571,6 +1783,24 @@
               "type": "integer",
               "format": "uint16",
               "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "PauseInfo": {
+          "type": "object",
+          "required": [
+            "deposit",
+            "swap"
+          ],
+          "properties": {
+            "deposit": {
+              "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "swap": {
+              "description": "True if swaps are paused",
+              "type": "boolean"
             }
           },
           "additionalProperties": false
@@ -1664,6 +1894,7 @@
         "assets",
         "fee_info",
         "lp_token_addr",
+        "paused",
         "pool_addr",
         "pool_id",
         "pool_type"
@@ -1692,6 +1923,14 @@
             }
           ]
         },
+        "paused": {
+          "description": "Pause status for this pool",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PauseInfo"
+            }
+          ]
+        },
         "pool_addr": {
           "description": "Address of the Pool Contract",
           "allOf": [
@@ -1701,7 +1940,7 @@
           ]
         },
         "pool_id": {
-          "description": "ID of contract which is allowed to create pools of this type",
+          "description": "ID of this pool",
           "allOf": [
             {
               "$ref": "#/definitions/Uint128"
@@ -1832,6 +2071,24 @@
               "type": "integer",
               "format": "uint16",
               "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "PauseInfo": {
+          "type": "object",
+          "required": [
+            "deposit",
+            "swap"
+          ],
+          "properties": {
+            "deposit": {
+              "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "swap": {
+              "description": "True if swaps are paused",
+              "type": "boolean"
             }
           },
           "additionalProperties": false
