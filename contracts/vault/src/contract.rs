@@ -57,8 +57,10 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // Check if code id is valid
-    if msg.lp_token_code_id == 0 {
-        return Err(ContractError::InvalidCodeId {});
+    if let Some(code_id) = msg.lp_token_code_id {
+        if code_id == 0 {
+            return Err(ContractError::InvalidCodeId {});
+        }
     }
 
     if let Some(pool_creation_fee) = &msg.pool_creation_fee {
@@ -339,7 +341,7 @@ pub fn execute_update_config(
         if lp_token_code_id == 0 {
             return Err(ContractError::InvalidCodeId {});
         }
-        config.lp_token_code_id = lp_token_code_id;
+        config.lp_token_code_id = Some(lp_token_code_id);
     }
 
     // Update fee collector
@@ -378,6 +380,14 @@ pub fn execute_update_config(
         config.paused = paused;
     }
 
+    // Update LP token code id
+    if let Some(lp_token_code_id) = lp_token_code_id {
+        // Check if code id is valid
+        if lp_token_code_id == 0 {
+            return Err(ContractError::InvalidCodeId {});
+        }
+        config.lp_token_code_id = Some(lp_token_code_id);
+    }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attribute("action", "update_config"))
@@ -848,7 +858,7 @@ pub fn execute_create_pool_instance(
         id: INSTANTIATE_LP_REPLY_ID,
         msg: WasmMsg::Instantiate {
             admin: None,
-            code_id: config.lp_token_code_id,
+            code_id: config.lp_token_code_id.ok_or(ContractError::LpTokenCodeIdNotSet)?,
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,

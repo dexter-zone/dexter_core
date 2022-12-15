@@ -119,7 +119,7 @@ pub struct Config {
     /// Additional allowed addresses that can create pools. If empty, only owner can create pools
     pub whitelisted_addresses: Vec<Addr>,
     /// The Contract ID that is used for instantiating LP tokens for new pools
-    pub lp_token_code_id: u64,
+    pub lp_token_code_id: Option<u64>,
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
     /// Which auto-stake feature is enabled for the pool
@@ -127,8 +127,8 @@ pub struct Config {
     /// Multistaking allows for staking of LP tokens with N-different rewards in a single contract.
     /// If none, it will disable auto-staking feature
     pub auto_stake_impl: Option<AutoStakeImpl>,
-     /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
-     pub generator_address: Option<Addr>,
+    /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
+    pub generator_address: Option<Addr>,
     /// The contract where users can stake LP tokens for N-asset rewards. Used for `auto-stake` feature.
     /// The usage between `generator_address` and `multistaking_address` is mutually exclusive depending
     /// on the current set auto-stake impl
@@ -259,7 +259,11 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
     pub pool_configs: Vec<PoolTypeConfig>,
-    pub lp_token_code_id: u64,
+    /// This ID is optional but mandatory to create any pool.
+    /// It is kept optional during instantiation to allow for the case where the contract is instantiated
+    /// without any LP token contract and then later on, the LP token contract is stored 
+    /// in the contract's state and then used to create pools
+    pub lp_token_code_id: Option<u64>,
     pub fee_collector: Option<String>,
     pub pool_creation_fee: Option<Asset>,
     /// Specifies which auto-stake implementation has to be used.

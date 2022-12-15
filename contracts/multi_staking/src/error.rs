@@ -53,6 +53,10 @@ pub enum ContractError {
     
     #[error("No reward state found for the asset for the user since the reward is not distributed to the user yet")]
     NoUserRewardState,
+
+    #[error("Invalid amount. Amount cannot be zero")]
+    ZeroAmount,
+    
 }
 
 impl From<OverflowError> for ContractError {

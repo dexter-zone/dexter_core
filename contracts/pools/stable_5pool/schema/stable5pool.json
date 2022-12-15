@@ -10,6 +10,7 @@
     "required": [
       "asset_infos",
       "fee_info",
+      "lp_token_addr",
       "pool_id",
       "pool_type",
       "vault_addr"
@@ -33,6 +34,14 @@
           },
           {
             "type": "null"
+          }
+        ]
+      },
+      "lp_token_addr": {
+        "description": "Address of the LP Token Contract",
+        "allOf": [
+          {
+            "$ref": "#/definitions/Addr"
           }
         ]
       },
@@ -218,30 +227,8 @@
   "execute": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "ExecuteMsg",
-    "description": "This struct describes the execute messages of the contract.",
+    "description": "This struct describes the execute messages of the contract. Each msg's params should be kept generic to allow addition of new pool types later, allow addition of logic which may need those variables, even though those params might not be used by the current pools.",
     "oneOf": [
-      {
-        "title": "Description - Set  updatable parameters related to Pool's configuration",
-        "type": "object",
-        "required": [
-          "set_lp_token"
-        ],
-        "properties": {
-          "set_lp_token": {
-            "type": "object",
-            "required": [
-              "lp_token_addr"
-            ],
-            "properties": {
-              "lp_token_addr": {
-                "$ref": "#/definitions/Addr"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
       {
         "title": "Description - Update updatable parameters related to Pool's configuration",
         "type": "object",
@@ -261,6 +248,30 @@
                     "type": "null"
                   }
                 ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "title": "Description - Update total fee bps",
+        "type": "object",
+        "required": [
+          "update_fee"
+        ],
+        "properties": {
+          "update_fee": {
+            "type": "object",
+            "required": [
+              "total_fee_bps"
+            ],
+            "properties": {
+              "total_fee_bps": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
               }
             },
             "additionalProperties": false
@@ -388,7 +399,7 @@
   "query": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "QueryMsg",
-    "description": "This struct describes the query messages of the contract.",
+    "description": "This struct describes the query messages of the contract. Each msg's params should be kept generic to allow addition of new pool types later, allow addition of logic which may need those variables, even though those params might not be used by the current pools.",
     "oneOf": [
       {
         "title": "Description - Returns the current configuration of the pool.",
@@ -761,6 +772,7 @@
         "assets",
         "block_time_last",
         "fee_info",
+        "lp_token_addr",
         "pool_id",
         "pool_type",
         "vault_addr"
@@ -793,17 +805,10 @@
           "$ref": "#/definitions/FeeStructs"
         },
         "lp_token_addr": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/definitions/Addr"
         },
         "math_params": {
-          "description": "Custom Math Config parameters are reutrned in binary format here",
+          "description": "Custom Math Config parameters are returned in binary format here",
           "anyOf": [
             {
               "$ref": "#/definitions/Binary"

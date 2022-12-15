@@ -91,7 +91,6 @@ pub fn execute(
         }
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
-
             // Transfer the lp token to the contract
             let transfer_msg = CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
@@ -288,12 +287,16 @@ pub fn compute_reward(
         return;
     }
 
+    if state.last_distributed == current_block_time {
+        return;
+    }
+
     let mut distributed_amount: Uint128 = Uint128::zero();
     for s in reward_schedules.iter() {
         let start_time = s.start_block_time;
         let end_time = s.end_block_time;
 
-        if start_time > current_block_time || end_time < state.last_distributed {
+        if start_time > current_block_time || end_time <= state.last_distributed {
             continue;
         }
 
@@ -336,6 +339,11 @@ pub fn bond(
     lp_token: Addr,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
+
+    if amount.is_zero() {
+        return Err(ContractError::ZeroAmount);
+    }
+
     let config = CONFIG.load(deps.storage)?;
     check_if_lp_token_allowed(&config, &lp_token)?;
 
@@ -431,37 +439,6 @@ pub fn unbond(
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &sender), &unlocks)?;
 
     Ok(response)
-}
-
-pub fn calculate_bonded_amount(
-    deps: Deps,
-    env: Env,
-    sender: Addr,
-    lp_token: Addr,
-) -> ContractResult<Uint128> {
-    let config = CONFIG.load(deps.storage)?;
-    check_if_lp_token_allowed(&config, &lp_token)?;
-
-    let current_bond_amount = USER_BONDED_LP_TOKENS
-        .may_load(deps.storage, (&lp_token, &sender))?
-        .unwrap_or_default();
-    
-    // deduct amount that is unlocked and due for withdrawal from bonded amount
-    let mut unlocked_amount = Uint128::zero();
-    let unlocks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &sender))?
-        .unwrap_or_default();
-    let mut new_unlocks = vec![];
-    for lock in unlocks.iter() {
-        if lock.unlock_time <= env.block.time.seconds() {
-            unlocked_amount += lock.amount;
-        } else {
-            new_unlocks.push(lock.clone());
-        }
-    }
-
-    let bonded_amount = current_bond_amount.checked_sub(unlocked_amount)?;
-    Ok(bonded_amount)
 }
 
 pub fn update_staking_rewards(

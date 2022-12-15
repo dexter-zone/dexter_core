@@ -158,7 +158,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
 
     let vault_init_msg = VaultInstantiateMsg {
         pool_configs: pool_configs.clone(),
-        lp_token_code_id: token_code_id,
+        lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         pool_creation_fee: None,
@@ -606,7 +606,7 @@ fn proper_initialization() {
     // Vault contract instance
     let vault_init_msg = VaultInstantiateMsg {
         pool_configs: pool_configs.clone(),
-        lp_token_code_id: token_code_id,
+        lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         pool_creation_fee: None,
@@ -631,7 +631,7 @@ fn proper_initialization() {
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
     assert_eq!(owner, config_res.owner);
-    assert_eq!(token_code_id, config_res.lp_token_code_id);
+    assert_eq!(token_code_id, config_res.lp_token_code_id.unwrap());
     assert_eq!(
         Some(Addr::unchecked("fee_collector".to_string())),
         config_res.fee_collector
