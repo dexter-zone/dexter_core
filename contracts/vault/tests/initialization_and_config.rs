@@ -400,7 +400,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             default_fee_info: FeeInfo {
@@ -438,7 +438,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {
@@ -466,7 +466,7 @@ fn test_add_to_registery() {
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let stable_pool_code_id = 2u64;
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {

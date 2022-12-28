@@ -55,19 +55,43 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    
+    let mut event = Event::new("dexter-vault::instantiate")
+        .add_attribute("pool_type_configs", serde_json_wasm::to_string(&msg.pool_configs).unwrap())
+        .add_attribute("owner", msg.owner.clone());
+
+    if let Some(fee_collector) = &msg.fee_collector {
+        event = event.add_attribute("fee_collector", fee_collector.clone());
+    }
+
+    if let Some(multistaking_address) = &msg.multistaking_address {
+        event = event.add_attribute("multistaking_address", multistaking_address.clone());
+    }
+
+    if let Some(generator_address) = &msg.generator_address {
+        event = event.add_attribute("generator_address", generator_address.clone());
+    }
+
+
+    if let Some(auto_stake_impl) = &msg.auto_stake_impl {
+        event = event.add_attribute("auto_stake_impl", auto_stake_impl.to_string());
+    }
 
     // Check if code id is valid
     if let Some(code_id) = msg.lp_token_code_id {
         if code_id == 0 {
             return Err(ContractError::InvalidCodeId {});
         }
+        event = event.add_attribute("lp_token_code_id", code_id.to_string());
     }
 
     if let Some(pool_creation_fee) = &msg.pool_creation_fee {
         if pool_creation_fee.amount.is_zero() {
             return Err(ContractError::InvalidPoolCreationFee {});
         }
+        event = event.add_attribute("pool_creation_fee", pool_creation_fee.to_string());
     }
+
 
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
@@ -109,9 +133,18 @@ pub fn instantiate(
         }
         REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
+    
+
     CONFIG.save(deps.storage, &config)?;
 
-    Ok(Response::new())
+    let response = Response::new()
+        .add_attributes(vec![
+            attr("action", "instantiate"),
+            attr("owner", msg.owner),
+        ])
+        .add_event(event);
+    
+    Ok(response)
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -177,8 +210,8 @@ pub fn execute(
         ExecuteMsg::RemoveAddressFromWhitelist { address } => {
             execute_remove_address_from_whitelist(deps, info, address)
         }
-        ExecuteMsg::AddToRegistry { new_pool_config } => {
-            execute_add_to_registry(deps, env, info, new_pool_config)
+        ExecuteMsg::AddToRegistry { new_pool_type_config } => {
+            execute_add_to_registry(deps, env, info, new_pool_type_config)
         }
         ExecuteMsg::CreatePoolInstance {
             pool_type,
@@ -194,9 +227,11 @@ pub fn execute(
             fee_info,
             init_params,
         ),
-        ExecuteMsg::UpdatePoolConfig { pool_id, fee_info, paused } => {
-            execute_update_pool_config(deps, info, pool_id, fee_info, paused)
-        }
+        ExecuteMsg::UpdatePoolConfig {
+            pool_id,
+            fee_info,
+            paused,
+        } => execute_update_pool_config(deps, info, pool_id, fee_info, paused),
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -464,7 +499,8 @@ pub fn execute_update_pool_type_config(
         .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
 
     // Emit Event
-    let mut event = Event::new("dexter-vault::update_pool_config")
+    let mut event = Event::new("dexter-vault::update_pool_type_config")
+        .add_attribute("pool_type", pool_type.to_string())
         .add_attribute("tx_executor", info.sender.to_string());
 
     // Update allow instantiation
@@ -491,22 +527,10 @@ pub fn execute_update_pool_type_config(
         }
 
         pool_config.default_fee_info = new_fee_info;
-        event = event
-            .add_attribute(
-                "total_fee_bps",
-                pool_config.default_fee_info.total_fee_bps.to_string(),
-            )
-            .add_attribute(
-                "protocol_fee_percent",
-                pool_config
-                    .default_fee_info
-                    .protocol_fee_percent
-                    .to_string(),
-            )
-            .add_attribute(
-                "dev_fee_percent",
-                pool_config.default_fee_info.dev_fee_percent.to_string(),
-            );
+        event = event.add_attribute(
+            "default_fee_info",
+            serde_json_wasm::to_string(&pool_config.default_fee_info).unwrap(),
+        );
     }
 
     if let Some(paused) = paused {
@@ -528,7 +552,7 @@ fn execute_update_pool_config(
     info: MessageInfo,
     pool_id: Uint128,
     fee_info: Option<FeeInfo>,
-    paused: Option<PauseInfo>
+    paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
     // permission check - only Owner can update any pool config.
     let config = CONFIG.load(deps.storage)?;
@@ -540,6 +564,7 @@ fn execute_update_pool_config(
 
     // Emit Event
     let mut event = Event::new("dexter-vault::update_pool_config")
+        .add_attribute("pool_id", pool_id)
         .add_attribute("tx_executor", info.sender.to_string());
 
     let mut msgs: Vec<CosmosMsg> = vec![];
@@ -556,13 +581,7 @@ fn execute_update_pool_config(
         }
 
         pool.fee_info = fee_info;
-        event = event
-            .add_attribute("total_fee_bps", pool.fee_info.total_fee_bps.to_string())
-            .add_attribute(
-                "protocol_fee_percent",
-                pool.fee_info.protocol_fee_percent.to_string(),
-            )
-            .add_attribute("dev_fee_percent", pool.fee_info.dev_fee_percent.to_string());
+        event = event.add_attribute("fee", serde_json_wasm::to_string(&pool.fee_info).unwrap());
 
         // update total fee in the actual pool contract by sending a wasm message
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -577,16 +596,16 @@ fn execute_update_pool_config(
     // update pause status
     if let Some(paused) = paused {
         pool.paused = paused.clone();
-
-        event = event.add_attribute("paused", paused.to_string());
+        event = event.add_attribute(
+            "paused_info",
+            serde_json_wasm::to_string(&pool.paused).unwrap(),
+        );
     }
 
     // Save pool config
     ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
 
-    let response = Response::new()
-        .add_event(event)
-        .add_messages(msgs);
+    let response = Response::new().add_event(event).add_messages(msgs);
 
     Ok(response)
 }
@@ -715,16 +734,9 @@ pub fn execute_add_to_registry(
     )?;
 
     // Emit Event
-    let event = Event::new("dexter-vault::add_new_pool")
+    let event = Event::new("dexter-vault::add_new_pool_type")
         .add_attribute("pool_type", pool_type_config.pool_type.to_string())
         .add_attribute("code_id", pool_type_config.code_id.to_string())
-        .add_attribute(
-            "developer_addr",
-            pool_type_config
-                .default_fee_info
-                .developer_addr
-                .unwrap_or(Addr::unchecked("None".to_string())),
-        )
         .add_attribute(
             "allow_instantiation",
             pool_type_config.allow_instantiation.to_string(),
@@ -734,22 +746,8 @@ pub fn execute_add_to_registry(
             pool_type_config.is_generator_disabled.to_string(),
         )
         .add_attribute(
-            "total_fee_bps",
-            pool_type_config.default_fee_info.total_fee_bps.to_string(),
-        )
-        .add_attribute(
-            "protocol_fee_percent",
-            pool_type_config
-                .default_fee_info
-                .protocol_fee_percent
-                .to_string(),
-        )
-        .add_attribute(
-            "dev_fee_percent",
-            pool_type_config
-                .default_fee_info
-                .dev_fee_percent
-                .to_string(),
+            "default_fee",
+            serde_json_wasm::to_string(&pool_type_config.default_fee_info).unwrap(),
         );
 
     Ok(Response::new().add_event(event))
@@ -842,7 +840,7 @@ pub fn execute_create_pool_instance(
     });
 
     let mut assets: Vec<Asset> = vec![];
-    let mut event = Event::new("dexter-vault::add_pool");
+    let mut event = Event::new("dexter-vault::create_pool");
 
     // Check asset definitions and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
@@ -872,7 +870,7 @@ pub fn execute_create_pool_instance(
         fee_info: fee_info.clone(),
         assets,
         pool_type: pool_type_config.pool_type.clone(),
-        init_params
+        init_params,
     };
 
     // Store the temporary Pool Info
@@ -889,22 +887,16 @@ pub fn execute_create_pool_instance(
         .add_attribute("pool_id", pool_id.to_string())
         .add_attribute("lp_token_name", token_name.clone())
         .add_attribute("lp_token_symbol", token_symbol.clone())
-        .add_attribute("total_fee_bps", fee_info.total_fee_bps.to_string())
-        .add_attribute(
-            "protocol_fee_percent",
-            fee_info.protocol_fee_percent.to_string(),
-        )
-        .add_attribute(
-            "developer_fee_percent",
-            fee_info.dev_fee_percent.to_string(),
-        );
+        .add_attribute("fee_info", serde_json_wasm::to_string(&fee_info).unwrap());
 
     // Sub Msg to initialize the LP token instance
     let init_lp_token_sub_msg: SubMsg = SubMsg {
         id: INSTANTIATE_LP_REPLY_ID,
         msg: WasmMsg::Instantiate {
             admin: None,
-            code_id: config.lp_token_code_id.ok_or(ContractError::LpTokenCodeIdNotSet)?,
+            code_id: config
+                .lp_token_code_id
+                .ok_or(ContractError::LpTokenCodeIdNotSet)?,
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,
@@ -939,7 +931,7 @@ pub fn execute_create_pool_instance(
 pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractError> {
     // Load stored temporary pool info
     let mut tmp_pool_info = TMP_POOL_INFO.load(deps.storage)?;
-    let mut event = Event::new("dexter-vault::add_pool_reply");
+    let mut event = Event::new("dexter-vault::create_pool_reply");
 
     // Parse the reply from the submessage
     let data = msg.result.unwrap().data.unwrap();
@@ -978,14 +970,18 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
             let init_pool_sub_msg: SubMsg = SubMsg {
                 id: INSTANTIATE_POOL_REPLY_ID,
                 msg: WasmMsg::Instantiate {
-                    admin: Some( CONFIG.load(deps.storage)?.owner.to_string()),
+                    admin: Some(CONFIG.load(deps.storage)?.owner.to_string()),
                     code_id: tmp_pool_info.code_id,
                     msg: to_binary(&PoolInstantiateMsg {
                         pool_id: tmp_pool_info.pool_id,
                         pool_type: tmp_pool_info.pool_type,
                         vault_addr: env.contract.address,
                         lp_token_addr,
-                        asset_infos: tmp_pool_info.assets.iter().map(|a| a.info.clone()).collect(),
+                        asset_infos: tmp_pool_info
+                            .assets
+                            .iter()
+                            .map(|a| a.info.clone())
+                            .collect(),
                         fee_info: FeeStructs {
                             total_fee_bps: tmp_pool_info.fee_info.total_fee_bps,
                         },
@@ -994,7 +990,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                     funds: vec![],
                     label: "dexter-pool-".to_string() + &tmp_pool_info.pool_id.to_string(),
                 }
-                    .into(),
+                .into(),
                 gas_limit: None,
                 reply_on: ReplyOn::Success,
             };
@@ -1012,7 +1008,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
             ACTIVE_POOLS.save(
                 deps.storage,
                 &tmp_pool_info.pool_id.to_string().as_bytes(),
-                &PoolInfo{
+                &PoolInfo {
                     pool_id: tmp_pool_info.pool_id,
                     pool_addr: pool_addr.clone(),
                     lp_token_addr: tmp_pool_info.lp_token_addr.unwrap(),
@@ -1141,10 +1137,8 @@ pub fn execute_join_pool(
     // Response - Emit Event
     let mut event = Event::new("dexter-vault::join_pool")
         .add_attribute("pool_id", pool_id.to_string())
-        .add_attribute(
-            "pool_addr",
-            pool_info.pool_addr.to_string(),
-        )
+        .add_attribute("pool_addr", pool_info.pool_addr.to_string())
+        .add_attribute("auto_stake", auto_stake.unwrap_or(false).to_string())
         .add_attribute("lp_tokens_minted", new_shares.to_string());
 
     // ExecuteMsg - Stores the list of messages to be executed
@@ -1328,9 +1322,7 @@ pub fn execute_join_pool(
     // WRITE - Store the Updated PoolInfo state to the storage
     ACTIVE_POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
-    Ok(Response::new()
-        .add_messages(execute_msgs)
-        .add_event(event))
+    Ok(Response::new().add_messages(execute_msgs).add_event(event))
 }
 
 /// ## Description - Entry point for a user to Exit a pool supported by the Vault. User can exit by providing the pool id and either the number of assets to be returned or the LP tokens to be burnt.
@@ -1419,10 +1411,7 @@ pub fn execute_exit_pool(
     // Response - Emit Event
     let mut event = Event::new("dexter-vault::exit_pool")
         .add_attribute("pool_id", pool_id.to_string())
-        .add_attribute(
-            "pool_addr",
-            pool_info.pool_addr.to_string(),
-        )
+        .add_attribute("pool_addr", pool_info.pool_addr.to_string())
         .add_attribute(
             "lp_tokens_burnt",
             pool_exit_transition.burn_shares.to_string(),
@@ -1646,8 +1635,8 @@ pub fn execute_swap(
 
     //  Read -  Get PoolInfo {} for the pool
     let mut pool_info = ACTIVE_POOLS
-    .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
-    .or(Err(ContractError::InvalidPoolId {}))?;
+        .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
+        .or(Err(ContractError::InvalidPoolId {}))?;
 
     // Read - Get the PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1659,10 +1648,7 @@ pub fn execute_swap(
     // Indexing - Make Event for indexing support
     let mut event = Event::new("dexter-vault::swap")
         .add_attribute("pool_id", swap_request.pool_id.to_string())
-        .add_attribute(
-            "pool_addr",
-            pool_info.pool_addr.to_string(),
-        )
+        .add_attribute("pool_addr", pool_info.pool_addr.to_string())
         .add_attribute("swap_type", swap_request.swap_type.to_string())
         .add_attribute("recipient", recipient.to_string())
         .add_attribute("sender", info.sender.clone());
@@ -1714,14 +1700,9 @@ pub fn execute_swap(
     let mut dev_fee = Uint128::zero();
     if let Some(fee) = pool_swap_transition.fee.clone() {
         if !fee.amount.is_zero() {
-            event = event.add_attribute(
-                "fee_asset",
-                serde_json_wasm::to_string(&fee.info).unwrap(),
-            );
-            event = event.add_attribute(
-                "total_fee",
-                fee.amount.to_string(),
-            );
+            event =
+                event.add_attribute("fee_asset", serde_json_wasm::to_string(&fee.info).unwrap());
+            event = event.add_attribute("total_fee", fee.amount.to_string());
             // Compute - Protocol Fee and dev fee
             (protocol_fee, dev_fee) = pool_config
                 .default_fee_info
@@ -1935,8 +1916,12 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
 pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
-    let pool_config = REGISTRY.load(deps.storage, pool_type.to_string())
-        .or(Err(StdError::generic_err(ContractError::PoolTypeConfigNotFound {}.to_string())))?;
+    let pool_config =
+        REGISTRY
+            .load(deps.storage, pool_type.to_string())
+            .or(Err(StdError::generic_err(
+                ContractError::PoolTypeConfigNotFound {}.to_string(),
+            )))?;
     Ok(Some(pool_config))
 }
 
@@ -1947,15 +1932,21 @@ pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigRe
 pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResult<bool> {
     let pool_id = LP_TOKEN_TO_POOL_ID
         .load(deps.storage, lp_token_addr.as_bytes())
-        .or(Err(StdError::generic_err(ContractError::LpTokenNotFound {}.to_string())))?;
+        .or(Err(StdError::generic_err(
+            ContractError::LpTokenNotFound {}.to_string(),
+        )))?;
 
     let pool_info = ACTIVE_POOLS
         .load(deps.storage, &pool_id.to_string().as_bytes())
-        .or(Err(StdError::generic_err(ContractError::InvalidPoolId {}.to_string())))?;
+        .or(Err(StdError::generic_err(
+            ContractError::InvalidPoolId {}.to_string(),
+        )))?;
 
     let pool_type_config = REGISTRY
         .load(deps.storage, pool_info.pool_type.to_string())
-        .or(Err(StdError::generic_err(ContractError::PoolTypeConfigNotFound {}.to_string())))?;
+        .or(Err(StdError::generic_err(
+            ContractError::PoolTypeConfigNotFound {}.to_string(),
+        )))?;
     Ok(pool_type_config.is_generator_disabled)
 }
 

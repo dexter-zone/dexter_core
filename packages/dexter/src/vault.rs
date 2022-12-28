@@ -160,7 +160,6 @@ impl Display for AllowPoolInstantiation {
         }
     }
 }
-
 /// This struct stores a pool type's configuration.
 #[cw_serde]
 pub struct PoolTypeConfig {
@@ -255,6 +254,15 @@ pub enum AutoStakeImpl {
     Multistaking
 }
 
+impl Display for AutoStakeImpl {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        match self {
+            AutoStakeImpl::Generator => fmt.write_str("generator"),
+            AutoStakeImpl::Multistaking => fmt.write_str("multistaking"),
+        }
+    }
+}
+
 /// This struct describes the Msg used to instantiate in this contract.
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -324,7 +332,7 @@ pub enum ExecuteMsg {
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {
-        new_pool_config: PoolTypeConfig,
+        new_pool_type_config: PoolTypeConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
     CreatePoolInstance {
