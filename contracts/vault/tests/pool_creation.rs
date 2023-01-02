@@ -230,12 +230,12 @@ fn test_pool_creation_whitelist() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        pool_creation_fee: Some(Asset {
+        pool_creation_fee: Some(Some(Asset {
             info: AssetInfo::NativeToken {
                 denom: "uxprt".to_string(),
             },
             amount: Uint128::from(100_000_000u128),
-        }),
+        })),
         auto_stake_impl: None,
         multistaking_address: None,
         generator_address: None,
@@ -485,12 +485,12 @@ fn test_pool_creation_fee() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        pool_creation_fee: Some(Asset {
+        pool_creation_fee: Some(Some(Asset {
             info: AssetInfo::NativeToken {
                 denom: "uxprt".to_string(),
             },
             amount: Uint128::from(100_000_000u128),
-        }),
+        })),
         auto_stake_impl: None,
         generator_address: None,
         multistaking_address: None,

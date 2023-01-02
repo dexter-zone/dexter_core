@@ -368,14 +368,15 @@ pub fn execute_update_config(
     info: MessageInfo,
     lp_token_code_id: Option<u64>,
     fee_collector: Option<String>,
-    pool_creation_fee: Option<Asset>,
-    auto_stake_impl: Option<AutoStakeImpl>,
+    pool_creation_fee: Option<Option<Asset>>,
+    auto_stake_impl: Option<Option<AutoStakeImpl>>,
     generator_address: Option<String>,
     multistaking_address: Option<String>,
     paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
+    let mut event = Event::new("dexter-vault::update_config");
     // permission check
     if info.sender.clone() != config.owner {
         return Err(ContractError::Unauthorized {});
@@ -387,29 +388,38 @@ pub fn execute_update_config(
         if lp_token_code_id == 0 {
             return Err(ContractError::InvalidCodeId {});
         }
+        event = event.add_attribute("lp_token_code_id", lp_token_code_id.to_string());
         config.lp_token_code_id = Some(lp_token_code_id);
     }
 
     // Update fee collector
     if let Some(fee_collector) = fee_collector {
+        event = event.add_attribute("fee_collector", fee_collector.clone());
         config.fee_collector = Some(deps.api.addr_validate(fee_collector.as_str())?);
     }
 
     // Validate the pool creation fee
     if let Some(pool_creation_fee) = &pool_creation_fee {
-        if pool_creation_fee.amount.is_zero() {
-            return Err(ContractError::InvalidPoolCreationFee {});
+        if let Some(pool_creation_fee) = pool_creation_fee {
+            if pool_creation_fee.amount.is_zero() {
+                return Err(ContractError::InvalidPoolCreationFee {});
+            }
         }
+        config.pool_creation_fee = pool_creation_fee.clone();
+        event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&config.pool_creation_fee).unwrap());
     }
-    config.pool_creation_fee = pool_creation_fee;
 
     // set auto stake implementation
-    config.auto_stake_impl = auto_stake_impl;
+    if let Some(auto_stake_impl) = auto_stake_impl {
+        config.auto_stake_impl = auto_stake_impl;
+        event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&config.auto_stake_impl).unwrap());
+    }
 
     // Set generator only if its not set
     if !config.generator_address.is_some() {
         if let Some(generator_address) = generator_address {
             config.generator_address = Some(deps.api.addr_validate(generator_address.as_str())?);
+            event = event.add_attribute("generator_address", generator_address);
         }
     }
 
@@ -418,11 +428,13 @@ pub fn execute_update_config(
         if let Some(multistaking_address) = multistaking_address {
             config.multistaking_address =
                 Some(deps.api.addr_validate(multistaking_address.as_str())?);
+            event = event.add_attribute("multistaking_address", multistaking_address);
         }
     }
 
     // update the pause status
     if let Some(paused) = paused {
+        event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
         config.paused = paused;
     }
 
@@ -436,7 +448,9 @@ pub fn execute_update_config(
     }
 
     CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new().add_attribute("action", "update_config"))
+    
+    let response = Response::default().add_event(event);
+    Ok(response)
 }
 
 pub fn execute_update_pause_info(
@@ -931,7 +945,7 @@ pub fn execute_create_pool_instance(
 pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractError> {
     // Load stored temporary pool info
     let mut tmp_pool_info = TMP_POOL_INFO.load(deps.storage)?;
-    let mut event = Event::new("dexter-vault::create_pool_reply");
+    let event;
 
     // Parse the reply from the submessage
     let data = msg.result.unwrap().data.unwrap();
@@ -947,7 +961,12 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
         INSTANTIATE_LP_REPLY_ID => {
             // Update the LP token address in the temporary pool info
             let lp_token_addr = deps.api.addr_validate(res.get_contract_address())?;
-            tmp_pool_info.lp_token_addr = Some(lp_token_addr.clone());
+
+            event = Event::new("dexter-vault::create_pool_reply_lp_token_init")
+                .add_attribute("pool_id", tmp_pool_info.pool_id.to_string())
+                .add_attribute("lp_token_addr", lp_token_addr.to_string());
+            
+                tmp_pool_info.lp_token_addr = Some(lp_token_addr.clone());
             // Store the temporary Pool Info
             TMP_POOL_INFO.save(deps.storage, &tmp_pool_info)?;
 
@@ -962,9 +981,6 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                 &lp_token_addr.clone().as_bytes(),
                 &tmp_pool_info.pool_id.clone(),
             )?;
-
-            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
-            event = event.add_attribute("lp_token_addr", lp_token_addr.clone());
 
             // Sub Msg to initialize the pool instance
             let init_pool_sub_msg: SubMsg = SubMsg {
@@ -1004,6 +1020,10 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                 attr("pool_addr", pool_addr.clone()),
             ]);
 
+            event = Event::new("dexter-vault::create_pool_reply_pool_init")
+                .add_attribute("pool_id", tmp_pool_info.pool_id.to_string())
+                .add_attribute("pool_addr", pool_addr.to_string());
+
             // Save the temporary pool info as permanent pool info mapped with the Pool Id
             ACTIVE_POOLS.save(
                 deps.storage,
@@ -1018,9 +1038,6 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                     paused: PauseInfo::default(),
                 },
             )?;
-
-            event = event.add_attribute("pool_id", tmp_pool_info.pool_id);
-            event = event.add_attribute("pool_addr", pool_addr);
 
             // Update the next pool id in the config and save it
             let mut config = CONFIG.load(deps.storage)?;

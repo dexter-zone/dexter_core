@@ -302,8 +302,8 @@ pub enum ExecuteMsg {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
         // Fee required for creating a new pool.
-        pool_creation_fee: Option<Asset>,
-        auto_stake_impl: Option<AutoStakeImpl>,
+        pool_creation_fee: Option<Option<Asset>>,
+        auto_stake_impl: Option<Option<AutoStakeImpl>>,
         generator_address: Option<String>,
         multistaking_address: Option<String>,
         paused: Option<PauseInfo>,
