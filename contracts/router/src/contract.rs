@@ -472,6 +472,10 @@ fn query_simulate_multihop(
         return_swap_sim_failure(vec![], "Multiswap request cannot be empty".to_string());
     }
 
+    if multiswap_request.len() > MAX_SWAP_OPERATIONS {
+        return_swap_sim_failure(vec![], "The swap operation limit was exceeded!".to_string());
+    }
+
     match swap_type {
         // If we are giving in, we need to simulate the trades in the order of the hops
         SwapType::GiveIn {} => {
