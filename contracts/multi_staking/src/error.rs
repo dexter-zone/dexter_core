@@ -28,6 +28,9 @@ pub enum ContractError {
         received_amount: Uint128,
     },
 
+    #[error("Can't allow any more LP tokens, limit reached!")]
+    CantAllowAnyMoreLpTokens,
+
     #[error("LP Token is already allowed")]
     LpTokenAlreadyAllowed,
 

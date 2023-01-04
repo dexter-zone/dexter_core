@@ -4,6 +4,9 @@ use cw20::Cw20ReceiveMsg;
 
 use crate::asset::AssetInfo;
 
+/// Maximum number of LP tokens that are allowed by the multi-staking contract
+pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
+
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Addr,

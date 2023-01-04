@@ -19,6 +19,7 @@ use dexter::{
 };
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
+use dexter::multi_staking::MAX_ALLOWED_LP_TOKENS;
 
 use crate::{
     error::ContractError,
@@ -151,6 +152,11 @@ fn allow_lp_token(
     let mut config = CONFIG.load(deps.storage)?;
     if config.owner != info.sender {
         return Err(ContractError::Unauthorized);
+    }
+
+    // To prevent out-of-gas issues in long run
+    if config.allowed_lp_tokens.len() == MAX_ALLOWED_LP_TOKENS {
+        return Err(ContractError::CantAllowAnyMoreLpTokens);
     }
 
     // verify that lp token is not already allowed
