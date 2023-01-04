@@ -626,7 +626,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                     .may_load(deps.storage, (&asset.to_string(), &lp_token))?
                     .unwrap_or(AssetRewardState {
                         reward_index: Decimal::zero(),
-                        last_distributed: block_time,
+                        last_distributed: 0,
                     });
 
                 let reward_schedules = REWARD_SCHEDULES
