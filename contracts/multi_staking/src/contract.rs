@@ -40,7 +40,7 @@ pub fn instantiate(
         deps.storage,
         &Config {
             unlock_period: msg.unlock_period,
-            owner: msg.owner,
+            owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
         },
     )?;
@@ -252,6 +252,7 @@ pub fn receive_cw20(
         },
         Cw20HookMsg::BondForBeneficiary { beneficiary } => {
             let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
             bond(deps, env, beneficiary, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::AddRewardSchedule {
