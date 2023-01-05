@@ -19,7 +19,7 @@ use dexter::{
 };
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use dexter::multi_staking::MAX_ALLOWED_LP_TOKENS;
+use dexter::multi_staking::{MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS};
 
 use crate::{
     error::ContractError,
@@ -435,6 +435,10 @@ pub fn unbond(
     let mut unlocks = USER_LP_TOKEN_LOCKS
         .may_load(deps.storage, (&lp_token, &sender))?
         .unwrap_or_default();
+
+    if unlocks.len() == MAX_USER_LP_TOKEN_LOCKS {
+        return Err(ContractError::CantAllowAnyMoreLpTokenUnbonds);
+    }
 
     let config = CONFIG.load(deps.storage)?;
 

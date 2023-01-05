@@ -4,8 +4,13 @@ use cw20::Cw20ReceiveMsg;
 
 use crate::asset::AssetInfo;
 
-/// Maximum number of LP tokens that are allowed by the multi-staking contract
+/// Maximum number of LP tokens that are allowed by the multi-staking contract.
+/// This limit exists to prevent out-of-gas issues during allow and remove LP token operations.
 pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
+
+/// Maximum number of LP token locks a user is allowed to have.
+/// This limit exists to prevent out-of-gas issues during LP token unlock.
+pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 
 #[cw_serde]
 pub struct InstantiateMsg {
