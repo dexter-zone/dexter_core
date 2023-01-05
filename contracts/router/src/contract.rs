@@ -159,7 +159,7 @@ pub fn execute_multihop_swap(
         if tokens_received.is_zero() || tokens_received < offer_amount {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg: format!(
-                    "Invalid number of tokens sent. Tokens sent = {} Tokens received = {}",
+                    "Invalid number of tokens sent. The offer amount is larger than the number of tokens received. Tokens received = {} Tokens offered = {}",
                     tokens_received, offer_amount
                 ),
             });
