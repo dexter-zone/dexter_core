@@ -156,7 +156,7 @@ pub fn execute_multihop_swap(
             .get_sent_native_token_balance(&info);
 
         // Error - if the number of native tokens sent is less than the offer amount, then return error
-        if tokens_received.is_zero() || tokens_received < offer_amount {
+        if tokens_received < offer_amount {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg: format!(
                     "Invalid number of tokens sent. The offer amount is larger than the number of tokens received. Tokens received = {} Tokens offered = {}",

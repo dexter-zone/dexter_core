@@ -252,12 +252,12 @@ pub fn receive_cw20(
 ) -> Result<Response, ContractError> {
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::Bond {} => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
             bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
         },
         Cw20HookMsg::BondForBeneficiary { beneficiary } => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let token_address = info.sender;
             let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
             bond(deps, env, beneficiary, token_address, cw20_msg.amount)
         }
@@ -266,7 +266,7 @@ pub fn receive_cw20(
             start_block_time,
             end_block_time,
         } => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let token_address = info.sender.clone();
             add_reward_schedule(
                 deps,
                 env,
@@ -467,7 +467,7 @@ pub fn update_staking_rewards(
     current_block_time: u64,
     deps: &mut DepsMut,
     response: &mut Response,
-    operation_post_update: Option<fn(&Addr, &mut AssetRewardState, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
+    operation_post_update: Option<fn(&Addr, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
 ) -> ContractResult<()> {
     let mut asset_staker_info = ASSET_STAKER_INFO
         .may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?
@@ -495,7 +495,7 @@ pub fn update_staking_rewards(
     compute_staker_reward(current_bond_amount, &mut asset_state, &mut asset_staker_info)?;
 
     if let Some(operation) = operation_post_update {
-        operation(user, &mut asset_state, &mut asset_staker_info, response)?;
+        operation(user, &mut asset_staker_info, response)?;
     }
 
     ASSET_LP_REWARD_STATE.save(
@@ -549,7 +549,6 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
 
 fn withdraw_pending_reward(
     user: &Addr,
-    asset_reward_state: &mut AssetRewardState,
     asset_staker_info: &mut AssetStakerInfo,
     response: &mut Response,
 ) -> ContractResult<()> {
@@ -567,7 +566,7 @@ fn withdraw_pending_reward(
     }
 
     asset_staker_info.pending_reward = Uint128::zero();
-    asset_staker_info.reward_index = asset_reward_state.reward_index;
+
     Ok(())
 }
 
