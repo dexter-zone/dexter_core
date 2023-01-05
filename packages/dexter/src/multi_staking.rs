@@ -171,18 +171,18 @@ pub enum ExecuteMsg {
     /// CW20 assets to be used as rewards.
     Receive(Cw20ReceiveMsg),
     /// Allows to bond LP tokens to the contract.
-    /// Bonded tokens are elligible to receive rewards.
+    /// Bonded tokens are eligible to receive rewards.
     Bond {
         lp_token: Addr,
         amount: Uint128,
     },
     /// Allows to unbond LP tokens from the contract.
     /// After unbonding, the tokens are still locked for a locking period.
-    /// During this period, the tokens are still elligible to receive rewards.\
+    /// During this period, the tokens are still eligible to receive rewards.
     /// After the locking period, the tokens can be withdrawn.
     Unbond {
         lp_token: Addr,
-        amount: Uint128,
+        amount: Option<Uint128>,
     },
     /// Unlocks the tokens which are locked for a locking period.
     /// After unlocking, the tokens are withdrawn from the contract and sent to the user.

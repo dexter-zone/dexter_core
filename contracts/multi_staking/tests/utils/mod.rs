@@ -288,7 +288,7 @@ pub fn unbond_lp_tokens(
     app.execute_contract(
         sender.clone(), 
         multistaking_contract.clone(),
-        &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount },
+        &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount: Some(amount) },
         &vec![],
     )
 }

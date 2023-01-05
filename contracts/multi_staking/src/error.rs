@@ -28,6 +28,12 @@ pub enum ContractError {
         received_amount: Uint128,
     },
 
+    #[error("Can't unbond more than bonded. Current bond amount: {current_bond_amount}, Amount to unbond {amount_to_unbond}")]
+    CantUnbondMoreThanBonded {
+        current_bond_amount: Uint128,
+        amount_to_unbond: Uint128,
+    },
+
     #[error("Can't allow any more LP token unbonds, limit reached! First unlock existing unbonds, then initiate new unbond.")]
     CantAllowAnyMoreLpTokenUnbonds,
 

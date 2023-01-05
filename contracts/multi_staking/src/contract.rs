@@ -395,7 +395,7 @@ pub fn unbond(
     env: Env,
     sender: Addr,
     lp_token: Addr,
-    amount: Uint128,
+    amount: Option<Uint128>,
 ) -> ContractResult<Response> {
     // We don't have to check for LP token allowed here, because there's a scenario that we allowed bonding
     // for an asset earlier and then we remove the LP token from the list of allowed LP tokens. In this case
@@ -405,6 +405,9 @@ pub fn unbond(
     let current_bond_amount = USER_BONDED_LP_TOKENS
         .may_load(deps.storage, (&lp_token, &sender))?
         .unwrap_or_default();
+
+    // if user didn't explicitly mention any amount, unbond everything.
+    let amount= amount.unwrap_or(current_bond_amount);
 
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
     for asset in &lp_global_state.active_reward_assets {
@@ -428,7 +431,10 @@ pub fn unbond(
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
         (&lp_token, &sender),
-        &(current_bond_amount.checked_sub(amount)?),
+        &(current_bond_amount.checked_sub(amount).map_err(|_| ContractError::CantUnbondMoreThanBonded {
+            amount_to_unbond: amount,
+            current_bond_amount,
+        })?),
     )?;
 
     // Start unlocking clock for the user's LP Tokens
