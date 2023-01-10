@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::vec;
 
 use crate::error::ContractError;
@@ -474,6 +475,16 @@ fn query_simulate_multihop(
 
     if multiswap_request.len() > MAX_SWAP_OPERATIONS {
         return_swap_sim_failure(vec![], "The swap operation limit was exceeded!".to_string());
+    }
+
+    // if two or more swaps use the same pool, then we can't simulate the query correctly as for the
+    // simulation to happen correctly the state of the pool needs to change between queries, which
+    // is technically not possible in a query, but only in a tx.
+    let mut pool_ids: HashSet<String> = HashSet::with_capacity(multiswap_request.len());
+    for hop in multiswap_request.iter() {
+        if !pool_ids.insert(hop.pool_id.to_string()) {
+            return_swap_sim_failure(vec![], "Can't simulate query when two or more swaps use the same pool!".to_string());
+        }
     }
 
     match swap_type {
