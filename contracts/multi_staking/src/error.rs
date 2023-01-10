@@ -55,6 +55,27 @@ pub enum ContractError {
         end_block_time: u64,
     },
 
+    #[error("Start block time must be at least 3 days in future at the time of proposal to give enough time to review")]
+    ProposedStartBlockTimeMustBeReviewable,
+
+    #[error("Proposal already exists with ID: {proposal_id}")]
+    ProposalAlreadyExists {
+        proposal_id: String
+    },
+
+    #[error("Proposal not found for ID: {proposal_id}")]
+    ProposalNotFound {
+        proposal_id: String
+    },
+
+    #[error("Duplicate review found for ID: {proposal_id}")]
+    DuplicateReview {
+        proposal_id: String
+    },
+
+    #[error("Can't query by only proposer! LP token addr must be given")]
+    InvalidQuery,
+
     #[error("Impossible contract state: {error}")]
     ImpossibleContractState {
         error: String,

@@ -2,12 +2,17 @@
 use cosmwasm_std::{Addr, Uint128};
 use cw_storage_plus::{Map, Item};
 use dexter::{multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock, LpGlobalState}, helper::OwnershipProposal};
+use dexter::multi_staking::ProposedRewardSchedule;
 
 // Global config of the contract
 pub const CONFIG: Item<Config> = Item::new("config");
 
 /// Ownership proposal in case of ownership transfer is initiated
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
+
+/// Map of (LP token addr, Proposer Addr, Proposal ID) to the proposed reward schedule for that LP token.
+/// Only when these proposals are approved, they will be moved to REWARD_SCHEDULES.
+pub const REWARD_SCHEDULE_PROPOSALS: Map<(&Addr, &Addr, &str), ProposedRewardSchedule> = Map::new("reward_schedule_proposals");
 
 /// Map between (LP Token, User, Asset identifier) to AssetStakerInfo
 /// This is used to store the staker's information for each asset and LP token pair

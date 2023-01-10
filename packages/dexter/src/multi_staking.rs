@@ -2,15 +2,18 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 
-use crate::asset::AssetInfo;
+use crate::asset::{Asset, AssetInfo};
 
-/// Maximum number of LP tokens that are allowed by the multi-staking contract.
+/// Maximum number of LP tokens that are allowed by the multi-staking contract at a point in time.
 /// This limit exists to prevent out-of-gas issues during allow and remove LP token operations.
 pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
 
-/// Maximum number of LP token locks a user is allowed to have.
+/// Maximum number of LP token locks a user is allowed to have at a point in time.
 /// This limit exists to prevent out-of-gas issues during LP token unlock.
 pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
+
+/// Minimum number of seconds only after which the reward schedule should start. 3 days at present.
+pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY: u64 = 3 * 24 * 60 * 60;
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -45,6 +48,32 @@ pub struct RewardSchedule {
     pub staking_lp_token: Addr,
     pub start_block_time: u64,
     pub end_block_time: u64,
+}
+
+#[cw_serde]
+/// The proposed reward schedule for a LP token
+pub struct ProposedRewardSchedule {
+    /// The asset proposed as reward.
+    /// The asset would go back to the proposer either if the reward schedule is rejected by admin,
+    /// or when the proposer drops the proposal.
+    pub asset: Asset,
+    /// Block time when the reward schedule will become effective.
+    /// This must be at least 7 days in future at the time of proposal to give enough time to review.
+    /// This also acts as the expiry of the proposal. If time has elapsed after the start_block_time,
+    /// then the proposal can't be approved by the admin. After that, it can only be rejected by the
+    /// admin, or dropped by the proposer.
+    pub start_block_time: u64,
+    /// Block time when reward schedule ends.
+    pub end_block_time: u64,
+}
+
+#[cw_serde]
+/// Review of a proposed reward schedule for a LP token
+pub struct ReviewProposedRewardSchedule {
+    /// ID of the proposal to review
+    pub proposal_id: String,
+    /// true if approved, false if rejected
+    pub approve: bool,
 }
 
 #[cw_serde]
@@ -86,6 +115,14 @@ pub struct LpGlobalState {
 }
 
 #[cw_serde]
+pub struct ProposedRewardSchedulesResponse {
+    pub lp_token: Addr,
+    pub proposer: Addr,
+    pub proposal_id: String,
+    pub proposal: ProposedRewardSchedule,
+}
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns currently unclaimed rewards for a user for a give LP token
@@ -117,6 +154,16 @@ pub enum QueryMsg {
     /// Returns the current owner of the contract
     #[returns(Addr)]
     Owner {},
+    /// Returns the proposed reward schedules matching the given search criteria.
+    /// If both options are None, all the proposed reward schedules are returned.
+    /// If lp_token is specified, all the proposed reward schedules for that lp_token are returned.
+    /// If both options are given, then all the proposed reward schedules for the given lp_token and proposer are returned.
+    /// Specifying a proposer without an lp_token is invalid.
+    #[returns(Vec<ProposedRewardSchedulesResponse>)]
+    ProposedRewardSchedules { lp_token: Option<Addr>, proposer: Option<Addr> },
+    /// Returns the proposed reward schedule matching the given parameters
+    #[returns(ProposedRewardSchedule)]
+    ProposedRewardSchedule { lp_token: Addr, proposer: Addr, proposal_id: String },
     /// Returns the reward schedule for a given LP token and a reward asset
     #[returns(Vec<RewardSchedule>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
@@ -136,10 +183,11 @@ pub enum Cw20HookMsg {
     Bond {},
     /// This hook message is called when a different address is bonding on user's behalf.
     BondForBeneficiary { beneficiary: Addr },
-    /// This hook message is sent from a CW20 asset contract to create a reward schedule for some LP.
+    /// This hook message is sent from a CW20 asset contract to propose a reward schedule for some LP.
     /// The LP Token contract must be in the allowed_lp_tokens list.
-    AddRewardSchedule {
+    ProposeRewardSchedule {
         lp_token: Addr,
+        proposal_id: String,
         start_block_time: u64,
         end_block_time: u64,
     },
@@ -147,14 +195,32 @@ pub enum Cw20HookMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// Adds a new reward schedule for rewarding LP token holders a specific asset.
+    /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
     /// This entry point is strictly meant for creating reward schedules with native tokens.
-    /// For creating reward schedules with CW20 tokens, CW20 transfer with AddRewardSchedule HookMsg is used.
-    AddRewardSchedule {
+    /// For proposing reward schedules with CW20 tokens, CW20 transfer with ProposeRewardSchedule
+    /// HookMsg is used. Anyone can initiate a reward schedule proposal.
+    ProposeRewardSchedule {
         lp_token: Addr,
+        /// This is a unique identifier for this proposal.
+        /// It only has to be unique per lp_token and proposer.
+        /// Anyone can create a new proposal with their own ID of choosing, and later admins can
+        /// review proposals using this ID. This is there to facilitate easier communication between
+        /// external teams and DEX team for identifying proposal reviews.
+        proposal_id: String,
         start_block_time: u64,
         end_block_time: u64,
+    },
+    /// Only the multi-staking admin can approve/reject proposed reward schedules.
+    ReviewRewardScheduleProposals {
+        lp_token: Addr,
+        proposer: Addr,
+        reviews: Vec<ReviewProposedRewardSchedule>,
+    },
+    /// Only the proposer can drop the proposal.
+    DropRewardScheduleProposal {
+        lp_token: Addr,
+        proposal_id: String,
     },
     /// Allows an admin to allow a new LP token to be rewarded
     /// This is needed to prevent spam related to adding new reward schedules for random LP tokens

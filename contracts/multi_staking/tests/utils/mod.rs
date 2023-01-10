@@ -2,6 +2,7 @@ use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary}
 use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
 use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward}, asset::AssetInfo};
 use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
+use dexter::multi_staking::ReviewProposedRewardSchedule;
 
 const EPOCH_START: u64 = 1_000_000_000;
 
@@ -183,6 +184,22 @@ pub fn create_reward_schedule(
     admin_addr: &Addr,
     multistaking_contract: &Addr,
     lp_token: &Addr,
+    proposal_id: String,
+    reward_asset: AssetInfo,
+    amount: Uint128,
+    start_block_time: u64,
+    end_block_time: u64,
+) -> anyhow::Result<AppResponse> {
+    propose_reward_schedule(app, admin_addr, multistaking_contract, lp_token, proposal_id.clone(), reward_asset, amount, start_block_time, end_block_time).unwrap();
+    review_reward_schedule(app, admin_addr, multistaking_contract, lp_token, admin_addr, vec![ReviewProposedRewardSchedule { proposal_id, approve: true}])
+}
+
+pub fn propose_reward_schedule(
+    app: &mut App,
+    proposer: &Addr,
+    multistaking_contract: &Addr,
+    lp_token: &Addr,
+    proposal_id: String,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
@@ -192,33 +209,73 @@ pub fn create_reward_schedule(
     match reward_asset {
         AssetInfo::NativeToken { denom } => {
             app.execute_contract(
-                admin_addr.clone(), 
-                multistaking_contract.clone(), 
-                &ExecuteMsg::AddRewardSchedule { 
-                        lp_token: lp_token.clone(),
-                        start_block_time, 
-                        end_block_time 
+                proposer.clone(),
+                multistaking_contract.clone(),
+                &ExecuteMsg::ProposeRewardSchedule {
+                    lp_token: lp_token.clone(),
+                    proposal_id,
+                    start_block_time,
+                    end_block_time
                 },
                 &vec![Coin::new(amount.u128(), denom.as_str())]
             )
         },
         AssetInfo::Token { contract_addr } => {
             app.execute_contract(
-                admin_addr.clone(), 
-                contract_addr.clone(), 
-                &Cw20ExecuteMsg::Send { 
-                        contract: multistaking_contract.to_string(),
-                        amount,
-                        msg: to_binary(&Cw20HookMsg::AddRewardSchedule {
-                            lp_token: lp_token.clone(),
-                            start_block_time,
-                            end_block_time,
-                        }).unwrap()
-                    },
+                proposer.clone(),
+                contract_addr.clone(),
+                &Cw20ExecuteMsg::Send {
+                    contract: multistaking_contract.to_string(),
+                    amount,
+                    msg: to_binary(&Cw20HookMsg::ProposeRewardSchedule {
+                        lp_token: lp_token.clone(),
+                        proposal_id,
+                        start_block_time,
+                        end_block_time,
+                    }).unwrap()
+                },
                 &vec![]
             )
         }
     }
+}
+
+pub fn review_reward_schedule(
+    app: &mut App,
+    admin_addr: &Addr,
+    multistaking_contract: &Addr,
+    lp_token: &Addr,
+    proposer: &Addr,
+    reviews: Vec<ReviewProposedRewardSchedule>,
+) -> anyhow::Result<AppResponse> {
+    app.execute_contract(
+        admin_addr.clone(),
+        multistaking_contract.clone(),
+        &ExecuteMsg::ReviewRewardScheduleProposals {
+            lp_token: lp_token.clone(),
+            proposer: proposer.clone(),
+            reviews,
+        },
+        &vec![]
+    )
+}
+
+pub fn drop_reward_schedule(
+    app: &mut App,
+    proposer: &Addr,
+    multistaking_contract: &Addr,
+    lp_token: &Addr,
+    proposal_id: String,
+) -> anyhow::Result<AppResponse> {
+    app.execute_contract(
+        proposer.clone(),
+        multistaking_contract.clone(),
+        &ExecuteMsg::DropRewardScheduleProposal {
+            lp_token: lp_token.clone(),
+            proposal_id,
+        },
+        &vec![]
+    )
 }
 
 pub fn mint_lp_tokens_to_addr(
