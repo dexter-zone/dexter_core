@@ -1,4 +1,5 @@
 use cosmwasm_std::{StdError, Uint128, OverflowError};
+use dexter::multi_staking::MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -55,7 +56,10 @@ pub enum ContractError {
         end_block_time: u64,
     },
 
-    #[error("Start block time must be at least 3 days in future at the time of proposal to give enough time to review")]
+    #[error(
+        "Start block time must be at least {} days in future at the time of proposal to give enough time to review",
+        MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS
+    )]
     ProposedStartBlockTimeMustBeReviewable,
 
     #[error("Proposal already exists with ID: {proposal_id}")]

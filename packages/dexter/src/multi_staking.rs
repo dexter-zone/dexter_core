@@ -12,8 +12,11 @@ pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
 /// This limit exists to prevent out-of-gas issues during LP token unlock.
 pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 
-/// Minimum number of seconds only after which the reward schedule should start. 3 days at present.
-pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY: u64 = 3 * 24 * 60 * 60;
+/// Minimum number of days only after which the reward schedule should start. 3 days at present.
+pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS: u64 = 3;
+
+/// Minimum number of seconds only after which the reward schedule should start.
+pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY: u64 = MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS * 24 * 60 * 60;
 
 #[cw_serde]
 pub struct InstantiateMsg {
