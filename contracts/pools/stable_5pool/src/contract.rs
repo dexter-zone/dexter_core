@@ -65,6 +65,9 @@ pub fn instantiate(
 
     // store precisions for assets in storage
     let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
+    if greatest_precision > 18 {
+        return Err(ContractError::InvalidGreatestPrecision);
+    }
 
     // Initializing cumulative prices
     let mut cumulative_prices = vec![];
