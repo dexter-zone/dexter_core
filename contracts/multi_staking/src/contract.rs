@@ -506,6 +506,9 @@ pub fn unbond(
 
     // if user didn't explicitly mention any amount, unbond everything.
     let amount= amount.unwrap_or(current_bond_amount);
+    if amount.is_zero() {
+        return Err(ContractError::ZeroAmount);
+    }
 
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
     for asset in &lp_global_state.active_reward_assets {
