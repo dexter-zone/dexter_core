@@ -4,7 +4,7 @@ use std::vec;
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
-use dexter::vault::{FeeInfo, PoolTypeConfig, PoolType};
+use dexter::vault::{FeeInfo, PauseInfo, PoolTypeConfig, PoolType};
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
@@ -48,6 +48,7 @@ fn instantiate_contracts(
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         }],
         lp_token_code_id: Some(1u64),
         fee_collector: None,

@@ -5,7 +5,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::vault::{ExecuteMsg, PauseInfo, SingleSwapRequest, SwapType};
+use dexter::vault::{ExecuteMsg, PauseInfo, PoolType, SingleSwapRequest, SwapType};
 
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
@@ -404,7 +404,51 @@ fn test_swap() {
     )
         .unwrap();
 
-    // pause swaps specifically for stable 5 pool
+    // pause swaps specifically for stable 5 pool type
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Stable5Pool {},
+        allow_instantiation: None,
+        new_fee_info: None,
+        is_generator_disabled: None,
+        paused: Some(PauseInfo{deposit: false, swap: true}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // swap should still fail because of the pause
+    assert_eq!("Swaps are paused", app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &swap_msg,
+        &[Coin {
+            denom: denom1.to_string(),
+            amount: Uint128::new(252_000000u128),
+        }],
+    )
+        .unwrap_err().root_cause().to_string());
+
+    // resume swaps specifically for stable 5 pool type
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Stable5Pool {},
+        allow_instantiation: None,
+        new_fee_info: None,
+        is_generator_disabled: None,
+        paused: Some(PauseInfo{deposit: false, swap: false}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // pause swaps specifically for stable 5 pool id
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
@@ -430,7 +474,7 @@ fn test_swap() {
     )
         .unwrap_err().root_cause().to_string());
 
-    // resume swaps specifically for stable 5 pool
+    // resume swaps specifically for stable 5 pool id
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,

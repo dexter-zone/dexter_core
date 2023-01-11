@@ -267,6 +267,7 @@ fn test_pool_creation_whitelist() {
         allow_instantiation: Some(AllowPoolInstantiation::Nobody),
         is_generator_disabled: None,
         new_fee_info: None,
+        paused: None,
     };
 
     app.execute_contract(
@@ -298,6 +299,7 @@ fn test_pool_creation_whitelist() {
         allow_instantiation: Some(AllowPoolInstantiation::OnlyWhitelistedAddresses),
         is_generator_disabled: None,
         new_fee_info: None,
+        paused: None,
     };
 
     app.execute_contract(

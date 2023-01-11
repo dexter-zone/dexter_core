@@ -9,7 +9,7 @@ use dexter::generator::UserInfoResponse;
 use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
-use dexter::vault::{ExecuteMsg, PauseInfo};
+use dexter::vault::{ExecuteMsg, PauseInfo, PoolType};
 
 use crate::utils::{
     increase_token_allowance, initialize_3_tokens, initialize_generator_contract,
@@ -214,18 +214,20 @@ fn test_join_pool() {
     )
         .unwrap();
 
+    let stable5_pool_join_msg = ExecuteMsg::JoinPool {
+        pool_id: Uint128::from(stable5_pool_id),
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_msg.clone()),
+    };
+
     // try to provide liquidity to empty stable 5 pool => should fail with paused error
     assert_eq!("Deposits are paused", app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable5_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(assets_msg.clone()),
-        },
+        &stable5_pool_join_msg,
         &[
             Coin {
                 denom: denom0.clone(),
@@ -256,7 +258,56 @@ fn test_join_pool() {
     )
         .unwrap();
 
-    // pause deposits specifically for stable 5 pool
+    // pause deposits specifically for stable 5 pool type
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Stable5Pool {},
+        allow_instantiation: None,
+        new_fee_info: None,
+        is_generator_disabled: None,
+        paused: Some(PauseInfo{deposit: true, swap: false}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // try to provide liquidity to empty stable 5 pool => should still fail with paused error
+    assert_eq!("Deposits are paused", app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &stable5_pool_join_msg,
+        &[
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+        ],
+    ).unwrap_err().root_cause().to_string());
+
+    // resume deposits specifically for stable 5 pool type
+    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+        pool_type: PoolType::Stable5Pool {},
+        allow_instantiation: None,
+        new_fee_info: None,
+        is_generator_disabled: None,
+        paused: Some(PauseInfo{deposit: false, swap: false}),
+    };
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    )
+        .unwrap();
+
+    // pause deposits specifically for stable 5 pool id
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
@@ -274,14 +325,7 @@ fn test_join_pool() {
     assert_eq!("Deposits are paused", app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable5_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(assets_msg.clone()),
-        },
+        &stable5_pool_join_msg,
         &[
             Coin {
                 denom: denom0.clone(),
@@ -294,7 +338,7 @@ fn test_join_pool() {
         ],
     ).unwrap_err().root_cause().to_string());
 
-    // resume deposits specifically for stable 5 pool
+    // resume deposits specifically for stable 5 pool id
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
@@ -312,14 +356,7 @@ fn test_join_pool() {
     app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable5_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(assets_msg.clone()),
-        },
+        &stable5_pool_join_msg,
         &[
             Coin {
                 denom: denom0.clone(),
