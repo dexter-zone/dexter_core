@@ -62,19 +62,14 @@ pub enum ContractError {
     )]
     ProposedStartBlockTimeMustBeReviewable,
 
-    #[error("Proposal already exists with ID: {proposal_id}")]
-    ProposalAlreadyExists {
-        proposal_id: String
-    },
-
     #[error("Proposal not found for ID: {proposal_id}")]
     ProposalNotFound {
-        proposal_id: String
+        proposal_id: u64
     },
 
     #[error("Duplicate review found for ID: {proposal_id}")]
     DuplicateReview {
-        proposal_id: String
+        proposal_id: u64
     },
 
     #[error("Can't query by only proposer! LP token addr must be given")]

@@ -184,14 +184,13 @@ pub fn create_reward_schedule(
     admin_addr: &Addr,
     multistaking_contract: &Addr,
     lp_token: &Addr,
-    proposal_id: String,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
     end_block_time: u64,
 ) -> anyhow::Result<AppResponse> {
-    propose_reward_schedule(app, admin_addr, multistaking_contract, lp_token, proposal_id.clone(), reward_asset, amount, start_block_time, end_block_time).unwrap();
-    review_reward_schedule(app, admin_addr, multistaking_contract, lp_token, admin_addr, vec![ReviewProposedRewardSchedule { proposal_id, approve: true}])
+    let proposal_id = propose_reward_schedule(app, admin_addr, multistaking_contract, lp_token, lp_token.as_str().to_owned()+"-"+admin_addr.as_str(), None, reward_asset, amount, start_block_time, end_block_time).unwrap();
+    review_reward_schedule(app, admin_addr, multistaking_contract, vec![ReviewProposedRewardSchedule { proposal_id, approve: true}])
 }
 
 pub fn propose_reward_schedule(
@@ -199,21 +198,23 @@ pub fn propose_reward_schedule(
     proposer: &Addr,
     multistaking_contract: &Addr,
     lp_token: &Addr,
-    proposal_id: String,
+    title: String,
+    description: Option<String>,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
     end_block_time: u64,
-) -> anyhow::Result<AppResponse> {
+) -> anyhow::Result<u64> {
 
-    match reward_asset {
+    let res = match reward_asset {
         AssetInfo::NativeToken { denom } => {
             app.execute_contract(
                 proposer.clone(),
                 multistaking_contract.clone(),
                 &ExecuteMsg::ProposeRewardSchedule {
                     lp_token: lp_token.clone(),
-                    proposal_id,
+                    title,
+                    description,
                     start_block_time,
                     end_block_time
                 },
@@ -229,7 +230,8 @@ pub fn propose_reward_schedule(
                     amount,
                     msg: to_binary(&Cw20HookMsg::ProposeRewardSchedule {
                         lp_token: lp_token.clone(),
-                        proposal_id,
+                        title,
+                        description,
                         start_block_time,
                         end_block_time,
                     }).unwrap()
@@ -237,23 +239,39 @@ pub fn propose_reward_schedule(
                 &vec![]
             )
         }
-    }
+    };
+
+    let proposal_id: anyhow::Result<u64> = res.map(|r| {
+        r.events
+            .iter()
+            .filter(|&e| {
+                e.ty == "wasm"
+            })
+            .fold(Vec::new(), |acc, e| {
+                let mut res = e.attributes.clone();
+                res.append(&mut acc.clone());
+                res
+            })
+            .iter()
+            .find(|&a| {
+                a.key == "proposal_id"
+            })
+            .map(|a| a.value.parse::<u64>().unwrap()).unwrap()
+    });
+
+    return proposal_id;
 }
 
 pub fn review_reward_schedule(
     app: &mut App,
     admin_addr: &Addr,
     multistaking_contract: &Addr,
-    lp_token: &Addr,
-    proposer: &Addr,
     reviews: Vec<ReviewProposedRewardSchedule>,
 ) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         admin_addr.clone(),
         multistaking_contract.clone(),
         &ExecuteMsg::ReviewRewardScheduleProposals {
-            lp_token: lp_token.clone(),
-            proposer: proposer.clone(),
             reviews,
         },
         &vec![]
@@ -264,14 +282,12 @@ pub fn drop_reward_schedule(
     app: &mut App,
     proposer: &Addr,
     multistaking_contract: &Addr,
-    lp_token: &Addr,
-    proposal_id: String,
+    proposal_id: u64,
 ) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         proposer.clone(),
         multistaking_contract.clone(),
         &ExecuteMsg::DropRewardScheduleProposal {
-            lp_token: lp_token.clone(),
             proposal_id,
         },
         &vec![]

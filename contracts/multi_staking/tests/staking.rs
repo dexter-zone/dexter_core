@@ -35,7 +35,6 @@ fn test_staking() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -298,7 +297,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -312,7 +310,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-2".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -326,7 +323,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-3".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -471,7 +467,6 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -485,7 +480,6 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-2".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -499,7 +493,6 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-3".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -698,7 +691,6 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -738,7 +730,6 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-2".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -867,7 +858,6 @@ fn test_create_cw20_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::Token {
             contract_addr: cw20_token_addr.clone()
         },
@@ -1005,7 +995,6 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
-        "prop-1".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string()
         },

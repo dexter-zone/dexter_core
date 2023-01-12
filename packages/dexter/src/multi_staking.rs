@@ -56,25 +56,35 @@ pub struct RewardSchedule {
 #[cw_serde]
 /// The proposed reward schedule for a LP token
 pub struct ProposedRewardSchedule {
+    /// The LP token for which to propose the reward schedule
+    pub lp_token: Addr,
+    /// The proposer of the reward schedule
+    pub proposer: Addr,
+    /// The title of the proposal.
+    pub title: String,
+    /// Any description that the proposer wants to give about the proposal.
+    pub description: Option<String>,
     /// The asset proposed as reward.
-    /// The asset would go back to the proposer either if the reward schedule is rejected by admin,
-    /// or when the proposer drops the proposal.
+    /// The asset would go back to the proposer when the proposer drops the proposal.
     pub asset: Asset,
     /// Block time when the reward schedule will become effective.
-    /// This must be at least 7 days in future at the time of proposal to give enough time to review.
+    /// This must be at least 3 days in future at the time of proposal to give enough time to review.
     /// This also acts as the expiry of the proposal. If time has elapsed after the start_block_time,
     /// then the proposal can't be approved by the admin. After that, it can only be rejected by the
     /// admin, or dropped by the proposer.
     pub start_block_time: u64,
     /// Block time when reward schedule ends.
     pub end_block_time: u64,
+    /// True if proposal was rejected, false if proposal hasn't yet been reviewed.
+    /// Once rejected, a proposal can't be reviewed again. It can only be dropped by the proposer.
+    pub rejected: bool,
 }
 
 #[cw_serde]
 /// Review of a proposed reward schedule for a LP token
 pub struct ReviewProposedRewardSchedule {
     /// ID of the proposal to review
-    pub proposal_id: String,
+    pub proposal_id: u64,
     /// true if approved, false if rejected
     pub approve: bool,
 }
@@ -119,9 +129,7 @@ pub struct LpGlobalState {
 
 #[cw_serde]
 pub struct ProposedRewardSchedulesResponse {
-    pub lp_token: Addr,
-    pub proposer: Addr,
-    pub proposal_id: String,
+    pub proposal_id: u64,
     pub proposal: ProposedRewardSchedule,
 }
 
@@ -157,16 +165,12 @@ pub enum QueryMsg {
     /// Returns the current owner of the contract
     #[returns(Addr)]
     Owner {},
-    /// Returns the proposed reward schedules matching the given search criteria.
-    /// If both options are None, all the proposed reward schedules are returned.
-    /// If lp_token is specified, all the proposed reward schedules for that lp_token are returned.
-    /// If both options are given, then all the proposed reward schedules for the given lp_token and proposer are returned.
-    /// Specifying a proposer without an lp_token is invalid.
+    /// Returns the proposed reward schedules matching the given pagination params.
     #[returns(Vec<ProposedRewardSchedulesResponse>)]
-    ProposedRewardSchedules { lp_token: Option<Addr>, proposer: Option<Addr> },
-    /// Returns the proposed reward schedule matching the given parameters
+    ProposedRewardSchedules { start_after: Option<u64>, limit: Option<u32> },
+    /// Returns the proposed reward schedule matching the given proposal_id
     #[returns(ProposedRewardSchedule)]
-    ProposedRewardSchedule { lp_token: Addr, proposer: Addr, proposal_id: String },
+    ProposedRewardSchedule { proposal_id: u64 },
     /// Returns the reward schedule for a given LP token and a reward asset
     #[returns(Vec<RewardSchedule>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
@@ -190,7 +194,8 @@ pub enum Cw20HookMsg {
     /// The LP Token contract must be in the allowed_lp_tokens list.
     ProposeRewardSchedule {
         lp_token: Addr,
-        proposal_id: String,
+        title: String,
+        description: Option<String>,
         start_block_time: u64,
         end_block_time: u64,
     },
@@ -200,30 +205,25 @@ pub enum Cw20HookMsg {
 pub enum ExecuteMsg {
     /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
-    /// This entry point is strictly meant for creating reward schedules with native tokens.
+    /// This entry point is strictly meant for proposing reward schedules with native tokens.
     /// For proposing reward schedules with CW20 tokens, CW20 transfer with ProposeRewardSchedule
     /// HookMsg is used. Anyone can initiate a reward schedule proposal.
     ProposeRewardSchedule {
         lp_token: Addr,
-        /// This is a unique identifier for this proposal.
-        /// It only has to be unique per lp_token and proposer.
-        /// Anyone can create a new proposal with their own ID of choosing, and later admins can
-        /// review proposals using this ID. This is there to facilitate easier communication between
-        /// external teams and DEX team for identifying proposal reviews.
-        proposal_id: String,
+        title: String,
+        description: Option<String>,
         start_block_time: u64,
         end_block_time: u64,
     },
     /// Only the multi-staking admin can approve/reject proposed reward schedules.
     ReviewRewardScheduleProposals {
-        lp_token: Addr,
-        proposer: Addr,
         reviews: Vec<ReviewProposedRewardSchedule>,
     },
     /// Only the proposer can drop the proposal.
+    /// A proposal can be dropped either if its not yet been reviewed or has been rejected by admin.
+    /// If approved, a proposal can't be dropped.
     DropRewardScheduleProposal {
-        lp_token: Addr,
-        proposal_id: String,
+        proposal_id: u64,
     },
     /// Allows an admin to allow a new LP token to be rewarded
     /// This is needed to prevent spam related to adding new reward schedules for random LP tokens
