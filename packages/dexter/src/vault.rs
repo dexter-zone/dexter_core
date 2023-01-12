@@ -279,7 +279,7 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum PauseInfoUpdateType {
-    PoolID(Uint128),
+    PoolId(Uint128),
     PoolType(PoolType)
 }
 

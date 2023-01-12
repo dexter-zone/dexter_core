@@ -416,7 +416,7 @@ pub fn execute_update_pause_info(
     }
 
     match update_type {
-        PauseInfoUpdateType::PoolID(pool_id) => {
+        PauseInfoUpdateType::PoolId(pool_id) => {
             let mut pool = ACTIVE_POOLS.
                 load(deps.storage, pool_id.to_string().as_bytes())
                 .map_err(|_| ContractError::InvalidPoolId {})?;

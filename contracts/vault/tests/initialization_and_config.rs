@@ -836,7 +836,7 @@ fn test_update_pause_info() {
         user_addr.clone(),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolID(xyk_pool_id),
+            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
             pause_info: expected_pause_info.clone(),
         },
         &[],
@@ -855,7 +855,7 @@ fn test_update_pause_info() {
         Addr::unchecked("non-whitelisted-addr"),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolID(xyk_pool_id),
+            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
             pause_info: expected_pause_info.clone(),
         },
         &[],
