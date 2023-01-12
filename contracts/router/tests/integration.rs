@@ -11,7 +11,7 @@ use dexter::router::{
 };
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
-    InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType,
+    InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType, PauseInfo,
     QueryMsg as VaultQueryMsg, SwapType,
 };
 
@@ -117,6 +117,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable_pool_code_id,
@@ -129,6 +130,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
@@ -141,6 +143,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
@@ -153,6 +156,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     ];
 
@@ -562,6 +566,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable_pool_code_id,
@@ -574,6 +579,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
@@ -586,6 +592,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
@@ -598,6 +605,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     ];
 

@@ -7,13 +7,13 @@ use dexter::asset::AssetInfo;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
-    PoolType, PoolTypeConfig, QueryMsg,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PauseInfoUpdateType,
+    PoolConfigResponse, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg,
 };
 
 use crate::utils::{
-    instantiate_contract, mock_app, store_stable5_pool_code, store_stable_pool_code,
-    store_token_code, store_vault_code, store_weighted_pool_code, store_xyk_pool_code,
+    initialize_3_tokens, initialize_xyk_pool, instantiate_contract, mock_app, store_stable5_pool_code,
+    store_stable_pool_code, store_token_code, store_vault_code, store_weighted_pool_code, store_xyk_pool_code,
 };
 
 #[test]
@@ -39,6 +39,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable_pool_code_id,
@@ -51,6 +52,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
@@ -63,6 +65,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
@@ -75,6 +78,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     ];
 
@@ -243,6 +247,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: xyk_pool_code_id,
@@ -255,6 +260,7 @@ fn proper_initialization() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     ];
 
@@ -294,6 +300,7 @@ fn proper_initialization() {
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
+        paused: PauseInfo::default(),
     }];
 
     let vault_init_msg = InstantiateMsg {
@@ -339,6 +346,7 @@ fn test_add_to_registery() {
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
+        paused: PauseInfo::default(),
     }];
 
     //// -----x----- Success :: Initialize Vault Contract -----x----- ////
@@ -403,6 +411,7 @@ fn test_add_to_registery() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     };
 
@@ -440,6 +449,7 @@ fn test_add_to_registery() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     };
 
@@ -467,6 +477,7 @@ fn test_add_to_registery() {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     };
 
@@ -721,4 +732,134 @@ fn test_pool_config_update() {
     let res: FeeResponse = app.wrap().query_wasm_smart(pool_address, &msg).unwrap();
 
     assert_eq!(res.total_fee_bps, 400u16);
+}
+
+#[test]
+fn test_update_pause_info() {
+    let owner = String::from("owner");
+    let denom0 = "token0".to_string();
+
+    let mut app = mock_app(
+        Addr::unchecked(owner.clone()),
+        vec![Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::from(1_000_000_000u64),
+        }],
+    );
+
+    let owner_addr = Addr::unchecked(owner.clone());
+    let user_addr = Addr::unchecked("user".to_string());
+
+    // Send some funds from owner to user
+    app.send_tokens(
+        owner_addr.clone(),
+        user_addr.clone(),
+        &[coin(300_000_000u128, "uxprt")],
+    )
+        .unwrap();
+
+    let vault_instance = instantiate_contract(&mut app, &owner_addr);
+    let (token_instance1, _, _) = initialize_3_tokens(&mut app, &owner_addr);
+
+    // Create XYK pool
+    let (_, _, xyk_pool_id) = initialize_xyk_pool(
+        &mut app,
+        &owner_addr,
+        vault_instance.clone(),
+        token_instance1.clone(),
+        denom0.clone(),
+    );
+
+    // Add user to whitelist
+    app.execute_contract(
+        owner_addr.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::AddAddressToWhitelist {
+            address: user_addr.to_string(),
+        },
+        &[],
+    )
+        .unwrap();
+
+    // --------------- begin actual testing -----------------
+
+    // assert the pause status via queries before updating
+
+    // pool type config
+    let res: PoolConfigResponse = app.wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::QueryRegistry {pool_type: PoolType::Xyk {}}
+        ).unwrap();
+    assert_eq!(res.unwrap().paused, PauseInfo::default());
+
+    // pool id config
+    let res: PoolInfoResponse = app.wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+        ).unwrap();
+    assert_eq!(res.paused, PauseInfo::default());
+
+    // update the pause info for type
+    let expected_pause_info = PauseInfo { deposit: true, swap: false };
+    app.execute_contract(
+        user_addr.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::UpdatePauseInfo {
+            update_type: PauseInfoUpdateType::PoolType(PoolType::Xyk {}),
+            pause_info: expected_pause_info.clone(),
+        },
+        &[],
+    ).unwrap();
+
+    // assert the pause status via queries after updating only for pool type
+
+    // pool type config
+    let res: PoolConfigResponse = app.wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::QueryRegistry {pool_type: PoolType::Xyk {}}
+        ).unwrap();
+    assert_eq!(res.unwrap().paused, expected_pause_info.clone());
+
+    // pool id config
+    let res: PoolInfoResponse = app.wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+        ).unwrap();
+    assert_eq!(res.paused, PauseInfo::default());
+
+    // update the pause info for id
+    app.execute_contract(
+        user_addr.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::UpdatePauseInfo {
+            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
+            pause_info: expected_pause_info.clone(),
+        },
+        &[],
+    ).unwrap();
+
+    // assert the pause status for pool id as well
+    let res: PoolInfoResponse = app.wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+        ).unwrap();
+    assert_eq!(res.paused, expected_pause_info);
+
+    // trying to update the pause info from a non-whitelisted address should fail
+    let res = app.execute_contract(
+        Addr::unchecked("non-whitelisted-addr"),
+        vault_instance.clone(),
+        &ExecuteMsg::UpdatePauseInfo {
+            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
+            pause_info: expected_pause_info.clone(),
+        },
+        &[],
+    );
+    assert_eq!(res.is_err(), true);
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
 }

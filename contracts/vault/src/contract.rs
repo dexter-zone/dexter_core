@@ -23,7 +23,7 @@ use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     AllowPoolInstantiation, AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg,
     FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse,
-    PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, AutoStakeImpl, TmpPoolInfo
+    PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, AutoStakeImpl, TmpPoolInfo, PauseInfoUpdateType,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -147,11 +147,21 @@ pub fn execute(
             multistaking_address,
             paused,
         ),
+        ExecuteMsg::UpdatePauseInfo {
+            update_type,
+            pause_info
+        } => execute_update_pause_info(
+            deps,
+            info,
+            update_type,
+            pause_info,
+        ),
         ExecuteMsg::UpdatePoolTypeConfig {
             pool_type,
             allow_instantiation,
             new_fee_info,
             is_generator_disabled,
+            paused,
         } => execute_update_pool_type_config(
             deps,
             info,
@@ -159,6 +169,7 @@ pub fn execute(
             allow_instantiation,
             new_fee_info,
             is_generator_disabled,
+            paused,
         ),
         ExecuteMsg::AddAddressToWhitelist { address } => {
             execute_add_address_to_whitelist(deps, info, address)
@@ -393,6 +404,37 @@ pub fn execute_update_config(
     Ok(Response::new().add_attribute("action", "update_config"))
 }
 
+pub fn execute_update_pause_info(
+    deps: DepsMut,
+    info: MessageInfo,
+    update_type: PauseInfoUpdateType,
+    pause_info: PauseInfo,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if !config.whitelisted_addresses.contains(&info.sender) {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    match update_type {
+        PauseInfoUpdateType::PoolId(pool_id) => {
+            let mut pool = ACTIVE_POOLS.
+                load(deps.storage, pool_id.to_string().as_bytes())
+                .map_err(|_| ContractError::InvalidPoolId {})?;
+            pool.paused = pause_info;
+            ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
+        }
+        PauseInfoUpdateType::PoolType(pool_type) => {
+            let mut pool_type_config = REGISTRY
+                .load(deps.storage, pool_type.to_string())
+                .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
+            pool_type_config.paused = pause_info;
+            REGISTRY.save(deps.storage, pool_type.to_string(), &pool_type_config)?;
+        }
+    }
+
+    Ok(Response::new())
+}
+
 /// ## Description - Updates pool configuration. Returns an [`ContractError`] on failure or
 /// the following [`PoolConfig`] data will be updated if successful.
 ///
@@ -409,10 +451,10 @@ pub fn execute_update_pool_type_config(
     allow_instantiation: Option<AllowPoolInstantiation>,
     new_fee_info: Option<FeeInfo>,
     is_generator_disabled: Option<bool>,
+    paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
+    // permission check - only Owner can update any pool config.
     let config = CONFIG.load(deps.storage)?;
-
-    // permission check - Owner can update any pool config.
     if info.sender.clone() != config.owner {
         return Err(ContractError::Unauthorized {});
     }
@@ -467,6 +509,10 @@ pub fn execute_update_pool_type_config(
             );
     }
 
+    if let Some(paused) = paused {
+        pool_config.paused = paused;
+    }
+
     // Save pool config
     REGISTRY.save(
         deps.storage,
@@ -484,17 +530,17 @@ fn execute_update_pool_config(
     fee_info: Option<FeeInfo>,
     paused: Option<PauseInfo>
 ) -> Result<Response, ContractError> {
+    // permission check - only Owner can update any pool config.
     let config = CONFIG.load(deps.storage)?;
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
     let mut pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
 
     // Emit Event
     let mut event = Event::new("dexter-vault::update_pool_config")
         .add_attribute("tx_executor", info.sender.to_string());
-
-    // permission check - Owner can update any pool config.
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
 
     let mut msgs: Vec<CosmosMsg> = vec![];
 
@@ -1026,12 +1072,12 @@ pub fn execute_join_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .or(Err(ContractError::InvalidPoolId {}))?;
 
-    if config.paused.deposit || pool_info.paused.deposit {
-        return Err(ContractError::PausedDeposit {});
-    }
-
     // Read -  Get PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
+
+    if config.paused.deposit || pool_config.paused.deposit || pool_info.paused.deposit {
+        return Err(ContractError::PausedDeposit {});
+    }
 
     // Check if auto-staking (if requested), is enabled (or possible) right now
     if auto_stake.unwrap_or(false) {
@@ -1603,12 +1649,12 @@ pub fn execute_swap(
     .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
     .or(Err(ContractError::InvalidPoolId {}))?;
 
-    if config.paused.swap || pool_info.paused.swap {
-        return Err(ContractError::PausedSwap {});
-    }
-
     // Read - Get the PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
+
+    if config.paused.swap || pool_config.paused.swap || pool_info.paused.swap {
+        return Err(ContractError::PausedSwap {});
+    }
 
     // Indexing - Make Event for indexing support
     let mut event = Event::new("dexter-vault::swap")

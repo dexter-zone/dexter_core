@@ -138,7 +138,7 @@ pub struct Config {
     pub pool_creation_fee: Option<Asset>,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
-    /// The global pause status for the vault. This overrides the pause status of any pool.
+    /// The global pause status for the vault. This overrides the pause status of any pool type or pool id.
     pub paused: PauseInfo,
 }
 
@@ -174,6 +174,8 @@ pub struct PoolTypeConfig {
     /// Setting this to true means that pools of this type will not be able
     /// to get added to generator
     pub is_generator_disabled: bool,
+    /// The pause status for this pool type. This overrides the pause status of any pool id of this type.
+    pub paused: PauseInfo,
 }
 
 /// ## Description - This is an intermediate struct for storing the pool config during pool creation and used in reply of submessage.
@@ -275,6 +277,12 @@ pub struct InstantiateMsg {
     pub multistaking_address: Option<String>
 }
 
+#[cw_serde]
+pub enum PauseInfoUpdateType {
+    PoolId(Uint128),
+    PoolType(PoolType)
+}
+
 /// This struct describes the functions that can be executed in this contract.
 #[cw_serde]
 pub enum ExecuteMsg {
@@ -298,7 +306,13 @@ pub enum ExecuteMsg {
     RemoveAddressFromWhitelist { 
         address: String 
     },
-    ///  Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set.
+    /// Allows updating pause info of pools to whitelisted addresses.
+    /// Pools can be paused based on a know pool_id or pool_type.
+    UpdatePauseInfo {
+        update_type: PauseInfoUpdateType,
+        pause_info: PauseInfo,
+    },
+    ///  Executable only by `config.owner`.
     /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
     /// and updating Fee (` pool_config.fee_info`) for new pool instances
     UpdatePoolTypeConfig {
@@ -306,6 +320,7 @@ pub enum ExecuteMsg {
         allow_instantiation: Option<AllowPoolInstantiation>,
         new_fee_info: Option<FeeInfo>,
         is_generator_disabled: Option<bool>,
+        paused: Option<PauseInfo>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {

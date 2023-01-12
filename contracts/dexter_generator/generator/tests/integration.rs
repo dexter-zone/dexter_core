@@ -12,7 +12,7 @@ use dexter::{
     },
     vault::{
         ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig,
-        PoolInfo as VaultPoolInfo, PoolType, QueryMsg as VaultQueryMsg,
+        PauseInfo, PoolInfo as VaultPoolInfo, PoolType, QueryMsg as VaultQueryMsg,
     },
     vesting::{
         Cw20HookMsg as VestingCw20HookMsg, InstantiateMsg as VestingInstantiateMsg, VestingAccount,
@@ -158,6 +158,7 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         is_generator_disabled: false,
+        paused: PauseInfo::default(),
     }];
     let vault_init_msg = VaultInstantiateMsg {
         pool_configs: pool_configs.clone(),

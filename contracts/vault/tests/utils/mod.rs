@@ -6,7 +6,7 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolInfoResponse, PoolType,
     PoolTypeConfig, QueryMsg,
 };
 
@@ -103,6 +103,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable_pool_code_id,
@@ -115,6 +116,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: weighted_pool_code_id,
@@ -127,6 +129,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
@@ -139,6 +142,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
             is_generator_disabled: false,
+            paused: PauseInfo::default(),
         },
     ];
 
