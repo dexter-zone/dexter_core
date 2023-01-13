@@ -153,6 +153,12 @@ pub struct ProposedRewardSchedulesResponse {
 }
 
 #[cw_serde]
+pub struct RewardScheduleResponse {
+    pub id: u64,
+    pub reward_schedule: RewardSchedule,
+}
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns currently unclaimed rewards for a user for a give LP token
@@ -191,7 +197,7 @@ pub enum QueryMsg {
     #[returns(ProposedRewardSchedule)]
     ProposedRewardSchedule { proposal_id: u64 },
     /// Returns the reward schedule for a given LP token and a reward asset
-    #[returns(Vec<RewardSchedule>)]
+    #[returns(Vec<RewardScheduleResponse>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
     /// Returns the current reward state for a given LP token and a reward asset
     #[returns(AssetRewardState)]

@@ -24,7 +24,7 @@ use cw_storage_plus::Bound;
 use dexter::asset::Asset;
 use dexter::multi_staking::{
     MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS, MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY, ProposedRewardSchedule,
-    ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule
+    ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule, RewardScheduleResponse
 };
 
 use crate::{
@@ -925,7 +925,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             let mut reward_schedules = vec![];
             for id in &reward_schedule_ids {
-                reward_schedules.push((*id, REWARD_SCHEDULES.load(deps.storage, *id)?.clone()));
+                reward_schedules.push(RewardScheduleResponse {
+                    id: *id,
+                    reward_schedule: REWARD_SCHEDULES.load(deps.storage, *id)?.clone(),
+                });
             }
             to_binary(&reward_schedules).map_err(ContractError::from)
         }

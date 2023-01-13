@@ -3,6 +3,7 @@ use dexter::{
     asset::AssetInfo,
     multi_staking::{QueryMsg, UnclaimedReward, CreatorClaimableRewardState},
 };
+use dexter::multi_staking::{RewardSchedule, RewardScheduleResponse};
 
 use crate::utils::{
     assert_user_lp_token_balance, bond_lp_tokens, create_dummy_cw20_token, create_reward_schedule,
@@ -274,7 +275,31 @@ fn test_staking() {
         }
     );
 
-    println!(" LP token address: {}", lp_token_addr);
+    let response: Vec<RewardScheduleResponse> = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &QueryMsg::RewardSchedules {
+            lp_token: lp_token_addr.clone(),
+            asset: AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            },
+        })
+        .unwrap();
+    assert_eq!(response.len(), 1);
+    assert_eq!(response[0], RewardScheduleResponse {
+        id: 1,
+        reward_schedule: RewardSchedule {
+            title: lp_token_addr.as_str().to_owned()+"-"+admin_addr.as_str(),
+            creator: admin_addr.clone(),
+            asset: AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            },
+            amount: Uint128::from(100_000_000 as u64),
+            staking_lp_token: lp_token_addr.clone(),
+            start_block_time: 1000_301_000,
+            end_block_time: 1000_302_000,
+        },
+    });
+
     // Withdraw the rewards
     withdraw_unclaimed_rewards(
         &mut app,
