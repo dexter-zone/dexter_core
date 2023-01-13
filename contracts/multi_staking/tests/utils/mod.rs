@@ -473,7 +473,7 @@ pub fn claim_creator_rewards(
     multistaking_contract: &Addr,
     reward_schedule_id: u64,
     creator_addr: &Addr,
-) {
+) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         creator_addr.clone(),
         multistaking_contract.clone(),
@@ -482,7 +482,6 @@ pub fn claim_creator_rewards(
         },
         &vec![],
     )
-    .unwrap();
 }
 
 pub fn assert_user_lp_token_balance(

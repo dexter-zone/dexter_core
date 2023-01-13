@@ -275,7 +275,7 @@ pub enum ExecuteMsg {
     },
     /// Allows to unbond LP tokens from the contract.
     /// After unbonding, the tokens are still locked for a locking period.
-    /// During this period, the tokens are still eligible to receive rewards.
+    /// During this period, the tokens are not eligible to receive rewards.
     /// After the locking period, the tokens can be withdrawn.
     Unbond {
         lp_token: Addr,
