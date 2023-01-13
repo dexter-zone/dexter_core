@@ -1,4 +1,5 @@
 use cosmwasm_std::{StdError, Uint128, OverflowError};
+use dexter::multi_staking::MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -28,6 +29,18 @@ pub enum ContractError {
         received_amount: Uint128,
     },
 
+    #[error("Can't unbond more than bonded. Current bond amount: {current_bond_amount}, Amount to unbond {amount_to_unbond}")]
+    CantUnbondMoreThanBonded {
+        current_bond_amount: Uint128,
+        amount_to_unbond: Uint128,
+    },
+
+    #[error("Can't allow any more LP token unbonds, limit reached! First unlock existing unbonds, then initiate new unbond.")]
+    CantAllowAnyMoreLpTokenUnbonds,
+
+    #[error("Can't allow any more LP tokens, limit reached!")]
+    CantAllowAnyMoreLpTokens,
+
     #[error("LP Token is already allowed")]
     LpTokenAlreadyAllowed,
 
@@ -42,6 +55,25 @@ pub enum ContractError {
         start_block_time: u64,
         end_block_time: u64,
     },
+
+    #[error(
+        "Start block time must be at least {} days in future at the time of proposal to give enough time to review",
+        MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS
+    )]
+    ProposedStartBlockTimeMustBeReviewable,
+
+    #[error("Proposal not found for ID: {proposal_id}")]
+    ProposalNotFound {
+        proposal_id: u64
+    },
+
+    #[error("Duplicate review found for ID: {proposal_id}")]
+    DuplicateReview {
+        proposal_id: u64
+    },
+
+    #[error("Can't query by only proposer! LP token addr must be given")]
+    InvalidQuery,
 
     #[error("Impossible contract state: {error}")]
     ImpossibleContractState {

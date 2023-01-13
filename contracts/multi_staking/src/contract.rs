@@ -1,9 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 
+use std::collections::HashSet;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo,
-    Response, StdError, StdResult, Uint128, WasmMsg,
+    Response, StdError, StdResult, Uint128, WasmMsg, Order
 };
 
 use dexter::{
@@ -19,14 +20,22 @@ use dexter::{
 };
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw_storage_plus::Bound;
+use dexter::asset::Asset;
+use dexter::multi_staking::{
+    MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS, MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY, ProposedRewardSchedule,
+    ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule
+};
 
 use crate::{
     error::ContractError,
     state::{
-        ASSET_STAKER_INFO, CONFIG, OWNERSHIP_PROPOSAL, REWARD_SCHEDULES,
+        ASSET_STAKER_INFO, CONFIG, OWNERSHIP_PROPOSAL, REWARD_SCHEDULE_PROPOSALS, REWARD_SCHEDULES,
         USER_LP_TOKEN_LOCKS, USER_BONDED_LP_TOKENS, LP_GLOBAL_STATE, ASSET_LP_REWARD_STATE,
     },
 };
+use crate::state::next_reward_schedule_proposal_id;
+
 type ContractResult<T> = Result<T, ContractError>;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -40,7 +49,7 @@ pub fn instantiate(
         deps.storage,
         &Config {
             unlock_period: msg.unlock_period,
-            owner: msg.owner,
+            owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
         },
     )?;
@@ -61,8 +70,10 @@ pub fn execute(
             remove_lp_token_from_allowed_list(deps, info, &lp_token)
         }
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::AddRewardSchedule {
+        ExecuteMsg::ProposeRewardSchedule {
             lp_token,
+            title,
+            description,
             start_block_time,
             end_block_time,
         } => {
@@ -75,20 +86,28 @@ pub fn execute(
             }
 
             let sent_asset = info.funds[0].clone();
+            let proposer = info.sender.clone();
 
-            add_reward_schedule(
+            propose_reward_schedule(
                 deps,
                 env,
                 info,
                 lp_token,
-                AssetInfo::NativeToken { 
-                    denom: sent_asset.denom,
+                title,
+                description,
+                proposer,
+                Asset {
+                    info: AssetInfo::NativeToken {
+                        denom: sent_asset.denom,
+                    },
+                    amount: sent_asset.amount,
                 },
-                sent_asset.amount,
                 start_block_time,
                 end_block_time,
             )
         }
+        ExecuteMsg::ReviewRewardScheduleProposals { reviews } => review_reward_schedule_proposals(deps, env, info, reviews),
+        ExecuteMsg::DropRewardScheduleProposal { proposal_id } => drop_reward_schedule_proposal(deps, env, info, proposal_id),
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
             // Transfer the lp token to the contract
@@ -153,6 +172,11 @@ fn allow_lp_token(
         return Err(ContractError::Unauthorized);
     }
 
+    // To prevent out-of-gas issues in long run
+    if config.allowed_lp_tokens.len() == MAX_ALLOWED_LP_TOKENS {
+        return Err(ContractError::CantAllowAnyMoreLpTokens);
+    }
+
     // verify that lp token is not already allowed
     if config.allowed_lp_tokens.contains(&lp_token) {
         return Err(ContractError::LpTokenAlreadyAllowed);
@@ -180,13 +204,15 @@ fn remove_lp_token_from_allowed_list(
     Ok(Response::default())
 }
 
-pub fn add_reward_schedule(
+pub fn propose_reward_schedule(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
     lp_token: Addr,
-    asset: AssetInfo,
-    amount: Uint128,
+    title: String,
+    description: Option<String>,
+    proposer: Addr,
+    asset: Asset,
     start_block_time: u64,
     end_block_time: u64,
 ) -> ContractResult<Response> {
@@ -200,42 +226,128 @@ pub fn add_reward_schedule(
             end_block_time,
         });
     }
-
-    if start_block_time < env.block.time.seconds() {
-        return Err(ContractError::BlockTimeInPast);
+    if start_block_time <= env.block.time.seconds() + MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY {
+        return Err(ContractError::ProposedStartBlockTimeMustBeReviewable);
     }
 
-    let mut lp_global_state = LP_GLOBAL_STATE
-        .may_load(deps.storage, &lp_token)?
-        .unwrap_or_default();
+    let proposal_id: u64 = next_reward_schedule_proposal_id(deps.storage)?;
 
-    if !lp_global_state.active_reward_assets.contains(&asset) {
-        lp_global_state.active_reward_assets.push(asset.clone());
-    }
-
-    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
-
-    let reward_schedule = RewardSchedule {
-        asset: asset.clone(),
-        amount,
-        staking_lp_token: lp_token.clone(),
-        start_block_time,
-        end_block_time,
-    };
-
-    let mut reward_schedules = REWARD_SCHEDULES
-        .may_load(deps.storage, (&lp_token, &asset.to_string()))?
-        .unwrap_or_default();
-
-    reward_schedules.push(reward_schedule);
-
-    REWARD_SCHEDULES.save(
+    REWARD_SCHEDULE_PROPOSALS.save(
         deps.storage,
-        (&lp_token, &asset.to_string()),
-        &reward_schedules,
-    )?;
+        proposal_id.clone(),
+        &ProposedRewardSchedule {
+            lp_token,
+            proposer,
+            title,
+            description,
+            asset,
+            start_block_time,
+            end_block_time,
+            rejected: false, // => not yet reviewed
+        })?;
+
+    Ok(Response::default().add_attribute("proposal_id", proposal_id.to_string()))
+}
+
+pub fn review_reward_schedule_proposals(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    reviews: Vec<ReviewProposedRewardSchedule>,
+) -> ContractResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+    if config.owner != info.sender {
+        return Err(ContractError::Unauthorized);
+    }
+
+    // ensure that reviews are for unique proposal_ids, otherwise we might end up creating duplicate reward schedules
+    let mut reviewed_ids: HashSet<u64> = HashSet::with_capacity(reviews.len());
+    for review in reviews.iter() {
+        if !reviewed_ids.insert(review.proposal_id.clone()) {
+            return Err(ContractError::DuplicateReview{ proposal_id: review.proposal_id.clone() });
+        }
+    }
+
+    // act on all the reviews
+    for review in reviews.into_iter() {
+        let mut proposal: ProposedRewardSchedule = REWARD_SCHEDULE_PROPOSALS
+            .load(deps.storage,review.proposal_id)
+            .map_err(|_| ContractError::ProposalNotFound { proposal_id: review.proposal_id.clone() })?;
+
+        // skip the proposal if rejected already. No need to error, just ignore it.
+        if proposal.rejected {
+            continue
+        }
+
+        // if approved and proposal is still valid, then need to save the reward schedule
+        if review.approve && proposal.start_block_time > env.block.time.seconds() {
+
+            // still need to check as an LP token might have been removed after the reward schedule was proposed
+            check_if_lp_token_allowed(&config, &proposal.lp_token)?;
+
+            let mut lp_global_state = LP_GLOBAL_STATE
+                .may_load(deps.storage, &proposal.lp_token)?
+                .unwrap_or_default();
+
+            if !lp_global_state.active_reward_assets.contains(&proposal.asset.info) {
+                lp_global_state.active_reward_assets.push(proposal.asset.info.clone());
+            }
+
+            LP_GLOBAL_STATE.save(deps.storage, &proposal.lp_token, &lp_global_state)?;
+
+            let reward_schedule = RewardSchedule {
+                asset: proposal.asset.info.clone(),
+                amount: proposal.asset.amount,
+                staking_lp_token: proposal.lp_token.clone(),
+                start_block_time: proposal.start_block_time,
+                end_block_time: proposal.end_block_time,
+            };
+
+            let mut reward_schedules = REWARD_SCHEDULES
+                .may_load(deps.storage, (&proposal.lp_token, &proposal.asset.info.to_string()))?
+                .unwrap_or_default();
+
+            reward_schedules.push(reward_schedule);
+
+            REWARD_SCHEDULES.save(
+                deps.storage,
+                (&proposal.lp_token, &proposal.asset.info.to_string()),
+                &reward_schedules,
+            )?;
+
+            // remove the approved proposal from the state
+            REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, review.proposal_id);
+        }
+        // otherwise, mark the proposal rejected
+        else {
+            proposal.rejected = true;
+            REWARD_SCHEDULE_PROPOSALS.save(deps.storage, review.proposal_id, &proposal)?;
+        }
+    }
 
     Ok(Response::default())
+}
+
+
+
+pub fn drop_reward_schedule_proposal(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    proposal_id: u64,
+) -> ContractResult<Response> {
+    let proposal = REWARD_SCHEDULE_PROPOSALS.load(deps.storage, proposal_id)?;
+
+    // only the proposer can drop the proposal
+    if proposal.proposer != info.sender {
+        return Err(ContractError::Unauthorized{});
+    }
+
+    let msg = build_transfer_token_to_user_msg(proposal.asset.info.clone(), proposal.proposer, proposal.asset.amount)?;
+
+    REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
+
+    Ok(Response::default().add_message(msg))
 }
 
 pub fn receive_cw20(
@@ -246,29 +358,39 @@ pub fn receive_cw20(
 ) -> Result<Response, ContractError> {
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::Bond {} => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
             bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
         },
         Cw20HookMsg::BondForBeneficiary { beneficiary } => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
+            let token_address = info.sender;
+            let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
             bond(deps, env, beneficiary, token_address, cw20_msg.amount)
         }
-        Cw20HookMsg::AddRewardSchedule {
+        Cw20HookMsg::ProposeRewardSchedule {
             lp_token,
+            title,
+            description,
             start_block_time,
             end_block_time,
         } => {
-            let token_address = deps.api.addr_validate(info.sender.as_str())?;
-            add_reward_schedule(
+            let token_addr = info.sender.clone();
+            let proposer = deps.api.addr_validate(&cw20_msg.sender)?;
+
+            propose_reward_schedule(
                 deps,
                 env,
                 info,
                 lp_token,
-                AssetInfo::Token {
-                    contract_addr: token_address,
+                title,
+                description,
+                proposer,
+                Asset {
+                    info: AssetInfo::Token {
+                        contract_addr: token_addr,
+                    },
+                    amount: cw20_msg.amount,
                 },
-                cw20_msg.amount,
                 start_block_time,
                 end_block_time,
             )
@@ -388,7 +510,7 @@ pub fn unbond(
     env: Env,
     sender: Addr,
     lp_token: Addr,
-    amount: Uint128,
+    amount: Option<Uint128>,
 ) -> ContractResult<Response> {
     // We don't have to check for LP token allowed here, because there's a scenario that we allowed bonding
     // for an asset earlier and then we remove the LP token from the list of allowed LP tokens. In this case
@@ -398,6 +520,12 @@ pub fn unbond(
     let current_bond_amount = USER_BONDED_LP_TOKENS
         .may_load(deps.storage, (&lp_token, &sender))?
         .unwrap_or_default();
+
+    // if user didn't explicitly mention any amount, unbond everything.
+    let amount= amount.unwrap_or(current_bond_amount);
+    if amount.is_zero() {
+        return Err(ContractError::ZeroAmount);
+    }
 
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
     for asset in &lp_global_state.active_reward_assets {
@@ -421,13 +549,20 @@ pub fn unbond(
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
         (&lp_token, &sender),
-        &(current_bond_amount.checked_sub(amount)?),
+        &(current_bond_amount.checked_sub(amount).map_err(|_| ContractError::CantUnbondMoreThanBonded {
+            amount_to_unbond: amount,
+            current_bond_amount,
+        })?),
     )?;
 
     // Start unlocking clock for the user's LP Tokens
     let mut unlocks = USER_LP_TOKEN_LOCKS
         .may_load(deps.storage, (&lp_token, &sender))?
         .unwrap_or_default();
+
+    if unlocks.len() == MAX_USER_LP_TOKEN_LOCKS {
+        return Err(ContractError::CantAllowAnyMoreLpTokenUnbonds);
+    }
 
     let config = CONFIG.load(deps.storage)?;
 
@@ -450,7 +585,7 @@ pub fn update_staking_rewards(
     current_block_time: u64,
     deps: &mut DepsMut,
     response: &mut Response,
-    operation_post_update: Option<fn(&Addr, &mut AssetRewardState, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
+    operation_post_update: Option<fn(&Addr, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
 ) -> ContractResult<()> {
     let mut asset_staker_info = ASSET_STAKER_INFO
         .may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?
@@ -478,7 +613,7 @@ pub fn update_staking_rewards(
     compute_staker_reward(current_bond_amount, &mut asset_state, &mut asset_staker_info)?;
 
     if let Some(operation) = operation_post_update {
-        operation(user, &mut asset_state, &mut asset_staker_info, response)?;
+        operation(user, &mut asset_staker_info, response)?;
     }
 
     ASSET_LP_REWARD_STATE.save(
@@ -532,7 +667,6 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
 
 fn withdraw_pending_reward(
     user: &Addr,
-    asset_reward_state: &mut AssetRewardState,
     asset_staker_info: &mut AssetStakerInfo,
     response: &mut Response,
 ) -> ContractResult<()> {
@@ -550,7 +684,7 @@ fn withdraw_pending_reward(
     }
 
     asset_staker_info.pending_reward = Uint128::zero();
-    asset_staker_info.reward_index = asset_reward_state.reward_index;
+
     Ok(())
 }
 
@@ -583,6 +717,10 @@ pub fn withdraw(
 
     Ok(response)
 }
+
+// settings for pagination
+const MAX_LIMIT: u32 = 30;
+const DEFAULT_LIMIT: u32 = 10;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
@@ -625,7 +763,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                     .may_load(deps.storage, (&asset.to_string(), &lp_token))?
                     .unwrap_or(AssetRewardState {
                         reward_index: Decimal::zero(),
-                        last_distributed: block_time,
+                        last_distributed: 0,
                     });
 
                 let reward_schedules = REWARD_SCHEDULES
@@ -656,6 +794,28 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
         QueryMsg::Owner {} => {
             let config = CONFIG.load(deps.storage)?;
             to_binary(&config.owner).map_err(ContractError::from)
+        }
+        QueryMsg::ProposedRewardSchedules { start_after, limit } => {
+            let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+            let start = start_after.map(Bound::exclusive);
+            let proposals: Vec<ProposedRewardSchedulesResponse> = REWARD_SCHEDULE_PROPOSALS
+                .range(deps.storage, start, None, Order::Ascending)
+                .take(limit)
+                .map(|p| {
+                    p.map(|(proposal_id, proposal)| {
+                        ProposedRewardSchedulesResponse {
+                            proposal_id,
+                            proposal,
+                        }
+                    })
+                })
+                .collect::<StdResult<_>>()?;
+
+            to_binary(&proposals).map_err(ContractError::from)
+        }
+        QueryMsg::ProposedRewardSchedule { proposal_id } => {
+            let reward_schedule = REWARD_SCHEDULE_PROPOSALS.load(deps.storage, proposal_id)?;
+            to_binary(&reward_schedule).map_err(ContractError::from)
         }
         QueryMsg::RewardSchedules { lp_token, asset } => {
             let reward_schedules = REWARD_SCHEDULES
@@ -712,6 +872,5 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 None => Err(ContractError::NoUserRewardState),
             }
         }
-
     }
 }

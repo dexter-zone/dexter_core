@@ -1,19 +1,14 @@
+use std::collections::HashSet;
 use std::vec;
 
 use crate::error::ContractError;
 use crate::state::CONFIG;
-use cosmwasm_std::{
-    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo,
-    QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery,
-};
+use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery, Api};
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::ResponseType;
-use dexter::router::{
-    return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest,
-    InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade,
-};
+use dexter::router::{return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest, InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade, MAX_SWAP_OPERATIONS};
 use dexter::vault::{self, SingleSwapRequest, SwapType};
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-router";
@@ -118,7 +113,7 @@ pub fn execute_multihop_swap(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    mut multiswap_request: Vec<HopSwapRequest>,
+    mut requests: Vec<HopSwapRequest>,
     offer_amount: Uint128,
     recipient: Option<Addr>,
     minimum_receive: Option<Uint128>,
@@ -126,17 +121,27 @@ pub fn execute_multihop_swap(
     let config = CONFIG.load(deps.storage)?;
 
     // Validate the multiswap request
-    if multiswap_request.len() < 1 {
+    let requests_len = requests.len();
+    if requests_len < 1 {
         return Err(ContractError::InvalidMultihopSwapRequest {
             msg: "Multihop swap request must contain at least 1 hop".to_string(),
         });
     }
 
+    if requests_len > MAX_SWAP_OPERATIONS {
+        return Err(ContractError::InvalidMultihopSwapRequest {
+            msg: "The swap operation limit was exceeded!".to_string(),
+        });
+    }
+
+    // Assert the requests are properly set
+    assert_requests(deps.api, &requests)?;
+
     // CosmosMsgs to be sent in the response
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
     // Event for indexing support
     let mut event = Event::new("dexter-router::multihop-swap")
-        .add_attribute("total_hops", multiswap_request.len().to_string());
+        .add_attribute("total_hops", requests.len().to_string());
 
     // Current ask token balance available with the router contract
     let current_ask_balance: Uint128;
@@ -145,17 +150,17 @@ pub fn execute_multihop_swap(
     // - check number of native tokens sent with the tx
     // - if the number of native tokens sent is less than the offer amount, then return error
     // - if the number of native tokens sent is greater than the offer amount, then send the remaining tokens back to the sender
-    if multiswap_request[0].asset_in.is_native_token() {
+    if requests[0].asset_in.is_native_token() {
         // Query - Get number of offer asset (Native) tokens sent with the msg
-        let tokens_received = multiswap_request[0]
+        let tokens_received = requests[0]
             .asset_in
             .get_sent_native_token_balance(&info);
 
         // Error - if the number of native tokens sent is less than the offer amount, then return error
-        if tokens_received.is_zero() || tokens_received < offer_amount {
+        if tokens_received < offer_amount {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg: format!(
-                    "Invalid number of tokens sent. Tokens sent = {} Tokens received = {}",
+                    "Invalid number of tokens sent. The offer amount is larger than the number of tokens received. Tokens received = {} Tokens offered = {}",
                     tokens_received, offer_amount
                 ),
             });
@@ -163,7 +168,7 @@ pub fn execute_multihop_swap(
 
         // ExecuteMsg -if the number of native tokens sent is greater than the offer amount, then send the remaining tokens back to the sender
         if tokens_received > offer_amount {
-            execute_msgs.push(multiswap_request[0].asset_in.clone().create_transfer_msg(
+            execute_msgs.push(requests[0].asset_in.clone().create_transfer_msg(
                 info.sender.clone(),
                 tokens_received.checked_sub(offer_amount)?,
             )?);
@@ -173,7 +178,7 @@ pub fn execute_multihop_swap(
     // - Transfer the offer amount from the sender to the router contract
     else {
         let transfer_from_msg = dexter::helper::build_transfer_cw20_from_user_msg(
-            multiswap_request[0].asset_in.as_string(),
+            requests[0].asset_in.as_string(),
             info.sender.clone().to_string(),
             env.contract.address.to_string(),
             offer_amount,
@@ -182,7 +187,7 @@ pub fn execute_multihop_swap(
 
         // If a CW20 token, we need to give allowance to the dexter Vault contract
         let allowance_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: multiswap_request[0].asset_in.to_string(),
+            contract_addr: requests[0].asset_in.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
                 spender: config.dexter_vault.to_string(),
@@ -194,7 +199,7 @@ pub fn execute_multihop_swap(
     }
 
     // Create SingleSwapRequest for the first hop
-    let first_hop = multiswap_request[0].clone();
+    let first_hop = requests[0].clone();
     let first_hop_swap_request = SingleSwapRequest {
         pool_id: first_hop.pool_id,
         asset_in: first_hop.asset_in.clone(),
@@ -234,14 +239,14 @@ pub fn execute_multihop_swap(
     execute_msgs.push(first_hop_execute_msg);
 
     // Get current balance of the ask asset (Native) token
-    current_ask_balance = multiswap_request[0]
+    current_ask_balance = requests[0]
         .asset_out
         .query_for_balance(&deps.querier, env.contract.address.clone())?;
 
     // CallbackMsg - Add Callback Msg as we need to continue with the hops
-    multiswap_request.remove(0);
+    requests.remove(0);
     let arb_chain_msg = CallbackMsg::ContinueHopSwap {
-        multiswap_request: multiswap_request,
+        multiswap_request: requests,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
         recipient: recipient.unwrap_or(info.sender),
@@ -251,6 +256,28 @@ pub fn execute_multihop_swap(
     execute_msgs.push(arb_chain_msg);
 
     Ok(Response::new().add_messages(execute_msgs).add_event(event))
+}
+
+/// Validates swap requests.
+///
+/// * **requests** is a vector that contains objects of type [`HopSwapRequest`]. These are all the swap operations we check.
+fn assert_requests(api: &dyn Api, requests: &[HopSwapRequest]) -> Result<(), ContractError> {
+    let mut prev_req: HopSwapRequest = requests[0].clone();
+    prev_req.asset_in.check(api)?;
+    prev_req.asset_out.check(api)?;
+
+    for i in 1..requests.len() {
+        if !requests[i].asset_in.equal(&prev_req.asset_out) {
+            return Err(ContractError::InvalidMultihopSwapRequest {
+                msg: "invalid sequence of requests; prev output doesn't match current input".to_string()
+            });
+        }
+        prev_req = requests[i].clone();
+        prev_req.asset_in.check(api)?;
+        prev_req.asset_out.check(api)?;
+    }
+
+    Ok(())
 }
 
 /// ## Description - Callback Entry point for the multi-hop swap tx. Remaining multi-hop route swap details are passed in [`Vec<HopSwapRequest>`] Type parameter.
@@ -444,6 +471,20 @@ fn query_simulate_multihop(
     // Error - If invalid request
     if multiswap_request.len() == 0 {
         return_swap_sim_failure(vec![], "Multiswap request cannot be empty".to_string());
+    }
+
+    if multiswap_request.len() > MAX_SWAP_OPERATIONS {
+        return_swap_sim_failure(vec![], "The swap operation limit was exceeded!".to_string());
+    }
+
+    // if two or more swaps use the same pool, then we can't simulate the query correctly as for the
+    // simulation to happen correctly the state of the pool needs to change between queries, which
+    // is technically not possible in a query, but only in a tx.
+    let mut pool_ids: HashSet<String> = HashSet::with_capacity(multiswap_request.len());
+    for hop in multiswap_request.iter() {
+        if !pool_ids.insert(hop.pool_id.to_string()) {
+            return_swap_sim_failure(vec![], "Can't simulate query when two or more swaps use the same pool!".to_string());
+        }
     }
 
     match swap_type {

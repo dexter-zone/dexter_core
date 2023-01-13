@@ -39,12 +39,12 @@ fn test_staking() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
+        1000_301_000,
+        1000_302_000,
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_000);
+        b.time = Timestamp::from_seconds(1_000_301_000);
         b.height = b.height + 100;
     });
 
@@ -81,7 +81,7 @@ fn test_staking() {
     );
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.time = Timestamp::from_seconds(1_000_301_500);
         b.height = b.height + 100;
     });
 
@@ -114,7 +114,7 @@ fn test_staking() {
     assert_eq!(token_lock_info.unlocked_amount, Uint128::from(0 as u64));
     assert_eq!(token_locks.len(), 1);
     assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
-    assert_eq!(token_locks[0].unlock_time, 1_000_002_500);
+    assert_eq!(token_locks[0].unlock_time, 1_000_302_500);
 
     // try to unlock some tokens, but it should not alter any balance as unlock time is not reached
     unlock_lp_tokens(
@@ -133,7 +133,7 @@ fn test_staking() {
     );
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_001);
+        b.time = Timestamp::from_seconds(1_000_302_001);
         b.height = b.height + 100;
     });
 
@@ -156,12 +156,12 @@ fn test_staking() {
     let token_locks = token_lock_info.locks;
     assert_eq!(token_locks.len(), 2);
     assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
-    assert_eq!(token_locks[0].unlock_time, 1_000_002_500);
+    assert_eq!(token_locks[0].unlock_time, 1_000_302_500);
     assert_eq!(token_locks[1].amount, Uint128::from(50_000_000 as u64));
-    assert_eq!(token_locks[1].unlock_time, 1_000_003_001);
+    assert_eq!(token_locks[1].unlock_time, 1_000_303_001);
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_501);
+        b.time = Timestamp::from_seconds(1_000_302_501);
         b.height = b.height + 100;
     });
 
@@ -192,10 +192,10 @@ fn test_staking() {
     let token_locks = token_lock_info.locks;
     assert_eq!(token_locks.len(), 1);
     assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
-    assert_eq!(token_locks[0].unlock_time, 1_000_003_001);
+    assert_eq!(token_locks[0].unlock_time, 1_000_303_001);
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_003_002);
+        b.time = Timestamp::from_seconds(1_000_303_002);
         b.height = b.height + 100;
     });
 
@@ -301,8 +301,8 @@ fn test_multi_asset_multi_reward_schedules() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
+        1000_301_000,
+        1000_302_000,
     ).unwrap();
 
     create_reward_schedule(
@@ -314,8 +314,8 @@ fn test_multi_asset_multi_reward_schedules() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(150_000_000 as u64),
-        1000_001_500,
-        1000_002_000,
+        1000_301_500,
+        1000_302_000,
     ).unwrap();
 
     create_reward_schedule(
@@ -327,12 +327,12 @@ fn test_multi_asset_multi_reward_schedules() {
             denom: "uatom".to_string(),
         },
         Uint128::from(200_000_000 as u64),
-        1000_001_200,
-        1000_002_000,
+        1000_301_200,
+        1000_302_000,
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_000);
+        b.time = Timestamp::from_seconds(1_000_301_000);
         b.height = b.height + 100;
     });
 
@@ -354,7 +354,7 @@ fn test_multi_asset_multi_reward_schedules() {
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.time = Timestamp::from_seconds(1_000_301_500);
         b.height = b.height + 100;
     });
 
@@ -391,7 +391,7 @@ fn test_multi_asset_multi_reward_schedules() {
     }
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_001);
+        b.time = Timestamp::from_seconds(1_000_302_001);
         b.height = b.height + 100;
     });
 
@@ -471,8 +471,8 @@ fn test_multi_user_multi_reward_schedule() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
+        1000_301_000,
+        1000_302_000,
     ).unwrap();
 
     create_reward_schedule(
@@ -484,8 +484,8 @@ fn test_multi_user_multi_reward_schedule() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_500,
-        1000_002_000,
+        1000_301_500,
+        1000_302_000,
     ).unwrap();
 
     create_reward_schedule(
@@ -497,12 +497,12 @@ fn test_multi_user_multi_reward_schedule() {
             denom: "uatom".to_string(),
         },
         Uint128::from(200_000_000 as u64),
-        1000_001_200,
-        1000_002_000,
+        1000_301_200,
+        1000_302_000,
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_000);
+        b.time = Timestamp::from_seconds(1_000_301_000);
         b.height = b.height + 100;
     });
 
@@ -531,7 +531,7 @@ fn test_multi_user_multi_reward_schedule() {
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_200);
+        b.time = Timestamp::from_seconds(1_000_301_200);
         b.height = b.height + 100;
     });
 
@@ -544,7 +544,7 @@ fn test_multi_user_multi_reward_schedule() {
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.time = Timestamp::from_seconds(1_000_301_500);
         b.height = b.height + 100;
     });
 
@@ -567,7 +567,7 @@ fn test_multi_user_multi_reward_schedule() {
     assert_eq!(user_1_bonded, Uint128::from(50_000 as u64));
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_001);
+        b.time = Timestamp::from_seconds(1_000_302_001);
         b.height = b.height + 100;
     });
 
@@ -684,6 +684,7 @@ fn test_reward_schedule_creation_after_bonding() {
 
     let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
 
+    println!("1");
     // create a reward schedule
     create_reward_schedule(
         &mut app,
@@ -694,9 +695,10 @@ fn test_reward_schedule_creation_after_bonding() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
+        1000_301_000,
+        1000_602_000,
     ).unwrap();
+    println!("2");
 
     // mint some LP tokens to user
     mint_lp_tokens_to_addr(
@@ -718,7 +720,7 @@ fn test_reward_schedule_creation_after_bonding() {
 
     // increase time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_200);
+        b.time = Timestamp::from_seconds(1_000_301_200);
         b.height = b.height + 100;
     });
 
@@ -732,12 +734,13 @@ fn test_reward_schedule_creation_after_bonding() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(500_000_000 as u64),
-        1000_001_500,
-        1000_002_000,
+        1000_601_500,
+        1000_602_000,
     ).unwrap();
+    println!("3");
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_600);
+        b.time = Timestamp::from_seconds(1_000_601_600);
         b.height = b.height + 100;
     });
 
@@ -761,7 +764,7 @@ fn test_reward_schedule_creation_after_bonding() {
 
     // increase time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_001);
+        b.time = Timestamp::from_seconds(1_000_602_001);
         b.height = b.height + 100;
     });
 
@@ -793,7 +796,7 @@ fn test_reward_schedule_creation_after_bonding() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(380_000_000 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(399_933_554 as u64)),
                 "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
                 _ => panic!("Unexpected denom"),
             }
@@ -812,7 +815,7 @@ fn test_reward_schedule_creation_after_bonding() {
     for unclaimed_reward in unclaimed_rewards_user_2 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(220_000_000 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(200_066_445 as u64)),
                 "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
                 _ => panic!("Unexpected denom"),
             }
@@ -859,8 +862,8 @@ fn test_create_cw20_reward_schedule() {
             contract_addr: cw20_token_addr.clone()
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
+        1000_301_000,
+        1000_302_000,
     );
 
     assert!(result.is_ok());
@@ -884,7 +887,7 @@ fn test_create_cw20_reward_schedule() {
 
     // update time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_001_500);
+        b.time = Timestamp::from_seconds(1_000_301_500);
         b.height = b.height + 100;
     });
 
@@ -899,7 +902,7 @@ fn test_create_cw20_reward_schedule() {
 
     // increase time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_003_001);
+        b.time = Timestamp::from_seconds(1_000_303_001);
         b.height = b.height + 100;
     });
 
@@ -996,8 +999,8 @@ fn test_lp_methods_after_lp_allowance_removal() {
             denom: "uxprt".to_string()
         },
         Uint128::from(100_000_000 as u64),
-        1000_001_500,
-        1000_002_000,
+        1000_301_500,
+        1000_302_000,
     ).unwrap();
 
     // disallow lp token
@@ -1022,7 +1025,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
 
     // increase time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_002_000);
+        b.time = Timestamp::from_seconds(1_000_302_000);
         b.height = b.height + 100;
     });
 
@@ -1057,7 +1060,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
 
     // increase time
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_003_001);
+        b.time = Timestamp::from_seconds(1_000_303_001);
         b.height = b.height + 100;
     });
 

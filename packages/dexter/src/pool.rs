@@ -6,7 +6,7 @@ use crate::vault::{PoolType, SwapType};
 use cosmwasm_std::{Addr, Binary, Decimal, Uint128};
 use std::fmt::{Display, Formatter, Result};
 
-/// The default slippage (5%)
+/// The default slippage (0.5%)
 pub const DEFAULT_SLIPPAGE: &str = "0.005";
 
 /// The maximum allowed slippage (50%)

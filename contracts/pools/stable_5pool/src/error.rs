@@ -75,6 +75,9 @@ pub enum ContractError {
 
     #[error("The asset {0} does not belong to the pair")]
     InvalidAsset(String),
+
+    #[error("The greatest token precision must be less than or equal to 18")]
+    InvalidGreatestPrecision,
 }
 
 impl From<OverflowError> for ContractError {
