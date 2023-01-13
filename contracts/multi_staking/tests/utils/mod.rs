@@ -468,6 +468,23 @@ pub fn withdraw_unclaimed_rewards(
     .unwrap();
 }
 
+pub fn claim_creator_rewards(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    reward_schedule_id: u64,
+    creator_addr: &Addr,
+) {
+    app.execute_contract(
+        creator_addr.clone(),
+        multistaking_contract.clone(),
+        &ExecuteMsg::ClaimUnallocatedReward {
+            reward_schedule_id
+        },
+        &vec![],
+    )
+    .unwrap();
+}
+
 pub fn assert_user_lp_token_balance(
     app: &mut App,
     user_addr: &Addr,

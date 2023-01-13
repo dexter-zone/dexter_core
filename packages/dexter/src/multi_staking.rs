@@ -46,11 +46,30 @@ pub struct UnclaimedReward {
 
 #[cw_serde]
 pub struct RewardSchedule {
+    pub title: String,
+    pub creator: Addr,
     pub asset: AssetInfo,
     pub amount: Uint128,
     pub staking_lp_token: Addr,
     pub start_block_time: u64,
     pub end_block_time: u64,
+}
+
+#[cw_serde]
+pub struct CreatorClaimableRewardState {
+    pub claimed: bool,
+    pub amount: Uint128,
+    pub last_update: u64,
+}
+
+impl Default for CreatorClaimableRewardState {
+    fn default() -> Self {
+        CreatorClaimableRewardState {
+            claimed: false,
+            amount: Uint128::zero(),
+            last_update: 0,
+        }
+    }
 }
 
 #[cw_serde]
@@ -181,6 +200,9 @@ pub enum QueryMsg {
     /// interaction with the contract
     #[returns(AssetStakerInfo)]
     StakerInfo { lp_token: Addr, asset: AssetInfo, user: Addr },
+    /// Returns the reward that the creator of a reward schedule can claim since no token was bonded in a part of the reward period
+    #[returns(CreatorClaimableRewardState)]
+    CreatorClaimableReward { reward_schedule_id: u64 }
 }
 
 #[cw_serde]
@@ -262,6 +284,12 @@ pub enum ExecuteMsg {
     /// The rewards are sent to the user's address.
     Withdraw {
         lp_token: Addr,
+    },
+    /// Allows a reward schedule creator to claim back amount that was
+    /// not allocated to anyone since no token were bonded.
+    /// This can only be claimed after reward schedule expiry
+    ClaimUnallocatedReward {
+        reward_schedule_id: u64,
     },
     /// Allows the owner to transfer ownership to a new address.
     /// Ownership transfer is done in two steps:

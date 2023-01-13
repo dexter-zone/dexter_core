@@ -88,6 +88,15 @@ pub enum ContractError {
 
     #[error("Invalid amount. Amount cannot be zero")]
     ZeroAmount,
+
+    #[error("Can't perform this operation while reward schedule is active")]
+    RewardScheduleIsActive,
+    
+    #[error("Unallocated reward for this schedule has already been claimed by the creator")]
+    UnallocatedRewardAlreadyClaimed,
+
+    #[error("This reward schedule has no unallocated reward to claim by the creator")]
+    NoUnallocatedReward,
     
 }
 
