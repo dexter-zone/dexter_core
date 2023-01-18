@@ -678,6 +678,7 @@
             "amount",
             "asset",
             "end_block_time",
+            "id",
             "staking_lp_token",
             "start_block_time"
           ],
@@ -689,6 +690,11 @@
               "$ref": "#/definitions/AssetInfo"
             },
             "end_block_time": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "id": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0

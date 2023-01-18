@@ -4,6 +4,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
+use dexter::vault::PoolCreationFeeInfo;
 use dexter::{
     generator::{
         ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, PendingTokenResponse,
@@ -165,10 +166,8 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: None,
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
+        pool_creation_fee: PoolCreationFeeInfo::default(),
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
     let vault_instance = app
         .instantiate_contract(

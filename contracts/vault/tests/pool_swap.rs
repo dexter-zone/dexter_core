@@ -139,9 +139,7 @@ fn test_swap() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        generator_address: None,
         auto_stake_impl: None,
-        multistaking_address: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: true}),
     };
@@ -390,9 +388,7 @@ fn test_swap() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        generator_address: None,
         auto_stake_impl: None,
-        multistaking_address: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: false}),
     };

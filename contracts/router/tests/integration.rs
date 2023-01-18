@@ -11,8 +11,8 @@ use dexter::router::{
 };
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
-    InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType, PauseInfo,
-    QueryMsg as VaultQueryMsg, SwapType,
+    InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType,
+    QueryMsg as VaultQueryMsg, SwapType, PoolCreationFeeInfo, AutoStakeImpl, PauseInfo,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -165,10 +165,8 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: None,
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
+        pool_creation_fee: PoolCreationFeeInfo::default(),
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
 
     let vault_instance = app
@@ -617,10 +615,8 @@ fn proper_initialization() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: None,
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
+        pool_creation_fee: PoolCreationFeeInfo::default(),
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
 
     let vault_instance = app
@@ -644,7 +640,7 @@ fn proper_initialization() {
         Some(Addr::unchecked("fee_collector".to_string())),
         config_res.fee_collector
     );
-    assert_eq!(None, config_res.generator_address);
+    assert_eq!(AutoStakeImpl::None, config_res.auto_stake_impl);
 
     // Router contract instance
     let router_init_msg = InstantiateMsg {

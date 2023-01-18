@@ -358,7 +358,14 @@
               "auto_stake_impl": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/AutoStakeImpl"
+                    "anyOf": [
+                      {
+                        "$ref": "#/definitions/AutoStakeImpl"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -404,7 +411,14 @@
               "pool_creation_fee": {
                 "anyOf": [
                   {
-                    "$ref": "#/definitions/Asset"
+                    "anyOf": [
+                      {
+                        "$ref": "#/definitions/Asset"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -517,10 +531,10 @@
           "add_to_registry": {
             "type": "object",
             "required": [
-              "new_pool_config"
+              "new_pool_type_config"
             ],
             "properties": {
-              "new_pool_config": {
+              "new_pool_type_config": {
                 "$ref": "#/definitions/PoolTypeConfig"
               }
             },

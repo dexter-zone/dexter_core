@@ -21,9 +21,9 @@ use dexter::helper::{
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
-    AllowPoolInstantiation, AssetFeeBreakup, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg,
-    FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse,
-    PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, AutoStakeImpl, TmpPoolInfo, PauseInfoUpdateType,
+    AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg,
+    ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo,
+    PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFeeInfo, PauseInfoUpdateType,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -64,18 +64,7 @@ pub fn instantiate(
         event = event.add_attribute("fee_collector", fee_collector.clone());
     }
 
-    if let Some(multistaking_address) = &msg.multistaking_address {
-        event = event.add_attribute("multistaking_address", multistaking_address.clone());
-    }
-
-    if let Some(generator_address) = &msg.generator_address {
-        event = event.add_attribute("generator_address", generator_address.clone());
-    }
-
-
-    if let Some(auto_stake_impl) = &msg.auto_stake_impl {
-        event = event.add_attribute("auto_stake_impl", auto_stake_impl.to_string());
-    }
+    event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&msg.auto_stake_impl).unwrap());
 
     // Check if code id is valid
     if let Some(code_id) = msg.lp_token_code_id {
@@ -85,13 +74,18 @@ pub fn instantiate(
         event = event.add_attribute("lp_token_code_id", code_id.to_string());
     }
 
-    if let Some(pool_creation_fee) = &msg.pool_creation_fee {
-        if pool_creation_fee.amount.is_zero() {
+    let pool_creation_fee = &msg.pool_creation_fee;
+    if pool_creation_fee.enabled {
+        if pool_creation_fee.fee.is_none() {
             return Err(ContractError::InvalidPoolCreationFee {});
         }
-        event = event.add_attribute("pool_creation_fee", pool_creation_fee.to_string());
+        if let Some(fee) = &pool_creation_fee.fee {
+            if fee.amount.is_zero() {
+                return Err(ContractError::InvalidPoolCreationFee {});
+            }
+        }
     }
-
+    event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&pool_creation_fee).unwrap());
 
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
@@ -99,8 +93,6 @@ pub fn instantiate(
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         auto_stake_impl: msg.auto_stake_impl,
-        multistaking_address: addr_opt_validate(deps.api, &msg.multistaking_address)?,
-        generator_address: addr_opt_validate(deps.api, &msg.generator_address)?,
         pool_creation_fee: msg.pool_creation_fee,
         next_pool_id: Uint128::from(1u128),
         paused: PauseInfo::default(),
@@ -165,8 +157,6 @@ pub fn execute(
             fee_collector,
             pool_creation_fee,
             auto_stake_impl,
-            generator_address,
-            multistaking_address,
             paused,
         } => execute_update_config(
             deps,
@@ -176,8 +166,6 @@ pub fn execute(
             fee_collector,
             pool_creation_fee,
             auto_stake_impl,
-            generator_address,
-            multistaking_address,
             paused,
         ),
         ExecuteMsg::UpdatePauseInfo {
@@ -368,10 +356,8 @@ pub fn execute_update_config(
     info: MessageInfo,
     lp_token_code_id: Option<u64>,
     fee_collector: Option<String>,
-    pool_creation_fee: Option<Option<Asset>>,
-    auto_stake_impl: Option<Option<AutoStakeImpl>>,
-    generator_address: Option<String>,
-    multistaking_address: Option<String>,
+    pool_creation_fee: Option<PoolCreationFeeInfo>,
+    auto_stake_impl: Option<AutoStakeImpl>,
     paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
@@ -399,10 +385,15 @@ pub fn execute_update_config(
     }
 
     // Validate the pool creation fee
-    if let Some(pool_creation_fee) = &pool_creation_fee {
-        if let Some(pool_creation_fee) = pool_creation_fee {
-            if pool_creation_fee.amount.is_zero() {
-                return Err(ContractError::InvalidPoolCreationFee {});
+    if let Some(pool_creation_fee) = pool_creation_fee {
+        if pool_creation_fee.enabled {
+            if pool_creation_fee.fee.is_none() {
+                return Err(ContractError::InvalidPoolCreationFee);
+            }
+            if let Some(fee) = &pool_creation_fee.fee {
+                if fee.amount.is_zero() {
+                    return Err(ContractError::InvalidPoolCreationFee);
+                }
             }
         }
         config.pool_creation_fee = pool_creation_fee.clone();
@@ -413,23 +404,6 @@ pub fn execute_update_config(
     if let Some(auto_stake_impl) = auto_stake_impl {
         config.auto_stake_impl = auto_stake_impl;
         event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&config.auto_stake_impl).unwrap());
-    }
-
-    // Set generator only if its not set
-    if !config.generator_address.is_some() {
-        if let Some(generator_address) = generator_address {
-            config.generator_address = Some(deps.api.addr_validate(generator_address.as_str())?);
-            event = event.add_attribute("generator_address", generator_address);
-        }
-    }
-
-    // set multistaking address only if its not set
-    if !config.multistaking_address.is_some() {
-        if let Some(multistaking_address) = multistaking_address {
-            config.multistaking_address =
-                Some(deps.api.addr_validate(multistaking_address.as_str())?);
-            event = event.add_attribute("multistaking_address", multistaking_address);
-        }
     }
 
     // update the pause status
@@ -809,9 +783,16 @@ pub fn execute_create_pool_instance(
     let mut execute_msgs = vec![];
 
     // Validate if fee is sent for creation of pool
-    if let Some(pool_creation_fee) = config.pool_creation_fee {
+    if config.pool_creation_fee.enabled {
         // Check if sender has sent enough funds to pay for the pool creation fee
+        let pool_creation_fee = config.pool_creation_fee.fee.clone();
+        if pool_creation_fee.is_none() {
+            return Err(ContractError::InvalidPoolCreationFee);
+        }
+
+        let pool_creation_fee = pool_creation_fee.unwrap();
         let fee_amount = pool_creation_fee.amount;
+        // TODO: Send the Pool creation fee to the Keeper contract or have a withdrawal mechanism for the fee
         match pool_creation_fee.info.clone() {
             AssetInfo::NativeToken { denom } => {
                 let tokens_received = find_sent_native_token_balance(&info, &denom);
@@ -1094,22 +1075,8 @@ pub fn execute_join_pool(
 
     // Check if auto-staking (if requested), is enabled (or possible) right now
     if auto_stake.unwrap_or(false) {
-        match &config.auto_stake_impl {
-            None => return Err(ContractError::AutoStakeDisabled {}),
-            Some(auto_stake_impl) => match auto_stake_impl {
-                AutoStakeImpl::Generator => {
-                    // validate generator contract address is set
-                    if config.generator_address.is_none() {
-                        return Err(ContractError::GeneratorAddrNotSet);
-                    }
-                }
-                AutoStakeImpl::Multistaking => {
-                    // Validate multistaking contract address is set
-                    if config.multistaking_address.is_none() {
-                        return Err(ContractError::MultistakingAddrNotSet);
-                    }
-                }
-            },
+        if let AutoStakeImpl::None = &config.auto_stake_impl {
+            return Err(ContractError::AutoStakeDisabled);    
         }
     }
 
@@ -1328,9 +1295,7 @@ pub fn execute_join_pool(
         recipient,
         new_shares,
         auto_stake.unwrap_or(false),
-        config.auto_stake_impl.clone(),
-        config.multistaking_address.clone(),
-        config.generator_address.clone(),
+        config.auto_stake_impl.clone()
     )?;
     for msg in mint_msgs {
         execute_msgs.push(msg);
@@ -2024,9 +1989,7 @@ fn build_mint_lp_token_msg(
     recipient: Addr,
     amount: Uint128,
     auto_stake: bool,
-    auto_stake_impl: Option<AutoStakeImpl>,
-    multistaking_address: Option<Addr>,
-    generator: Option<Addr>,
+    auto_stake_impl: AutoStakeImpl,
 ) -> Result<Vec<CosmosMsg>, ContractError> {
     // If no auto-stake - just mint to recipient
     if !auto_stake {
@@ -2050,15 +2013,13 @@ fn build_mint_lp_token_msg(
     })];
 
     // Safe to do since it is validated at the caller
-    let auto_stake_impl = auto_stake_impl.unwrap();
     let msg = match auto_stake_impl {
-        AutoStakeImpl::Generator => {
+        AutoStakeImpl::Generator { contract_addr } => {
             // Address of generator
-            let generator = generator.clone().unwrap();
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
                 msg: to_binary(&Cw20ExecuteMsg::Send {
-                    contract: generator.to_string(),
+                    contract: contract_addr.to_string(),
                     amount,
                     msg: to_binary(&dexter::generator::Cw20HookMsg::DepositFor {
                         beneficiary: recipient,
@@ -2067,13 +2028,12 @@ fn build_mint_lp_token_msg(
                 funds: vec![],
             })
         }
-        AutoStakeImpl::Multistaking => {
+        AutoStakeImpl::Multistaking { contract_addr} => {
             // Address of multistaking
-            let multistaking_address = multistaking_address.unwrap();
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
                 msg: to_binary(&Cw20ExecuteMsg::Send {
-                    contract: multistaking_address.to_string(),
+                    contract: contract_addr.to_string(),
                     amount,
                     msg: to_binary(&dexter::multi_staking::Cw20HookMsg::BondForBeneficiary {
                         beneficiary: recipient,
@@ -2081,6 +2041,9 @@ fn build_mint_lp_token_msg(
                 })?,
                 funds: vec![],
             })
+        }
+        AutoStakeImpl::None => {
+            return Err(ContractError::AutoStakeDisabled)
         }
     };
 

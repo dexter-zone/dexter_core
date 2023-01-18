@@ -200,9 +200,7 @@ fn test_join_pool() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        generator_address: None,
         auto_stake_impl: None,
-        multistaking_address: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: true, swap: false}),
     };
@@ -244,9 +242,7 @@ fn test_join_pool() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        generator_address: None,
         auto_stake_impl: None,
-        multistaking_address: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: false}),
     };
@@ -1243,9 +1239,9 @@ fn test_join_auto_stake() {
         lp_token_code_id: None,
         fee_collector: None,
         pool_creation_fee: None,
-        auto_stake_impl: Some(Some(dexter::vault::AutoStakeImpl::Generator)),
-        generator_address: Some(generator_contract_address.to_string()),
-        multistaking_address: None,
+        auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Generator {
+            contract_addr: generator_contract_address.clone(),
+        }),
         paused: None,
     };
 
@@ -1377,9 +1373,11 @@ fn test_join_auto_stake() {
         lp_token_code_id: None,
         fee_collector: None,
         pool_creation_fee: None,
-        auto_stake_impl: Some(Some(dexter::vault::AutoStakeImpl::Multistaking)),
-        generator_address: None,
-        multistaking_address: Some(multistaking_contract_address.to_string()),
+        auto_stake_impl: Some(
+            dexter::vault::AutoStakeImpl::Multistaking {
+                contract_addr: multistaking_contract_address.clone(),
+            }
+        ),
         paused: None,
     };
 

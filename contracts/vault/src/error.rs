@@ -112,7 +112,7 @@ pub enum ContractError {
     #[error("Cannot add admin to whitelist. Admin is always whitelisted by default")]
     CannotAddOwnerToWhitelist,
 
-    #[error("Pool creation fee must be null or greater than 0")]
+    #[error("Pool creation fee must non-null and non-zero if enabled")]
     InvalidPoolCreationFee,
 
     #[error("Auto staking is disabled for vault")]
