@@ -128,7 +128,7 @@ pub fn execute(
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info.sender, lp_token),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
-            claim_unclaimed_reward(deps, env, info, reward_schedule_id)
+            claim_unallocated_reward(deps, env, info, reward_schedule_id)
         }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
@@ -163,9 +163,9 @@ pub fn execute(
     }
 }
 
-/// Claim unclaimed reward for a reward schedule by the creator. This is useful when there was no token bonded for a certain
-/// time period and the reward schedule creator wants to claim the unclaimed reward.
-fn claim_unclaimed_reward(
+/// Claim unallocated reward for a reward schedule by the creator. This is useful when there was no tokens bonded for a certain
+/// time period during reward schedule and the reward schedule creator wants to claim the unallocated amount.
+fn claim_unallocated_reward(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
