@@ -207,7 +207,12 @@ fn claim_unallocated_reward(
 
     // Send the unclaimed reward to the reward schedule creator
     let msg = build_transfer_token_to_user_msg(reward_schedule.asset, reward_schedule.creator, creator_claimable_reward_state.amount)?;
-    Ok(Response::new().add_message(msg))
+
+    let event = Event::new("claim_unallocated_reward")
+        .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
+        .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
+
+    Ok(Response::new().add_event(event).add_message(msg))
 }
 
 fn compute_creator_claimable_reward(
@@ -335,17 +340,28 @@ pub fn propose_reward_schedule(
         deps.storage,
         proposal_id.clone(),
         &ProposedRewardSchedule {
-            lp_token,
-            proposer,
-            title,
+            lp_token: lp_token.clone(),
+            proposer: proposer.clone(),
+            title: title.clone(),
             description,
-            asset,
+            asset: asset.clone(),
             start_block_time,
             end_block_time,
             rejected: false, // => not yet reviewed
         })?;
 
-    Ok(Response::default().add_attribute("proposal_id", proposal_id.to_string()))
+    let event = Event::new("dexter-multistaking::propose_reward_schedule")
+        .add_attribute("proposal_id", proposal_id.to_string())
+        .add_attribute("lp_token", lp_token.to_string())
+        .add_attribute("proposer", proposer.to_string())
+        .add_attribute("title", title)
+        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+        .add_attribute("start_block_time", start_block_time.to_string())
+        .add_attribute("end_block_time", end_block_time.to_string());
+
+    let response = Response::new()
+        .add_event(event);
+    Ok(response)
 }
 
 pub fn review_reward_schedule_proposals(
@@ -367,6 +383,9 @@ pub fn review_reward_schedule_proposals(
         }
     }
 
+    let mut accepted_reward_proposals: Vec<(u64, u64)> = vec![];
+    let mut rejected_reward_proposals: Vec<u64> = vec![];
+
     // act on all the reviews
     for review in reviews.into_iter() {
         let mut proposal: ProposedRewardSchedule = REWARD_SCHEDULE_PROPOSALS
@@ -375,12 +394,12 @@ pub fn review_reward_schedule_proposals(
 
         // skip the proposal if rejected already. No need to error, just ignore it.
         if proposal.rejected {
+            rejected_reward_proposals.push(review.proposal_id);
             continue
         }
 
         // if approved and proposal is still valid, then need to save the reward schedule
         if review.approve && proposal.start_block_time > env.block.time.seconds() {
-
             // still need to check as an LP token might have been removed after the reward schedule was proposed
             check_if_lp_token_allowed(&config, &proposal.lp_token)?;
 
@@ -395,6 +414,8 @@ pub fn review_reward_schedule_proposals(
             LP_GLOBAL_STATE.save(deps.storage, &proposal.lp_token, &lp_global_state)?;
 
             let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
+
+            accepted_reward_proposals.push((review.proposal_id, reward_schedule_id));
             let reward_schedule = RewardSchedule {
                 title: proposal.title,
                 creator: proposal.proposer,
@@ -424,19 +445,16 @@ pub fn review_reward_schedule_proposals(
         // otherwise, mark the proposal rejected
         else {
             proposal.rejected = true;
+            rejected_reward_proposals.push(review.proposal_id);
             REWARD_SCHEDULE_PROPOSALS.save(deps.storage, review.proposal_id, &proposal)?;
         }
     }
 
-    let response = Response::new();
-    // let event = Event::new("dexter-multistaking::add_reward_schedule")
-    //     .add_attribute("lp_token", lp_token)
-    //     .add_attribute("asset", asset.to_string())
-    //     .add_attribute("amount", amount)
-    //     .add_attribute("start_block_time", start_block_time.to_string())
-    //     .add_attribute("end_block_time", end_block_time.to_string());
+    let event = Event::new("dexter-multistaking::review_reward_schedule_proposals")
+        .add_attribute("accepted_proposals", serde_json_wasm::to_string(&accepted_reward_proposals).unwrap())
+        .add_attribute("rejected_proposals", serde_json_wasm::to_string(&rejected_reward_proposals).unwrap());
 
-    // response = response.add_event(event);
+    let response = Response::new().add_event(event);
     Ok(response)
 }
 
@@ -459,7 +477,10 @@ pub fn drop_reward_schedule_proposal(
 
     REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
 
-    Ok(Response::default().add_message(msg))
+    let event = Event::new("dexter-multistaking::drop_reward_schedule_proposal")
+        .add_attribute("proposal_id", proposal_id.to_string());
+
+    Ok(Response::default().add_event(event).add_message(msg))
 }
 
 pub fn receive_cw20(
