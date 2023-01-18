@@ -1,15 +1,16 @@
 use cosmwasm_std::{coin, Addr, Coin, Timestamp, Uint128};
 use dexter::{
     asset::AssetInfo,
-    multi_staking::{QueryMsg, UnclaimedReward},
+    multi_staking::{QueryMsg, UnclaimedReward, CreatorClaimableRewardState},
 };
+use dexter::multi_staking::{RewardSchedule, RewardScheduleResponse};
 
 use crate::utils::{
     assert_user_lp_token_balance, bond_lp_tokens, create_dummy_cw20_token, create_reward_schedule,
     mint_lp_tokens_to_addr, mock_app, query_bonded_lp_tokens, query_token_locks,
     query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
     withdraw_unclaimed_rewards, mint_cw20_tokens_to_addr, query_cw20_balance, disallow_lp_token,
-    query_balance
+    query_balance, claim_creator_rewards
 };
 pub mod utils;
 
@@ -44,7 +45,7 @@ fn test_staking() {
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_301_000);
+        b.time = Timestamp::from_seconds(1_000_301_100);
         b.height = b.height + 100;
     });
 
@@ -93,6 +94,20 @@ fn test_staking() {
         &user_addr,
         Uint128::from(50_000_000 as u64),
     ).unwrap();
+
+    // Query creator claimable reward
+    let creator_claimable_reward: CreatorClaimableRewardState = app
+        .wrap()
+        .query_wasm_smart(
+            multi_staking_instance.clone(),
+            &QueryMsg::CreatorClaimableReward { 
+                reward_schedule_id: 1
+            },
+        )
+        .unwrap();
+
+    assert_eq!(creator_claimable_reward.amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(creator_claimable_reward.claimed, false);
 
     // Validate that user balance is still zero after bonding till unlock happens
     assert_user_lp_token_balance(
@@ -252,15 +267,40 @@ fn test_staking() {
 
     assert_eq!(response.len(), 1);
     let unclaimed_reward = response.get(0).unwrap();
-    assert_eq!(unclaimed_reward.amount, Uint128::from(100_000_000 as u64));
+    assert_eq!(unclaimed_reward.amount, Uint128::from(90_000_000 as u64));
     assert_eq!(
         unclaimed_reward.asset,
-        dexter::asset::AssetInfo::NativeToken {
+        AssetInfo::NativeToken {
             denom: "uxprt".to_string()
         }
     );
 
-    println!(" LP token address: {}", lp_token_addr);
+    // ensure the reward schedules query works
+    let response: Vec<RewardScheduleResponse> = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &QueryMsg::RewardSchedules {
+            lp_token: lp_token_addr.clone(),
+            asset: AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            },
+        })
+        .unwrap();
+    assert_eq!(response.len(), 1);
+    assert_eq!(response[0], RewardScheduleResponse {
+        id: 1,
+        reward_schedule: RewardSchedule {
+            title: lp_token_addr.as_str().to_owned()+"-"+admin_addr.as_str(),
+            creator: admin_addr.clone(),
+            asset: AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            },
+            amount: Uint128::from(100_000_000 as u64),
+            staking_lp_token: lp_token_addr.clone(),
+            start_block_time: 1000_301_000,
+            end_block_time: 1000_302_000,
+        },
+    });
+
     // Withdraw the rewards
     withdraw_unclaimed_rewards(
         &mut app,
@@ -272,7 +312,104 @@ fn test_staking() {
     // query bank module for user balance
     let balances = app.wrap().query_all_balances(user_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(100_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(90_000_000 as u64));
+
+    // Claim creator rewards
+    claim_creator_rewards(
+        &mut app,
+        &multi_staking_instance,
+        1,
+        &admin_addr
+    ).unwrap();
+
+    // Query creator claimable rewards
+    let query_msg = QueryMsg::CreatorClaimableReward { 
+        reward_schedule_id: 1
+    };
+
+    let response: CreatorClaimableRewardState = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
+        .unwrap();
+
+    assert_eq!(response.amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(response.claimed, true);
+
+    // Verify balance of admin addr
+    let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
+    let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
+
+    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+
+    // claiming creator rewards again should fail
+    let response = claim_creator_rewards(
+        &mut app,
+        &multi_staking_instance,
+        1,
+        &admin_addr,
+    );
+    assert_eq!(response.is_err(), true);
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "Unallocated reward for this schedule has already been claimed by the creator");
+
+    // create another reward schedule which won't have any user bonding
+    create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(100_000_000 as u64),
+        1000_601_000,
+        1000_602_000,
+    ).unwrap();
+
+    // verify the amount before the beginning of the reward schedule
+    let query_msg = QueryMsg::CreatorClaimableReward {
+        reward_schedule_id: 2
+    };
+    let response: CreatorClaimableRewardState = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
+        .unwrap();
+
+    assert_eq!(response.amount, Uint128::from(0 as u64));
+    assert_eq!(response.claimed, false);
+
+    // Verify balance of admin addr
+    let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
+    let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
+    assert_eq!(balance_uxprt.amount, Uint128::from(810_000_000 as u64));
+
+    // skip the whole reward schedule duration
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_602_001);
+        b.height = b.height + 100;
+    });
+
+    // verify the amount after the end of the reward schedule
+    let response: CreatorClaimableRewardState = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
+        .unwrap();
+
+    assert_eq!(response.amount, Uint128::from(100_000_000 as u64));
+    assert_eq!(response.claimed, false);
+
+    // claim the unused rewards
+    claim_creator_rewards(
+        &mut app,
+        &multi_staking_instance,
+        2,
+        &admin_addr
+    ).unwrap();
+
+    // Verify balance of admin addr
+    let balances = app.wrap().query_all_balances(admin_addr).unwrap();
+    let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
+    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+
 }
 
 #[test]

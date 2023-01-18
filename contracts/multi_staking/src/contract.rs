@@ -1,10 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo,
-    Response, StdError, StdResult, Uint128, WasmMsg, Order
+    Response, StdError, StdResult, Uint128, WasmMsg, Order, Storage
 };
 
 use dexter::{
@@ -15,7 +15,7 @@ use dexter::{
     },
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg,
-        QueryMsg, RewardSchedule, TokenLock, TokenLockInfo, UnclaimedReward,
+        QueryMsg, RewardSchedule, TokenLock, TokenLockInfo, UnclaimedReward, CreatorClaimableRewardState,
     },
 };
 
@@ -24,14 +24,14 @@ use cw_storage_plus::Bound;
 use dexter::asset::Asset;
 use dexter::multi_staking::{
     MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS, MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY, ProposedRewardSchedule,
-    ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule
+    ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule, RewardScheduleResponse
 };
 
 use crate::{
     error::ContractError,
     state::{
-        ASSET_STAKER_INFO, CONFIG, OWNERSHIP_PROPOSAL, REWARD_SCHEDULE_PROPOSALS, REWARD_SCHEDULES,
-        USER_LP_TOKEN_LOCKS, USER_BONDED_LP_TOKENS, LP_GLOBAL_STATE, ASSET_LP_REWARD_STATE,
+        ASSET_STAKER_INFO, CONFIG, OWNERSHIP_PROPOSAL, REWARD_SCHEDULE_PROPOSALS, LP_TOKEN_ASSET_REWARD_SCHEDULE,
+        USER_LP_TOKEN_LOCKS, USER_BONDED_LP_TOKENS, LP_GLOBAL_STATE, ASSET_LP_REWARD_STATE, REWARD_SCHEDULES, next_reward_schedule_id, CREATOR_CLAIMABLE_REWARD,
     },
 };
 use crate::state::next_reward_schedule_proposal_id;
@@ -127,6 +127,9 @@ pub fn execute(
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info.sender, lp_token, amount),
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info.sender, lp_token),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, &info.sender, lp_token),
+        ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
+            claim_unallocated_reward(deps, env, info, reward_schedule_id)
+        }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
             let response = propose_new_owner(
@@ -158,6 +161,92 @@ pub fn execute(
             .map_err(|e| e.into())
         }
     }
+}
+
+/// Claim unallocated reward for a reward schedule by the creator. This is useful when there was no tokens bonded for a certain
+/// time period during reward schedule and the reward schedule creator wants to claim the unallocated amount.
+fn claim_unallocated_reward(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    reward_schedule_id: u64,
+) -> ContractResult<Response> {
+    let reward_schedule = REWARD_SCHEDULES.load(deps.storage, reward_schedule_id)?;
+    let mut creator_claimable_reward_state = CREATOR_CLAIMABLE_REWARD
+        .may_load(deps.storage, reward_schedule_id)?
+        .unwrap_or_default();
+
+    // Verify that the message sender is the reward schedule creator
+    if info.sender != reward_schedule.creator {
+        return Err(ContractError::Unauthorized);
+    }
+
+    // Verify that the reward schedule is not active
+    if reward_schedule.end_block_time > env.block.time.seconds() {
+        return Err(ContractError::RewardScheduleIsActive);
+    }
+
+    // Verify that the reward schedule is not already claimed
+    if creator_claimable_reward_state.claimed {
+        return Err(ContractError::UnallocatedRewardAlreadyClaimed);
+    }
+
+    // if no user activity happened after the last time rewards were computed for this reward schedule
+    // and before the reward schedule ended, then the creator claimable reward amount would be less
+    // than what it should be if there was nothing bonded for this LP token during that time.
+    compute_creator_claimable_reward(deps.storage, env, &reward_schedule, &mut creator_claimable_reward_state)?;
+
+    // Verify that the reward schedule has unclaimed reward
+    if creator_claimable_reward_state.amount.is_zero() {
+        return Err(ContractError::NoUnallocatedReward);
+    }
+
+    // Update the reward schedule to be claimed
+    creator_claimable_reward_state.claimed = true;
+    CREATOR_CLAIMABLE_REWARD.save(deps.storage, reward_schedule_id, &creator_claimable_reward_state)?;
+
+    // Send the unclaimed reward to the reward schedule creator
+    let msg = build_transfer_token_to_user_msg(reward_schedule.asset, reward_schedule.creator, creator_claimable_reward_state.amount)?;
+    Ok(Response::new().add_message(msg))
+}
+
+fn compute_creator_claimable_reward(
+    store: &dyn Storage,
+    env: Env,
+    reward_schedule: &RewardSchedule,
+    creator_claimable_reward_state: &mut CreatorClaimableRewardState,
+) -> ContractResult<()> {
+    let lp_global_state = LP_GLOBAL_STATE.may_load(store, &reward_schedule.staking_lp_token)?.unwrap_or_default();
+    let asset_state = ASSET_LP_REWARD_STATE
+        .may_load(store, (&reward_schedule.asset.to_string(), &reward_schedule.staking_lp_token))?
+        .unwrap_or(AssetRewardState {
+            reward_index: Decimal::zero(),
+            last_distributed: 0,
+        });
+    let current_block_time = env.block.time.seconds();
+
+    if lp_global_state.total_bond_amount.is_zero() && asset_state.last_distributed < reward_schedule.end_block_time {
+        let start_time = reward_schedule.start_block_time;
+        let end_time = reward_schedule.end_block_time;
+
+        // this case is possible during the query
+        if start_time > current_block_time {
+            return Ok(());
+        }
+
+        // min(s.1, block_time) - max(s.0, last_distributed)
+        let passed_time = std::cmp::min(end_time, current_block_time)
+            - std::cmp::max(start_time, asset_state.last_distributed);
+
+        let time = end_time - start_time;
+        let distribution_amount_per_second: Decimal = Decimal::from_ratio(reward_schedule.amount, time);
+        let distributed_amount = distribution_amount_per_second * Uint128::from(passed_time as u128);
+
+        creator_claimable_reward_state.amount = creator_claimable_reward_state.amount.checked_add(distributed_amount)?;
+        creator_claimable_reward_state.last_update = env.block.time.seconds();
+    }
+
+    Ok(())
 }
 
 fn allow_lp_token(
@@ -295,7 +384,10 @@ pub fn review_reward_schedule_proposals(
 
             LP_GLOBAL_STATE.save(deps.storage, &proposal.lp_token, &lp_global_state)?;
 
+            let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
             let reward_schedule = RewardSchedule {
+                title: proposal.title,
+                creator: proposal.proposer,
                 asset: proposal.asset.info.clone(),
                 amount: proposal.asset.amount,
                 staking_lp_token: proposal.lp_token.clone(),
@@ -303,16 +395,17 @@ pub fn review_reward_schedule_proposals(
                 end_block_time: proposal.end_block_time,
             };
 
-            let mut reward_schedules = REWARD_SCHEDULES
+            REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
+
+            let mut reward_schedules_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
                 .may_load(deps.storage, (&proposal.lp_token, &proposal.asset.info.to_string()))?
                 .unwrap_or_default();
 
-            reward_schedules.push(reward_schedule);
-
-            REWARD_SCHEDULES.save(
+            reward_schedules_ids.push(reward_schedule_id);
+            LP_TOKEN_ASSET_REWARD_SCHEDULE.save(
                 deps.storage,
                 (&proposal.lp_token, &proposal.asset.info.to_string()),
-                &reward_schedules,
+                &reward_schedules_ids,
             )?;
 
             // remove the approved proposal from the state
@@ -402,19 +495,16 @@ pub fn compute_reward(
     current_block_time: u64,
     total_bond_amount: Uint128,
     state: &mut AssetRewardState,
-    reward_schedules: Vec<RewardSchedule>,
+    reward_schedules: Vec<(u64, RewardSchedule)>,
+    // Current creator claimable rewards for the above reward schedule ids
+    creator_claimable_reward: &mut HashMap<u64, CreatorClaimableRewardState>
 ) {
-    if total_bond_amount.is_zero() {
-        state.last_distributed = current_block_time;
-        return;
-    }
-
     if state.last_distributed == current_block_time {
         return;
     }
 
     let mut distributed_amount: Uint128 = Uint128::zero();
-    for s in reward_schedules.iter() {
+    for (id, s) in reward_schedules.iter() {
         let start_time = s.start_block_time;
         let end_time = s.end_block_time;
 
@@ -429,9 +519,30 @@ pub fn compute_reward(
         let time = end_time - start_time;
         let distribution_amount_per_second: Decimal = Decimal::from_ratio(s.amount, time);
         distributed_amount += distribution_amount_per_second * Uint128::from(passed_time as u128);
+
+        // This means between last distributed time and current block time, no one has bonded any assets
+        // This reward value must be claimable by the reward schedule creator
+        if total_bond_amount.is_zero() && state.last_distributed < current_block_time {
+            // Previous function ensures we can unwrap safely here
+            let current_creator_claimable_reward = creator_claimable_reward.get(id).cloned().unwrap();
+            // don't update already claimed creator claimable rewards
+            if !current_creator_claimable_reward.claimed {
+                let amount = current_creator_claimable_reward.amount;
+                let new_amount = amount.checked_add(distributed_amount).unwrap();
+                creator_claimable_reward.insert(*id, CreatorClaimableRewardState {
+                    claimed: false,
+                    amount: new_amount,
+                    last_update: current_block_time
+                });
+            }
+        }
     }
 
     state.last_distributed = current_block_time;
+
+    if total_bond_amount.is_zero() {
+        return;
+    }
     state.reward_index =
         state.reward_index + Decimal::from_ratio(distributed_amount, total_bond_amount);
 }
@@ -602,14 +713,27 @@ pub fn update_staking_rewards(
             last_distributed: 0,
         });
 
-    let reward_schedules = REWARD_SCHEDULES
+    let reward_schedule_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
         .may_load(
             deps.storage,
             (&lp_token, &asset.to_string()),
         )?
         .unwrap_or_default();
 
-    compute_reward(current_block_time, total_bond_amount, &mut asset_state, reward_schedules);
+    let mut reward_schedules = vec![];
+    for id in &reward_schedule_ids {
+        reward_schedules.push((*id, REWARD_SCHEDULES.load(deps.storage, *id)?.clone()));
+    }
+
+    let mut current_creator_claimable_rewards = HashMap::new();
+    for id in &reward_schedule_ids {
+        let reward = CREATOR_CLAIMABLE_REWARD
+            .may_load(deps.storage, *id)?
+            .unwrap_or_default();
+        current_creator_claimable_rewards.insert(*id, reward);
+    }
+
+    compute_reward(current_block_time, total_bond_amount, &mut asset_state, reward_schedules, &mut current_creator_claimable_rewards);
     compute_staker_reward(current_bond_amount, &mut asset_state, &mut asset_staker_info)?;
 
     if let Some(operation) = operation_post_update {
@@ -627,6 +751,10 @@ pub fn update_staking_rewards(
         (&lp_token, &user, &asset.to_string()),
         &asset_staker_info,
     )?;
+
+    for (id, reward) in current_creator_claimable_rewards {
+        CREATOR_CLAIMABLE_REWARD.save(deps.storage, id, &reward)?;
+    }
 
     Ok(())
 }
@@ -766,14 +894,28 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                         last_distributed: 0,
                     });
 
-                let reward_schedules = REWARD_SCHEDULES
-                    .may_load(
-                        deps.storage,
-                        (&lp_token, &asset.to_string()),
-                    )?
-                    .unwrap_or_default();
+                
+                let reward_schedule_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
+                .may_load(
+                    deps.storage,
+                    (&lp_token, &asset.to_string()),
+                )?
+                .unwrap_or_default();
 
-                compute_reward(block_time, lp_global_state.total_bond_amount, &mut asset_state, reward_schedules);
+                let mut reward_schedules = vec![];
+                for id in &reward_schedule_ids {
+                    reward_schedules.push((*id, REWARD_SCHEDULES.load(deps.storage, *id)?.clone()));
+                }
+
+                let mut current_creator_claimable_rewards = HashMap::new();
+                for id in &reward_schedule_ids {
+                    let reward = CREATOR_CLAIMABLE_REWARD
+                        .may_load(deps.storage, *id)?
+                        .unwrap_or_default();
+                    current_creator_claimable_rewards.insert(*id, reward);
+                }
+
+                compute_reward(block_time, lp_global_state.total_bond_amount, &mut asset_state, reward_schedules, &mut current_creator_claimable_rewards);
                 compute_staker_reward(current_bonded_amount, &mut asset_state, &mut asset_staker_info)?;
                 
                 if asset_staker_info.pending_reward > Uint128::zero() {
@@ -818,9 +960,17 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             to_binary(&reward_schedule).map_err(ContractError::from)
         }
         QueryMsg::RewardSchedules { lp_token, asset } => {
-            let reward_schedules = REWARD_SCHEDULES
+            let reward_schedule_ids= LP_TOKEN_ASSET_REWARD_SCHEDULE
                 .may_load(deps.storage, (&lp_token, &asset.to_string()))?
                 .unwrap_or_default();
+
+            let mut reward_schedules = vec![];
+            for id in &reward_schedule_ids {
+                reward_schedules.push(RewardScheduleResponse {
+                    id: *id,
+                    reward_schedule: REWARD_SCHEDULES.load(deps.storage, *id)?.clone(),
+                });
+            }
             to_binary(&reward_schedules).map_err(ContractError::from)
         }
         QueryMsg::TokenLocks {
@@ -871,6 +1021,23 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 Some(reward_state) => to_binary(&reward_state).map_err(ContractError::from),
                 None => Err(ContractError::NoUserRewardState),
             }
+        }
+        QueryMsg::CreatorClaimableReward {
+            reward_schedule_id
+        } => {
+            let reward_schedule = REWARD_SCHEDULES.load(deps.storage, reward_schedule_id)?;
+            let mut creator_claimable_reward = CREATOR_CLAIMABLE_REWARD
+                .may_load(deps.storage, reward_schedule_id)?
+                .unwrap_or_default();
+
+            compute_creator_claimable_reward(
+               deps.storage,
+                env,
+                &reward_schedule,
+                &mut creator_claimable_reward,
+            )?;
+                
+            to_binary(&creator_claimable_reward).map_err(ContractError::from)
         }
     }
 }

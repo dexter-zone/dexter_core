@@ -1,6 +1,6 @@
 use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
 use cw_storage_plus::{Map, Item};
-use dexter::{multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock, LpGlobalState}, helper::OwnershipProposal};
+use dexter::{multi_staking::{AssetRewardState, Config, AssetStakerInfo, RewardSchedule, TokenLock, LpGlobalState, CreatorClaimableRewardState}, helper::OwnershipProposal};
 use dexter::multi_staking::ProposedRewardSchedule;
 
 // Global config of the contract
@@ -11,6 +11,8 @@ pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_pro
 
 /// The count of how many reward schedules have been proposed till now
 pub const REWARD_SCHEDULE_PROPOSAL_COUNT: Item<u64> = Item::new("reward_schedule_proposal_count");
+
+pub const REWARD_SCHEDULE_ID_COUNT: Item<u64> = Item::new("reward_schedule_id_count");
 
 /// Map of Proposal ID to the proposed reward schedule for that LP token.
 /// Only when these proposals are approved, they will be moved to REWARD_SCHEDULES.
@@ -24,7 +26,12 @@ pub const REWARD_SCHEDULE_PROPOSALS: Map<u64, ProposedRewardSchedule> = Map::new
 pub const ASSET_STAKER_INFO: Map<(&Addr, &Addr, &str), AssetStakerInfo> = Map::new("asset_staker_info");
 
 /// Store of all reward schedules for a (LP token, Asset) pair.
-pub const REWARD_SCHEDULES: Map<(&Addr, &str) , Vec<RewardSchedule>> = Map::new("rewards");
+pub const LP_TOKEN_ASSET_REWARD_SCHEDULE: Map<(&Addr, &str) , Vec<u64>> = Map::new("rewards");
+
+pub const REWARD_SCHEDULES: Map<u64, RewardSchedule> = Map::new("reward_schedules");
+
+/// Reward amount that can be claimed back by the creator since there was no user bonding in that time period
+pub const CREATOR_CLAIMABLE_REWARD: Map<u64, CreatorClaimableRewardState> = Map::new("creator_claimable_reward");
 
 /// This is used to keep track of the LP tokens that are currently locked for the user
 /// after they have unbonded their tokens.
@@ -48,5 +55,11 @@ pub const LP_GLOBAL_STATE: Map<&Addr, LpGlobalState> = Map::new("lp_global_state
 pub fn next_reward_schedule_proposal_id(store: &mut dyn Storage) -> StdResult<u64> {
     let id: u64 = REWARD_SCHEDULE_PROPOSAL_COUNT.may_load(store)?.unwrap_or_default() + 1;
     REWARD_SCHEDULE_PROPOSAL_COUNT.save(store, &id)?;
+    Ok(id)
+}
+
+pub fn next_reward_schedule_id(store: &mut dyn Storage) -> StdResult<u64> {
+    let id: u64 = REWARD_SCHEDULE_ID_COUNT.may_load(store)?.unwrap_or_default() + 1;
+    REWARD_SCHEDULE_ID_COUNT.save(store, &id)?;
     Ok(id)
 }
