@@ -71,15 +71,7 @@ pub fn instantiate(
     // Weights assigned to assets
     let WeightedParams {
         mut weights,
-        exit_fee,
     } = from_binary(&msg.init_params.unwrap())?;
-
-    // Exit fee cannot be set more than 1%
-    if exit_fee.is_some() {
-        if exit_fee.unwrap() > Decimal::from_ratio(1u128, 100u128) {
-            return Err(ContractError::InvalidExitFee {});
-        }
-    }
 
     // Error if number of assets and weights provided do not match
     if msg.asset_infos.len() != weights.len() {
@@ -158,7 +150,6 @@ pub fn instantiate(
 
     let math_config = MathConfig {
         greatest_precision,
-        exit_fee,
     };
 
     // Store config, MathConfig and twap in storage
@@ -655,7 +646,6 @@ pub fn query_on_exit_pool(
     }
 
     let config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
@@ -670,12 +660,7 @@ pub fn query_on_exit_pool(
     // refundedShares = act_burn_shares * (1 - exit fee) with 0 exit fee optimization
 
     // Calculate number of LP tokens to be refunded to the user
-    // --> Weighted pool allows setting an exit fee for the pool which needs to be less than 1%
-    let mut refunded_shares = act_burn_shares;
-    if math_config.exit_fee.is_some() && !math_config.exit_fee.unwrap().is_zero() {
-        let one_sub_exit_fee = Decimal::one() - math_config.exit_fee.unwrap();
-        refunded_shares = act_burn_shares * one_sub_exit_fee;
-    }
+    let refunded_shares = act_burn_shares;
 
     // % of share to be burnt from the pool
     let share_out_ratio = Decimal::from_ratio(refunded_shares, total_share);

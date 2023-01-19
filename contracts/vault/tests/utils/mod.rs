@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128, BlockInfo, Uint64};
+use cosmwasm_std::{to_binary, Addr, Coin, Timestamp, Uint128, BlockInfo, Uint64};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
@@ -488,7 +488,6 @@ pub fn initialize_weighted_pool(
         init_params: Some(
             to_binary(&weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,
-                exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })
             .unwrap(),
         ),

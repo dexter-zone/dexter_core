@@ -5,15 +5,13 @@ any pair of tokens held in a Pool which was introduced by Balancer. Dexter's wei
 
 Unlike pools in other DeFi protocols that only provide 50/50 weightings, Dexter's Weighted Pools enable users to build pools with different token counts and weightings, such as pools with 80/20 or 60/20/20 weightings.
 
-Note - Dexter's weighted pool accepts an `exit_fee` parameter during pool initialization. The `exit_fee` is the % fee charged to the user when liquidity is withdrawn from the pool. 100% of the exit fee charged is distributed among the LPs of the Pool. `exit_fee` cannot be more than 1%.
-
 ## Contract State
 
 | Message      | Description                                                                      |
 | ------------ | -------------------------------------------------------------------------------- |
 | `CONFIG`     | Stores pool contract's core Configuration parameters in a [`Config`] struct      |
 | `TWAPINFO`   | Stores Twap prices for the tokens supported by the pool in a [`Twap`] struct     |
-| `MATHCONFIG` | Stores `exit_fee` and `greatest_precision` configuration parameters for the pool |
+| `MATHCONFIG` | Stores `greatest_precision` configuration parameters for the pool                |
 | `PRECISIONS` | Stores decimal precision for each asset supported by the pool                    |
 | `WEIGHTS`    | Stores normalized weight for each asset supported by the pool                    |
 

@@ -207,7 +207,6 @@ fn instantiate_contracts_instance(
         init_params: Some(
             to_binary(&WeightedParams {
                 weights: asset_infos_with_weights,
-                exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })
             .unwrap(),
         ),
@@ -309,7 +308,6 @@ fn instantiate_contracts_instance(
     );
     assert_eq!(
         to_binary(&MathConfig {
-            exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             greatest_precision: 6u8
         })
         .unwrap(),
@@ -1429,19 +1427,19 @@ fn test_on_exit_pool() {
                 info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(2808729u128),
+                amount: Uint128::from(2837100u128),
             },
             Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                amount: Uint128::from(1424313u128),
+                amount: Uint128::from(1438700u128),
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(2313778u128),
+                amount: Uint128::from(2337150u128),
             },
         ],
         exit_pool_query_res.assets_out
@@ -1482,7 +1480,7 @@ fn test_on_exit_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(56739191271u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(56739162900u128), vault_bal_res.balance);
 
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
@@ -1504,19 +1502,19 @@ fn test_on_exit_pool() {
                 info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(56739191271u128),
+                amount: Uint128::from(56739162900u128),
             },
             Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                amount: Uint128::from(28772575687u128),
+                amount: Uint128::from(28772561300u128),
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(46740686222u128),
+                amount: Uint128::from(46740662850u128),
             },
         ],
         vault_pool_config_res.assets

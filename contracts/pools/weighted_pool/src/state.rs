@@ -25,8 +25,6 @@ pub const WEIGHTS: Map<String, Decimal> = Map::new("weights");
 /// This struct describes the main math config of pool.
 #[cw_serde]
 pub struct MathConfig {
-    /// Exit fee in % charged when liquidity is withdrawn from the pool
-    pub exit_fee: Option<Decimal>,
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,
 }
@@ -98,6 +96,5 @@ pub struct WeightedAsset {
 
 #[cw_serde]
 pub struct WeightedParams {
-    pub weights: Vec<Asset>,
-    pub exit_fee: Option<Decimal>,
+    pub weights: Vec<Asset>
 }
