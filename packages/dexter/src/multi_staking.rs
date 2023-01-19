@@ -142,7 +142,6 @@ pub struct AssetStakerInfo {
 #[cw_serde]
 #[derive(Default)]
 pub struct LpGlobalState {
-    pub reward_schedule_id_counter: u64,
     pub total_bond_amount: Uint128,
     pub active_reward_assets: Vec<AssetInfo>
 }

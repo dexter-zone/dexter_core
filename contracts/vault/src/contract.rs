@@ -23,7 +23,7 @@ use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{
     AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg,
     ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo,
-    PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFeeInfo, PauseInfoUpdateType,
+    PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType,
 };
 
 use cw2::{get_contract_version, set_contract_version};
@@ -75,14 +75,9 @@ pub fn instantiate(
     }
 
     let pool_creation_fee = &msg.pool_creation_fee;
-    if pool_creation_fee.enabled {
-        if pool_creation_fee.fee.is_none() {
-            return Err(ContractError::InvalidPoolCreationFee {});
-        }
-        if let Some(fee) = &pool_creation_fee.fee {
-            if fee.amount.is_zero() {
-                return Err(ContractError::InvalidPoolCreationFee {});
-            }
+    if let PoolCreationFee::Enabled { fee } = &pool_creation_fee {
+        if fee.amount == Uint128::zero() {
+            return Err(ContractError::InvalidPoolCreationFee);
         }
     }
     event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&pool_creation_fee).unwrap());
@@ -356,7 +351,7 @@ pub fn execute_update_config(
     info: MessageInfo,
     lp_token_code_id: Option<u64>,
     fee_collector: Option<String>,
-    pool_creation_fee: Option<PoolCreationFeeInfo>,
+    pool_creation_fee: Option<PoolCreationFee>,
     auto_stake_impl: Option<AutoStakeImpl>,
     paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
@@ -386,17 +381,12 @@ pub fn execute_update_config(
 
     // Validate the pool creation fee
     if let Some(pool_creation_fee) = pool_creation_fee {
-        if pool_creation_fee.enabled {
-            if pool_creation_fee.fee.is_none() {
+        if let PoolCreationFee::Enabled { fee } = &pool_creation_fee {
+            if fee.amount == Uint128::zero() {
                 return Err(ContractError::InvalidPoolCreationFee);
             }
-            if let Some(fee) = &pool_creation_fee.fee {
-                if fee.amount.is_zero() {
-                    return Err(ContractError::InvalidPoolCreationFee);
-                }
-            }
         }
-        config.pool_creation_fee = pool_creation_fee.clone();
+        config.pool_creation_fee = pool_creation_fee;
         event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&config.pool_creation_fee).unwrap());
     }
 
@@ -783,18 +773,12 @@ pub fn execute_create_pool_instance(
     let mut execute_msgs = vec![];
 
     // Validate if fee is sent for creation of pool
-    if config.pool_creation_fee.enabled {
-        // Check if sender has sent enough funds to pay for the pool creation fee
-        let pool_creation_fee = config.pool_creation_fee.fee.clone();
-        if pool_creation_fee.is_none() {
-            return Err(ContractError::InvalidPoolCreationFee);
-        }
-
-        let pool_creation_fee = pool_creation_fee.unwrap();
-        let fee_amount = pool_creation_fee.amount;
+    if let PoolCreationFee::Enabled { fee } = config.pool_creation_fee {
+        let fee_amount = fee.amount;
         // TODO: Send the Pool creation fee to the Keeper contract or have a withdrawal mechanism for the fee
-        match pool_creation_fee.info.clone() {
+        match fee.info.clone() {
             AssetInfo::NativeToken { denom } => {
+                // Check if sender has sent enough funds to pay for the pool creation fee
                 let tokens_received = find_sent_native_token_balance(&info, &denom);
 
                 if tokens_received < fee_amount {
@@ -806,7 +790,7 @@ pub fn execute_create_pool_instance(
                 } else if tokens_received > fee_amount {
                     // refund the extra tokens
                     if tokens_received > fee_amount {
-                        let transfer_msg = pool_creation_fee.info.clone().create_transfer_msg(
+                        let transfer_msg = fee.info.clone().create_transfer_msg(
                             info.sender.clone(),
                             tokens_received.checked_sub(fee_amount)?,
                         )?;

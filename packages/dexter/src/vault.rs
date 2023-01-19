@@ -129,7 +129,7 @@ pub struct Config {
     pub auto_stake_impl: AutoStakeImpl,
     /// Fee required for creating a new pool.
     /// Ideally, it is charged in the base currency of the chain but can be changed to governance token later
-    pub pool_creation_fee: PoolCreationFeeInfo,
+    pub pool_creation_fee: PoolCreationFee,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
     /// The global pause status for the vault. This overrides the pause status of any pool type or pool id.
@@ -220,10 +220,17 @@ pub struct PauseInfo {
 }
 
 #[cw_serde]
-#[derive(Default)]
-pub struct PoolCreationFeeInfo {
-    pub enabled: bool,
-    pub fee: Option<Asset>
+pub enum PoolCreationFee {
+    Disabled,
+    Enabled {
+        fee: Asset
+    }
+}
+
+impl Default for PoolCreationFee {
+    fn default() -> Self {
+        PoolCreationFee::Disabled
+    }
 }
 
 impl Display for PauseInfo {
@@ -287,7 +294,7 @@ pub struct InstantiateMsg {
     /// in the contract's state and then used to create pools
     pub lp_token_code_id: Option<u64>,
     pub fee_collector: Option<String>,
-    pub pool_creation_fee: PoolCreationFeeInfo,
+    pub pool_creation_fee: PoolCreationFee,
     /// Specifies which auto-stake implementation has to be used.
     pub auto_stake_impl: AutoStakeImpl
 }
@@ -309,7 +316,7 @@ pub enum ExecuteMsg {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
         // Fee required for creating a new pool.
-        pool_creation_fee: Option<PoolCreationFeeInfo>,
+        pool_creation_fee: Option<PoolCreationFee>,
         auto_stake_impl: Option<AutoStakeImpl>,
         paused: Option<PauseInfo>,
     },

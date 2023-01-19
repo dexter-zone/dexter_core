@@ -7,7 +7,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
-    PoolTypeConfig, QueryMsg, PoolCreationFeeInfo, PauseInfo,
+    PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -152,7 +152,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
     };
 
     let vault_instance = app

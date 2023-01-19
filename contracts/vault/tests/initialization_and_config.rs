@@ -8,7 +8,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
-    PoolType, PoolTypeConfig, QueryMsg, PoolCreationFeeInfo, AutoStakeImpl, PauseInfoUpdateType,
+    PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
 
 use crate::utils::{
@@ -90,10 +90,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
-        pool_creation_fee: PoolCreationFeeInfo {
-            enabled: false,
-            fee: None
-        },
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let vault_instance = app
@@ -270,7 +267,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: AutoStakeImpl::None,
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
     };
 
     let res = app
@@ -307,7 +304,7 @@ fn proper_initialization() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
-        pool_creation_fee: PoolCreationFeeInfo { enabled: false, fee: None },
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let res = app
@@ -353,7 +350,7 @@ fn test_add_to_registery() {
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         auto_stake_impl: AutoStakeImpl::None,
-        pool_creation_fee: PoolCreationFeeInfo { enabled: false, fee: None },
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let vault_instance = app

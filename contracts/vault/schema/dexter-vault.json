@@ -8,28 +8,21 @@
     "description": "This struct describes the Msg used to instantiate in this contract.",
     "type": "object",
     "required": [
+      "auto_stake_impl",
       "owner",
-      "pool_configs"
+      "pool_configs",
+      "pool_creation_fee"
     ],
     "properties": {
       "auto_stake_impl": {
         "description": "Specifies which auto-stake implementation has to be used.",
-        "anyOf": [
+        "allOf": [
           {
             "$ref": "#/definitions/AutoStakeImpl"
-          },
-          {
-            "type": "null"
           }
         ]
       },
       "fee_collector": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "generator_address": {
         "type": [
           "string",
           "null"
@@ -44,12 +37,6 @@
         "format": "uint64",
         "minimum": 0.0
       },
-      "multistaking_address": {
-        "type": [
-          "string",
-          "null"
-        ]
-      },
       "owner": {
         "type": "string"
       },
@@ -61,14 +48,7 @@
         }
       },
       "pool_creation_fee": {
-        "anyOf": [
-          {
-            "$ref": "#/definitions/Asset"
-          },
-          {
-            "type": "null"
-          }
-        ]
+        "$ref": "#/definitions/PoolCreationFee"
       }
     },
     "additionalProperties": false,
@@ -162,10 +142,55 @@
         ]
       },
       "AutoStakeImpl": {
-        "type": "string",
-        "enum": [
-          "generator",
-          "multistaking"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "none"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "generator"
+            ],
+            "properties": {
+              "generator": {
+                "type": "object",
+                "required": [
+                  "contract_addr"
+                ],
+                "properties": {
+                  "contract_addr": {
+                    "$ref": "#/definitions/Addr"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "multistaking"
+            ],
+            "properties": {
+              "multistaking": {
+                "type": "object",
+                "required": [
+                  "contract_addr"
+                ],
+                "properties": {
+                  "contract_addr": {
+                    "$ref": "#/definitions/Addr"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "FeeInfo": {
@@ -204,6 +229,55 @@
           }
         },
         "additionalProperties": false
+      },
+      "PauseInfo": {
+        "type": "object",
+        "required": [
+          "deposit",
+          "swap"
+        ],
+        "properties": {
+          "deposit": {
+            "description": "True if deposits are paused",
+            "type": "boolean"
+          },
+          "swap": {
+            "description": "True if swaps are paused",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PoolCreationFee": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "disabled"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "object",
+                "required": [
+                  "fee"
+                ],
+                "properties": {
+                  "fee": {
+                    "$ref": "#/definitions/Asset"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "PoolType": {
         "description": "This enum describes the key for the different Pool types supported by Dexter",
@@ -287,6 +361,7 @@
           "code_id",
           "default_fee_info",
           "is_generator_disabled",
+          "paused",
           "pool_type"
         ],
         "properties": {
@@ -310,6 +385,14 @@
           "is_generator_disabled": {
             "description": "Setting this to true means that pools of this type will not be able to get added to generator",
             "type": "boolean"
+          },
+          "paused": {
+            "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/PauseInfo"
+              }
+            ]
           },
           "pool_type": {
             "description": "The pools type (provided in a [`PoolType`])",
@@ -358,14 +441,7 @@
               "auto_stake_impl": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "$ref": "#/definitions/AutoStakeImpl"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/definitions/AutoStakeImpl"
                   },
                   {
                     "type": "null"
@@ -378,12 +454,6 @@
                   "null"
                 ]
               },
-              "generator_address": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "lp_token_code_id": {
                 "type": [
                   "integer",
@@ -391,12 +461,6 @@
                 ],
                 "format": "uint64",
                 "minimum": 0.0
-              },
-              "multistaking_address": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "paused": {
                 "anyOf": [
@@ -411,14 +475,7 @@
               "pool_creation_fee": {
                 "anyOf": [
                   {
-                    "anyOf": [
-                      {
-                        "$ref": "#/definitions/Asset"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/definitions/PoolCreationFee"
                   },
                   {
                     "type": "null"
@@ -474,7 +531,33 @@
         "additionalProperties": false
       },
       {
-        "description": "Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) , and updating Fee (` pool_config.fee_info`) for new pool instances",
+        "description": "Allows updating pause info of pools to whitelisted addresses. Pools can be paused based on a know pool_id or pool_type.",
+        "type": "object",
+        "required": [
+          "update_pause_info"
+        ],
+        "properties": {
+          "update_pause_info": {
+            "type": "object",
+            "required": [
+              "pause_info",
+              "update_type"
+            ],
+            "properties": {
+              "pause_info": {
+                "$ref": "#/definitions/PauseInfo"
+              },
+              "update_type": {
+                "$ref": "#/definitions/PauseInfoUpdateType"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Executable only by `config.owner`. Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) , and updating Fee (` pool_config.fee_info`) for new pool instances",
         "type": "object",
         "required": [
           "update_pool_type_config"
@@ -506,6 +589,16 @@
                 "anyOf": [
                   {
                     "$ref": "#/definitions/FeeInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "paused": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/PauseInfo"
                   },
                   {
                     "type": "null"
@@ -889,10 +982,55 @@
         ]
       },
       "AutoStakeImpl": {
-        "type": "string",
-        "enum": [
-          "generator",
-          "multistaking"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "none"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "generator"
+            ],
+            "properties": {
+              "generator": {
+                "type": "object",
+                "required": [
+                  "contract_addr"
+                ],
+                "properties": {
+                  "contract_addr": {
+                    "$ref": "#/definitions/Addr"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "multistaking"
+            ],
+            "properties": {
+              "multistaking": {
+                "type": "object",
+                "required": [
+                  "contract_addr"
+                ],
+                "properties": {
+                  "contract_addr": {
+                    "$ref": "#/definitions/Addr"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "Binary": {
@@ -979,6 +1117,65 @@
         },
         "additionalProperties": false
       },
+      "PauseInfoUpdateType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "pool_id"
+            ],
+            "properties": {
+              "pool_id": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "pool_type"
+            ],
+            "properties": {
+              "pool_type": {
+                "$ref": "#/definitions/PoolType"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "PoolCreationFee": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "disabled"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "object",
+                "required": [
+                  "fee"
+                ],
+                "properties": {
+                  "fee": {
+                    "$ref": "#/definitions/Asset"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "PoolType": {
         "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
@@ -1061,6 +1258,7 @@
           "code_id",
           "default_fee_info",
           "is_generator_disabled",
+          "paused",
           "pool_type"
         ],
         "properties": {
@@ -1084,6 +1282,14 @@
           "is_generator_disabled": {
             "description": "Setting this to true means that pools of this type will not be able to get added to generator",
             "type": "boolean"
+          },
+          "paused": {
+            "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/PauseInfo"
+              }
+            ]
           },
           "pool_type": {
             "description": "The pools type (provided in a [`PoolType`])",
@@ -1396,36 +1602,24 @@
       "title": "Description - This struct describes the main control config of Vault.",
       "type": "object",
       "required": [
+        "auto_stake_impl",
         "next_pool_id",
         "owner",
         "paused",
+        "pool_creation_fee",
         "whitelisted_addresses"
       ],
       "properties": {
         "auto_stake_impl": {
           "description": "Which auto-stake feature is enabled for the pool Generator allows for generating DEX token and dual farming of 3rd party tokens/assets Multistaking allows for staking of LP tokens with N-different rewards in a single contract. If none, it will disable auto-staking feature",
-          "anyOf": [
+          "allOf": [
             {
               "$ref": "#/definitions/AutoStakeImpl"
-            },
-            {
-              "type": "null"
             }
           ]
         },
         "fee_collector": {
           "description": "The contract address to which protocol fees are sent",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "generator_address": {
-          "description": "The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature",
           "anyOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -1444,17 +1638,6 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "multistaking_address": {
-          "description": "The contract where users can stake LP tokens for N-asset rewards. Used for `auto-stake` feature. The usage between `generator_address` and `multistaking_address` is mutually exclusive depending on the current set auto-stake impl",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "next_pool_id": {
           "description": "The next pool ID to be used for creating new pools",
           "allOf": [
@@ -1472,7 +1655,7 @@
           ]
         },
         "paused": {
-          "description": "The global pause status for the vault. This overrides the pause status of any pool.",
+          "description": "The global pause status for the vault. This overrides the pause status of any pool type or pool id.",
           "allOf": [
             {
               "$ref": "#/definitions/PauseInfo"
@@ -1481,12 +1664,9 @@
         },
         "pool_creation_fee": {
           "description": "Fee required for creating a new pool. Ideally, it is charged in the base currency of the chain but can be changed to governance token later",
-          "anyOf": [
+          "allOf": [
             {
-              "$ref": "#/definitions/Asset"
-            },
-            {
-              "type": "null"
+              "$ref": "#/definitions/PoolCreationFee"
             }
           ]
         },
@@ -1581,10 +1761,55 @@
           ]
         },
         "AutoStakeImpl": {
-          "type": "string",
-          "enum": [
-            "generator",
-            "multistaking"
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "none"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "generator"
+              ],
+              "properties": {
+                "generator": {
+                  "type": "object",
+                  "required": [
+                    "contract_addr"
+                  ],
+                  "properties": {
+                    "contract_addr": {
+                      "$ref": "#/definitions/Addr"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "multistaking"
+              ],
+              "properties": {
+                "multistaking": {
+                  "type": "object",
+                  "required": [
+                    "contract_addr"
+                  ],
+                  "properties": {
+                    "contract_addr": {
+                      "$ref": "#/definitions/Addr"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
           ]
         },
         "PauseInfo": {
@@ -1604,6 +1829,37 @@
             }
           },
           "additionalProperties": false
+        },
+        "PoolCreationFee": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "disabled"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "enabled"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "object",
+                  "required": [
+                    "fee"
+                  ],
+                  "properties": {
+                    "fee": {
+                      "$ref": "#/definitions/Asset"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         },
         "Uint128": {
           "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
@@ -2253,6 +2509,24 @@
           },
           "additionalProperties": false
         },
+        "PauseInfo": {
+          "type": "object",
+          "required": [
+            "deposit",
+            "swap"
+          ],
+          "properties": {
+            "deposit": {
+              "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "swap": {
+              "description": "True if swaps are paused",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
         "PoolType": {
           "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
@@ -2335,6 +2609,7 @@
             "code_id",
             "default_fee_info",
             "is_generator_disabled",
+            "paused",
             "pool_type"
           ],
           "properties": {
@@ -2358,6 +2633,14 @@
             "is_generator_disabled": {
               "description": "Setting this to true means that pools of this type will not be able to get added to generator",
               "type": "boolean"
+            },
+            "paused": {
+              "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/PauseInfo"
+                }
+              ]
             },
             "pool_type": {
               "description": "The pools type (provided in a [`PoolType`])",

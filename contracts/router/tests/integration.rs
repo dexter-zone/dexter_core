@@ -12,7 +12,7 @@ use dexter::router::{
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
     InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType,
-    QueryMsg as VaultQueryMsg, SwapType, PoolCreationFeeInfo, AutoStakeImpl, PauseInfo,
+    QueryMsg as VaultQueryMsg, SwapType, PoolCreationFee, AutoStakeImpl, PauseInfo,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -165,7 +165,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
 
@@ -615,7 +615,7 @@ fn proper_initialization() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
 

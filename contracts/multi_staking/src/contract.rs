@@ -208,7 +208,7 @@ fn claim_unallocated_reward(
     // Send the unclaimed reward to the reward schedule creator
     let msg = build_transfer_token_to_user_msg(reward_schedule.asset, reward_schedule.creator, creator_claimable_reward_state.amount)?;
 
-    let event = Event::new("claim_unallocated_reward")
+    let event = Event::new("dexter-multistaking::claim_unallocated_reward")
         .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
         .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
 

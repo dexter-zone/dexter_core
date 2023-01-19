@@ -12,7 +12,7 @@ use dexter::pool::{
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
-    SwapType, PoolCreationFeeInfo,
+    SwapType, PoolCreationFee,
 };
 
 use stable5pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
@@ -106,7 +106,7 @@ fn instantiate_contracts_instance(
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None
     };
 

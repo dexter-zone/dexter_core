@@ -12,7 +12,7 @@ use dexter::pool::{
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
-    SwapType, PoolCreationFeeInfo, AutoStakeImpl,
+    SwapType, PoolCreationFee, AutoStakeImpl,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -100,7 +100,7 @@ fn instantiate_contracts_instance(app: &mut App, owner: &Addr) -> (Addr, Addr, A
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: AutoStakeImpl::None,
     };
 

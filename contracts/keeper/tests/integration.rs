@@ -4,7 +4,7 @@ use std::vec;
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
-use dexter::vault::{FeeInfo, PauseInfo, PoolTypeConfig, PoolType, PoolCreationFeeInfo};
+use dexter::vault::{FeeInfo, PauseInfo, PoolTypeConfig, PoolType, PoolCreationFee};
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
@@ -53,7 +53,7 @@ fn instantiate_contracts(
         lp_token_code_id: Some(1u64),
         fee_collector: None,
         owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFeeInfo::default(),
+        pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
     let vault_instance = router
