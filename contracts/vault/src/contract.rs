@@ -842,6 +842,10 @@ pub fn execute_create_pool_instance(
     let pool_id = config.next_pool_id;
 
     let fee_info = fee_info.unwrap_or(pool_type_config.default_fee_info);
+    // validate fee bps limits
+    if !fee_info.valid_fee_info() {
+        return Err(ContractError::InvalidFeeInfo {});
+    }
     let tmp_pool_info = TmpPoolInfo {
         code_id: pool_type_config.code_id,
         pool_id,
