@@ -4,7 +4,7 @@ use cosmwasm_std::entry_point;
 use std::collections::{HashSet, HashMap};
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, MessageInfo,
-    Response, StdError, StdResult, Uint128, WasmMsg, Order, Storage
+    Response, StdError, StdResult, Uint128, WasmMsg, Order, Storage, Event
 };
 
 use dexter::{
@@ -207,7 +207,12 @@ fn claim_unallocated_reward(
 
     // Send the unclaimed reward to the reward schedule creator
     let msg = build_transfer_token_to_user_msg(reward_schedule.asset, reward_schedule.creator, creator_claimable_reward_state.amount)?;
-    Ok(Response::new().add_message(msg))
+
+    let event = Event::new("dexter-multistaking::claim_unallocated_reward")
+        .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
+        .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
+
+    Ok(Response::new().add_event(event).add_message(msg))
 }
 
 fn compute_creator_claimable_reward(
@@ -271,9 +276,14 @@ fn allow_lp_token(
         return Err(ContractError::LpTokenAlreadyAllowed);
     }
 
-    config.allowed_lp_tokens.push(lp_token);
+    config.allowed_lp_tokens.push(lp_token.clone());
     CONFIG.save(deps.storage, &config)?;
-    Ok(Response::default())
+
+    let response = Response::new()
+        .add_event(Event::new("dexter-multistaking::allow_lp_token")
+            .add_attribute("lp_token", lp_token.to_string())
+        );
+    Ok(response)
 }
 
 fn remove_lp_token_from_allowed_list(
@@ -290,7 +300,12 @@ fn remove_lp_token_from_allowed_list(
     config.allowed_lp_tokens.retain(|x| x != lp_token);
     CONFIG.save(deps.storage, &config)?;
 
-    Ok(Response::default())
+    let response = Response::new()
+        .add_event(Event::new("dexter-multistaking::remove_lp_token")
+            .add_attribute("lp_token", lp_token.to_string())
+        );
+
+    Ok(response)
 }
 
 pub fn propose_reward_schedule(
@@ -325,17 +340,28 @@ pub fn propose_reward_schedule(
         deps.storage,
         proposal_id.clone(),
         &ProposedRewardSchedule {
-            lp_token,
-            proposer,
-            title,
+            lp_token: lp_token.clone(),
+            proposer: proposer.clone(),
+            title: title.clone(),
             description,
-            asset,
+            asset: asset.clone(),
             start_block_time,
             end_block_time,
             rejected: false, // => not yet reviewed
         })?;
 
-    Ok(Response::default().add_attribute("proposal_id", proposal_id.to_string()))
+    let event = Event::new("dexter-multistaking::propose_reward_schedule")
+        .add_attribute("proposal_id", proposal_id.to_string())
+        .add_attribute("lp_token", lp_token.to_string())
+        .add_attribute("proposer", proposer.to_string())
+        .add_attribute("title", title)
+        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+        .add_attribute("start_block_time", start_block_time.to_string())
+        .add_attribute("end_block_time", end_block_time.to_string());
+
+    let response = Response::new()
+        .add_event(event);
+    Ok(response)
 }
 
 pub fn review_reward_schedule_proposals(
@@ -357,6 +383,9 @@ pub fn review_reward_schedule_proposals(
         }
     }
 
+    let mut accepted_reward_proposals: Vec<(u64, u64)> = vec![];
+    let mut rejected_reward_proposals: Vec<u64> = vec![];
+
     // act on all the reviews
     for review in reviews.into_iter() {
         let mut proposal: ProposedRewardSchedule = REWARD_SCHEDULE_PROPOSALS
@@ -365,12 +394,12 @@ pub fn review_reward_schedule_proposals(
 
         // skip the proposal if rejected already. No need to error, just ignore it.
         if proposal.rejected {
+            rejected_reward_proposals.push(review.proposal_id);
             continue
         }
 
         // if approved and proposal is still valid, then need to save the reward schedule
         if review.approve && proposal.start_block_time > env.block.time.seconds() {
-
             // still need to check as an LP token might have been removed after the reward schedule was proposed
             check_if_lp_token_allowed(&config, &proposal.lp_token)?;
 
@@ -385,6 +414,8 @@ pub fn review_reward_schedule_proposals(
             LP_GLOBAL_STATE.save(deps.storage, &proposal.lp_token, &lp_global_state)?;
 
             let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
+
+            accepted_reward_proposals.push((review.proposal_id, reward_schedule_id));
             let reward_schedule = RewardSchedule {
                 title: proposal.title,
                 creator: proposal.proposer,
@@ -414,11 +445,17 @@ pub fn review_reward_schedule_proposals(
         // otherwise, mark the proposal rejected
         else {
             proposal.rejected = true;
+            rejected_reward_proposals.push(review.proposal_id);
             REWARD_SCHEDULE_PROPOSALS.save(deps.storage, review.proposal_id, &proposal)?;
         }
     }
 
-    Ok(Response::default())
+    let event = Event::new("dexter-multistaking::review_reward_schedule_proposals")
+        .add_attribute("accepted_proposals", serde_json_wasm::to_string(&accepted_reward_proposals).unwrap())
+        .add_attribute("rejected_proposals", serde_json_wasm::to_string(&rejected_reward_proposals).unwrap());
+
+    let response = Response::new().add_event(event);
+    Ok(response)
 }
 
 
@@ -440,7 +477,10 @@ pub fn drop_reward_schedule_proposal(
 
     REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
 
-    Ok(Response::default().add_message(msg))
+    let event = Event::new("dexter-multistaking::drop_reward_schedule_proposal")
+        .add_attribute("proposal_id", proposal_id.to_string());
+
+    Ok(Response::default().add_event(event).add_message(msg))
 }
 
 pub fn receive_cw20(
@@ -605,13 +645,23 @@ pub fn bond(
     lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_add(amount)?;
     LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
 
+    let user_updated_bond_amount = current_bond_amount.checked_add(amount)?;
+
     // Increase user bond amount
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
         (&lp_token, &user),
-        &(current_bond_amount.checked_add(amount)?),
+        &user_updated_bond_amount,
     )?;
 
+    let event = Event::new("dexter-multistaking::bond")
+        .add_attribute("lp_token", lp_token)
+        .add_attribute("user", user)
+        .add_attribute("amount", amount)
+        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
+        .add_attribute("user_updated_bond_amount", user_updated_bond_amount);
+
+    response = response.add_event(event);
     Ok(response)
 }
 
@@ -677,13 +727,23 @@ pub fn unbond(
 
     let config = CONFIG.load(deps.storage)?;
 
+    let unlock_time = env.block.time.seconds() + config.unlock_period;
     unlocks.push(TokenLock {
-        unlock_time: env.block.time.seconds() + config.unlock_period,
+        unlock_time,
         amount,
     });
 
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &sender), &unlocks)?;
 
+    let event = Event::new("dexter-multistaking::unbond")
+        .add_attribute("lp_token", lp_token)
+        .add_attribute("user", sender)
+        .add_attribute("amount", amount)
+        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
+        .add_attribute("user_updated_bond_amount", current_bond_amount.checked_sub(amount)?)
+        .add_attribute("unlock_time", unlock_time.to_string());
+
+    response = response.add_event(event);
     Ok(response)
 }
 
@@ -696,7 +756,7 @@ pub fn update_staking_rewards(
     current_block_time: u64,
     deps: &mut DepsMut,
     response: &mut Response,
-    operation_post_update: Option<fn(&Addr, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
+    operation_post_update: Option<fn(&Addr, &Addr, &mut AssetRewardState, &mut AssetStakerInfo, &mut Response) -> ContractResult<()>>,
 ) -> ContractResult<()> {
     let mut asset_staker_info = ASSET_STAKER_INFO
         .may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?
@@ -737,7 +797,7 @@ pub fn update_staking_rewards(
     compute_staker_reward(current_bond_amount, &mut asset_state, &mut asset_staker_info)?;
 
     if let Some(operation) = operation_post_update {
-        operation(user, &mut asset_staker_info, response)?;
+        operation(user, lp_token, &mut asset_state, &mut asset_staker_info, response)?;
     }
 
     ASSET_LP_REWARD_STATE.save(
@@ -789,17 +849,31 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
             amount: total_unlocked_amount,
         })?,
     }));
-    
+
+    let event = Event::new("dexter-multistaking::unlock")
+        .add_attribute("lp_token", lp_token)
+        .add_attribute("user", sender)
+        .add_attribute("amount", total_unlocked_amount);
+
+    response = response.add_event(event);
     Ok(response)
 }
 
 fn withdraw_pending_reward(
     user: &Addr,
+    lp_token: &Addr,
+    _asset_reward_state: &mut AssetRewardState,
     asset_staker_info: &mut AssetStakerInfo,
     response: &mut Response,
 ) -> ContractResult<()> {
     let pending_reward = asset_staker_info.pending_reward;
     
+    let event = Event::new("dexter-multistaking::withdraw_reward")
+        .add_attribute("user", user)
+        .add_attribute("lp_token", lp_token)
+        .add_attribute("asset", asset_staker_info.asset.to_string())
+        .add_attribute("amount", pending_reward);
+
     if pending_reward > Uint128::zero() {
         let res = response.clone().add_message(
             build_transfer_token_to_user_msg(
@@ -807,7 +881,7 @@ fn withdraw_pending_reward(
                 user.clone(),
                 pending_reward,
             )?,
-        );
+        ).add_event(event);
         *response = res;
     }
 
@@ -843,6 +917,13 @@ pub fn withdraw(
         )?;
     }
 
+    // At each withdraw, we withdraw all earned rewards by the user.
+    // If we keep a track of the reward at the subgraph level, then that much data can really suffice.
+    let event = Event::new("dexter-multistaking::withdraw")
+        .add_attribute("lp_token", lp_token.clone())
+        .add_attribute("user", sender);
+
+    response = response.add_event(event);
     Ok(response)
 }
 

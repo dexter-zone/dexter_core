@@ -6,7 +6,7 @@ use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
-use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg};
+use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg, PoolCreationFee};
 
 use crate::utils::{dummy_pool_creation_msg, instantiate_contract, mock_app, store_token_code};
 
@@ -230,15 +230,15 @@ fn test_pool_creation_whitelist() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        pool_creation_fee: Some(Asset {
-            info: AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
-            },
-            amount: Uint128::from(100_000_000u128),
+        pool_creation_fee: Some(PoolCreationFee::Enabled {
+            fee: Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+                amount: Uint128::from(100_000_000u128),
+            }
         }),
         auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
         paused: None,
     };
 
@@ -485,15 +485,15 @@ fn test_pool_creation_fee() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
-        pool_creation_fee: Some(Asset {
-            info: AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
-            },
-            amount: Uint128::from(100_000_000u128),
+        pool_creation_fee: Some(PoolCreationFee::Enabled {
+            fee: Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+                amount: Uint128::from(100_000_000u128),
+            }
         }),
         auto_stake_impl: None,
-        generator_address: None,
-        multistaking_address: None,
         paused: None,
     };
 

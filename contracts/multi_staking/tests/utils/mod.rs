@@ -245,7 +245,7 @@ pub fn propose_reward_schedule(
         r.events
             .iter()
             .filter(|&e| {
-                e.ty == "wasm"
+                e.ty == "wasm-dexter-multistaking::propose_reward_schedule"
             })
             .fold(Vec::new(), |acc, e| {
                 let mut res = e.attributes.clone();

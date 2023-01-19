@@ -7,8 +7,8 @@ use dexter::asset::AssetInfo;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PauseInfoUpdateType,
-    PoolConfigResponse, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
+    PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
 
 use crate::utils::{
@@ -89,10 +89,8 @@ fn proper_initialization() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
-        pool_creation_fee: None,
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let vault_instance = app
@@ -115,7 +113,6 @@ fn proper_initialization() {
         Some(Addr::unchecked("fee_collector".to_string())),
         config_res.fee_collector
     );
-    assert_eq!(None, config_res.generator_address);
     assert_eq!(PauseInfo {
         deposit: false,
         swap: false,
@@ -269,10 +266,8 @@ fn proper_initialization() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
-        pool_creation_fee: None,
+        auto_stake_impl: AutoStakeImpl::None,
+        pool_creation_fee: PoolCreationFee::default(),
     };
 
     let res = app
@@ -308,10 +303,8 @@ fn proper_initialization() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        auto_stake_impl: None,
-        multistaking_address: None,
-        generator_address: None,
-        pool_creation_fee: None,
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let res = app
@@ -356,10 +349,8 @@ fn test_add_to_registery() {
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
-        auto_stake_impl: None,
-        generator_address: None,
-        multistaking_address: None,
-        pool_creation_fee: None,
+        auto_stake_impl: AutoStakeImpl::None,
+        pool_creation_fee: PoolCreationFee::Disabled,
     };
 
     let vault_instance = app
@@ -400,7 +391,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Xyk {},
             default_fee_info: FeeInfo {
@@ -438,7 +429,7 @@ fn test_add_to_registery() {
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: xyk_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {
@@ -466,7 +457,7 @@ fn test_add_to_registery() {
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let stable_pool_code_id = 2u64;
     let msg = ExecuteMsg::AddToRegistry {
-        new_pool_config: PoolTypeConfig {
+        new_pool_type_config: PoolTypeConfig {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {
@@ -530,7 +521,7 @@ fn update_config() {
         Some(Addr::unchecked("fee_collector".to_string())),
         after_init_config_res.fee_collector
     );
-    assert_eq!(None, after_init_config_res.generator_address);
+    assert_eq!(AutoStakeImpl::None, after_init_config_res.auto_stake_impl);
     assert_eq!(PauseInfo::default(), after_init_config_res.paused);
 
     //// -----x----- Success :: update config -----x----- ////
@@ -543,9 +534,7 @@ fn update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: Some("fee_address".to_string()),
-        generator_address: Some("generator_address".to_string()),
-        auto_stake_impl: None,
-        multistaking_address: None,
+        auto_stake_impl: Some(AutoStakeImpl::Generator { contract_addr: Addr::unchecked("generator_address") }),
         pool_creation_fee: None,
         paused: Some(pause_info.clone()),
     };
@@ -567,8 +556,8 @@ fn update_config() {
         config_res.fee_collector
     );
     assert_eq!(
-        Some(Addr::unchecked("generator_address".to_string())),
-        config_res.generator_address
+        AutoStakeImpl::Generator { contract_addr: Addr::unchecked("generator_address") },
+        config_res.auto_stake_impl
     );
     assert_eq!(
         after_init_config_res.lp_token_code_id,

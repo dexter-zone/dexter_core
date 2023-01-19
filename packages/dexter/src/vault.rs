@@ -126,16 +126,10 @@ pub struct Config {
     /// Generator allows for generating DEX token and dual farming of 3rd party tokens/assets
     /// Multistaking allows for staking of LP tokens with N-different rewards in a single contract.
     /// If none, it will disable auto-staking feature
-    pub auto_stake_impl: Option<AutoStakeImpl>,
-    /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
-    pub generator_address: Option<Addr>,
-    /// The contract where users can stake LP tokens for N-asset rewards. Used for `auto-stake` feature.
-    /// The usage between `generator_address` and `multistaking_address` is mutually exclusive depending
-    /// on the current set auto-stake impl
-    pub multistaking_address: Option<Addr>,
+    pub auto_stake_impl: AutoStakeImpl,
     /// Fee required for creating a new pool.
     /// Ideally, it is charged in the base currency of the chain but can be changed to governance token later
-    pub pool_creation_fee: Option<Asset>,
+    pub pool_creation_fee: PoolCreationFee,
     /// The next pool ID to be used for creating new pools
     pub next_pool_id: Uint128,
     /// The global pause status for the vault. This overrides the pause status of any pool type or pool id.
@@ -160,7 +154,6 @@ impl Display for AllowPoolInstantiation {
         }
     }
 }
-
 /// This struct stores a pool type's configuration.
 #[cw_serde]
 pub struct PoolTypeConfig {
@@ -226,6 +219,20 @@ pub struct PauseInfo {
     // We aren't allowing pause for withdrawals as of now.
 }
 
+#[cw_serde]
+pub enum PoolCreationFee {
+    Disabled,
+    Enabled {
+        fee: Asset
+    }
+}
+
+impl Default for PoolCreationFee {
+    fn default() -> Self {
+        PoolCreationFee::Disabled
+    }
+}
+
 impl Display for PauseInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.write_str(format!("swap: {}, deposit: {}", self.swap, self.deposit).as_str())
@@ -249,10 +256,30 @@ pub struct SingleSwapRequest {
 
 #[cw_serde]
 pub enum AutoStakeImpl {
+    //  This means that auto-staking is disabled
+    None,
     // This will enable auto-staking feature for generating DEX token and dual farming of 3rd party tokens/assets
-    Generator,
+    Generator {
+        contract_addr: Addr,
+    },
     // This will enable auto-staking feature for staking of LP tokens with N-different rewards in a single contract
-    Multistaking
+    Multistaking {
+        contract_addr: Addr,
+    }
+}
+
+impl Display for AutoStakeImpl {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        match &self {
+            AutoStakeImpl::None => fmt.write_str("none"),
+            AutoStakeImpl::Generator { contract_addr } => {
+                fmt.write_str(format!("generator: {}", contract_addr).as_str())
+            }
+            AutoStakeImpl::Multistaking { contract_addr } => {
+                fmt.write_str(format!("multistaking: {}", contract_addr).as_str())
+            }
+        }
+    }
 }
 
 /// This struct describes the Msg used to instantiate in this contract.
@@ -267,14 +294,9 @@ pub struct InstantiateMsg {
     /// in the contract's state and then used to create pools
     pub lp_token_code_id: Option<u64>,
     pub fee_collector: Option<String>,
-    pub pool_creation_fee: Option<Asset>,
+    pub pool_creation_fee: PoolCreationFee,
     /// Specifies which auto-stake implementation has to be used.
-    pub auto_stake_impl: Option<AutoStakeImpl>,
-    // Keeping both generator and multistaking.
-    // Generator is kept to be able to upgrade to Generator + Proxy multistaking based reward implementation
-    // from the vault without needing to upgrade the contract.
-    pub generator_address: Option<String>,
-    pub multistaking_address: Option<String>
+    pub auto_stake_impl: AutoStakeImpl
 }
 
 #[cw_serde]
@@ -294,10 +316,8 @@ pub enum ExecuteMsg {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
         // Fee required for creating a new pool.
-        pool_creation_fee: Option<Asset>,
+        pool_creation_fee: Option<PoolCreationFee>,
         auto_stake_impl: Option<AutoStakeImpl>,
-        generator_address: Option<String>,
-        multistaking_address: Option<String>,
         paused: Option<PauseInfo>,
     },
     AddAddressToWhitelist { 
@@ -324,7 +344,7 @@ pub enum ExecuteMsg {
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {
-        new_pool_config: PoolTypeConfig,
+        new_pool_type_config: PoolTypeConfig,
     },
     /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
     CreatePoolInstance {
