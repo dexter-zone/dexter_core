@@ -518,7 +518,7 @@ fn update_config() {
 
     assert_eq!(owner, after_init_config_res.owner);
     assert_eq!(
-        Some(Addr::unchecked("fee_collector".to_string())),
+        None,
         after_init_config_res.fee_collector
     );
     assert_eq!(AutoStakeImpl::None, after_init_config_res.auto_stake_impl);

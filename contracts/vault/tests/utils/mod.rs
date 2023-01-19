@@ -149,7 +149,7 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     let vault_init_msg = InstantiateMsg {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
-        fee_collector: Some("fee_collector".to_string()),
+        fee_collector: None,
         owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::default(),
@@ -616,4 +616,22 @@ pub fn initialize_xyk_pool(
     let pool_id = pool_info_res.pool_id;
 
     return (pool_addr, lp_token_addr, pool_id);
+}
+
+
+pub fn set_keeper_contract_in_config(app: &mut App, owner: Addr, vault_addr: Addr) {
+    let msg = ExecuteMsg::UpdateConfig { 
+        lp_token_code_id: None,
+        fee_collector: Some("fee_collector".to_string()),
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None 
+    };
+
+    app.execute_contract(
+        owner,
+        vault_addr,
+        &msg,
+        &[],
+    ).unwrap();
 }
