@@ -10,7 +10,7 @@ use dexter::vault::{Cw20HookMsg, ExecuteMsg};
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
     initialize_weighted_pool, initialize_xyk_pool, instantiate_contract, mint_some_tokens,
-    mock_app,
+    mock_app, set_keeper_contract_in_config
 };
 
 #[test]
@@ -134,6 +134,9 @@ fn test_exit_pool() {
         token_instance1.clone(),
         denom0.clone(),
     );
+
+    // Update config to set keeper contract address
+    set_keeper_contract_in_config(&mut app, owner.clone(), vault_instance.clone());
 
     // Provide liquidity to empty stable 5 pool. No fee is charged
     let assets_msg = vec![

@@ -229,7 +229,7 @@ fn test_pool_creation_whitelist() {
     // Set a pool creation fee
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
-        fee_collector: None,
+        fee_collector: Some("fee_collector".to_string()),
         pool_creation_fee: Some(PoolCreationFee::Enabled {
             fee: Asset {
                 info: AssetInfo::NativeToken {
@@ -250,7 +250,7 @@ fn test_pool_creation_whitelist() {
     )
     .unwrap();
 
-    // Pool creation allowed to anyone scenarion
+    // Pool creation allowed to anyone scenario
     let msg = dummy_pool_creation_msg(&asset_infos);
     let res = app.execute_contract(
         user_addr.clone(),
@@ -258,6 +258,7 @@ fn test_pool_creation_whitelist() {
         &msg,
         &[coin(100_000_000u128, "uxprt")],
     );
+
 
     assert!(res.is_ok());
 
@@ -528,8 +529,48 @@ fn test_pool_creation_fee() {
             vault_instance.clone(),
             &msg,
             &[coin(100_000_000u128, "uxprt")],
-        )
-        .unwrap();
+        );
+    
+    assert!(res.is_err());
+    assert_eq!(
+        res.unwrap_err().root_cause().to_string(),
+        "Fee collector address is not configured"
+    );
+
+    // set fee collector
+    let msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: Some("fee_collector".to_string()),
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+    };
+
+    app.execute_contract(
+        Addr::unchecked(owner.clone()),
+        vault_instance.clone(),
+        &msg,
+        &[],
+    ).unwrap();
+
+    // try creating another pool with passing fee
+    let msg = dummy_pool_creation_msg(&asset_infos);
+    let res = app
+        .execute_contract(
+            Addr::unchecked(owner.clone()),
+            vault_instance.clone(),
+            &msg,
+            &[coin(100_000_000u128, "uxprt")],
+        ).unwrap();
 
     assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    
+    // validate that fee collector has received the fee
+    let fee_collector = Addr::unchecked("fee_collector".to_string());
+    let res = app
+        .wrap()
+        .query_balance(fee_collector.clone(), "uxprt")
+        .unwrap();
+
+    assert_eq!(res.amount, Uint128::from(100_000_000u128));
 }

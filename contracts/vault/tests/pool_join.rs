@@ -16,6 +16,7 @@ use crate::utils::{
     initialize_multistaking_contract,
     initialize_stable_5_pool, initialize_stable_pool, initialize_weighted_pool,
     initialize_xyk_pool, instantiate_contract, mint_some_tokens, mock_app,
+    set_keeper_contract_in_config
 };
 
 #[test]
@@ -38,6 +39,9 @@ fn test_join_pool() {
         ],
     );
     let vault_instance = instantiate_contract(&mut app, &owner.clone());
+
+    // Set keeper contract
+    set_keeper_contract_in_config(&mut app, owner.clone(), vault_instance.clone());
 
     let (token_instance1, token_instance2, token_instance3) =
         initialize_3_tokens(&mut app, &owner.clone());

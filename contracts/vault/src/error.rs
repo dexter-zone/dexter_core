@@ -132,6 +132,9 @@ pub enum ContractError {
 
     #[error("LP Token ID is not configured")]
     LpTokenCodeIdNotSet,
+
+    #[error("Fee collector address is not configured")]
+    FeeCollectorNotSet,
 }
 
 impl From<OverflowError> for ContractError {
