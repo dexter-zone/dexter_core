@@ -775,7 +775,6 @@ pub fn execute_create_pool_instance(
     // Validate if fee is sent for creation of pool
     if let PoolCreationFee::Enabled { fee } = config.pool_creation_fee {
         let fee_amount = fee.amount;
-        // TODO: Send the Pool creation fee to the Keeper contract or have a withdrawal mechanism for the fee
         match fee.info.clone() {
             AssetInfo::NativeToken { denom } => {
                 // Check if sender has sent enough funds to pay for the pool creation fee
