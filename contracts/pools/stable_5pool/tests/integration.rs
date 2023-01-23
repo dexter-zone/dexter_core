@@ -92,8 +92,8 @@ fn instantiate_contracts_instance(
         pool_type: PoolType::Stable5Pool {},
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
-            protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
+            protocol_fee_percent: 64u16,
+            dev_fee_percent: 0u16,
             developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -1272,7 +1272,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1416399369u128),
+        Uint128::from(1416399370u128),
         join_pool_query_res.new_shares
     );
 }
@@ -2364,7 +2364,7 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(4u128), dev_bal_res.balance);
+    assert_eq!(Uint128::from(0u128), dev_bal_res.balance);
     let keeper_bal_res: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -2374,7 +2374,7 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(14u128), keeper_bal_res.balance);
+    assert_eq!(Uint128::from(18u128), keeper_bal_res.balance);
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(

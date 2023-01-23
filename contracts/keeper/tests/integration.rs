@@ -43,7 +43,7 @@ fn instantiate_contracts(
             default_fee_info: FeeInfo {
                 total_fee_bps: 0u16,
                 protocol_fee_percent: 50u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,

@@ -626,11 +626,11 @@ fn test_swap() {
         new_user_ask_token_balance.balance - user_ask_token_balance.balance
     );
     assert_eq!(
-        Uint128::from(1169072u128),
+        Uint128::from(0u128),
         new_dev_ask_token_balance.balance - dev_ask_token_balance.balance
     );
     assert_eq!(
-        Uint128::from(3818968u128),
+        Uint128::from(4988040u128),
         new_keeper_ask_token_balance.balance - keeper_ask_token_balance.balance
     );
 

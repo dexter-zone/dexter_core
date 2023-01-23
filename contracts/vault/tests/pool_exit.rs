@@ -555,7 +555,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(365999u128),
+        Uint128::from(478039u128),
         new_keeper_token1_balance.balance - keeper_token1_balance.balance
     );
 
@@ -569,7 +569,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(112040u128),
+        Uint128::from(0u128),
         new_dev_token1_balance.balance - dev_token1_balance.balance
     );
 
@@ -583,7 +583,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(814594u128),
+        Uint128::from(1063959u128),
         new_keeper_token2_balance.balance - keeper_token2_balance.balance
     );
 
@@ -597,7 +597,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(249365u128),
+        Uint128::from(0u128),
         new_dev_token2_balance.balance - dev_token2_balance.balance
     );
 

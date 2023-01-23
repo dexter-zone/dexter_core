@@ -34,7 +34,7 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -47,7 +47,7 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -60,7 +60,7 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -73,7 +73,7 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -334,7 +334,7 @@ fn test_add_to_registery() {
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
+            dev_fee_percent: 0u16,
             developer_addr: None,
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -461,9 +461,9 @@ fn test_add_to_registery() {
             code_id: stable_pool_code_id,
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {
-                total_fee_bps: 1_001u16,
+                total_fee_bps: 1_000u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                dev_fee_percent: 0u16,
                 developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -492,9 +492,9 @@ fn test_add_to_registery() {
     assert_eq!(PoolType::Stable2Pool {}, pool_config_res.pool_type);
     assert_eq!(
         FeeInfo {
-            total_fee_bps: 1_001u16,
+            total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
+            dev_fee_percent: 0u16,
             developer_addr: None,
         },
         pool_config_res.default_fee_info

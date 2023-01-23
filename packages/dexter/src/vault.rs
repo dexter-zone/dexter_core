@@ -66,15 +66,22 @@ impl Display for SwapType {
 // ----------------x----------------x    {{FeeInfo}} struct Type    x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-// FEE PRECISION is 4 decimal places
+// We want to keep a precision of 2 decimal places, so we need to keep FEE_PRECISION as 10^4.
+// Fee % = (fee_bps / FEE_PRECISION) * 100
+// => 1% = (10^2 / 10^4) * 100
+// Similarly,
+// => 10% = (10^3 / 10^4) * 100
+// => MAX_TOTAL_FEE_BPS should be 10^3.
+// Also, if we want to set a fee of 0.01%, then we would supply the fee_bps as 1.
+// => 0.01% = (1 / 10^4) * 100
 pub const FEE_PRECISION: u16 = 10_000u16;
 // Maximum total commission in bps that can be charged on any supported pool by Dexter
-// If MAX_TOTAL_FEE_BPS / FEE_PRECISION is 1, then the maximum total commission that can be charged on any supported pool by Dexter is 1%
-const MAX_TOTAL_FEE_BPS: u16 = 10_000u16;
+// It is currently 10%
+const MAX_TOTAL_FEE_BPS: u16 = 1_000u16;
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_PROTOCOL_FEE_PERCENT: u16 = 50u16;
+const MAX_PROTOCOL_FEE_PERCENT: u16 = 100u16;
 // Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_DEV_FEE_PERCENT: u16 = 25u16;
+const MAX_DEV_FEE_PERCENT: u16 = 0u16;
 
 /// ## Description - This struct describes the Fee configuration supported by a particular pool type.
 #[cw_serde]
