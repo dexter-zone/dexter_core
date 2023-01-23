@@ -147,7 +147,7 @@ fn test_reward_schedule_proposal_flow() {
         1000_002_000,
     );
     assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 3 days in future at the time of proposal to give enough time to review");
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
 
     // proposing a valid reward schedule should succeed
     let prop1_id = propose_reward_schedule(

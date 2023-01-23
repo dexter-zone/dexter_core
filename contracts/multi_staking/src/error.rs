@@ -1,5 +1,4 @@
-use cosmwasm_std::{StdError, Uint128, OverflowError};
-use dexter::multi_staking::MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS;
+use cosmwasm_std::{OverflowError, StdError, Uint128};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -57,32 +56,27 @@ pub enum ContractError {
     },
 
     #[error(
-        "Start block time must be at least {} days in future at the time of proposal to give enough time to review",
-        MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS
+        "Start block time must be at least {min_reward_schedule_proposal_start_delay} seconds in future at the time of proposal to give enough time to review"
     )]
-    ProposedStartBlockTimeMustBeReviewable,
+    ProposedStartBlockTimeMustBeReviewable {
+        min_reward_schedule_proposal_start_delay: u64,
+    },
 
     #[error("Proposal not found for ID: {proposal_id}")]
-    ProposalNotFound {
-        proposal_id: u64
-    },
+    ProposalNotFound { proposal_id: u64 },
 
     #[error("Duplicate review found for ID: {proposal_id}")]
-    DuplicateReview {
-        proposal_id: u64
-    },
+    DuplicateReview { proposal_id: u64 },
 
     #[error("Can't query by only proposer! LP token addr must be given")]
     InvalidQuery,
 
     #[error("Impossible contract state: {error}")]
-    ImpossibleContractState {
-        error: String,
-    },
+    ImpossibleContractState { error: String },
 
     #[error("No reward state found for the asset since the reward is not distributed for it yet")]
     NoRewardState,
-    
+
     #[error("No reward state found for the asset for the user since the reward is not distributed to the user yet")]
     NoUserRewardState,
 
@@ -91,13 +85,12 @@ pub enum ContractError {
 
     #[error("Can't perform this operation while reward schedule is active")]
     RewardScheduleIsActive,
-    
+
     #[error("Unallocated reward for this schedule has already been claimed by the creator")]
     UnallocatedRewardAlreadyClaimed,
 
     #[error("This reward schedule has no unallocated reward to claim by the creator")]
     NoUnallocatedReward,
-    
 }
 
 impl From<OverflowError> for ContractError {
