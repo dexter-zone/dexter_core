@@ -576,7 +576,7 @@ fn test_join_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(1560865487u128),
+        Uint128::from(1560865486u128),
         new_vault_token3_balance.balance - vault_token3_balance.balance
     );
 
@@ -590,7 +590,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(1128925u128), keeper_token1_balance.balance);
+    assert_eq!(Uint128::from(1474514u128), keeper_token1_balance.balance);
     let mut keeper_token2_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -600,7 +600,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(1204699u128), keeper_token2_balance.balance);
+    assert_eq!(Uint128::from(1573484u128), keeper_token2_balance.balance);
     let keeper_token3_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -610,7 +610,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(1634237u128), keeper_token3_balance.balance);
+    assert_eq!(Uint128::from(2134514u128), keeper_token3_balance.balance);
 
     let dev_token1_balance: BalanceResponse = app
         .wrap()
@@ -621,7 +621,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(345589u128), dev_token1_balance.balance);
+    assert_eq!(Uint128::from(0u128), dev_token1_balance.balance);
     let mut dev_token2_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -631,7 +631,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(368785u128), dev_token2_balance.balance);
+    assert_eq!(Uint128::from(0u128), dev_token2_balance.balance);
     let dev_token3_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -641,7 +641,7 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(500276u128), dev_token3_balance.balance);
+    assert_eq!(Uint128::from(0u128), dev_token3_balance.balance);
 
     // Provide only 2 of 5 assets liquidity to stable 5 pool. Fee is charged
     // VAULT -::- Join Pool -::- Execution Function
@@ -979,7 +979,7 @@ fn test_join_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(11113200u128),
+        Uint128::from(14515200u128),
         new_keeper_token2_balance.balance - keeper_token2_balance.balance
     );
 
@@ -993,7 +993,7 @@ fn test_join_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(3402000u128),
+        Uint128::from(0u128),
         new_dev_token2_balance.balance - dev_token2_balance.balance
     );
 

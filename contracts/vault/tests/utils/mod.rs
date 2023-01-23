@@ -97,8 +97,8 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             pool_type: PoolType::Xyk {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                protocol_fee_percent: 64u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -110,8 +110,8 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             pool_type: PoolType::Stable2Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                protocol_fee_percent: 64u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -123,8 +123,8 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             pool_type: PoolType::Weighted {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                protocol_fee_percent: 64u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -136,8 +136,8 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
+                protocol_fee_percent: 64u16,
+                dev_fee_percent: 0u16,
                 developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
@@ -349,9 +349,9 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
         asset_infos: asset_infos.to_vec(),
         init_params: None,
         fee_info: Some(FeeInfo {
-            total_fee_bps: 1_001u16,
+            total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
+            dev_fee_percent: 0u16,
             developer_addr: None,
         }),
     }

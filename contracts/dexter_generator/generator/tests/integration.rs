@@ -154,7 +154,7 @@ fn instantiate_contracts(app: &mut App, owner: Addr) -> (Addr, Addr) {
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
+            dev_fee_percent: 0u16,
             developer_addr: None,
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
