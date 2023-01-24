@@ -12,16 +12,12 @@ pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
 /// This limit exists to prevent out-of-gas issues during LP token unlock.
 pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 
-/// Minimum number of days only after which the reward schedule should start. 3 days at present.
-pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS: u64 = 3;
-
-/// Minimum number of seconds only after which the reward schedule should start.
-pub const MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY: u64 = MIN_REWARD_SCHEDULE_PROPOSAL_START_DELAY_DAYS * 24 * 60 * 60;
 
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Addr,
     pub unlock_period: u64,
+    pub minimum_reward_schedule_proposal_start_delay: u64
 }
 
 #[cw_serde]
@@ -118,6 +114,9 @@ pub struct Config {
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
+    /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
+    /// This is to give enough time to review the proposal.
+    pub minimum_reward_schedule_proposal_start_delay: u64
 }
 
 #[cw_serde]
@@ -161,6 +160,9 @@ pub struct RewardScheduleResponse {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    /// Returns current config of the contract
+    #[returns(Config)]
+    Config,
     /// Returns currently unclaimed rewards for a user for a give LP token
     /// If a future block time is provided, it will return the unclaimed rewards till that block time.
     #[returns(Vec<UnclaimedReward>)]
@@ -231,6 +233,11 @@ pub enum Cw20HookMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
+    /// Allows an admin to update config params
+    UpdateConfig {
+        minimum_reward_schedule_proposal_start_delay: Option<u64>,
+        unlock_period: Option<u64>,
+    },
     /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
     /// This entry point is strictly meant for proposing reward schedules with native tokens.

@@ -26,6 +26,8 @@ pub fn instantiate_multi_staking_contract(
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
         unlock_period: 1000,
+        // 3 day delay
+        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
     };
 
     let multi_staking_instance = app
