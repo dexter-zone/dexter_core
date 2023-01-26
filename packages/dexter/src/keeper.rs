@@ -15,16 +15,20 @@ pub struct InstantiateMsg {
     pub vault_contract: String,
 }
 
+
+/// ## Description
+/// This structure stores the main parameters for the Keeper contract.
+#[cw_serde]
+pub struct Config {
+    /// admin address
+    pub owner: Addr,
+    /// The factory contract address
+    pub vault_contract: Addr,
+}
+
 /// This struct describes the functions that can be executed in this contract.
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// Updates general settings
-    UpdateConfig {
-        /// The DEX token contract address
-        dex_token_contract: Option<String>,
-        /// The DEX token staking contract address
-        staking_contract: Option<String>,
-    },
     /// Withdraws an asset from the contract
     /// This is used to withdraw the fees collected by the contract by the owner
     Withdraw {
@@ -67,16 +71,8 @@ pub struct MigrateMsg {}
 // ----------------x----------------x    Response Types      x----------------x----------------x--------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-/// A custom struct that holds contract parameters and is used to retrieve them.
-#[cw_serde]
-pub struct ConfigResponse {
-    /// The DEX token contract address
-    pub dex_token_contract: Option<Addr>,
-    /// The vault contract address
-    pub vault_contract: Addr,
-    /// The DEX token staking contract address
-    pub staking_contract: Option<Addr>,
-}
+/// A custom type that holds contract parameters and is used to retrieve them.
+pub type ConfigResponse = Config;
 
 /// A custom struct used to return multiple asset balances.
 #[cw_serde]

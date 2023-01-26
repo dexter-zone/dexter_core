@@ -121,48 +121,8 @@ fn update_config() {
         .query_wasm_smart(&keeper_instance, &msg)
         .unwrap();
 
-    assert_eq!(res.dex_token_contract, None);
+    assert_eq!(res.owner, keeper_admin);
     assert_eq!(res.vault_contract, vault_instance);
-    assert_eq!(res.staking_contract, None);
-
-    // #########---- Error :: Permission check  ----#########
-
-    let new_staking = Addr::unchecked("new_staking");
-    let dex_token = Addr::unchecked("dex_token");
-
-    let msg = ExecuteMsg::UpdateConfig {
-        dex_token_contract: Some(dex_token.to_string()),
-        staking_contract: Some(new_staking.to_string()),
-    };
-
-    // Assert cannot update with improper owner
-    let e = router
-        .execute_contract(
-            Addr::unchecked("not_owner"),
-            keeper_instance.clone(),
-            &msg,
-            &[],
-        )
-        .unwrap_err();
-
-        // Assert cannot update with improper owner
-    assert_eq!(e.root_cause().to_string(), "Unauthorized");
-
-    // #########---- Success :: Check if config updated successfully  ----#########
-
-    router
-        .execute_contract(keeper_admin.clone(), keeper_instance.clone(), &msg, &[])
-        .unwrap();
-
-    let msg = QueryMsg::Config {};
-    let res: ConfigResponse = router
-        .wrap()
-        .query_wasm_smart(&keeper_instance, &msg)
-        .unwrap();
-
-    assert_eq!(res.dex_token_contract, Some(dex_token));
-    assert_eq!(res.vault_contract, vault_instance);
-    assert_eq!(res.staking_contract, Some(new_staking));
 
     // #########---- Check if Balances Query is working as expected  ----#########
 

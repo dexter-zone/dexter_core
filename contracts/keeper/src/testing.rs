@@ -2,8 +2,8 @@ use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::Addr;
 
 use crate::contract::instantiate;
-use crate::state::{Config, CONFIG};
-use dexter::keeper::InstantiateMsg;
+use crate::state::CONFIG;
+use dexter::keeper::{Config, InstantiateMsg};
 
 #[test]
 fn proper_initialization() {
@@ -27,8 +27,6 @@ fn proper_initialization() {
         Config {
             owner: admin,
             vault_contract: Addr::unchecked("vault"),
-            staking_contract: None,
-            dex_token_contract: None,
         }
     )
 }
