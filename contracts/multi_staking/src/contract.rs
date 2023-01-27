@@ -353,6 +353,8 @@ fn allow_lp_token(
         return Err(ContractError::CantAllowAnyMoreLpTokens);
     }
 
+    let lp_token = deps.api.addr_validate(lp_token.as_str())?;
+
     // verify that lp token is not already allowed
     if config.allowed_lp_tokens.contains(&lp_token) {
         return Err(ContractError::LpTokenAlreadyAllowed);
@@ -956,16 +958,16 @@ pub fn unlock(deps: DepsMut, env: Env, sender: Addr, lp_token: Addr) -> Contract
         .filter(|lock| lock.unlock_time <= env.block.time.seconds())
         .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
 
+    if total_unlocked_amount.is_zero() {
+        return Ok(response);
+    }
+
     let updated_unlocks = locks
         .into_iter()
         .filter(|lock| lock.unlock_time > env.block.time.seconds())
         .collect::<Vec<TokenLock>>();
 
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &sender), &updated_unlocks)?;
-
-    if total_unlocked_amount.is_zero() {
-        return Ok(response);
-    }
 
     response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token.to_string(),

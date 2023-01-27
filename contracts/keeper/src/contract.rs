@@ -195,6 +195,7 @@ fn withdraw(
 
     // Send the funds to the recipient or to the owner if no recipient is specified
     let recipient = recipient.unwrap_or(config.owner);
+    let recipient = deps.api.addr_validate(recipient.as_str())?;
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
     attributes.push(Attribute::new("recipient", &recipient));
