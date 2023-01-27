@@ -190,7 +190,7 @@ pub fn accumulate_prices(
             amount: Decimal256::one(),
         };
 
-        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
+        let (offer_pool, ask_pool) = select_pools(from, to, pools).unwrap();
         let (return_amount, _) = compute_swap(
             deps.storage,
             &env,

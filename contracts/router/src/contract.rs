@@ -249,7 +249,7 @@ pub fn execute_multihop_swap(
         multiswap_request: requests,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
-        recipient: recipient.unwrap_or(info.sender),
+        recipient: deps.api.addr_validate(recipient.unwrap_or(info.sender).as_str())?,
         minimum_receive: minimum_receive.unwrap_or(Uint128::zero()),
     }
     .to_cosmos_msg(&env.contract.address)?;

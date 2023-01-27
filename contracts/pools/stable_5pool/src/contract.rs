@@ -353,7 +353,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 //--------x------------------x--------------x-----x-----
 
 /// ## Description
-/// Returns [`AfterJoinResponse`] type which contains -  
+/// Returns [`AfterJoinResponse`] type which contains -
 /// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
@@ -579,7 +579,7 @@ pub fn query_on_join_pool(
 }
 
 /// ## Description
-/// Returns [`AfterExitResponse`] type which contains -  
+/// Returns [`AfterExitResponse`] type which contains -
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and transfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
@@ -695,7 +695,7 @@ pub fn query_on_exit_pool(
 }
 
 /// ## Description
-/// Returns [`SwapResponse`] type which contains -  
+/// Returns [`SwapResponse`] type which contains -
 /// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
 ///
@@ -733,8 +733,8 @@ pub fn query_on_swap(
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
-        Some(&offer_asset_info.clone()),
-        Some(&ask_asset_info),
+        &offer_asset_info.clone(),
+        &ask_asset_info,
         &pools,
     ) {
         Ok(res) => res,
