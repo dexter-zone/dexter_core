@@ -1371,6 +1371,11 @@ pub fn execute_exit_pool(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
+    // Check - Burn amount cannot be 0
+    if pool_exit_transition.burn_shares.is_zero() {
+        return Err(ContractError::BurnAmountZero {});
+    }
+
     // Param - Number of LP shares to be returned to the user
     let lp_to_return: Uint128;
 
@@ -1523,20 +1528,15 @@ pub fn execute_exit_pool(
     }
 
     let assets_out_json = serde_json_wasm::to_string(&assets_out).unwrap();
-    let liquidity_withdrawan_json =
+    let liquidity_withdrawn_json =
         serde_json_wasm::to_string(&liquidity_withdrawn_per_asset).unwrap();
     let fee_breakup_json = serde_json_wasm::to_string(&charged_fee_breakup).unwrap();
     event = event.add_attribute("assets_out", assets_out_json);
-    event = event.add_attribute("liquidity_withdrawn", liquidity_withdrawan_json);
+    event = event.add_attribute("liquidity_withdrawn", liquidity_withdrawn_json);
     event = event.add_attribute("fees", fee_breakup_json);
 
     event = event.add_attribute("sender", sender.clone());
     event = event.add_attribute("vault_contract_address", env.contract.address);
-
-    // Check - Burn amount cannot be 0
-    if pool_exit_transition.burn_shares.is_zero() {
-        return Err(ContractError::BurnAmountZero {});
-    }
 
     // ExecuteMsg:: Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
