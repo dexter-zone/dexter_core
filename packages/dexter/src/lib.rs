@@ -1,16 +1,12 @@
 pub mod asset;
 pub mod error;
-pub mod generator;
-pub mod generator_proxy;
 pub mod helper;
 pub mod keeper;
 pub mod lp_token;
 pub mod pool;
 pub mod querier;
-pub mod ref_staking;
 pub mod router;
 pub mod vault;
-pub mod vesting;
 pub mod multi_staking;
 
 #[allow(clippy::all)]

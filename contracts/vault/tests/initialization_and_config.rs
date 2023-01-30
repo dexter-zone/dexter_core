@@ -1,6 +1,6 @@
 pub mod utils;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::AssetInfo;
@@ -10,61 +10,28 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
     PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
+use stable5pool::state::StablePoolParams;
 
-use crate::utils::{
-    initialize_3_tokens, initialize_xyk_pool, instantiate_contract, mock_app, store_stable5_pool_code,
-    store_stable_pool_code, store_token_code, store_vault_code, store_weighted_pool_code, store_xyk_pool_code,
-};
+use crate::utils::{initialize_3_tokens, initialize_stable_5_pool_2_asset, instantiate_contract, mock_app, store_stable5_pool_code, store_token_code, store_vault_code, store_weighted_pool_code};
 
 #[test]
 fn proper_initialization() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(Addr::unchecked(owner.clone()), vec![]);
     let vault_code_id = store_vault_code(&mut app);
-    let xyk_pool_code_id = store_xyk_pool_code(&mut app);
-    let stable_pool_code_id = store_stable_pool_code(&mut app);
     let weighted_pool_code_id = store_weighted_pool_code(&mut app);
     let stable5_pool_code_id = store_stable5_pool_code(&mut app);
     let token_code_id = store_token_code(&mut app);
 
     let pool_configs = vec![
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
-            code_id: stable_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
         PoolTypeConfig {
@@ -73,11 +40,8 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     ];
@@ -118,60 +82,6 @@ fn proper_initialization() {
         swap: false,
     }, config_res.paused);
 
-    // Check XYK Pool Config
-    // ---------------------
-    let xyk_pool_config_res: PoolConfigResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &vault_instance,
-            &QueryMsg::QueryRegistry {
-                pool_type: PoolType::Xyk {},
-            },
-        )
-        .unwrap();
-
-    assert!(xyk_pool_config_res.is_some());
-    let xyk_pool_config_res = xyk_pool_config_res.unwrap();
-    assert_eq!(xyk_pool_code_id, xyk_pool_config_res.code_id);
-    assert_eq!(PoolType::Xyk {}, xyk_pool_config_res.pool_type);
-    assert_eq!(
-        pool_configs[0].allow_instantiation,
-        xyk_pool_config_res.allow_instantiation
-    );
-    assert_eq!(
-        pool_configs[0].is_generator_disabled,
-        xyk_pool_config_res.is_generator_disabled
-    );
-
-    // Check Stabl Pool Config
-    // ---------------------
-    let stablepool_config_res: PoolConfigResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &vault_instance,
-            &QueryMsg::QueryRegistry {
-                pool_type: PoolType::Stable2Pool {},
-            },
-        )
-        .unwrap();
-
-    assert!(stablepool_config_res.is_some());
-    let stablepool_config_res = stablepool_config_res.unwrap();
-    assert_eq!(stable_pool_code_id, stablepool_config_res.code_id);
-    assert_eq!(PoolType::Stable2Pool {}, stablepool_config_res.pool_type);
-    assert_eq!(
-        pool_configs[1].default_fee_info,
-        stablepool_config_res.default_fee_info
-    );
-    assert_eq!(
-        pool_configs[1].allow_instantiation,
-        stablepool_config_res.allow_instantiation
-    );
-    assert_eq!(
-        pool_configs[1].is_generator_disabled,
-        stablepool_config_res.is_generator_disabled
-    );
-
     // Check Stabl-5-Pool Config
     // ---------------------
     let stable5pool_config_res: PoolConfigResponse = app
@@ -189,16 +99,12 @@ fn proper_initialization() {
     assert_eq!(stable5_pool_code_id, stable5pool_config_res.code_id);
     assert_eq!(PoolType::Stable5Pool {}, stable5pool_config_res.pool_type);
     assert_eq!(
-        pool_configs[2].default_fee_info,
+        pool_configs[0].default_fee_info,
         stable5pool_config_res.default_fee_info
     );
     assert_eq!(
-        pool_configs[2].allow_instantiation,
+        pool_configs[0].allow_instantiation,
         stable5pool_config_res.allow_instantiation
-    );
-    assert_eq!(
-        pool_configs[2].is_generator_disabled,
-        stable5pool_config_res.is_generator_disabled
     );
 
     // Check Weighted Config
@@ -218,45 +124,35 @@ fn proper_initialization() {
     assert_eq!(weighted_pool_code_id, weightedpool_config_res.code_id);
     assert_eq!(PoolType::Weighted {}, weightedpool_config_res.pool_type);
     assert_eq!(
-        pool_configs[3].default_fee_info,
+        pool_configs[1].default_fee_info,
         weightedpool_config_res.default_fee_info
     );
     assert_eq!(
-        pool_configs[3].allow_instantiation,
+        pool_configs[1].allow_instantiation,
         weightedpool_config_res.allow_instantiation
-    );
-    assert_eq!(
-        pool_configs[3].is_generator_disabled,
-        weightedpool_config_res.is_generator_disabled
     );
 
     //// -----x----- Error :: PoolConfigDuplicate Error -----x----- ////
 
     let pool_configs = vec![
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
+            code_id: stable5_pool_code_id,
+            pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
+            code_id: stable5_pool_code_id,
+            pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     ];
@@ -285,16 +181,13 @@ fn proper_initialization() {
     //// -----x----- Error :: InvalidFeeInfo Error -----x----- ////
 
     let pool_configs = vec![PoolTypeConfig {
-        code_id: xyk_pool_code_id,
-        pool_type: PoolType::Xyk {},
+        code_id: stable5_pool_code_id,
+        pool_type: PoolType::Stable5Pool {},
         default_fee_info: FeeInfo {
             total_fee_bps: 30000u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 15u16,
-            developer_addr: None,
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-        is_generator_disabled: false,
         paused: PauseInfo::default(),
     }];
 
@@ -325,20 +218,17 @@ fn test_add_to_registery() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(Addr::unchecked(owner.clone()), vec![]);
     let vault_code_id = store_vault_code(&mut app);
-    let xyk_pool_code_id = store_xyk_pool_code(&mut app);
+    let stable5_pool_code_id = store_stable5_pool_code(&mut app);
     let token_code_id = store_token_code(&mut app);
 
     let pool_configs = vec![PoolTypeConfig {
-        code_id: xyk_pool_code_id,
-        pool_type: PoolType::Xyk {},
+        code_id: stable5_pool_code_id,
+        pool_type: PoolType::Stable5Pool {},
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 0u16,
-            developer_addr: None,
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-        is_generator_disabled: false,
         paused: PauseInfo::default(),
     }];
 
@@ -365,7 +255,7 @@ fn test_add_to_registery() {
         .unwrap();
 
     let msg = QueryMsg::QueryRegistry {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
     };
     let registery_res: PoolConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
@@ -373,8 +263,8 @@ fn test_add_to_registery() {
     assert!(registery_res.is_some());
     let pool_config_res = registery_res.unwrap();
 
-    assert_eq!(xyk_pool_code_id, pool_config_res.code_id);
-    assert_eq!(PoolType::Xyk {}, pool_config_res.pool_type);
+    assert_eq!(stable5_pool_code_id, pool_config_res.code_id);
+    assert_eq!(PoolType::Stable5Pool {}, pool_config_res.pool_type);
     assert_eq!(
         pool_configs[0].default_fee_info,
         pool_config_res.default_fee_info
@@ -383,25 +273,18 @@ fn test_add_to_registery() {
         pool_configs[0].allow_instantiation,
         pool_config_res.allow_instantiation
     );
-    assert_eq!(
-        pool_configs[0].is_generator_disabled,
-        pool_config_res.is_generator_disabled
-    );
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
     let msg = ExecuteMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
+            code_id: stable5_pool_code_id,
+            pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 10_0u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     };
@@ -430,16 +313,13 @@ fn test_add_to_registery() {
 
     let msg = ExecuteMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
+            code_id: stable5_pool_code_id,
+            pool_type: PoolType::Weighted {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 10_001u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 15u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     };
@@ -455,19 +335,16 @@ fn test_add_to_registery() {
     assert_eq!(err_res.root_cause().to_string(), "Invalid FeeInfo params");
 
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
-    let stable_pool_code_id = 2u64;
+    let weighted_pool_code_id = 2u64;
     let msg = ExecuteMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
-            code_id: stable_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
+            code_id: weighted_pool_code_id,
+            pool_type: PoolType::Weighted {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 1_000u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     };
@@ -481,21 +358,19 @@ fn test_add_to_registery() {
     .unwrap();
 
     let msg = QueryMsg::QueryRegistry {
-        pool_type: PoolType::Stable2Pool {},
+        pool_type: PoolType::Weighted {},
     };
     let registery_res: PoolConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
     assert!(registery_res.is_some());
     let pool_config_res = registery_res.unwrap();
-    assert_eq!(stable_pool_code_id, pool_config_res.code_id);
-    assert_eq!(PoolType::Stable2Pool {}, pool_config_res.pool_type);
+    assert_eq!(weighted_pool_code_id, pool_config_res.code_id);
+    assert_eq!(PoolType::Weighted {}, pool_config_res.pool_type);
     assert_eq!(
         FeeInfo {
             total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 0u16,
-            developer_addr: None,
         },
         pool_config_res.default_fee_info
     );
@@ -503,7 +378,6 @@ fn test_add_to_registery() {
         dexter::vault::AllowPoolInstantiation::Everyone,
         pool_config_res.allow_instantiation
     );
-    assert_eq!(false, pool_config_res.is_generator_disabled);
 }
 
 #[test]
@@ -534,7 +408,7 @@ fn update_config() {
     let msg = ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: Some("fee_address".to_string()),
-        auto_stake_impl: Some(AutoStakeImpl::Generator { contract_addr: Addr::unchecked("generator_address") }),
+        auto_stake_impl: Some(AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked("multistaking_address") }),
         pool_creation_fee: None,
         paused: Some(pause_info.clone()),
     };
@@ -556,7 +430,7 @@ fn update_config() {
         config_res.fee_collector
     );
     assert_eq!(
-        AutoStakeImpl::Generator { contract_addr: Addr::unchecked("generator_address") },
+        AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked("multistaking_address") },
         config_res.auto_stake_impl
     );
     assert_eq!(
@@ -589,7 +463,7 @@ fn test_pool_config_update() {
     .unwrap();
 
     let token_code_id = store_token_code(&mut app);
-    let vault_instance = instantiate_contract(&mut app, &Addr::unchecked(owner.clone()));
+    let vault_instance = instantiate_contract(&mut app, &owner_addr);
 
     // Create Token X
     let init_msg = TokenInstantiateMsg {
@@ -647,9 +521,9 @@ fn test_pool_config_update() {
     ];
 
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: None,
+        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
         fee_info: None,
     };
 
@@ -662,7 +536,7 @@ fn test_pool_config_update() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
 
     let pool_id: u64 = 1;
 
@@ -687,8 +561,6 @@ fn test_pool_config_update() {
         fee_info: Some(FeeInfo {
             total_fee_bps: 400u16,
             protocol_fee_percent: 40u16,
-            dev_fee_percent: 0u16,
-            developer_addr: None,
         }),
         paused: Some(pause_info.clone()),
     };
@@ -713,7 +585,6 @@ fn test_pool_config_update() {
 
     assert_eq!(res.fee_info.total_fee_bps, 400u16);
     assert_eq!(res.fee_info.protocol_fee_percent, 40u16);
-    assert_eq!(res.fee_info.dev_fee_percent, 0u16);
     assert_eq!(res.paused, pause_info);
 
     // Fetch fee from the pool contract too to see if total fee is updated
@@ -750,8 +621,8 @@ fn test_update_pause_info() {
     let vault_instance = instantiate_contract(&mut app, &owner_addr);
     let (token_instance1, _, _) = initialize_3_tokens(&mut app, &owner_addr);
 
-    // Create XYK pool
-    let (_, _, xyk_pool_id) = initialize_xyk_pool(
+    // Create stable5 pool
+    let (_, _, stable5_pool_id) = initialize_stable_5_pool_2_asset(
         &mut app,
         &owner_addr,
         vault_instance.clone(),
@@ -778,7 +649,7 @@ fn test_update_pause_info() {
     let res: PoolConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::QueryRegistry {pool_type: PoolType::Xyk {}}
+            &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}
         ).unwrap();
     assert_eq!(res.unwrap().paused, PauseInfo::default());
 
@@ -786,7 +657,7 @@ fn test_update_pause_info() {
     let res: PoolInfoResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+            &QueryMsg::GetPoolById {pool_id: stable5_pool_id }
         ).unwrap();
     assert_eq!(res.paused, PauseInfo::default());
 
@@ -796,7 +667,7 @@ fn test_update_pause_info() {
         user_addr.clone(),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolType(PoolType::Xyk {}),
+            update_type: PauseInfoUpdateType::PoolType(PoolType::Stable5Pool {}),
             pause_info: expected_pause_info.clone(),
         },
         &[],
@@ -808,7 +679,7 @@ fn test_update_pause_info() {
     let res: PoolConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::QueryRegistry {pool_type: PoolType::Xyk {}}
+            &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}
         ).unwrap();
     assert_eq!(res.unwrap().paused, expected_pause_info.clone());
 
@@ -816,7 +687,7 @@ fn test_update_pause_info() {
     let res: PoolInfoResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+            &QueryMsg::GetPoolById {pool_id: stable5_pool_id }
         ).unwrap();
     assert_eq!(res.paused, PauseInfo::default());
 
@@ -825,7 +696,7 @@ fn test_update_pause_info() {
         user_addr.clone(),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
+            update_type: PauseInfoUpdateType::PoolId(stable5_pool_id),
             pause_info: expected_pause_info.clone(),
         },
         &[],
@@ -835,7 +706,7 @@ fn test_update_pause_info() {
     let res: PoolInfoResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::GetPoolById {pool_id: xyk_pool_id}
+            &QueryMsg::GetPoolById {pool_id: stable5_pool_id }
         ).unwrap();
     assert_eq!(res.paused, expected_pause_info);
 
@@ -844,7 +715,7 @@ fn test_update_pause_info() {
         Addr::unchecked("non-whitelisted-addr"),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolId(xyk_pool_id),
+            update_type: PauseInfoUpdateType::PoolId(stable5_pool_id),
             pause_info: expected_pause_info.clone(),
         },
         &[],

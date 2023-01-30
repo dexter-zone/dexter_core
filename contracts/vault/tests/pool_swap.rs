@@ -8,8 +8,8 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{ExecuteMsg, PauseInfo, PoolType, SingleSwapRequest, SwapType};
 
 use crate::utils::{
-    initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
-    initialize_weighted_pool, initialize_xyk_pool, instantiate_contract, mint_some_tokens,
+    initialize_3_tokens, initialize_stable_5_pool,
+    initialize_weighted_pool, instantiate_contract, mint_some_tokens,
     mock_app, set_keeper_contract_in_config
 };
 
@@ -117,23 +117,6 @@ fn test_swap() {
         token_instance3.clone(),
         denom0.clone(),
         denom1.clone(),
-    );
-
-    // Create STABLE pool
-    let (_, _, stable_pool_id) = initialize_stable_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
-    );
-    // Create XYK pool
-    let (_, _, xyk_pool_id) = initialize_xyk_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
     );
 
     // pause swaps for all pools
@@ -266,70 +249,6 @@ fn test_swap() {
     )
     .unwrap();
 
-    // Liquidity Provided to empty XYK Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // Liquidity Provided to empty Stable Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
     let _current_block = app.block_info();
     app.update_block(|b| {
         b.height += 10;
@@ -406,7 +325,6 @@ fn test_swap() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        is_generator_disabled: None,
         paused: Some(PauseInfo{deposit: false, swap: true}),
     };
     app.execute_contract(
@@ -434,7 +352,6 @@ fn test_swap() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        is_generator_disabled: None,
         paused: Some(PauseInfo{deposit: false, swap: false}),
     };
     app.execute_contract(
@@ -524,15 +441,6 @@ fn test_swap() {
             },
         )
         .unwrap();
-    let dev_ask_token_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
 
     // Execute Swap :: GiveOut Type
     // VAULT -::- Swap -::- Execution Function
@@ -607,15 +515,6 @@ fn test_swap() {
             },
         )
         .unwrap();
-    let new_dev_ask_token_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
     assert_eq!(
         Uint128::from(256988040u128),
         vault_ask_token_balance.balance - new_vault_ask_token_balance.balance
@@ -624,10 +523,6 @@ fn test_swap() {
     assert_eq!(
         Uint128::from(252000000u128),
         new_user_ask_token_balance.balance - user_ask_token_balance.balance
-    );
-    assert_eq!(
-        Uint128::from(0u128),
-        new_dev_ask_token_balance.balance - dev_ask_token_balance.balance
     );
     assert_eq!(
         Uint128::from(4988040u128),
@@ -735,186 +630,6 @@ fn test_swap() {
         &swap_msg,
         &[Coin {
             denom: denom1.to_string(),
-            amount: Uint128::new(792_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // -------x---------- XYK POOL -::- SWAP TOKENS -------x--------------
-    // -------x---------- -------x---------- -------x---------- -------x---------
-
-    // VAULT -::- Swap -::- Execution Function
-    // Offer asset: token0 Ask asset: contract1 Swap Type: "give-in" Amount: 252000000
-    // --- XYK:OnSwap Query :: Start ---
-    // SwapType::GiveIn
-    // In compute_swap() fn in XYK pool, we calculate the return amount via (ask_amount = (ask_pool - cp / (offer_pool + offer_amount))), which is 201277955
-    // fee yet to be charged: 6038338, hence return amount (actual return amount - total_fee) = 195239617
-    // VAULT -::- Swap -::- Pool Swap Transition Query Response returned - amount_in:252000000 amount_out:195239617 spread:50722045. Response: success
-    // Fee: 6038338 contract1
-    // Protocol Fee: 2958785 Dev Fee: 905750
-    // Ask Asset ::: Pool Liquidity being updated. Current pool balance: 1000000000. Ask Asset Amount: 195239617
-    // Ask Asset ::: Pool Liquidity after subtracting the ask asset amount to be transferred 804760383
-    // Fee Asset ::: Pool Liquidity being updated. Protocol and dev fee to be subtracted. Current pool liquidity 804760383
-    // Fee Asset ::: Pool Liquidity after being updated: 800895848
-    // Offer Asset ::: Pool Liquidity being updated. Current pool balance: 1000000000. Offer Asset Amount: 252000000
-    // Offer Asset ::: Pool Liquidity after adding offer asset amount provided 1252000000
-    let swap_msg = ExecuteMsg::Swap {
-        swap_request: SingleSwapRequest {
-            pool_id: Uint128::from(xyk_pool_id),
-            swap_type: SwapType::GiveIn {},
-            asset_in: AssetInfo::NativeToken {
-                denom: denom0.to_string(),
-            },
-            asset_out: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
-        },
-        recipient: None,
-        min_receive: None,
-        max_spend: None,
-    };
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &swap_msg,
-        &[Coin {
-            denom: denom0.to_string(),
-            amount: Uint128::new(252_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // VAULT -::- Swap -::- Execution Function
-    // Offer asset: token0 Ask asset: contract1 Swap Type: "give-out" Amount: 252000000
-    // --- XYK:OnSwap Query :: Start ---
-    // SwapType::GiveOut
-    // In compute_offer_amount() fn, we calculate the offer_amount which is 601110021 based on updated ask_pool balance which includes ask_amount + total fee yet to be charged. ask_amount = 252000000, ask_amount_before_commission = 259793814
-    // VAULT -::- Swap -::- Pool Swap Transition Query Response returned - amount_in:601110021 amount_out:252000000 spread:124732160. Response: success
-    // Fee: 7793814 contract1
-    // Protocol Fee: 3818968 Dev Fee: 1169072
-    // Ask Asset ::: Pool Liquidity being updated. Current pool balance: 800895848. Ask Asset Amount: 252000000
-    // Ask Asset ::: Pool Liquidity after subtracting the ask asset amount to be transferred 548895848
-    // Fee Asset ::: Pool Liquidity being updated. Protocol and dev fee to be subtracted. Current pool liquidity 548895848
-    // Fee Asset ::: Pool Liquidity after being updated: 543907808
-    // Offer Asset ::: Pool Liquidity being updated. Current pool balance: 1252000000. Offer Asset Amount: 601110021
-    // Offer Asset ::: Pool Liquidity after adding offer asset amount provided 1853110021
-    let swap_msg = ExecuteMsg::Swap {
-        swap_request: SingleSwapRequest {
-            pool_id: Uint128::from(xyk_pool_id),
-            swap_type: SwapType::GiveOut {},
-            asset_in: AssetInfo::NativeToken {
-                denom: denom0.to_string(),
-            },
-            asset_out: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
-        },
-        recipient: None,
-        min_receive: None,
-        max_spend: None,
-    };
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &swap_msg,
-        &[Coin {
-            denom: denom0.to_string(),
-            amount: Uint128::new(792_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // -------x---------- StableSwap POOL -::- SWAP TOKENS -------x---------------------
-    // -------x---------- -------x---------- -------x---------- -------x----------------
-
-    // VAULT -::- Swap -::- Execution Function
-    // Offer asset: token0 Ask asset: contract1 Swap Type: "give-in" Amount: 252000000
-    // --- Stableswap:OnSwap Query :: Start ---
-    // SwapType::GiveIn
-    // In compute_swap() fn in Stableswap pool, we calculate new ask pool balance based on offer amount and calculate the total return amount (with fee included) by subtracting it from current ask pool balance, total return amount: 246060232
-    // fee yet to be charged: 7381806, hence return amount (actual return amount - total_fee) = 238678426
-    // VAULT -::- Swap -::- Pool Swap Transition Query Response returned - amount_in:252000000 amount_out:238678426 spread:5939768. Response: success
-    // Fee: 7381806 contract1
-    // Protocol Fee: 3617084 Dev Fee: 1107270
-    // Ask Asset ::: Pool Liquidity being updated. Current pool balance: 1000000000. Ask Asset Amount: 238678426
-    // Ask Asset ::: Pool Liquidity after subtracting the ask asset amount to be transferred 761321574
-    // Fee Asset ::: Pool Liquidity being updated. Protocol and dev fee to be subtracted. Current pool liquidity 761321574
-    // Fee Asset ::: Pool Liquidity after being updated: 756597220
-    // Offer Asset ::: Pool Liquidity being updated. Current pool balance: 1000000000. Offer Asset Amount: 252000000
-    // Offer Asset ::: Pool Liquidity after adding offer asset amount provided 1252000000
-    let swap_msg = ExecuteMsg::Swap {
-        swap_request: SingleSwapRequest {
-            pool_id: Uint128::from(stable_pool_id),
-            swap_type: SwapType::GiveIn {},
-            asset_in: AssetInfo::NativeToken {
-                denom: denom0.to_string(),
-            },
-            asset_out: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
-        },
-        recipient: None,
-        min_receive: None,
-        max_spend: None,
-    };
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &swap_msg,
-        &[Coin {
-            denom: denom0.to_string(),
-            amount: Uint128::new(252_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // VAULT -::- Swap -::- Execution Function
-    // Offer asset: token0 Ask asset: contract1 Swap Type: "give-out" Amount: 252000000
-    // --- Stableswap:OnSwap Query :: Start ---
-    // SwapType::GiveOut
-    // In compute_offer_amount() fn, we calculate the offer_amount which is 285268305 based on updated ask_pool balance which includes ask_amount + total fee yet to be charged. ask_amount = 252000000, ask_amount_before_commission = 259793814
-    // VAULT -::- Swap -::- Pool Swap Transition Query Response returned - amount_in:285268305 amount_out:252000000 spread:25474491. Response: success
-    // Fee: 7793814 contract1
-    // Protocol Fee: 3818968 Dev Fee: 1169072
-    // Ask Asset ::: Pool Liquidity being updated. Current pool balance: 756597220. Ask Asset Amount: 252000000
-    // Ask Asset ::: Pool Liquidity after subtracting the ask asset amount to be transferred 504597220
-    // Fee Asset ::: Pool Liquidity being updated. Protocol and dev fee to be subtracted. Current pool liquidity 504597220
-    // Fee Asset ::: Pool Liquidity after being updated: 499609180
-    // Offer Asset ::: Pool Liquidity being updated. Current pool balance: 1252000000. Offer Asset Amount: 285268305
-    // Offer Asset ::: Pool Liquidity after adding offer asset amount provided 1537268305
-    let swap_msg = ExecuteMsg::Swap {
-        swap_request: SingleSwapRequest {
-            pool_id: Uint128::from(stable_pool_id),
-            swap_type: SwapType::GiveOut {},
-            asset_in: AssetInfo::NativeToken {
-                denom: denom0.to_string(),
-            },
-            asset_out: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
-        },
-        recipient: None,
-        min_receive: None,
-        max_spend: None,
-    };
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &swap_msg,
-        &[Coin {
-            denom: denom0.to_string(),
             amount: Uint128::new(792_000000u128),
         }],
     )

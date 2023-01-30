@@ -1,6 +1,0 @@
-[alias]
-wasm-debug = "build --lib --target wasm32-unknown-unknown"
-wasm = "build --release --lib --target wasm32-unknown-unknown"
-unit-test = "test --lib"
-integration-test = "test --test integration"
-schema = "run --example ref_staking"

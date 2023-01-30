@@ -1,21 +1,20 @@
 pub mod utils;
 
-use cosmwasm_std::{Addr, Coin, Decimal, Uint128};
+use cosmwasm_std::{Addr, Coin, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::generator::UserInfoResponse;
 use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
 use dexter::vault::{ExecuteMsg, PauseInfo, PoolType};
 
 use crate::utils::{
-    increase_token_allowance, initialize_3_tokens, initialize_generator_contract,
+    increase_token_allowance, initialize_3_tokens,
     initialize_multistaking_contract,
-    initialize_stable_5_pool, initialize_stable_pool, initialize_weighted_pool,
-    initialize_xyk_pool, instantiate_contract, mint_some_tokens, mock_app,
+    initialize_stable_5_pool, initialize_weighted_pool,
+    instantiate_contract, mint_some_tokens, mock_app,
     set_keeper_contract_in_config
 };
 
@@ -115,23 +114,6 @@ fn test_join_pool() {
         token_instance3.clone(),
         denom0.clone(),
         denom1.clone(),
-    );
-
-    // Create STABLE pool
-    let (_, _, stable_pool_id) = initialize_stable_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
-    );
-    // Create XYK pool
-    let (_, _, xyk_pool_id) = initialize_xyk_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
     );
 
     // -------x---------- STABLE-5-POOL -::- PROVIDE LIQUIDITY -------x----------
@@ -263,7 +245,6 @@ fn test_join_pool() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        is_generator_disabled: None,
         paused: Some(PauseInfo{deposit: true, swap: false}),
     };
     app.execute_contract(
@@ -296,7 +277,6 @@ fn test_join_pool() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        is_generator_disabled: None,
         paused: Some(PauseInfo{deposit: false, swap: false}),
     };
     app.execute_contract(
@@ -612,37 +592,6 @@ fn test_join_pool() {
         .unwrap();
     assert_eq!(Uint128::from(2134514u128), keeper_token3_balance.balance);
 
-    let dev_token1_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance1.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(Uint128::from(0u128), dev_token1_balance.balance);
-    let mut dev_token2_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(Uint128::from(0u128), dev_token2_balance.balance);
-    let dev_token3_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance3.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(Uint128::from(0u128), dev_token3_balance.balance);
-
     // Provide only 2 of 5 assets liquidity to stable 5 pool. Fee is charged
     // VAULT -::- Join Pool -::- Execution Function
     // --- Stable5Pool:OnJoinPool Query : Begin ---
@@ -903,15 +852,6 @@ fn test_join_pool() {
             },
         )
         .unwrap();
-    dev_token2_balance = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "weighted_dev".to_string(),
-            },
-        )
-        .unwrap();
 
     let assets_msg = vec![Asset {
         info: AssetInfo::Token {
@@ -982,154 +922,6 @@ fn test_join_pool() {
         Uint128::from(14515200u128),
         new_keeper_token2_balance.balance - keeper_token2_balance.balance
     );
-
-    let new_dev_token2_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "weighted_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        Uint128::from(0u128),
-        new_dev_token2_balance.balance - dev_token2_balance.balance
-    );
-
-    // -------x---------- XYK-POOL -::- PROVIDE LIQUIDITY -------x----------
-    // -------x---------- -------x---------- -------x---------- -------x----
-
-    // Provided to empty XYK Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // Provided to non-empty XYK Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: Some(Decimal::from_ratio(50u128, 100u128)),
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(563_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(557_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // -------x---------- Stableswap-POOL -::- PROVIDE LIQUIDITY -------x---------
-    // -------x---------- -------x---------- -------x---------- -------x----------
-
-    // Provided to empty Stable Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // Provided to non-empty Stable-Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: Some(Decimal::from_ratio(50u128, 100u128)),
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(563_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(557_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
 }
 
 /// This test is for testing the following:
@@ -1219,44 +1011,6 @@ fn test_join_auto_stake() {
         denom1.clone(),
     );
 
-    let current_block = app.block_info();
-    let generator_contract_address = initialize_generator_contract(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        &vault_instance.clone(),
-        current_block,
-    );
-
-    // setup weighted pool in generator
-    let setup_pool_msg = dexter::generator::ExecuteMsg::SetupPools { 
-        pools: vec![(weighted_lp_token_addr.to_string(), Uint128::from(100u64))],
-    };
-    app.execute_contract(
-        owner.clone(),
-        generator_contract_address.clone(),
-        &setup_pool_msg,
-        &[],
-    ).unwrap();
-
-    // Update vault config to set generator
-    let config_update_msg = ExecuteMsg::UpdateConfig {
-        lp_token_code_id: None,
-        fee_collector: None,
-        pool_creation_fee: None,
-        auto_stake_impl: Some(dexter::vault::AutoStakeImpl::Generator {
-            contract_addr: generator_contract_address.clone(),
-        }),
-        paused: None,
-    };
-
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &config_update_msg,
-        &[],
-    )
-    .unwrap();
-
     // -------x---------- WEIGHTED-POOL -::- PROVIDE LIQUIDITY -------x---------
     let assets_msg = vec![
         Asset {
@@ -1326,45 +1080,6 @@ fn test_join_auto_stake() {
         .unwrap();
 
     assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
-
-    // Check if LP tokens are minted and staked to generator when auto-stake is enabled
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(weighted_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: Some(true),
-            slippage_tolerance: None,
-            assets: Some(assets_msg.clone()),
-        },
-        &[
-            Coin {
-                denom: denom0.clone(),
-                amount: Uint128::new(1000_000000u128),
-            },
-            Coin {
-                denom: denom1.clone(),
-                amount: Uint128::new(1000_000000u128),
-            },
-        ],
-    )
-    .unwrap();
-
-    // fetch user staked tokens in generator
-    let user_info: UserInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &generator_contract_address.clone(),
-            &dexter::generator::QueryMsg::UserInfo {
-                user: owner.clone().to_string(),
-                lp_token: weighted_lp_token_addr.clone().into_string(),
-            },
-        )
-        .unwrap();
-
-    assert_eq!(user_info.amount, Uint128::from(100_000_000u128));
 
     // setup multistaking contract
     let multistaking_contract_address = initialize_multistaking_contract(
@@ -1453,8 +1168,6 @@ fn test_join_auto_stake() {
         )
         .unwrap();
 
-    // This means auto-stake didn't make any changes to user's LP balance but staked it in multistaking or generator
+    // This means auto-stake didn't make any changes to user's LP balance but staked it in multistaking
     assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
-
-    // Create a generator contract
 }

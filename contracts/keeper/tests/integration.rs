@@ -28,26 +28,23 @@ fn instantiate_contracts(
     );
     let vault_code_id = router.store_code(vault_contract);
 
-    let xyk_contract = Box::new(ContractWrapper::new_with_empty(
-        xyk_pool::contract::execute,
-        xyk_pool::contract::instantiate,
-        xyk_pool::contract::query,
+    let stable5_contract = Box::new(ContractWrapper::new_with_empty(
+        stable5pool::contract::execute,
+        stable5pool::contract::instantiate,
+        stable5pool::contract::query,
     ));
-    let xyk_code_id = router.store_code(xyk_contract);
+    let stable5_code_id = router.store_code(stable5_contract);
 
     // Instantiate Vault Contract
     let msg = dexter::vault::InstantiateMsg {
         pool_configs: vec![PoolTypeConfig {
-            code_id: xyk_code_id,
-            pool_type: PoolType::Xyk {},
+            code_id: stable5_code_id,
+            pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 0u16,
                 protocol_fee_percent: 50u16,
-                dev_fee_percent: 0u16,
-                developer_addr: None,
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         }],
         lp_token_code_id: Some(1u64),

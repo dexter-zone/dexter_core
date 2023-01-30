@@ -113,11 +113,6 @@ pub fn instantiate(
         if !pc.default_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
         }
-        // Validate dev address (if provided)
-        if pc.default_fee_info.developer_addr.clone().is_some() {
-            deps.api
-                .addr_validate(pc.default_fee_info.developer_addr.clone().unwrap().as_str())?;
-        }
         REGISTRY.save(deps.storage, pc.clone().pool_type.to_string(), pc)?;
     }
     
@@ -176,7 +171,6 @@ pub fn execute(
             pool_type,
             allow_instantiation,
             new_fee_info,
-            is_generator_disabled,
             paused,
         } => execute_update_pool_type_config(
             deps,
@@ -184,7 +178,6 @@ pub fn execute(
             pool_type,
             allow_instantiation,
             new_fee_info,
-            is_generator_disabled,
             paused,
         ),
         ExecuteMsg::AddAddressToWhitelist { address } => {
@@ -342,7 +335,6 @@ pub fn receive_cw20(
 /// ## Params
 /// * **lp_token_code_id** optional parameter. The new id of the LP token code to be used for instantiating new LP tokens along-with the Pools
 /// * **fee_collector** optional parameter. The new address of the fee collector to be used for collecting fees from LP tokens
-/// * **generator_address** optional parameter. New address of the generator to be used for staking LP tokens via `auto_stake`
 ///
 /// ##Executor - Only owner can execute it
 pub fn execute_update_config(
@@ -453,7 +445,6 @@ pub fn execute_update_pause_info(
 ///
 /// ## Params
 /// * **is_disabled** Optional parameter. If set to `true`, the instantiation of new pool instances will be disabled. If set to `false`, they will be enabled.
-/// * **is_generator_disabled**  Optional parameter. If set to `true`, the generator will not be able to support
 ///
 /// ## Executor
 /// Only owner can execute it
@@ -463,7 +454,6 @@ pub fn execute_update_pool_type_config(
     pool_type: PoolType,
     allow_instantiation: Option<AllowPoolInstantiation>,
     new_fee_info: Option<FeeInfo>,
-    is_generator_disabled: Option<bool>,
     paused: Option<PauseInfo>,
 ) -> Result<Response, ContractError> {
     // permission check - only Owner can update any pool config.
@@ -487,21 +477,10 @@ pub fn execute_update_pool_type_config(
         pool_config.allow_instantiation = allow_instantiation;
     }
 
-    // Disable or enable integration with dexter generator
-    if let Some(is_generator_disabled) = is_generator_disabled {
-        pool_config.is_generator_disabled = is_generator_disabled;
-        event = event.add_attribute("is_generator_disabled", is_generator_disabled.to_string());
-    }
-
     // Update fee info
     if let Some(new_fee_info) = new_fee_info {
         if !new_fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
-        }
-        // Validate dev address (if provided)
-        if new_fee_info.developer_addr.clone().is_some() {
-            deps.api
-                .addr_validate(new_fee_info.developer_addr.clone().unwrap().as_str())?;
         }
 
         pool_config.default_fee_info = new_fee_info;
@@ -551,11 +530,6 @@ fn execute_update_pool_config(
     if let Some(fee_info) = fee_info {
         if !fee_info.valid_fee_info() {
             return Err(ContractError::InvalidFeeInfo {});
-        }
-        // Validate dev address (if provided)
-        if fee_info.developer_addr.clone().is_some() {
-            deps.api
-                .addr_validate(fee_info.developer_addr.clone().unwrap().as_str())?;
         }
 
         pool.fee_info = fee_info;
@@ -687,23 +661,6 @@ pub fn execute_add_to_registry(
         return Err(ContractError::InvalidFeeInfo {});
     }
 
-    // Validate dev address (if provided)
-    if pool_type_config
-        .default_fee_info
-        .developer_addr
-        .clone()
-        .is_some()
-    {
-        deps.api.addr_validate(
-            pool_type_config
-                .default_fee_info
-                .developer_addr
-                .clone()
-                .unwrap()
-                .as_str(),
-        )?;
-    }
-
     // Save pool config
     REGISTRY.save(
         deps.storage,
@@ -718,10 +675,6 @@ pub fn execute_add_to_registry(
         .add_attribute(
             "allow_instantiation",
             pool_type_config.allow_instantiation.to_string(),
-        )
-        .add_attribute(
-            "is_generator_disabled",
-            pool_type_config.is_generator_disabled.to_string(),
         )
         .add_attribute(
             "default_fee",
@@ -1045,7 +998,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
 /// * **op_recipient** Optional parameter. If provided, the Vault will transfer the LP tokens to the provided address.
 /// * **assets_in** Optional parameter. It is the list of assets the user is willing to provide to join the pool
 /// * **lp_to_mint** Optional parameter. The number of LP tokens the user wants to get against the provided assets.
-/// * **auto_stake** Optional parameter. If provided, the Vault will automatically stake the provided assets with the generator contract.
+/// * **auto_stake** Optional parameter. If provided, the Vault will automatically stake the provided assets with the multistaking contract.
 pub fn execute_join_pool(
     deps: DepsMut,
     env: Env,
@@ -1086,8 +1039,8 @@ pub fn execute_join_pool(
     // new_shares - The number of LP tokens to be minted to the user / recipient
     // response - The response type :: Success or Failure
     // fee - Optional List assets (info and amounts) to be charged as fees to the user. If it is null then no fee is charged
-    //       - We calculate the protocol_fee and developer_fee and transfer it to keeper and developer respectively.
-    //       - When updating pool liquidity, we subtract the protocol_fee and developer_fee from the provided_assets.
+    //       - We calculate the protocol_fee and transfer it to keeper.
+    //       - When updating pool liquidity, we subtract the protocol_fee from the provided_assets.
     let pool_join_transition: dexter::pool::AfterJoinResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
@@ -1144,7 +1097,7 @@ pub fn execute_join_pool(
     // Update Loop - We loop through all the assets supported by the pool and do the following,
     //              1. Calculate Fee to be charged for the asset, and net liquidity to be updated for the asset
     //              2. Update the PoolInfo {} with the new liquidity
-    //              3. Create CosmosMsg to - transfer tokens to the Vault, transfer fees to the keeper and developer
+    //              3. Create CosmosMsg to - transfer tokens to the Vault, transfer fees to the keeper
     let mut index = 0;
     for stored_asset in pool_info.assets.iter_mut() {
         // Error - The returned list of assets needs to be sorted in the same order as the stored list of assets
@@ -1160,22 +1113,17 @@ pub fn execute_join_pool(
             .copied()
             .unwrap_or(Uint128::zero());
 
-        // Param - protocol, developer and lp fee
+        // Param - protocol and lp fee
         let mut protocol_fee: Uint128 = Uint128::zero();
-        let mut dev_fee: Uint128 = Uint128::zero();
 
-        // Compute - calculate protocol fee and dev fee based on % of total fee
+        // Compute - calculate protocol fee based on % of total fee
         if !total_fee.clone().is_zero() {
-            (protocol_fee, dev_fee) = pool_config
+            protocol_fee = pool_config
                 .default_fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
         // Compute - Update fee if recipient addresses are not set
-        if !pool_config.default_fee_info.developer_addr.is_some() {
-            protocol_fee = protocol_fee + dev_fee;
-            dev_fee = Uint128::zero();
-        }
         if !config.fee_collector.is_some() {
             protocol_fee = Uint128::zero();
         }
@@ -1186,27 +1134,23 @@ pub fn execute_join_pool(
         // - Return native tokens to the user (which are to be returned)
         if !transfer_in.is_zero() || !total_fee.is_zero() {
             // Update - Update Pool Liquidity
-            // - Liquidity Provided = transfer_in - protocol_fee - dev_fee
+            // - Liquidity Provided = transfer_in - protocol_fee
             // here,
             // transfer_in: tokens to be transferred from user to the Vault
             // protocol_fee: protocol fee to be charged and transfer to the fee_collector
-            // dev_fee: developer fee to be charged and transfer to the developer_addr
-            // Note: LP fees = total_fee - protocol_fee - dev_fee, pools need to charge fee in-terms of LP tokens (mint less number of LP tokens)
+            // Note: LP fees = total_fee - protocol_fee, pools need to charge fee in-terms of LP tokens (mint less number of LP tokens)
             //                 so inherently users are minted LP tokens equivalent to : (transfer_in - total_fee) while the actual liquidity
-            //                provided is (transfer_in - total_fee + lp_fee), where lp_fee = total_fee - protocol_fee - dev_fee
+            //                provided is (transfer_in - total_fee + lp_fee), where lp_fee = total_fee - protocol_fee
             // Compute - Add all tokens to be transferred to the Vault
             stored_asset.amount = stored_asset.amount.checked_add(transfer_in)?;
             // Compute - Subtract the protocol fee from the stored asset amount
             stored_asset.amount = stored_asset.amount.checked_sub(protocol_fee)?;
-            // Compute - Subtract the developer fee from the stored asset amount
-            stored_asset.amount = stored_asset.amount.checked_sub(dev_fee)?;
 
             // Indexing - Add fee to vec to push to event later
             charged_fee_breakup.push(AssetFeeBreakup {
                 asset: stored_asset.info.clone(),
                 total_fee,
                 protocol_fee,
-                dev_fee,
             });
 
             // ExecuteMsg -::- Transfer tokens from user to the Vault
@@ -1253,13 +1197,6 @@ pub fn execute_join_pool(
                     .clone()
                     .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
             );
-        }
-        // ExecuteMsg -::- To transfer the dev fee to the developer address
-        if !dev_fee.is_zero() {
-            execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
-                pool_config.default_fee_info.developer_addr.clone().unwrap(),
-                dev_fee,
-            )?);
         }
 
         // Increment Index
@@ -1348,8 +1285,8 @@ pub fn execute_exit_pool(
     // new_shares - The number of LP tokens to be burnt
     // response - The response type :: Success or Failure
     // fee - Optional List assets (info and amounts) to be charged as fees. If it is null then no fee is charged
-    //       - We calculate the protocol_fee and developer_fee and transfer it to keeper and developer respectively.
-    //       - When updating pool liquidity, we add the protocol_fee and developer_fee to the assets_out.
+    //       - We calculate the protocol_fee and transfer it to keeper.
+    //       - When updating pool liquidity, we add the protocol_fee to the assets_out.
     let pool_exit_transition: dexter::pool::AfterExitResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
@@ -1441,22 +1378,17 @@ pub fn execute_exit_pool(
             .copied()
             .unwrap_or(Uint128::zero());
 
-        // Param - protocol, developer and lp fee
+        // Param - protocol and lp fee
         let mut protocol_fee: Uint128 = Uint128::zero();
-        let mut dev_fee: Uint128 = Uint128::zero();
 
-        // Compute - calculate protocol fee and dev fee based on % of total fee
+        // Compute - calculate protocol fee based on % of total fee
         if !total_fee.clone().is_zero() {
-            (protocol_fee, dev_fee) = pool_config
+            protocol_fee = pool_config
                 .default_fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
         // Compute - Update fee if recipient addresses are not set
-        if !pool_config.default_fee_info.developer_addr.is_some() {
-            protocol_fee = protocol_fee + dev_fee;
-            dev_fee = Uint128::zero();
-        }
         if !config.fee_collector.is_some() {
             protocol_fee = Uint128::zero();
         }
@@ -1465,18 +1397,17 @@ pub fn execute_exit_pool(
         // - Update stored pool's asset balances in `PoolInfo` Struct
         // - Transfer tokens to the user, tranfer fees
         if !to_transfer.is_zero() || !total_fee.is_zero() {
-            let liquidity_withdrawn = to_transfer + protocol_fee + dev_fee;
+            let liquidity_withdrawn = to_transfer + protocol_fee;
 
             // Update - Update Pool Liquidity
-            // - Liquidity Removed = transfer_out + protocol_fee + dev_fee
+            // - Liquidity Removed = transfer_out + protocol_fee
             // here,
             // to_transfer: tokens to be transferred from Vault  to the user
             // protocol_fee: protocol fee to be charged and transfer to the fee_collector
-            // dev_fee: developer fee to be charged and transfer to the developer_addr
-            // Note: LP fees = total_fee - protocol_fee - dev_fee, pools need to charge fee in-terms of LP tokens (burn more number of LP tokens)
+            // Note: LP fees = total_fee - protocol_fee, pools need to charge fee in-terms of LP tokens (burn more number of LP tokens)
             //                 so inherently users burn LP tokens equivalent to : (transfer_out + total_fee) while the actual liquidity
-            //                withdrawn is (transfer_out - total_fee + lp_fee), where lp_fee = total_fee - protocol_fee - dev_fee
-            // Compute - Subtract all tokens to be transferred to the User, protocol fee and developer fee
+            //                withdrawn is (transfer_out - total_fee + lp_fee), where lp_fee = total_fee - protocol_fee
+            // Compute - Subtract all tokens to be transferred to the User and protocol fee
             stored_asset.amount = stored_asset.amount.checked_sub(liquidity_withdrawn)?;
 
             // Indexing - Collect fee data to add to add to event
@@ -1484,7 +1415,6 @@ pub fn execute_exit_pool(
                 asset: stored_asset.info.clone(),
                 total_fee,
                 protocol_fee,
-                dev_fee,
             });
 
             // Indexing: Collect liquidity withdrawn to add to event
@@ -1511,13 +1441,6 @@ pub fn execute_exit_pool(
                         .clone()
                         .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
                 );
-            }
-            // ExecuteMsg -::- To transfer the dev fee to the developer address
-            if !dev_fee.is_zero() {
-                execute_msgs.push(stored_asset.info.clone().create_transfer_msg(
-                    pool_config.default_fee_info.developer_addr.clone().unwrap(),
-                    dev_fee,
-                )?);
             }
 
             let asset_out = pool_exit_transition.assets_out[index].clone();
@@ -1678,24 +1601,19 @@ pub fn execute_swap(
 
     // Compute - Fee Calculation
     let mut protocol_fee = Uint128::zero();
-    let mut dev_fee = Uint128::zero();
     if let Some(fee) = pool_swap_transition.fee.clone() {
         if !fee.amount.is_zero() {
             event =
                 event.add_attribute("fee_asset", serde_json_wasm::to_string(&fee.info).unwrap());
             event = event.add_attribute("total_fee", fee.amount.to_string());
-            // Compute - Protocol Fee and dev fee
-            (protocol_fee, dev_fee) = pool_config
+            // Compute - Protocol Fee
+            protocol_fee = pool_config
                 .default_fee_info
                 .calculate_total_fee_breakup(fee.amount);
         }
     }
 
     // Compute - Update fee if recipient addresses are not set
-    if !pool_config.default_fee_info.developer_addr.is_some() {
-        protocol_fee = protocol_fee + dev_fee;
-        dev_fee = Uint128::zero();
-    }
     if !config.fee_collector.is_some() {
         protocol_fee = Uint128::zero();
     }
@@ -1741,7 +1659,7 @@ pub fn execute_swap(
             let act_amount_in = offer_asset.amount.clone();
             // ::: Update State -  Add tokens received to pool balance
             stored_asset.amount = stored_asset.amount.checked_add(act_amount_in)?;
-            // ::: Update State - If fee is charged in offer asset, then subtract protocol_fee and dev_fee from pool balance
+            // ::: Update State - If fee is charged in offer asset, then subtract protocol_fee from pool balance
             if pool_swap_transition
                 .fee
                 .clone()
@@ -1750,7 +1668,6 @@ pub fn execute_swap(
                 .equal(&offer_asset.info.clone())
             {
                 stored_asset.amount = stored_asset.amount.checked_sub(protocol_fee)?;
-                stored_asset.amount = stored_asset.amount.checked_sub(dev_fee)?;
             }
             offer_asset_updated = true;
 
@@ -1793,7 +1710,6 @@ pub fn execute_swap(
                 .equal(&ask_asset.info.clone())
             {
                 stored_asset.amount = stored_asset.amount.checked_sub(protocol_fee)?;
-                stored_asset.amount = stored_asset.amount.checked_sub(dev_fee)?;
             }
             ask_asset_updated = true;
 
@@ -1826,7 +1742,6 @@ pub fn execute_swap(
     )?);
 
     event = event.add_attribute("protocol_fee", protocol_fee.to_string());
-    event = event.add_attribute("dev_fee", dev_fee.to_string());
 
     // ExecuteMsg :: Protocol Fee transfer to Keeper contract
     if !protocol_fee.is_zero() {
@@ -1837,21 +1752,6 @@ pub fn execute_swap(
                 .unwrap()
                 .info
                 .create_transfer_msg(config.fee_collector.clone().unwrap(), protocol_fee)?,
-        );
-    }
-
-    // ExecuteMsg :: Dev Fee transfer to Keeper contract
-    if !dev_fee.is_zero() {
-        execute_msgs.push(
-            pool_swap_transition
-                .fee
-                .clone()
-                .unwrap()
-                .info
-                .create_transfer_msg(
-                    pool_config.default_fee_info.developer_addr.unwrap(),
-                    dev_fee,
-                )?,
         );
     }
 
@@ -1876,9 +1776,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::QueryRegistry { pool_type } => to_binary(&query_registry(deps, pool_type)?),
-        QueryMsg::IsGeneratorDisabled { lp_token_addr } => {
-            to_binary(&query_is_generator_disabled(deps, lp_token_addr)?)
-        }
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
@@ -1904,31 +1801,6 @@ pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigRe
                 ContractError::PoolTypeConfigNotFound {}.to_string(),
             )))?;
     Ok(Some(pool_config))
-}
-
-/// ## Description - Returns boolean value indicating if the genarator is disabled or not for the pool
-///
-/// ## Params
-/// * **pool_id** is the object of type [`Uint128`]. Its the pool id for which the state is requested.
-pub fn query_is_generator_disabled(deps: Deps, lp_token_addr: String) -> StdResult<bool> {
-    let pool_id = LP_TOKEN_TO_POOL_ID
-        .load(deps.storage, lp_token_addr.as_bytes())
-        .or(Err(StdError::generic_err(
-            ContractError::LpTokenNotFound {}.to_string(),
-        )))?;
-
-    let pool_info = ACTIVE_POOLS
-        .load(deps.storage, &pool_id.to_string().as_bytes())
-        .or(Err(StdError::generic_err(
-            ContractError::InvalidPoolId {}.to_string(),
-        )))?;
-
-    let pool_type_config = REGISTRY
-        .load(deps.storage, pool_info.pool_type.to_string())
-        .or(Err(StdError::generic_err(
-            ContractError::PoolTypeConfigNotFound {}.to_string(),
-        )))?;
-    Ok(pool_type_config.is_generator_disabled)
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure
@@ -1976,11 +1848,11 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 // ----------------x----------------x---------------------x-------------------x----------------x-----
 
 /// # Description
-/// Mint LP token to beneficiary or auto deposit into generator if set.
+/// Mint LP token to beneficiary or auto deposit into multistaking if set.
 /// # Params
 /// * **recipient** is the object of type [`Addr`]. The recipient of the liquidity.
 /// * **amount** is the object of type [`Uint128`]. The amount that will be mint to the recipient.
-/// * **auto_stake** is the field of type [`bool`]. Determines whether an autostake will be performed on the generator
+/// * **auto_stake** is the field of type [`bool`]. Determines whether an autostake will be performed on the multistaking
 fn build_mint_lp_token_msg(
     _deps: Deps,
     env: Env,
@@ -2013,20 +1885,6 @@ fn build_mint_lp_token_msg(
 
     // Safe to do since it is validated at the caller
     let msg = match auto_stake_impl {
-        AutoStakeImpl::Generator { contract_addr } => {
-            // Address of generator
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: lp_token.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Send {
-                    contract: contract_addr.to_string(),
-                    amount,
-                    msg: to_binary(&dexter::generator::Cw20HookMsg::DepositFor {
-                        beneficiary: recipient,
-                    })?,
-                })?,
-                funds: vec![],
-            })
-        }
         AutoStakeImpl::Multistaking { contract_addr} => {
             // Address of multistaking
             CosmosMsg::Wasm(WasmMsg::Execute {
