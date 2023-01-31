@@ -2140,7 +2140,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_out,
-        Uint128::from(966u128)
+        Uint128::from(965u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
@@ -2148,13 +2148,13 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
+        AssetInfo::NativeToken {
+            denom: "axlusd".to_string()
+        }
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
-        Uint128::from(29u128)
+        Uint128::from(30u128)
     );
 
     let _current_block = app.block_info();
@@ -2209,21 +2209,21 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(814406287u128)
+        Uint128::from(814372347u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(5540308u128)
+        Uint128::from(5341177u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
+        AssetInfo::NativeToken {
+            denom: "axlusd".to_string()
+        }
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
-        Uint128::from(24265979u128)
+        Uint128::from(24431170u128)
     );
 
     //// -----x----- Check #2 :: QUERY Failure : Spread check failed :::  -----x----- ////
@@ -2249,7 +2249,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.response,
         ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.0697911555".to_string()
+            "error : Operation exceeds max spread limit. Current spread = 0.066984666082474226".to_string()
         )
     );
     assert_eq!(
@@ -2288,7 +2288,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.response,
         ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.216606015387939536"
+            "error : Operation exceeds max spread limit. Current spread = 0.187679712517183249"
                 .to_string()
         )
     );
@@ -2351,7 +2351,7 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(53334999016u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(53334999035u128), vault_bal_res.balance);
     let keeper_bal_res: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -2361,7 +2361,16 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(18u128), keeper_bal_res.balance);
+
+    let keeper_balance_axlusd = app
+        .wrap()
+        .query_balance(&"fee_collector".to_string(), "axlusd")
+        .unwrap();
+
+
+    assert_eq!(Uint128::from(0u128), keeper_bal_res.balance);
+    assert_eq!(Uint128::from(19u128), keeper_balance_axlusd.amount);
+
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(
@@ -2382,13 +2391,13 @@ fn test_swap() {
                 info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string(),
                 },
-                amount: Uint128::from(56535001000u128),
+                amount: Uint128::from(56535000981u128),
             },
             Asset {
                 info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(53334999016u128),
+                amount: Uint128::from(53334999035u128),
             },
             Asset {
                 info: AssetInfo::Token {
@@ -2438,5 +2447,5 @@ fn test_swap() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(59335001034u128), vault_bal_res.balance);
+    assert_eq!(Uint128::from(59335001016u128), vault_bal_res.balance);
 }

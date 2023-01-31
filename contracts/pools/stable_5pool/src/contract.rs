@@ -764,7 +764,7 @@ pub fn query_on_swap(
 
     let offer_asset: Asset;
     let ask_asset: Asset;
-    let (calc_amount, spread_amount): (Uint128, Uint128);
+    let (offer_amount_including_fee, spread_amount): (Uint128, Uint128);
     let total_fee: Uint128;
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
@@ -774,13 +774,22 @@ pub fn query_on_swap(
                 info: offer_asset_info.clone(),
                 amount,
             };
+            
+            // Calculate the commission fees
+            total_fee = calculate_underlying_fees(amount, config.fee_info.total_fee_bps);
+            let offer_amount_after_fee = amount.checked_sub(total_fee)?;
+
+            let offer_asset_after_fee = Asset {
+                info: offer_asset_info.clone(),
+                amount: offer_amount_after_fee,
+            }.to_decimal_asset(offer_precision)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (calc_amount, spread_amount) = match compute_swap(
+            (offer_amount_including_fee, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
-                &offer_asset.to_decimal_asset(offer_precision)?,
+                &offer_asset_after_fee,
                 &offer_pool,
                 &ask_pool,
                 &pools,
@@ -794,12 +803,9 @@ pub fn query_on_swap(
                 }
             };
 
-            // Calculate the commission fees
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
-
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
-                amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
+                amount: offer_amount_including_fee, // Subtract fee from return amount
             };
         }
         SwapType::GiveOut {} => {
@@ -809,7 +815,7 @@ pub fn query_on_swap(
             };
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
+            (offer_amount_including_fee, spread_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
@@ -828,10 +834,10 @@ pub fn query_on_swap(
                     )))
                 }
             };
-
+            
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
-                amount: calc_amount,
+                amount: offer_amount_including_fee,
             };
         }
         SwapType::Custom(_) => {
@@ -841,7 +847,7 @@ pub fn query_on_swap(
 
     // Check if the calculated amount is valid
     // although this check isn't required given the current state of code, but better to be safe than sorry.
-    if calc_amount.is_zero() {
+    if offer_amount_including_fee.is_zero() {
         return Ok(return_swap_failure(
             "Computation error - calc_amount is zero".to_string(),
         ));
@@ -851,8 +857,8 @@ pub fn query_on_swap(
     let spread_check = assert_max_spread(
         belief_price,
         max_spread,
-        offer_asset.amount,
-        ask_asset.amount + total_fee,
+        offer_asset.amount - total_fee,
+        ask_asset.amount,
         spread_amount,
     );
     if !spread_check.is_success() {
@@ -867,7 +873,7 @@ pub fn query_on_swap(
         },
         response: ResponseType::Success {},
         fee: Some(Asset {
-            info: ask_asset_info.clone(),
+            info: offer_asset_info.clone(),
             amount: total_fee,
         }),
     })

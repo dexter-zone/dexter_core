@@ -51,12 +51,12 @@ pub fn calc_minted_shares_given_single_asset_in(
     in_precision: u32,
     asset_weight_and_balance: &WeightedAsset,
     total_shares: Uint128,
-    swap_fee: Decimal,
+    swap_fee_rate: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
     // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
-    let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee);
+    let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee_rate);
     let token_amount_in_after_fee = token_amount_in * fee_ratio;
     let fee_charged = token_amount_in.checked_sub(token_amount_in_after_fee)?;
 

@@ -866,7 +866,7 @@ fn test_router_functionality() {
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                received_amount: Uint128::from(885277u128)
+                received_amount: Uint128::from(885278u128)
             }
         ],
         multihop_sim_response.swap_operations
@@ -874,26 +874,26 @@ fn test_router_functionality() {
     assert_eq!(
         vec![
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance1.clone()
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
                 },
                 amount: Uint128::from(30000u128)
             },
             Asset {
                 info: AssetInfo::Token {
-                    contract_addr: token_instance2.clone()
+                    contract_addr: token_instance1.clone()
                 },
-                amount: Uint128::from(29099u128)
+                amount: Uint128::from(29100u128)
             },
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: denom0.clone()
+                info: AssetInfo::Token {
+                    contract_addr: token_instance2.clone()
                 },
                 amount: Uint128::from(28226u128)
             },
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance1.clone()
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
                 },
                 amount: Uint128::from(27379u128)
             }
@@ -945,40 +945,40 @@ fn test_router_functionality() {
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(999999u128),
+                offered_amount: Uint128::from(999995u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                received_amount: Uint128::from(970000u128)
+                received_amount: Uint128::from(969996u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                offered_amount: Uint128::from(970000u128),
+                offered_amount: Uint128::from(969996u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                received_amount: Uint128::from(940891u128)
+                received_amount: Uint128::from(940889u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                offered_amount: Uint128::from(940891u128),
+                offered_amount: Uint128::from(940889u128),
                 asset_out: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                received_amount: Uint128::from(912665u128)
+                received_amount: Uint128::from(912663u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(912665u128),
+                offered_amount: Uint128::from(912663u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
@@ -990,26 +990,26 @@ fn test_router_functionality() {
     assert_eq!(
         vec![
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance1.clone()
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
                 },
                 amount: Uint128::from(29999u128)
             },
             Asset {
                 info: AssetInfo::Token {
-                    contract_addr: token_instance2.clone()
+                    contract_addr: token_instance1.clone()
                 },
                 amount: Uint128::from(29099u128)
             },
             Asset {
-                info: AssetInfo::NativeToken {
-                    denom: denom0.clone()
+                info: AssetInfo::Token {
+                    contract_addr: token_instance2.clone()
                 },
                 amount: Uint128::from(28226u128)
             },
             Asset {
-                info: AssetInfo::Token {
-                    contract_addr: token_instance1.clone()
+                info: AssetInfo::NativeToken {
+                    denom: denom0.clone()
                 },
                 amount: Uint128::from(27379u128)
             }
@@ -1172,11 +1172,12 @@ fn test_router_functionality() {
         .unwrap();
 
     assert_eq!(
-        Uint128::from(807962u128),
+        Uint128::from(807963u128),
         new_sender_ask_asset_balance.balance - cur_sender_ask_asset_balance.balance
     );
+    // Fees are not deducted from ask asset balance
     assert_eq!(
-        Uint128::from(823954u128), // Fees are also deducted
+        Uint128::from(807963u128),
         cur_vault_ask_asset_balance.balance - new_vault_ask_asset_balance.balance
     );
 
@@ -1185,7 +1186,7 @@ fn test_router_functionality() {
         cur_sender_offer_asset_balance.balance - new_sender_offer_asset_balance.balance
     );
     assert_eq!(
-        Uint128::from(885277u128),
+        Uint128::from(868280u128),
         new_vault_offer_asset_balance.balance - cur_vault_offer_asset_balance.balance
     );
 }
