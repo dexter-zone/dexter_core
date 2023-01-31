@@ -8,13 +8,8 @@ use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, select_pools};
 // use dexter::helper::decimal2decimal256;
-use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
-    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
-    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade,
-};
-use dexter::querier::{query_supply, query_vault_config};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_total_fee_bps};
+use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
 use crate::error::ContractError;
@@ -35,8 +30,9 @@ const CONTRACT_NAME: &str = "dexter::fixed_weighted_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Number of LP tokens to mint when liquidity is provided for the first time to the pool
-const INIT_LP_TOKENS: u128 = 100_000000;
+/// Number of LP tokens to mint when liquidity is provided for the first time to the pool.
+/// This does not include the token decimals.
+const INIT_LP_TOKENS: u128 = 100;
 /// Maximum number of assets supported by the pool
 const MAX_ASSETS: usize = 8;
 /// Minimum number of assets supported by the pool
@@ -190,33 +186,14 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
-        ExecuteMsg::UpdateFee { total_fee_bps } => update_total_fee_bps(deps, env, info, total_fee_bps),
+        ExecuteMsg::UpdateFee { total_fee_bps } => {
+            update_total_fee_bps(deps, env, info, total_fee_bps, CONFIG)
+                .map_err(|e| e.into())
+        },
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
-}
-
-pub fn update_total_fee_bps(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    total_fee_bps: u16,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
-
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    config.fee_info.total_fee_bps = total_fee_bps;
-    CONFIG.save(deps.storage, &config)?;
-
-    let event = Event::new("dexter-pool::update_total_fee_bps")
-        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
-    Ok(Response::new().add_event(event))
 }
 
 /// ## Description
@@ -390,7 +367,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 //--------x------------------x--------------x-----x-----
 
 /// ## Description
-/// Returns [`AfterJoinResponse`] type which contains -  
+/// Returns [`AfterJoinResponse`] type which contains -
 /// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
@@ -450,7 +427,7 @@ pub fn query_on_join_pool(
     let config: Config = CONFIG.load(deps.storage)?;
 
     // Total share of LP tokens minted by the pool
-    let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
+    let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
 
     //  1) Get pool current liquidity + and token weights : Convert assets to WeightedAssets
     let mut pool_assets_weighted: Vec<WeightedAsset> = config
@@ -545,7 +522,11 @@ pub fn query_on_join_pool(
     // if remaining coins is empty, logic is done (we joined all tokensIn)
     let (mut num_shares, remaining_tokens_in, err): (Uint128, Vec<Asset>, ResponseType) =
         if total_share.is_zero() {
-            let num_shares = Uint128::from(INIT_LP_TOKENS);
+            let num_decimals = query_token_precision(&deps.querier, AssetInfo::Token {
+                contract_addr: config.lp_token_addr
+            })?;
+            let decimals = 10u128.pow(num_decimals as u32);
+            let num_shares = Uint128::from(INIT_LP_TOKENS * decimals);
             (num_shares, vec![], ResponseType::Success {})
         } else {
             maximal_exact_ratio_join(act_assets_in.clone(), &pool_assets_weighted, total_share)?
@@ -633,7 +614,7 @@ pub fn query_on_join_pool(
 }
 
 /// ## Description
-/// Returns [`AfterExitResponse`] type which contains -  
+/// Returns [`AfterExitResponse`] type which contains -
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and tranfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, determining if the tx is accepted by the Pool's math computations or not
@@ -704,7 +685,7 @@ pub fn query_on_exit_pool(
 }
 
 /// ## Description
-/// Returns [`SwapResponse`] type which contains -  
+/// Returns [`SwapResponse`] type which contains -
 /// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, determining if the tx is accepted by the Pool's math computations or not
 ///
@@ -743,8 +724,8 @@ pub fn query_on_swap(
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
-        Some(&offer_asset_info),
-        Some(&ask_asset_info),
+        &offer_asset_info,
+        &ask_asset_info,
         &pools,
     ) {
         Ok(res) => res,

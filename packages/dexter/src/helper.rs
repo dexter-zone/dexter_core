@@ -202,32 +202,22 @@ pub fn build_transfer_token_to_user_msg(
 /// * **ask_asset_info** - asset info of the ask asset.
 /// * **pools** - list of pools.
 pub fn select_pools(
-    offer_asset_info: Option<&AssetInfo>,
-    ask_asset_info: Option<&AssetInfo>,
+    offer_asset_info: &AssetInfo,
+    ask_asset_info: &AssetInfo,
     pools: &[DecimalAsset],
 ) -> Result<(DecimalAsset, DecimalAsset), ContractError> {
     // if pool is only contains 2 assets
     if pools.len() == 2 {
-        match (offer_asset_info, ask_asset_info) {
-            (Some(offer_asset_info), _) => {
-                let (offer_ind, offer_pool) = pools
-                    .iter()
-                    .find_position(|pool| pool.info.eq(offer_asset_info))
-                    .ok_or(ContractError::AssetMismatch {})?;
-                Ok((offer_pool.clone(), pools[(offer_ind + 1) % 2].clone()))
-            }
-            (_, Some(ask_asset_info)) => {
-                let (ask_ind, ask_pool) = pools
-                    .iter()
-                    .find_position(|pool| pool.info.eq(ask_asset_info))
-                    .ok_or(ContractError::AssetMismatch {})?;
-                Ok((pools[(ask_ind + 1) % 2].clone(), ask_pool.clone()))
-            }
-            _ => Err(ContractError::VariableAssetMissed {}), // Should always be unreachable
+        let (offer_ind, offer_pool) = pools
+            .iter()
+            .find_position(|pool| pool.info.eq(offer_asset_info))
+            .ok_or(ContractError::AssetMismatch {})?;
+        let ask_pool = pools[(offer_ind + 1) % 2].clone();
+        if !ask_pool.info.eq(ask_asset_info) {
+            return Err(ContractError::AssetMismatch {});
         }
-    } else if let (Some(offer_asset_info), Some(ask_asset_info)) =
-        (offer_asset_info, ask_asset_info)
-    {
+        Ok((offer_pool.clone(), ask_pool))
+    } else {
         // Error if same assets
         if ask_asset_info.eq(offer_asset_info) {
             return Err(ContractError::SameAssets {});
@@ -243,8 +233,6 @@ pub fn select_pools(
             .ok_or(ContractError::AssetMismatch {})?;
 
         Ok((offer_pool.clone(), ask_pool.clone()))
-    } else {
-        Err(ContractError::VariableAssetMissed {}) // Should always be unreachable
     }
 }
 

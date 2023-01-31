@@ -172,7 +172,7 @@ pub fn accumulate_prices(
         let to_weight = get_weight(deps.storage, to)?;
 
         // retrieve the offer and ask asset pool's latest balances
-        let (offer_pool, ask_pool) = select_pools(Some(from), Some(to), pools).unwrap();
+        let (offer_pool, ask_pool) = select_pools(from, to, pools).unwrap();
 
         // Compute the current price of ask asset in base asset
         let (return_amount, _) = compute_swap(

@@ -252,7 +252,7 @@ pub fn claim(
                 contract_addr: config.token_addr.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: recipient.unwrap_or(info.sender.to_string()),
+                    recipient: deps.api.addr_validate(recipient.unwrap_or(info.sender.to_string()).as_str())?.to_string(),
                     amount: claim_amount,
                 })?,
             })]);

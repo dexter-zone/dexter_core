@@ -3,8 +3,9 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType};
-use cosmwasm_std::{Addr, Binary, Decimal, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
+use cw_storage_plus::Item;
 
 /// The default slippage (0.5%)
 pub const DEFAULT_SLIPPAGE: &str = "0.005";
@@ -263,6 +264,28 @@ pub struct CumulativePricesResponse {
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Helper response functions       x----------------x------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
+
+pub fn update_total_fee_bps(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    total_fee_bps: u16,
+    config_item: Item<Config>,
+) -> StdResult<Response> {
+    let mut config = config_item.load(deps.storage)?;
+
+    // Access Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
+
+    config.fee_info.total_fee_bps = total_fee_bps;
+    config_item.save(deps.storage, &config)?;
+
+    let event = Event::new("dexter-pool::update_total_fee_bps")
+        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
+    Ok(Response::new().add_event(event))
+}
 
 pub fn return_join_failure(error: String) -> AfterJoinResponse {
     AfterJoinResponse {

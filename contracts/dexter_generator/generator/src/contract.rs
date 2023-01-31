@@ -1043,6 +1043,14 @@ pub fn emergency_unstake(
     let mut pool = POOL_INFO.load(deps.storage, &lp_token)?;
     let user = USER_INFO.load(deps.storage, (&lp_token, &info.sender.clone()))?;
 
+    // All LP tokens are to be unbonded
+    let unbonded_amount = user.amount;
+
+    // Check that amount is non-zero
+    if unbonded_amount == Uint128::zero() {
+        return Err(ContractError::ZeroUnbondAmount {});
+    }
+
     // Instantiate the transfer call for the LP token
     let mut transfer_msgs: Vec<WasmMsg> = vec![];
     if let Some(proxy) = &pool.reward_proxy {
@@ -1067,13 +1075,7 @@ pub fn emergency_unstake(
     }
 
     // Update user's balance. All LP tokens are to be unbonded and the user's bonded amount is set to 0.
-    let unbonded_amount = user.amount;
     let mut user = update_user_balance(user, &pool, Uint128::zero())?;
-
-    // Check that amount is non-zero
-    if unbonded_amount == Uint128::zero() {
-        return Err(ContractError::ZeroUnbondAmount {});
-    }
 
     // Create unbonding period
     let unbonding_period = UnbondingInfo {

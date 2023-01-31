@@ -84,7 +84,7 @@ pub fn bond(deps: DepsMut, env: Env, sender_addr: Addr, amount: Uint128) -> StdR
     compute_staker_reward(&state, &mut staker_info)?;
 
     // Increase bond_amount
-    increase_bond_amount(&mut state, &mut staker_info, amount);
+    increase_bond_amount(&mut state, &mut staker_info, amount)?;
 
     // Store updated state with staker's staker_info
     USERS.save(deps.storage, &sender_addr, &staker_info)?;
@@ -184,9 +184,10 @@ pub fn withdraw(deps: DepsMut, env: Env, info: MessageInfo) -> StdResult<Respons
         ]))
 }
 
-fn increase_bond_amount(state: &mut State, staker_info: &mut StakerInfo, amount: Uint128) {
-    state.total_bond_amount += amount;
-    staker_info.bond_amount += amount;
+fn increase_bond_amount(state: &mut State, staker_info: &mut StakerInfo, amount: Uint128) -> StdResult<()> {
+    state.total_bond_amount = state.total_bond_amount.checked_add(amount)?;
+    staker_info.bond_amount = staker_info.bond_amount.checked_add(amount)?;
+    Ok(())
 }
 
 fn decrease_bond_amount(
@@ -232,7 +233,7 @@ fn compute_staker_reward(state: &State, staker_info: &mut StakerInfo) -> StdResu
         .checked_sub(staker_info.bond_amount * staker_info.reward_index)?;
 
     staker_info.reward_index = state.global_reward_index;
-    staker_info.pending_reward += pending_reward;
+    staker_info.pending_reward = staker_info.pending_reward.checked_add(pending_reward)?;
     Ok(())
 }
 

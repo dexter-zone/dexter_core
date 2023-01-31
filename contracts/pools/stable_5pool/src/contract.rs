@@ -16,12 +16,7 @@ use crate::state::{
     CONFIG, MATHCONFIG, TWAPINFO,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
-    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
-    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
-};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
@@ -141,7 +136,10 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
-        ExecuteMsg::UpdateFee { total_fee_bps } => update_total_fee_bps(deps, env, info, total_fee_bps),
+        ExecuteMsg::UpdateFee { total_fee_bps } => {
+            update_total_fee_bps(deps, env, info, total_fee_bps, CONFIG)
+                .map_err(|e| e.into())
+        },
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
@@ -244,28 +242,6 @@ pub fn update_config(
     }
 
     Ok(Response::default())
-}
-
-pub fn update_total_fee_bps(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    total_fee_bps: u16,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
-
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    config.fee_info.total_fee_bps = total_fee_bps;
-    CONFIG.save(deps.storage, &config)?;
-
-    let event = Event::new("dexter-pool::update_total_fee_bps")
-        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
-    Ok(Response::new().add_event(event))
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
@@ -377,7 +353,7 @@ pub fn query_pool_id(deps: Deps) -> StdResult<Uint128> {
 //--------x------------------x--------------x-----x-----
 
 /// ## Description
-/// Returns [`AfterJoinResponse`] type which contains -  
+/// Returns [`AfterJoinResponse`] type which contains -
 /// return_assets - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from
 /// the token balances provided by the user to the Vault, to get the final list of token balances to be provided as Liquiditiy against the minted LP shares
 /// new_shares - New LP shares which are to be minted
@@ -603,7 +579,7 @@ pub fn query_on_join_pool(
 }
 
 /// ## Description
-/// Returns [`AfterExitResponse`] type which contains -  
+/// Returns [`AfterExitResponse`] type which contains -
 /// assets_out - Is of type [`Vec<Asset>`] and is a sorted list consisting of amount and info of tokens which are to be subtracted from the PoolInfo state stored in the Vault contract and transfer from the Vault to the user
 /// burn_shares - Number of LP shares to be burnt
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
@@ -719,7 +695,7 @@ pub fn query_on_exit_pool(
 }
 
 /// ## Description
-/// Returns [`SwapResponse`] type which contains -  
+/// Returns [`SwapResponse`] type which contains -
 /// trade_params - Is of type [`Trade`] which contains all params related with the trade, including the number of assets to be traded, spread, and the fees to be paid
 /// response - A [`ResponseType`] which is either `Success` or `Failure`, deteriming if the tx is accepted by the Pool's math computations or not
 ///
@@ -757,8 +733,8 @@ pub fn query_on_swap(
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
-        Some(&offer_asset_info.clone()),
-        Some(&ask_asset_info),
+        &offer_asset_info.clone(),
+        &ask_asset_info,
         &pools,
     ) {
         Ok(res) => res,

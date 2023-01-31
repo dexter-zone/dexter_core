@@ -13,13 +13,8 @@ use crate::state::{Twap, CONFIG, TWAPINFO};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::error::ContractError;
 use dexter::helper::{calculate_underlying_fees, decimal2decimal256, get_share_in_assets};
-use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
-    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
-    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE,
-};
-use dexter::querier::{query_supply, query_vault_config};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps};
+use dexter::querier::{query_supply};
 use dexter::vault::{SwapType, FEE_PRECISION, TWAP_PRECISION};
 
 /// Contract name that is used for migration.
@@ -108,33 +103,14 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
-        ExecuteMsg::UpdateFee { total_fee_bps } => update_total_fee_bps(deps, env, info, total_fee_bps),
+        ExecuteMsg::UpdateFee { total_fee_bps } => {
+            update_total_fee_bps(deps, env, info, total_fee_bps, CONFIG)
+                .map_err(|e| e.into())
+        },
         ExecuteMsg::UpdateLiquidity { assets } => {
             execute_update_pool_liquidity(deps, env, info, assets)
         }
     }
-}
-
-pub fn update_total_fee_bps(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    total_fee_bps: u16,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
-
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    config.fee_info.total_fee_bps = total_fee_bps;
-    CONFIG.save(deps.storage, &config)?;
-
-    let event = Event::new("dexter-pool::update_total_fee_bps")
-        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
-    Ok(Response::new().add_event(event))
 }
 
 /// ## Description
