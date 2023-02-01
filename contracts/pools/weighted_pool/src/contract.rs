@@ -754,7 +754,7 @@ pub fn query_on_swap(
 
     let offer_asset: Asset;
     let ask_asset: Asset;
-    let (ask_amount, spread_amount): (Uint128, Uint128);
+    let (calc_amount, spread_amount): (Uint128, Uint128);
     let total_fee: Uint128;
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
@@ -774,7 +774,7 @@ pub fn query_on_swap(
             }.to_decimal_asset(offer_precision)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (ask_amount, spread_amount) = match compute_swap(
+            (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &offer_asset_after_fee,
@@ -794,7 +794,7 @@ pub fn query_on_swap(
 
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
-                amount: ask_amount,
+                amount: calc_amount,
             };
         }
         SwapType::GiveOut {} => {
@@ -802,7 +802,7 @@ pub fn query_on_swap(
                 info: ask_asset_info.clone(),
                 amount,
             };
-            (ask_amount, spread_amount, total_fee) = match compute_offer_amount(
+            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &ask_asset.to_decimal_asset(ask_precision)?,
@@ -823,7 +823,7 @@ pub fn query_on_swap(
 
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
-                amount: ask_amount,
+                amount: calc_amount,
             };
         }
         SwapType::Custom(_) => {
@@ -831,7 +831,7 @@ pub fn query_on_swap(
         }
     }
 
-    if ask_amount.is_zero() {
+    if calc_amount.is_zero() {
         return Ok(return_swap_failure(
             "Computation error - calc_amount is zero".to_string(),
         ));
