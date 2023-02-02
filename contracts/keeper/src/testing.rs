@@ -11,12 +11,10 @@ fn proper_initialization() {
     let info = mock_info("addr0000", &[]);
 
     let env = mock_env();
-    let vault = Addr::unchecked("vault");
     let admin = Addr::unchecked("admin");
 
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
-        vault_contract: vault.to_string(),
     };
     let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
@@ -26,7 +24,6 @@ fn proper_initialization() {
         state,
         Config {
             owner: admin,
-            vault_contract: Addr::unchecked("vault"),
         }
     )
 }

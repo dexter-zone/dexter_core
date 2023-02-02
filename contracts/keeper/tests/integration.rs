@@ -76,7 +76,6 @@ fn instantiate_contracts(
     let keeper_code_id = router.store_code(keeper_contract);
     let k_msg = dexter::keeper::InstantiateMsg {
         owner: keeper_admin,
-        vault_contract: vault_instance.to_string(),
     };
     let keeper_instance = router
         .instantiate_contract(
@@ -111,7 +110,7 @@ fn update_config() {
         ],
     );
 
-    let (vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
+    let (_, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
 
     // #########---- Check if Keeper contract is initialzied properly ----#########
 
@@ -122,7 +121,6 @@ fn update_config() {
         .unwrap();
 
     assert_eq!(res.owner, keeper_admin);
-    assert_eq!(res.vault_contract, vault_instance);
 
     // #########---- Check if Balances Query is working as expected  ----#########
 

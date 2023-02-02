@@ -11,8 +11,6 @@ use cosmwasm_std::{Addr, Uint128};
 pub struct InstantiateMsg {
     /// Owner address
     pub owner: Addr,
-    /// The vault contract address
-    pub vault_contract: String,
 }
 
 
@@ -22,8 +20,6 @@ pub struct InstantiateMsg {
 pub struct Config {
     /// admin address
     pub owner: Addr,
-    /// The factory contract address
-    pub vault_contract: Addr,
 }
 
 /// This struct describes the functions that can be executed in this contract.

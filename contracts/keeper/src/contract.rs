@@ -41,7 +41,6 @@ pub fn instantiate(
 
     let cfg = Config {
         owner: msg.owner,
-        vault_contract: deps.api.addr_validate(&msg.vault_contract)?,
     };
 
     CONFIG.save(deps.storage, &cfg)?;
@@ -183,7 +182,6 @@ fn query_get_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
         owner: config.owner,
-        vault_contract: config.vault_contract,
     })
 }
 
