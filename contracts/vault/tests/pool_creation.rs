@@ -1,12 +1,13 @@
 pub mod utils;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg, PoolCreationFee};
+use stable5pool::state::StablePoolParams;
 
 use crate::utils::{dummy_pool_creation_msg, instantiate_contract, mock_app, store_token_code};
 
@@ -91,9 +92,9 @@ fn test_create_pool_instance() {
     ];
 
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: None,
+        init_params: Some(to_binary(&StablePoolParams {amp: 100u64}).unwrap()),
         fee_info: None,
     };
 
@@ -106,7 +107,7 @@ fn test_create_pool_instance() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
 
     let pool_res: PoolInfo = app
         .wrap()
@@ -143,7 +144,7 @@ fn test_create_pool_instance() {
         pool_res.pool_addr
     );
     assert_eq!(assets, pool_res.assets);
-    assert_eq!(PoolType::Xyk {}, pool_res.pool_type);
+    assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
 }
 
 #[test]
@@ -264,9 +265,8 @@ fn test_pool_creation_whitelist() {
 
     // disable pool creation for everyone
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         allow_instantiation: Some(AllowPoolInstantiation::Nobody),
-        is_generator_disabled: None,
         new_fee_info: None,
         paused: None,
     };
@@ -296,9 +296,8 @@ fn test_pool_creation_whitelist() {
 
     // enable pool creation for only whitelisted addresses
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         allow_instantiation: Some(AllowPoolInstantiation::OnlyWhitelistedAddresses),
-        is_generator_disabled: None,
         new_fee_info: None,
         paused: None,
     };
@@ -465,9 +464,9 @@ fn test_pool_creation_fee() {
 
     // No pool creation fee
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: None,
+        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
         fee_info: None,
     };
 
@@ -480,7 +479,7 @@ fn test_pool_creation_fee() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
 
     // Add fee for pool creation
     let msg = ExecuteMsg::UpdateConfig {
@@ -563,7 +562,7 @@ fn test_pool_creation_fee() {
             &[coin(100_000_000u128, "uxprt")],
         ).unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "xyk"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
     
     // validate that fee collector has received the fee
     let fee_collector = Addr::unchecked("fee_collector".to_string());

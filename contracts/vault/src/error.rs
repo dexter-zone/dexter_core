@@ -118,12 +118,6 @@ pub enum ContractError {
     #[error("Auto staking is disabled for vault")]
     AutoStakeDisabled,
 
-    #[error("Generator address is not configured")]
-    GeneratorAddrNotSet,
-
-    #[error("Multistaking address is not configured")]
-    MultistakingAddrNotSet,
-
     #[error("Deposits are paused")]
     PausedDeposit,
 

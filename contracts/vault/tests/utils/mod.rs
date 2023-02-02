@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128, BlockInfo, Uint64};
+use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
@@ -9,6 +9,7 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
     PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo,
 };
+use stable5pool::state::StablePoolParams;
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -63,28 +64,8 @@ pub fn store_weighted_pool_code(app: &mut App) -> u64 {
     app.store_code(pool_contract)
 }
 
-pub fn store_stable_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stableswap_pool::contract::execute,
-        stableswap_pool::contract::instantiate,
-        stableswap_pool::contract::query,
-    ));
-    app.store_code(pool_contract)
-}
-
-pub fn store_xyk_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        xyk_pool::contract::execute,
-        xyk_pool::contract::instantiate,
-        xyk_pool::contract::query,
-    ));
-    app.store_code(pool_contract)
-}
-
-// Initialize a vault with XYK, Stable, Stable5, Weighted pools
+// Initialize a vault with Stable5, Weighted pools
 pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
-    let xyk_pool_code_id = store_xyk_pool_code(app);
-    let stable_pool_code_id = store_stable_pool_code(app);
     let weighted_pool_code_id = store_weighted_pool_code(app);
     let stable5_pool_code_id = store_stable5_pool_code(app);
 
@@ -93,42 +74,13 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
 
     let pool_configs = vec![
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
-            code_id: stable_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
         PoolTypeConfig {
@@ -137,11 +89,8 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     ];
@@ -169,15 +118,6 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     return vault_instance;
 }
 
-pub fn store_generator_code(app: &mut App) -> u64 {
-    let generator_contract = Box::new(ContractWrapper::new_with_empty(
-        dexter_generator::contract::execute,
-        dexter_generator::contract::instantiate,
-        dexter_generator::contract::query,
-    ));
-    app.store_code(generator_contract)
-}
-
 pub fn store_multistaking_code(app: &mut App) -> u64 {
     let multistaking_contract = Box::new(ContractWrapper::new_with_empty(
         dexter_multi_staking::contract::execute,
@@ -185,37 +125,6 @@ pub fn store_multistaking_code(app: &mut App) -> u64 {
         dexter_multi_staking::contract::query,
     ));
     app.store_code(multistaking_contract)
-}
-
-pub fn initialize_generator_contract(
-    app: &mut App,
-    owner: &Addr,
-    vault: &Addr,
-    current_block: BlockInfo,
-) -> Addr {
-    let generator_code_id = store_generator_code(app);
-
-    let generator_init_msg = dexter::generator::InstantiateMsg {
-        owner: owner.to_string(),
-        vault: vault.clone().to_string(),
-        dex_token: None,
-        tokens_per_block: Uint128::zero(),
-        start_block: Uint64::from(current_block.height),
-        unbonding_period: 8640u64,
-    };
-
-    let generator_instance = app
-        .instantiate_contract(
-            generator_code_id,
-            owner.to_owned(),
-            &generator_init_msg,
-            &[],
-            "generator",
-            None,
-        )
-        .unwrap();
-
-    return generator_instance;
 }
 
 pub fn initialize_multistaking_contract(
@@ -346,16 +255,64 @@ pub fn increase_token_allowance(
 
 pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
     ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
+        pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: None,
+        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
         fee_info: Some(FeeInfo {
             total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
-            dev_fee_percent: 0u16,
-            developer_addr: None,
         }),
     }
+}
+
+/// Initialize a STABLE-5-POOL with 2 tokens
+/// --------------------------
+pub fn initialize_stable_5_pool_2_asset(
+    app: &mut App,
+    owner: &Addr,
+    vault_instance: Addr,
+    token_instance0: Addr,
+    denom0: String,
+) -> (Addr, Addr, Uint128) {
+    let asset_infos = vec![
+        AssetInfo::NativeToken { denom: denom0 },
+        AssetInfo::Token {
+            contract_addr: token_instance0.clone(),
+        },
+    ];
+
+    // Initialize Stable-5-Pool contract instance
+    // ------------------------------------------
+
+    let vault_config_res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(vault_instance.clone(), &QueryMsg::Config {})
+        .unwrap();
+    let next_pool_id = vault_config_res.next_pool_id;
+    let msg = ExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Stable5Pool {},
+        asset_infos: asset_infos.to_vec(),
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        fee_info: None,
+    };
+    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
+        .unwrap();
+
+    let pool_info_res: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(
+            vault_instance.clone(),
+            &QueryMsg::GetPoolById {
+                pool_id: next_pool_id,
+            },
+        )
+        .unwrap();
+
+    let pool_addr = pool_info_res.pool_addr;
+    let lp_token_addr = pool_info_res.lp_token_addr;
+    let pool_id = pool_info_res.pool_id;
+
+    return (pool_addr, lp_token_addr, pool_id);
 }
 
 /// Initialize a STABLE-5-POOL
@@ -514,111 +471,6 @@ pub fn initialize_weighted_pool(
 
     return (pool_addr, lp_token_addr, pool_id);
 }
-
-/// Initialize a STABLE POOL
-/// --------------------------
-pub fn initialize_stable_pool(
-    app: &mut App,
-    owner: &Addr,
-    vault_instance: Addr,
-    token_instance0: Addr,
-    denom0: String,
-) -> (Addr, Addr, Uint128) {
-    let asset_infos = vec![
-        AssetInfo::NativeToken {
-            denom: denom0.clone(),
-        },
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
-    ];
-
-    // Initialize Stable-Pool contract instance
-    // ------------------------------------------
-
-    let vault_config_res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(vault_instance.clone(), &QueryMsg::Config {})
-        .unwrap();
-    let next_pool_id = vault_config_res.next_pool_id;
-    let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable2Pool {},
-        asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
-        fee_info: None,
-    };
-    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
-        .unwrap();
-
-    let pool_info_res: PoolInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &QueryMsg::GetPoolById {
-                pool_id: next_pool_id,
-            },
-        )
-        .unwrap();
-
-    let pool_addr = pool_info_res.pool_addr;
-    let lp_token_addr = pool_info_res.lp_token_addr;
-    let pool_id = pool_info_res.pool_id;
-
-    return (pool_addr, lp_token_addr, pool_id);
-}
-
-/// Initialize a XYK POOL
-/// --------------------------
-pub fn initialize_xyk_pool(
-    app: &mut App,
-    owner: &Addr,
-    vault_instance: Addr,
-    token_instance0: Addr,
-    denom0: String,
-) -> (Addr, Addr, Uint128) {
-    let asset_infos = vec![
-        AssetInfo::NativeToken {
-            denom: denom0.clone(),
-        },
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
-    ];
-
-    // Initialize XYK Pool contract instance
-    // ------------------------------------------
-
-    let vault_config_res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(vault_instance.clone(), &QueryMsg::Config {})
-        .unwrap();
-    let next_pool_id = vault_config_res.next_pool_id;
-    let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
-        asset_infos: asset_infos.to_vec(),
-        init_params: None,
-        fee_info: None,
-    };
-    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
-        .unwrap();
-
-    let pool_info_res: PoolInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &QueryMsg::GetPoolById {
-                pool_id: next_pool_id,
-            },
-        )
-        .unwrap();
-
-    let pool_addr = pool_info_res.pool_addr;
-    let lp_token_addr = pool_info_res.lp_token_addr;
-    let pool_id = pool_info_res.pool_id;
-
-    return (pool_addr, lp_token_addr, pool_id);
-}
-
 
 pub fn set_keeper_contract_in_config(app: &mut App, owner: Addr, vault_addr: Addr) {
     let msg = ExecuteMsg::UpdateConfig { 

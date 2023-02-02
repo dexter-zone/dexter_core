@@ -93,11 +93,8 @@ fn instantiate_contracts_instance(
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 64u16,
-            dev_fee_percent: 0u16,
-            developer_addr: Some(Addr::unchecked("dev".to_string())),
         },
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-        is_generator_disabled: false,
         paused: PauseInfo::default(),
     }];
 
@@ -1278,7 +1275,7 @@ fn test_query_on_join_pool() {
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnExitPool for XYK Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnExitPool for Stable5 Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -1938,7 +1935,7 @@ fn test_on_exit_pool() {
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnSwap - for XYK Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnSwap - for Stable5 Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -2355,16 +2352,6 @@ fn test_swap() {
         )
         .unwrap();
     assert_eq!(Uint128::from(53334999016u128), vault_bal_res.balance);
-    let dev_bal_res: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance0.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(Uint128::from(0u128), dev_bal_res.balance);
     let keeper_bal_res: BalanceResponse = app
         .wrap()
         .query_wasm_smart(

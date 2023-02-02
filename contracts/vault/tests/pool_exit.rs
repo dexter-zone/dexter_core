@@ -8,8 +8,8 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{Cw20HookMsg, ExecuteMsg};
 
 use crate::utils::{
-    initialize_3_tokens, initialize_stable_5_pool, initialize_stable_pool,
-    initialize_weighted_pool, initialize_xyk_pool, instantiate_contract, mint_some_tokens,
+    initialize_3_tokens, initialize_stable_5_pool,
+    initialize_weighted_pool, instantiate_contract, mint_some_tokens,
     mock_app, set_keeper_contract_in_config
 };
 
@@ -116,23 +116,6 @@ fn test_exit_pool() {
         token_instance3.clone(),
         denom0.clone(),
         denom1.clone(),
-    );
-
-    // Create STABLE pool
-    let (_, stable_lp_token_addr, stable_pool_id) = initialize_stable_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
-    );
-    // Create XYK pool
-    let (_, xyk_lp_token_addr, xyk_pool_id) = initialize_xyk_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
     );
 
     // Update config to set keeper contract address
@@ -252,70 +235,6 @@ fn test_exit_pool() {
     )
     .unwrap();
 
-    // Liquidity Provided to empty XYK Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // Liquidity Provided to empty Stable Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(1000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(1000_000000u128),
-        }],
-    )
-    .unwrap();
-
     // -------x---------- Stable-5-swap-POOL -::- WITHDRAW LIQUIDITY -------x---------
     // -------x---------- -------x---------- -------x---------- -------x--------------
 
@@ -424,30 +343,12 @@ fn test_exit_pool() {
             },
         )
         .unwrap();
-    let dev_token1_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance1.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
     let keeper_token2_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
             &token_instance2.clone(),
             &Cw20QueryMsg::Balance {
                 address: "fee_collector".to_string(),
-            },
-        )
-        .unwrap();
-    let dev_token2_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
             },
         )
         .unwrap();
@@ -559,20 +460,6 @@ fn test_exit_pool() {
         new_keeper_token1_balance.balance - keeper_token1_balance.balance
     );
 
-    let new_dev_token1_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance1.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        Uint128::from(0u128),
-        new_dev_token1_balance.balance - dev_token1_balance.balance
-    );
-
     let new_keeper_token2_balance: BalanceResponse = app
         .wrap()
         .query_wasm_smart(
@@ -585,20 +472,6 @@ fn test_exit_pool() {
     assert_eq!(
         Uint128::from(1063959u128),
         new_keeper_token2_balance.balance - keeper_token2_balance.balance
-    );
-
-    let new_dev_token2_balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &token_instance2.clone(),
-            &Cw20QueryMsg::Balance {
-                address: "stable5_dev".to_string(),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        Uint128::from(0u128),
-        new_dev_token2_balance.balance - dev_token2_balance.balance
     );
 
     // When its normal withdraw from a stable-5-pool. No fee charged
@@ -651,48 +524,4 @@ fn test_exit_pool() {
         &[],
     )
     .unwrap();
-
-    // -------x---------- XYK POOL -::- WITHDRAW LIQUIDITY -------x--------------
-    // -------x---------- -------x---------- -------x---------- -------x---------
-
-    // No Fee charged by XYK pool
-    // VAULT -::- Exit Pool -::- Execution Function
-    // Transfering total "5000000" "contract1" to the User. Total Fee : "0" (protocol_fee="0", dev_fee="0" LP fee="0"). Liquidity withdrawn = "5000000" "contract1"
-    // Transfering total "5000000" "token0" to the User. Total Fee : "0" (protocol_fee="0", dev_fee="0" LP fee="0"). Liquidity withdrawn = "5000000" "token0"
-    // test test_exit_pool ... ok
-    let exit_msg = Cw20ExecuteMsg::Send {
-        contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(5000_000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            assets: None,
-            burn_amount: Some(Uint128::from(5000_000u128)),
-        })
-        .unwrap(),
-    };
-    app.execute_contract(owner.clone(), xyk_lp_token_addr.clone(), &exit_msg, &[])
-        .unwrap();
-
-    // -------x---------- StableSwap POOL -::- WITHDRAW LIQUIDITY -------x--------------
-    // -------x---------- -------x---------- -------x---------- -------x----------------
-
-    // No Fee charged by Stableswap pool
-    // VAULT -::- Exit Pool -::- Execution Function
-    // Transfering total "5000000" "contract1" to the User. Total Fee : "0" (protocol_fee="0", dev_fee="0" LP fee="0"). Liquidity withdrawn = "5000000" "contract1"
-    // Transfering total "5000000" "token0" to the User. Total Fee : "0" (protocol_fee="0", dev_fee="0" LP fee="0"). Liquidity withdrawn = "5000000" "token0"
-    // test test_exit_pool ... ok
-    let exit_msg = Cw20ExecuteMsg::Send {
-        contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(5000_000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            assets: None,
-            burn_amount: Some(Uint128::from(5000_000u128)),
-        })
-        .unwrap(),
-    };
-    app.execute_contract(owner.clone(), stable_lp_token_addr.clone(), &exit_msg, &[])
-        .unwrap();
 }

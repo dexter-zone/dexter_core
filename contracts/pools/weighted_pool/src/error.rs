@@ -57,9 +57,6 @@ pub enum ContractError {
 
     #[error("Pair type mismatch. Check factory pair configs")]
     PoolTypeMismatch {},
-
-    #[error("GeneratorAddress is not set in factory. Cannot autostake")]
-    AutoStakeError {},
 }
 
 impl From<OverflowError> for ContractError {

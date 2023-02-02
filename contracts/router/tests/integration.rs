@@ -77,28 +77,8 @@ fn store_weighted_pool_code(app: &mut App) -> u64 {
     app.store_code(pool_contract)
 }
 
-fn store_stable_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stableswap_pool::contract::execute,
-        stableswap_pool::contract::instantiate,
-        stableswap_pool::contract::query,
-    ));
-    app.store_code(pool_contract)
-}
-
-fn store_xyk_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        xyk_pool::contract::execute,
-        xyk_pool::contract::instantiate,
-        xyk_pool::contract::query,
-    ));
-    app.store_code(pool_contract)
-}
-
-// Initialize a vault with XYK, Stable, Stable5, Weighted pools
+// Initialize a vault with Stable5, Weighted pools
 fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
-    let xyk_pool_code_id = store_xyk_pool_code(app);
-    let stable_pool_code_id = store_stable_pool_code(app);
     let weighted_pool_code_id = store_weighted_pool_code(app);
     let stable5_pool_code_id = store_stable5_pool_code(app);
 
@@ -107,42 +87,13 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
 
     let pool_configs = vec![
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
-            code_id: stable_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
         PoolTypeConfig {
@@ -151,11 +102,8 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 64u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     ];
@@ -417,110 +365,6 @@ fn initialize_weighted_pool(
     return (pool_addr, lp_token_addr, pool_id);
 }
 
-/// Initialize a STABLE POOL
-/// --------------------------
-fn initialize_stable_pool(
-    app: &mut App,
-    owner: &Addr,
-    vault_instance: Addr,
-    token_instance0: Addr,
-    denom0: String,
-) -> (Addr, Addr, Uint128) {
-    let asset_infos = vec![
-        AssetInfo::NativeToken {
-            denom: denom0.clone(),
-        },
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
-    ];
-
-    // Initialize Stable-Pool contract instance
-    // ------------------------------------------
-
-    let vault_config_res: VaultConfigResponse = app
-        .wrap()
-        .query_wasm_smart(vault_instance.clone(), &VaultQueryMsg::Config {})
-        .unwrap();
-    let next_pool_id = vault_config_res.next_pool_id;
-    let msg = VaultExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable2Pool {},
-        asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
-        fee_info: None,
-    };
-    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
-        .unwrap();
-
-    let pool_info_res: PoolInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &VaultQueryMsg::GetPoolById {
-                pool_id: next_pool_id,
-            },
-        )
-        .unwrap();
-
-    let pool_addr = pool_info_res.pool_addr;
-    let lp_token_addr = pool_info_res.lp_token_addr;
-    let pool_id = pool_info_res.pool_id;
-
-    return (pool_addr, lp_token_addr, pool_id);
-}
-
-/// Initialize a XYK POOL
-/// --------------------------
-fn initialize_xyk_pool(
-    app: &mut App,
-    owner: &Addr,
-    vault_instance: Addr,
-    token_instance0: Addr,
-    denom0: String,
-) -> (Addr, Addr, Uint128) {
-    let asset_infos = vec![
-        AssetInfo::NativeToken {
-            denom: denom0.clone(),
-        },
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        },
-    ];
-
-    // Initialize XYK Pool contract instance
-    // ------------------------------------------
-
-    let vault_config_res: VaultConfigResponse = app
-        .wrap()
-        .query_wasm_smart(vault_instance.clone(), &VaultQueryMsg::Config {})
-        .unwrap();
-    let next_pool_id = vault_config_res.next_pool_id;
-    let msg = VaultExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Xyk {},
-        asset_infos: asset_infos.to_vec(),
-        init_params: None,
-        fee_info: None,
-    };
-    app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
-        .unwrap();
-
-    let pool_info_res: PoolInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &VaultQueryMsg::GetPoolById {
-                pool_id: next_pool_id,
-            },
-        )
-        .unwrap();
-
-    let pool_addr = pool_info_res.pool_addr;
-    let lp_token_addr = pool_info_res.lp_token_addr;
-    let pool_id = pool_info_res.pool_id;
-
-    return (pool_addr, lp_token_addr, pool_id);
-}
-
 /// Initialize the Router contract
 /// --------------------------
 fn initialize_router(app: &mut App, owner: &Addr, vault_instance: Addr) -> Addr {
@@ -545,8 +389,6 @@ fn proper_initialization() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(Addr::unchecked(owner.clone()), vec![]);
     let vault_code_id = store_vault_code(&mut app);
-    let xyk_pool_code_id = store_xyk_pool_code(&mut app);
-    let stable_pool_code_id = store_stable_pool_code(&mut app);
     let weighted_pool_code_id = store_weighted_pool_code(&mut app);
     let stable5_pool_code_id = store_stable5_pool_code(&mut app);
     let token_code_id = store_token_code(&mut app);
@@ -554,42 +396,13 @@ fn proper_initialization() {
 
     let pool_configs = vec![
         PoolTypeConfig {
-            code_id: xyk_pool_code_id,
-            pool_type: PoolType::Xyk {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"xyk_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
-            code_id: stable_pool_code_id,
-            pool_type: PoolType::Stable2Pool {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 300u16,
-                protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable_dev".to_string())),
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
-            paused: PauseInfo::default(),
-        },
-        PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Stable5Pool {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"stable5_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
         PoolTypeConfig {
@@ -598,11 +411,8 @@ fn proper_initialization() {
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
-                dev_fee_percent: 0u16,
-                developer_addr: Some(Addr::unchecked(&"weighted_dev".to_string())),
             },
             allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            is_generator_disabled: false,
             paused: PauseInfo::default(),
         },
     ];
@@ -808,23 +618,6 @@ fn test_router_functionality() {
         denom1.clone(),
     );
 
-    // Create STABLE pool
-    let (_, _, stable_pool_id) = initialize_stable_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
-    );
-    // Create XYK pool
-    let (_, _, xyk_pool_id) = initialize_xyk_pool(
-        &mut app,
-        &Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        token_instance1.clone(),
-        denom0.clone(),
-    );
-
     // -------x---------- STABLE-5-POOL -::- PROVIDE LIQUIDITY -------x----------
     // -------x---------- -------x---------- -------x---------- -------x----------
 
@@ -945,76 +738,6 @@ fn test_router_functionality() {
     )
     .unwrap();
 
-    // -------x---------- XYK-POOL -::- PROVIDE LIQUIDITY -------x----------
-    // -------x---------- -------x---------- -------x---------- -------x----
-
-    // Provided to empty XYK Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &VaultExecuteMsg::JoinPool {
-            pool_id: Uint128::from(xyk_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(100000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(100000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(100000_000000u128),
-        }],
-    )
-    .unwrap();
-
-    // -------x---------- Stableswap-POOL -::- PROVIDE LIQUIDITY -------x---------
-    // -------x---------- -------x---------- -------x---------- -------x----------
-
-    // Provided to empty Stable Pool
-    app.execute_contract(
-        owner.clone(),
-        vault_instance.clone(),
-        &VaultExecuteMsg::JoinPool {
-            pool_id: Uint128::from(stable_pool_id),
-            recipient: None,
-            lp_to_mint: None,
-            auto_stake: None,
-            slippage_tolerance: None,
-            assets: Some(vec![
-                Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: denom0.clone(),
-                    },
-                    amount: Uint128::from(100000_000000u128),
-                },
-                Asset {
-                    info: AssetInfo::Token {
-                        contract_addr: token_instance1.clone(),
-                    },
-                    amount: Uint128::from(100000_000000u128),
-                },
-            ]),
-        },
-        &[Coin {
-            denom: denom0.clone(),
-            amount: Uint128::new(100000_000000u128),
-        }],
-    )
-    .unwrap();
-
     // -------x---------- DEXTER ROUTER -::- Test swap simulations -------x-------
     // -------x---------- -------x---------- -------x---------- -------x----------
 
@@ -1039,7 +762,7 @@ fn test_router_functionality() {
     //       , response: Success }
     let multiswap_request_msg: Vec<HopSwapRequest> = [
         HopSwapRequest {
-            pool_id: Uint128::from(xyk_pool_id),
+            pool_id: Uint128::from(stable5_pool_id),
             asset_in: AssetInfo::NativeToken {
                 denom: denom0.clone(),
             },
@@ -1072,7 +795,7 @@ fn test_router_functionality() {
             belief_price: None,
         },
         HopSwapRequest {
-            pool_id: Uint128::from(stable_pool_id),
+            pool_id: Uint128::from(weighted_pool_id),
             asset_in: AssetInfo::NativeToken {
                 denom: denom0.clone(),
             },
@@ -1102,7 +825,7 @@ fn test_router_functionality() {
     assert_eq!(
         vec![
             SimulatedTrade {
-                pool_id: Uint128::from(4u128),
+                pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
@@ -1110,36 +833,36 @@ fn test_router_functionality() {
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                received_amount: Uint128::from(969991u128)
+                received_amount: Uint128::from(970000u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                offered_amount: Uint128::from(969991u128),
+                offered_amount: Uint128::from(970000u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                received_amount: Uint128::from(940882u128)
+                received_amount: Uint128::from(940891u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                offered_amount: Uint128::from(940882u128),
+                offered_amount: Uint128::from(940891u128),
                 asset_out: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                received_amount: Uint128::from(912656u128)
+                received_amount: Uint128::from(912665u128)
             },
             SimulatedTrade {
-                pool_id: Uint128::from(3u128),
+                pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(912656u128),
+                offered_amount: Uint128::from(912665u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
@@ -1154,7 +877,7 @@ fn test_router_functionality() {
                 info: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                amount: Uint128::from(29999u128)
+                amount: Uint128::from(30000u128)
             },
             Asset {
                 info: AssetInfo::Token {
@@ -1218,44 +941,44 @@ fn test_router_functionality() {
     assert_eq!(
         vec![
             SimulatedTrade {
-                pool_id: Uint128::from(4u128),
+                pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(999998u128),
+                offered_amount: Uint128::from(999999u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                received_amount: Uint128::from(969990u128)
+                received_amount: Uint128::from(970000u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                offered_amount: Uint128::from(969990u128),
+                offered_amount: Uint128::from(970000u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                received_amount: Uint128::from(940882u128)
+                received_amount: Uint128::from(940891u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                offered_amount: Uint128::from(940882u128),
+                offered_amount: Uint128::from(940891u128),
                 asset_out: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                received_amount: Uint128::from(912656u128)
+                received_amount: Uint128::from(912665u128)
             },
             SimulatedTrade {
-                pool_id: Uint128::from(3u128),
+                pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(912656u128),
+                offered_amount: Uint128::from(912665u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
@@ -1305,7 +1028,7 @@ fn test_router_functionality() {
 
     let multiswap_request_msg: Vec<HopSwapRequest> = [
         HopSwapRequest {
-            pool_id: Uint128::from(xyk_pool_id),
+            pool_id: Uint128::from(stable5_pool_id),
             asset_in: AssetInfo::Token {
                 contract_addr: token_instance1.clone(),
             },
@@ -1449,11 +1172,11 @@ fn test_router_functionality() {
         .unwrap();
 
     assert_eq!(
-        Uint128::from(807954u128),
+        Uint128::from(807962u128),
         new_sender_ask_asset_balance.balance - cur_sender_ask_asset_balance.balance
     );
     assert_eq!(
-        Uint128::from(823946u128), // Fees are also deducted
+        Uint128::from(823954u128), // Fees are also deducted
         cur_vault_ask_asset_balance.balance - new_vault_ask_asset_balance.balance
     );
 

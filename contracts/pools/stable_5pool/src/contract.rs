@@ -16,7 +16,12 @@ use crate::state::{
     CONFIG, MATHCONFIG, TWAPINFO,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps};
+use dexter::pool::{
+    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
+    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
+    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
+    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps
+};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
@@ -245,7 +250,7 @@ pub fn update_config(
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: XYK POOL::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: Stable5 POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 /// ## Description

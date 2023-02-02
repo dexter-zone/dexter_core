@@ -47,9 +47,6 @@ pub enum ContractError {
     #[error("You need to provide init params")]
     InitParamsNotFound {},
 
-    #[error("Generator address is not set in factory. Cannot autostake")]
-    AutoStakeError {},
-
     #[error("Ask or offer asset is missed")]
     VariableAssetMissed {},
 

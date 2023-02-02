@@ -14,10 +14,6 @@ pub const TWAP_PRECISION: u16 = 9u16;
 /// This enum describes the key for the different Pool types supported by Dexter
 #[cw_serde]
 pub enum PoolType {
-    /// XYK pool type
-    Xyk {},
-    /// Stable pool type
-    Stable2Pool {},
     /// Stable pool type
     Stable5Pool {},
     /// Weighted pool type
@@ -30,8 +26,6 @@ pub enum PoolType {
 impl Display for PoolType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
-            PoolType::Xyk {} => fmt.write_str("xyk"),
-            PoolType::Stable2Pool {} => fmt.write_str("stable-2-pool"),
             PoolType::Weighted {} => fmt.write_str("weighted"),
             PoolType::Stable5Pool {} => fmt.write_str("stable-5-pool"),
             PoolType::Custom(pool_type) => fmt.write_str(format!("custom-{}", pool_type).as_str()),
@@ -80,16 +74,12 @@ pub const FEE_PRECISION: u16 = 10_000u16;
 const MAX_TOTAL_FEE_BPS: u16 = 1_000u16;
 // Maximum total protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
 const MAX_PROTOCOL_FEE_PERCENT: u16 = 100u16;
-// Maximum dev protocol fee as % of the commission fee that can be charged on any supported pool by Dexter
-const MAX_DEV_FEE_PERCENT: u16 = 0u16;
 
 /// ## Description - This struct describes the Fee configuration supported by a particular pool type.
 #[cw_serde]
 pub struct FeeInfo {
     pub total_fee_bps: u16,
     pub protocol_fee_percent: u16,
-    pub dev_fee_percent: u16,
-    pub developer_addr: Option<Addr>,
 }
 
 impl FeeInfo {
@@ -97,20 +87,18 @@ impl FeeInfo {
     pub fn valid_fee_info(&self) -> bool {
         self.total_fee_bps <= MAX_TOTAL_FEE_BPS
             && self.protocol_fee_percent <= MAX_PROTOCOL_FEE_PERCENT
-            && self.dev_fee_percent <= MAX_DEV_FEE_PERCENT
     }
 
-    // Returns the number of tokens charged as total fee, protocol fee and dev fee
-    pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> (Uint128, Uint128) {
+    // Returns the number of tokens charged as protocol fee
+    pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> Uint128 {
         // println!(
         //     "calculate_total_fee_breakup:: protocol_fee_percent = {}, dev_fee_percent = {}",
         //     self.protocol_fee_percent, self.dev_fee_percent
         // );
         let protocol_fee: Uint128 =
             total_fee * Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
-        let dev_fee: Uint128 =
-            total_fee * Decimal::from_ratio(self.dev_fee_percent, Uint128::from(100u128));
-        (protocol_fee, dev_fee)
+
+        protocol_fee
     }
 }
 
@@ -130,7 +118,6 @@ pub struct Config {
     /// The contract address to which protocol fees are sent
     pub fee_collector: Option<Addr>,
     /// Which auto-stake feature is enabled for the pool
-    /// Generator allows for generating DEX token and dual farming of 3rd party tokens/assets
     /// Multistaking allows for staking of LP tokens with N-different rewards in a single contract.
     /// If none, it will disable auto-staking feature
     pub auto_stake_impl: AutoStakeImpl,
@@ -171,9 +158,6 @@ pub struct PoolTypeConfig {
     pub default_fee_info: FeeInfo,
     /// Controls whether the pool can be created by anyone or only by whitelisted addresses (if any) or not at all
     pub allow_instantiation: AllowPoolInstantiation,
-    /// Setting this to true means that pools of this type will not be able
-    /// to get added to generator
-    pub is_generator_disabled: bool,
     /// The pause status for this pool type. This overrides the pause status of any pool id of this type.
     pub paused: PauseInfo,
 }
@@ -265,10 +249,6 @@ pub struct SingleSwapRequest {
 pub enum AutoStakeImpl {
     //  This means that auto-staking is disabled
     None,
-    // This will enable auto-staking feature for generating DEX token and dual farming of 3rd party tokens/assets
-    Generator {
-        contract_addr: Addr,
-    },
     // This will enable auto-staking feature for staking of LP tokens with N-different rewards in a single contract
     Multistaking {
         contract_addr: Addr,
@@ -279,9 +259,6 @@ impl Display for AutoStakeImpl {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match &self {
             AutoStakeImpl::None => fmt.write_str("none"),
-            AutoStakeImpl::Generator { contract_addr } => {
-                fmt.write_str(format!("generator: {}", contract_addr).as_str())
-            }
             AutoStakeImpl::Multistaking { contract_addr } => {
                 fmt.write_str(format!("multistaking: {}", contract_addr).as_str())
             }
@@ -317,8 +294,8 @@ pub enum PauseInfoUpdateType {
 pub enum ExecuteMsg {
     // Receives LP Tokens when removing Liquidity
     Receive(Cw20ReceiveMsg),
-    /// Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`,
-    /// `config.lp_token_code_id` parameters.       
+    /// Executable only by `config.owner`. Facilitates updating parameters like `config.fee_collector`,
+    /// `config.lp_token_code_id`, etc.
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
@@ -346,7 +323,6 @@ pub enum ExecuteMsg {
         pool_type: PoolType,
         allow_instantiation: Option<AllowPoolInstantiation>,
         new_fee_info: Option<FeeInfo>,
-        is_generator_disabled: Option<bool>,
         paused: Option<PauseInfo>,
     },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
@@ -419,9 +395,6 @@ pub enum QueryMsg {
     /// Return PoolConfig
     #[returns(PoolConfigResponse)]
     QueryRegistry { pool_type: PoolType },
-    /// Returns boolean value indicating if the genarator is disabled or not for the pool
-    #[returns(bool)]
-    IsGeneratorDisabled { lp_token_addr: String },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
     GetPoolById { pool_id: Uint128 },
@@ -446,7 +419,6 @@ pub struct AssetFeeBreakup {
     pub asset: AssetInfo,
     pub total_fee: Uint128,
     pub protocol_fee: Uint128,
-    pub dev_fee: Uint128,
 }
 
 pub type PoolConfigResponse = Option<PoolTypeConfig>;
