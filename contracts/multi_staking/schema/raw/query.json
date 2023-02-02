@@ -1,0 +1,352 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryMsg",
+  "oneOf": [
+    {
+      "description": "Returns current config of the contract",
+      "type": "string",
+      "enum": [
+        "config"
+      ]
+    },
+    {
+      "description": "Returns currently unclaimed rewards for a user for a give LP token If a future block time is provided, it will return the unclaimed rewards till that block time.",
+      "type": "object",
+      "required": [
+        "unclaimed_rewards"
+      ],
+      "properties": {
+        "unclaimed_rewards": {
+          "type": "object",
+          "required": [
+            "lp_token",
+            "user"
+          ],
+          "properties": {
+            "block_time": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            },
+            "user": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns current token locks for a user for a given LP token If a future block time is provided, it will return the token locks and unlocked value at that block time based on current unlock period",
+      "type": "object",
+      "required": [
+        "token_locks"
+      ],
+      "properties": {
+        "token_locks": {
+          "type": "object",
+          "required": [
+            "lp_token",
+            "user"
+          ],
+          "properties": {
+            "block_time": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            },
+            "user": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the total staked amount for a given LP token",
+      "type": "object",
+      "required": [
+        "bonded_lp_tokens"
+      ],
+      "properties": {
+        "bonded_lp_tokens": {
+          "type": "object",
+          "required": [
+            "lp_token",
+            "user"
+          ],
+          "properties": {
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            },
+            "user": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the LP tokens which are whitelisted for rewards",
+      "type": "object",
+      "required": [
+        "allowed_l_p_tokens_for_reward"
+      ],
+      "properties": {
+        "allowed_l_p_tokens_for_reward": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the current owner of the contract",
+      "type": "object",
+      "required": [
+        "owner"
+      ],
+      "properties": {
+        "owner": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the proposed reward schedules matching the given pagination params.",
+      "type": "object",
+      "required": [
+        "proposed_reward_schedules"
+      ],
+      "properties": {
+        "proposed_reward_schedules": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "start_after": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the proposed reward schedule matching the given proposal_id",
+      "type": "object",
+      "required": [
+        "proposed_reward_schedule"
+      ],
+      "properties": {
+        "proposed_reward_schedule": {
+          "type": "object",
+          "required": [
+            "proposal_id"
+          ],
+          "properties": {
+            "proposal_id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the reward schedule for a given LP token and a reward asset",
+      "type": "object",
+      "required": [
+        "reward_schedules"
+      ],
+      "properties": {
+        "reward_schedules": {
+          "type": "object",
+          "required": [
+            "asset",
+            "lp_token"
+          ],
+          "properties": {
+            "asset": {
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the current reward state for a given LP token and a reward asset",
+      "type": "object",
+      "required": [
+        "reward_state"
+      ],
+      "properties": {
+        "reward_state": {
+          "type": "object",
+          "required": [
+            "asset",
+            "lp_token"
+          ],
+          "properties": {
+            "asset": {
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the staking information for a given user based on the last interaction with the contract",
+      "type": "object",
+      "required": [
+        "staker_info"
+      ],
+      "properties": {
+        "staker_info": {
+          "type": "object",
+          "required": [
+            "asset",
+            "lp_token",
+            "user"
+          ],
+          "properties": {
+            "asset": {
+              "$ref": "#/definitions/AssetInfo"
+            },
+            "lp_token": {
+              "$ref": "#/definitions/Addr"
+            },
+            "user": {
+              "$ref": "#/definitions/Addr"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the reward that the creator of a reward schedule can claim since no token was bonded in a part of the reward period",
+      "type": "object",
+      "required": [
+        "creator_claimable_reward"
+      ],
+      "properties": {
+        "creator_claimable_reward": {
+          "type": "object",
+          "required": [
+            "reward_schedule_id"
+          ],
+          "properties": {
+            "reward_schedule_id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "Addr": {
+      "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+      "type": "string"
+    },
+    "AssetInfo": {
+      "description": "This enum describes available Token types.",
+      "oneOf": [
+        {
+          "description": "Non-native Token",
+          "type": "object",
+          "required": [
+            "token"
+          ],
+          "properties": {
+            "token": {
+              "type": "object",
+              "required": [
+                "contract_addr"
+              ],
+              "properties": {
+                "contract_addr": {
+                  "$ref": "#/definitions/Addr"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Native token",
+          "type": "object",
+          "required": [
+            "native_token"
+          ],
+          "properties": {
+            "native_token": {
+              "type": "object",
+              "required": [
+                "denom"
+              ],
+              "properties": {
+                "denom": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}
