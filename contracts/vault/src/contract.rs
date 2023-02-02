@@ -1118,8 +1118,8 @@ pub fn execute_join_pool(
 
         // Compute - calculate protocol fee based on % of total fee
         if !total_fee.clone().is_zero() {
-            protocol_fee = pool_config
-                .default_fee_info
+            protocol_fee = pool_info
+                .fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
@@ -1270,9 +1270,6 @@ pub fn execute_exit_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .or(Err(ContractError::InvalidPoolId {}))?;
 
-    // Read -  Get PoolConfig {} for the pool
-    let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
-
     // Error - Check if the LP token sent is valid
     if info.sender != pool_info.lp_token_addr {
         return Err(ContractError::Unauthorized {});
@@ -1383,8 +1380,8 @@ pub fn execute_exit_pool(
 
         // Compute - calculate protocol fee based on % of total fee
         if !total_fee.clone().is_zero() {
-            protocol_fee = pool_config
-                .default_fee_info
+            protocol_fee = pool_info
+                .fee_info
                 .calculate_total_fee_breakup(total_fee.clone());
         }
 
@@ -1607,8 +1604,8 @@ pub fn execute_swap(
                 event.add_attribute("fee_asset", serde_json_wasm::to_string(&fee.info).unwrap());
             event = event.add_attribute("total_fee", fee.amount.to_string());
             // Compute - Protocol Fee
-            protocol_fee = pool_config
-                .default_fee_info
+            protocol_fee = pool_info
+                .fee_info
                 .calculate_total_fee_breakup(fee.amount);
         }
     }
