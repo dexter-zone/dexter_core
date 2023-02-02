@@ -15,21 +15,21 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 dexter = { path = "../../packages/dexter", default-features = false }
-cw20 = { version = "0.15" }
-cw2 = "0.15"
-cw20-base = { version = "0.15", features = ["library"] }
-cosmwasm-std = { version = "1.1" }
-cw-storage-plus = "0.15"
-schemars = "0.8.1"
-thiserror = { version = "1.0.20" }
-serde = { version = "1.0.103", default-features = false, features = ["derive"] }
-cosmwasm-schema = "1.1"
+cw20 = "1.0.1"
+cw2 = "1.0.1"
+cw20-base = { version = "1.0.1", features = ["library"] }
+cosmwasm-std = "1.2.1"
+cw-storage-plus = "1.0.1"
+schemars = "0.8.11"
+thiserror = "1.0.38"
+serde = { version = "1.0.152", default-features = false, features = ["derive"] }
+cosmwasm-schema = "1.2.1"
 
 [dev-dependencies]
 # we only need to enable this if we use integration tests
-cw-multi-test = "0.13.2"
+cw-multi-test = "0.16.2"
 dexter-vault = { path = "../vault"}
 stable5pool = { path = "../pools/stable_5pool"}
 weighted-pool = { path = "../pools/weighted_pool"}
 lp-token = { path = "../lp_token"}
-cw20 = "0.15"
+cw20 = "1.0.1"

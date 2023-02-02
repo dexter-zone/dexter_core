@@ -8,8 +8,7 @@
     "description": "This struct describes the Msg used to instantiate in this contract.",
     "type": "object",
     "required": [
-      "owner",
-      "vault_contract"
+      "owner"
     ],
     "properties": {
       "owner": {
@@ -19,10 +18,6 @@
             "$ref": "#/definitions/Addr"
           }
         ]
-      },
-      "vault_contract": {
-        "description": "The vault contract address",
-        "type": "string"
       }
     },
     "additionalProperties": false,
@@ -38,36 +33,6 @@
     "title": "ExecuteMsg",
     "description": "This struct describes the functions that can be executed in this contract.",
     "oneOf": [
-      {
-        "description": "Updates general settings",
-        "type": "object",
-        "required": [
-          "update_config"
-        ],
-        "properties": {
-          "update_config": {
-            "type": "object",
-            "properties": {
-              "dex_token_contract": {
-                "description": "The DEX token contract address",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "staking_contract": {
-                "description": "The DEX token staking contract address",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
       {
         "description": "Withdraws an asset from the contract This is used to withdraw the fees collected by the contract by the owner",
         "type": "object",
@@ -442,37 +407,15 @@
     },
     "config": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ConfigResponse",
-      "description": "A custom struct that holds contract parameters and is used to retrieve them.",
+      "title": "Description",
+      "description": "This structure stores the main parameters for the Keeper contract.",
       "type": "object",
       "required": [
-        "vault_contract"
+        "owner"
       ],
       "properties": {
-        "dex_token_contract": {
-          "description": "The DEX token contract address",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "staking_contract": {
-          "description": "The DEX token staking contract address",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "vault_contract": {
-          "description": "The vault contract address",
+        "owner": {
+          "description": "admin address",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"

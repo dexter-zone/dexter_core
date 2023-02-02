@@ -152,27 +152,6 @@
           {
             "type": "object",
             "required": [
-              "generator"
-            ],
-            "properties": {
-              "generator": {
-                "type": "object",
-                "required": [
-                  "contract_addr"
-                ],
-                "properties": {
-                  "contract_addr": {
-                    "$ref": "#/definitions/Addr"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
               "multistaking"
             ],
             "properties": {
@@ -197,26 +176,10 @@
         "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
         "type": "object",
         "required": [
-          "dev_fee_percent",
           "protocol_fee_percent",
           "total_fee_bps"
         ],
         "properties": {
-          "dev_fee_percent": {
-            "type": "integer",
-            "format": "uint16",
-            "minimum": 0.0
-          },
-          "developer_addr": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Addr"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "protocol_fee_percent": {
             "type": "integer",
             "format": "uint16",
@@ -283,34 +246,6 @@
         "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
-            "description": "XYK pool type",
-            "type": "object",
-            "required": [
-              "xyk"
-            ],
-            "properties": {
-              "xyk": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Stable pool type",
-            "type": "object",
-            "required": [
-              "stable2_pool"
-            ],
-            "properties": {
-              "stable2_pool": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Stable pool type",
             "type": "object",
             "required": [
@@ -360,7 +295,6 @@
           "allow_instantiation",
           "code_id",
           "default_fee_info",
-          "is_generator_disabled",
           "paused",
           "pool_type"
         ],
@@ -381,10 +315,6 @@
           },
           "default_fee_info": {
             "$ref": "#/definitions/FeeInfo"
-          },
-          "is_generator_disabled": {
-            "description": "Setting this to true means that pools of this type will not be able to get added to generator",
-            "type": "boolean"
           },
           "paused": {
             "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
@@ -429,7 +359,7 @@
         "additionalProperties": false
       },
       {
-        "description": "Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`, `config.lp_token_code_id` parameters.",
+        "description": "Executable only by `config.owner`. Facilitates updating parameters like `config.fee_collector`, `config.lp_token_code_id`, etc.",
         "type": "object",
         "required": [
           "update_config"
@@ -577,12 +507,6 @@
                   {
                     "type": "null"
                   }
-                ]
-              },
-              "is_generator_disabled": {
-                "type": [
-                  "boolean",
-                  "null"
                 ]
               },
               "new_fee_info": {
@@ -992,27 +916,6 @@
           {
             "type": "object",
             "required": [
-              "generator"
-            ],
-            "properties": {
-              "generator": {
-                "type": "object",
-                "required": [
-                  "contract_addr"
-                ],
-                "properties": {
-                  "contract_addr": {
-                    "$ref": "#/definitions/Addr"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
               "multistaking"
             ],
             "properties": {
@@ -1066,26 +969,10 @@
         "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
         "type": "object",
         "required": [
-          "dev_fee_percent",
           "protocol_fee_percent",
           "total_fee_bps"
         ],
         "properties": {
-          "dev_fee_percent": {
-            "type": "integer",
-            "format": "uint16",
-            "minimum": 0.0
-          },
-          "developer_addr": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Addr"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "protocol_fee_percent": {
             "type": "integer",
             "format": "uint16",
@@ -1180,34 +1067,6 @@
         "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
-            "description": "XYK pool type",
-            "type": "object",
-            "required": [
-              "xyk"
-            ],
-            "properties": {
-              "xyk": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Stable pool type",
-            "type": "object",
-            "required": [
-              "stable2_pool"
-            ],
-            "properties": {
-              "stable2_pool": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Stable pool type",
             "type": "object",
             "required": [
@@ -1257,7 +1116,6 @@
           "allow_instantiation",
           "code_id",
           "default_fee_info",
-          "is_generator_disabled",
           "paused",
           "pool_type"
         ],
@@ -1278,10 +1136,6 @@
           },
           "default_fee_info": {
             "$ref": "#/definitions/FeeInfo"
-          },
-          "is_generator_disabled": {
-            "description": "Setting this to true means that pools of this type will not be able to get added to generator",
-            "type": "boolean"
           },
           "paused": {
             "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
@@ -1442,28 +1296,6 @@
         "additionalProperties": false
       },
       {
-        "description": "Returns boolean value indicating if the genarator is disabled or not for the pool",
-        "type": "object",
-        "required": [
-          "is_generator_disabled"
-        ],
-        "properties": {
-          "is_generator_disabled": {
-            "type": "object",
-            "required": [
-              "lp_token_addr"
-            ],
-            "properties": {
-              "lp_token_addr": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
         "description": "Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct",
         "type": "object",
         "required": [
@@ -1512,34 +1344,6 @@
       "PoolType": {
         "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
-          {
-            "description": "XYK pool type",
-            "type": "object",
-            "required": [
-              "xyk"
-            ],
-            "properties": {
-              "xyk": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Stable pool type",
-            "type": "object",
-            "required": [
-              "stable2_pool"
-            ],
-            "properties": {
-              "stable2_pool": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
           {
             "description": "Stable pool type",
             "type": "object",
@@ -1611,7 +1415,7 @@
       ],
       "properties": {
         "auto_stake_impl": {
-          "description": "Which auto-stake feature is enabled for the pool Generator allows for generating DEX token and dual farming of 3rd party tokens/assets Multistaking allows for staking of LP tokens with N-different rewards in a single contract. If none, it will disable auto-staking feature",
+          "description": "Which auto-stake feature is enabled for the pool Multistaking allows for staking of LP tokens with N-different rewards in a single contract. If none, it will disable auto-staking feature",
           "allOf": [
             {
               "$ref": "#/definitions/AutoStakeImpl"
@@ -1767,27 +1571,6 @@
               "enum": [
                 "none"
               ]
-            },
-            {
-              "type": "object",
-              "required": [
-                "generator"
-              ],
-              "properties": {
-                "generator": {
-                  "type": "object",
-                  "required": [
-                    "contract_addr"
-                  ],
-                  "properties": {
-                    "contract_addr": {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
             },
             {
               "type": "object",
@@ -2024,26 +1807,10 @@
           "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
           "type": "object",
           "required": [
-            "dev_fee_percent",
             "protocol_fee_percent",
             "total_fee_bps"
           ],
           "properties": {
-            "dev_fee_percent": {
-              "type": "integer",
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "developer_addr": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "protocol_fee_percent": {
               "type": "integer",
               "format": "uint16",
@@ -2078,34 +1845,6 @@
         "PoolType": {
           "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
-            {
-              "description": "XYK pool type",
-              "type": "object",
-              "required": [
-                "xyk"
-              ],
-              "properties": {
-                "xyk": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "Stable pool type",
-              "type": "object",
-              "required": [
-                "stable2_pool"
-              ],
-              "properties": {
-                "stable2_pool": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
             {
               "description": "Stable pool type",
               "type": "object",
@@ -2312,26 +2051,10 @@
           "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
           "type": "object",
           "required": [
-            "dev_fee_percent",
             "protocol_fee_percent",
             "total_fee_bps"
           ],
           "properties": {
-            "dev_fee_percent": {
-              "type": "integer",
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "developer_addr": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "protocol_fee_percent": {
               "type": "integer",
               "format": "uint16",
@@ -2366,34 +2089,6 @@
         "PoolType": {
           "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
-            {
-              "description": "XYK pool type",
-              "type": "object",
-              "required": [
-                "xyk"
-              ],
-              "properties": {
-                "xyk": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "Stable pool type",
-              "type": "object",
-              "required": [
-                "stable2_pool"
-              ],
-              "properties": {
-                "stable2_pool": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
             {
               "description": "Stable pool type",
               "type": "object",
@@ -2443,11 +2138,6 @@
         }
       }
     },
-    "is_generator_disabled": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Boolean",
-      "type": "boolean"
-    },
     "query_registry": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Nullable_PoolTypeConfig",
@@ -2460,10 +2150,6 @@
         }
       ],
       "definitions": {
-        "Addr": {
-          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
-          "type": "string"
-        },
         "AllowPoolInstantiation": {
           "type": "string",
           "enum": [
@@ -2476,26 +2162,10 @@
           "title": "Description - This struct describes the Fee configuration supported by a particular pool type.",
           "type": "object",
           "required": [
-            "dev_fee_percent",
             "protocol_fee_percent",
             "total_fee_bps"
           ],
           "properties": {
-            "dev_fee_percent": {
-              "type": "integer",
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "developer_addr": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Addr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
             "protocol_fee_percent": {
               "type": "integer",
               "format": "uint16",
@@ -2530,34 +2200,6 @@
         "PoolType": {
           "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
-            {
-              "description": "XYK pool type",
-              "type": "object",
-              "required": [
-                "xyk"
-              ],
-              "properties": {
-                "xyk": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "Stable pool type",
-              "type": "object",
-              "required": [
-                "stable2_pool"
-              ],
-              "properties": {
-                "stable2_pool": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
             {
               "description": "Stable pool type",
               "type": "object",
@@ -2608,7 +2250,6 @@
             "allow_instantiation",
             "code_id",
             "default_fee_info",
-            "is_generator_disabled",
             "paused",
             "pool_type"
           ],
@@ -2629,10 +2270,6 @@
             },
             "default_fee_info": {
               "$ref": "#/definitions/FeeInfo"
-            },
-            "is_generator_disabled": {
-              "description": "Setting this to true means that pools of this type will not be able to get added to generator",
-              "type": "boolean"
             },
             "paused": {
               "description": "The pause status for this pool type. This overrides the pause status of any pool id of this type.",
