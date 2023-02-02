@@ -1,17 +1,15 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
-use crate::state::{Config, CONFIG, OWNERSHIP_PROPOSAL};
+use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use cosmwasm_std::{
-    attr, entry_point, to_binary, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, Uint128, Addr, StdError,
+    Addr, attr, Attribute, Binary, Deps, DepsMut, entry_point, Env, MessageInfo, Response,
+    StdError, StdResult, to_binary, Uint128,
 };
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::keeper::{
-    BalancesResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
-};
-use dexter::helper::{propose_new_owner, drop_ownership_proposal, claim_ownership};
+use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -43,9 +41,6 @@ pub fn instantiate(
 
     let cfg = Config {
         owner: msg.owner,
-        vault_contract: deps.api.addr_validate(&msg.vault_contract)?,
-        dex_token_contract: None,
-        staking_contract: None,
     };
 
     CONFIG.save(deps.storage, &cfg)?;
@@ -78,10 +73,6 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateConfig {
-            dex_token_contract,
-            staking_contract,
-        } => update_config(deps, info, dex_token_contract, staking_contract),
         ExecuteMsg::Withdraw {
             asset,
             amount,
@@ -118,53 +109,6 @@ pub fn execute(
             .map_err(|e| e.into())
         }
     }
-}
-
-/// ## Description
-/// Updates general contarct parameters. Returns a [`ContractError`] on failure or the [`Config`]
-/// data will be updated if the transaction is successful.
-///
-/// ## Params
-/// * **dex_token_contract** is an [`Option`] field of type [`String`]. This is the address of the DEX token contract.
-/// * **staking_contract** is an [`Option`] field of type [`String`]. This is the address of the DEX token staking contract.
-///
-/// ##Executor
-/// Only the owner can execute this.
-fn update_config(
-    deps: DepsMut,
-    info: MessageInfo,
-    dex_token_contract: Option<String>,
-    staking_contract: Option<String>,
-) -> Result<Response, ContractError> {
-    let mut attributes = vec![attr("action", "set_config")];
-
-    let mut config = CONFIG.load(deps.storage)?;
-
-    // Permission check
-    if info.sender != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Set DEX token contract
-    if let Some(dex_token_contract) = dex_token_contract {
-        if config.dex_token_contract.is_some() {
-            return Err(ContractError::DexTokenAlreadySet {});
-        }
-        config.dex_token_contract = Some(deps.api.addr_validate(&dex_token_contract)?);
-        attributes.push(Attribute::new("dex_token_contract", &dex_token_contract));
-    };
-
-    // Set Staking contract
-    if let Some(staking_contract) = staking_contract {
-        if config.staking_contract.is_some() {
-            return Err(ContractError::StakingAddrAlreadySet {});
-        }
-        config.staking_contract = Some(deps.api.addr_validate(&staking_contract)?);
-        attributes.push(Attribute::new("staking_contract", &staking_contract));
-    };
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new().add_attributes(attributes))
 }
 
 /// ## Description
@@ -237,9 +181,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 fn query_get_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
-        dex_token_contract: config.dex_token_contract,
-        vault_contract: config.vault_contract,
-        staking_contract: config.staking_contract,
+        owner: config.owner,
     })
 }
 
