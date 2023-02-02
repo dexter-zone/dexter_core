@@ -1,9 +1,8 @@
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env, Fraction, StdResult, Storage, Uint128};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128, Uint256};
 
 use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
-use dexter::helper::{adjust_precision, select_pools};
+use dexter::helper::{adjust_precision, select_pools, decimal2decimal256};
 use dexter::vault::FEE_PRECISION;
-use dexter::DecimalCheckedOps;
 
 use crate::error::ContractError;
 use crate::math::calc_y;
@@ -76,24 +75,19 @@ pub(crate) fn compute_offer_amount(
     commission_rate: u16,
     greatest_precision: u8,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
-    let commission_rate_decimals = Decimal::from_ratio(commission_rate, FEE_PRECISION);
-
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;
 
-    // before_commission = ask_amount * 1/(1-commission_rate)
-    let before_commission = Decimal256::with_precision(
-        (Decimal::one() - commission_rate_decimals)
-            .inv()
-            .unwrap_or_else(Decimal::one)
-            .checked_mul_uint128(ask_asset.amount)?,
-        ask_precision as u32,
-    )?;
+    let one_minus_commission = Decimal256::one()
+        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
+    let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
+
+    let ask_amount = Decimal256::with_precision(ask_asset.amount, ask_precision as u32)?;
 
     let new_offer_pool = calc_y(
         &ask_pool,
         &offer_pool.info,
-        ask_pool.amount - before_commission,
+        ask_pool.amount - ask_amount,
         &pools,
         compute_current_amp(&math_config, &env)?,
         greatest_precision,
@@ -106,16 +100,17 @@ pub(crate) fn compute_offer_amount(
             .to_uint128_with_precision(greatest_precision)?,
     )?;
 
-    let offer_amount = adjust_precision(offer_amount, greatest_precision, offer_precision)?;
+    let offer_amount_including_fee: Uint128 = (Uint256::from(offer_amount) * inv_one_minus_commission).try_into()?;
+    let fee = offer_amount_including_fee - offer_amount;
+
+    let offer_amount_with_precision = adjust_precision(offer_amount_including_fee, greatest_precision, offer_precision)?;
+    let fee_with_precision = adjust_precision(fee, greatest_precision, offer_precision)?;
 
     // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
     let spread_amount =
-        offer_amount.saturating_sub(before_commission.to_uint128_with_precision(ask_precision)?);
+        offer_amount.saturating_sub(ask_asset.amount);
 
-    let commission_amount = commission_rate_decimals
-        .checked_mul_uint128(before_commission.to_uint128_with_precision(ask_precision)?)?;
-
-    Ok((offer_amount, spread_amount, commission_amount))
+    Ok((offer_amount_with_precision, spread_amount, fee_with_precision))
 }
 
 // --------x--------x--------x--------x--------x--------x--------

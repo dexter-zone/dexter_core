@@ -774,13 +774,22 @@ pub fn query_on_swap(
                 info: offer_asset_info.clone(),
                 amount,
             };
+            
+            // Calculate the commission fees
+            total_fee = calculate_underlying_fees(amount, config.fee_info.total_fee_bps);
+            let offer_amount_after_fee = amount.checked_sub(total_fee)?;
+
+            let offer_asset_after_fee = Asset {
+                info: offer_asset_info.clone(),
+                amount: offer_amount_after_fee,
+            }.to_decimal_asset(offer_precision)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
-                &offer_asset.to_decimal_asset(offer_precision)?,
+                &offer_asset_after_fee,
                 &offer_pool,
                 &ask_pool,
                 &pools,
@@ -794,12 +803,9 @@ pub fn query_on_swap(
                 }
             };
 
-            // Calculate the commission fees
-            total_fee = calculate_underlying_fees(calc_amount, config.fee_info.total_fee_bps);
-
             ask_asset = Asset {
                 info: ask_asset_info.clone(),
-                amount: calc_amount.checked_sub(total_fee)?, // Subtract fee from return amount
+                amount: calc_amount,
             };
         }
         SwapType::GiveOut {} => {
@@ -828,7 +834,7 @@ pub fn query_on_swap(
                     )))
                 }
             };
-
+            
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
                 amount: calc_amount,
@@ -851,8 +857,8 @@ pub fn query_on_swap(
     let spread_check = assert_max_spread(
         belief_price,
         max_spread,
-        offer_asset.amount,
-        ask_asset.amount + total_fee,
+        offer_asset.amount - total_fee,
+        ask_asset.amount,
         spread_amount,
     );
     if !spread_check.is_success() {
@@ -867,7 +873,7 @@ pub fn query_on_swap(
         },
         response: ResponseType::Success {},
         fee: Some(Asset {
-            info: ask_asset_info.clone(),
+            info: offer_asset_info.clone(),
             amount: total_fee,
         }),
     })

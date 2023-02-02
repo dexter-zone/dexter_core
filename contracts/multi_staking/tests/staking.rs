@@ -821,7 +821,6 @@ fn test_reward_schedule_creation_after_bonding() {
 
     let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
 
-    println!("1");
     // create a reward schedule
     create_reward_schedule(
         &mut app,
@@ -835,7 +834,6 @@ fn test_reward_schedule_creation_after_bonding() {
         1000_301_000,
         1000_602_000,
     ).unwrap();
-    println!("2");
 
     // mint some LP tokens to user
     mint_lp_tokens_to_addr(
@@ -874,7 +872,6 @@ fn test_reward_schedule_creation_after_bonding() {
         1000_601_500,
         1000_602_000,
     ).unwrap();
-    println!("3");
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_601_600);

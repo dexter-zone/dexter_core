@@ -1723,13 +1723,13 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
+        AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
         }
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
-        Uint128::from(36u128)
+        Uint128::from(30u128)
     );
 
     // SwapType::GiveOut {},  XPRT --> Token0
@@ -1774,17 +1774,15 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(849u128)
+        Uint128::from(848u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
-        AssetInfo::Token {
-            contract_addr: token_instance0.clone(),
-        }
+        AssetInfo::NativeToken { denom: "xprt".to_string() }
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
-        Uint128::from(30u128)
+        Uint128::from(25u128)
     );
 
     // ----- Execute GiveIn Swap----- //

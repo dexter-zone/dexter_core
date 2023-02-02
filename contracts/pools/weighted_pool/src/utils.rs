@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128};
+use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128, Uint256};
 use dexter::asset::{Asset, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{ResponseType};
@@ -94,12 +94,10 @@ pub(crate) fn compute_offer_amount(
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string())?;
-    let before_commission_deduction =
-        ask_asset_amount * Decimal::from_str(&inv_one_minus_commission.clone().to_string())?;
 
     // Ask pool balance after swap
     let pool_post_swap_out_balance =
-        Decimal::from_str(&ask_pool.amount.to_string())? - before_commission_deduction;
+        Decimal::from_str(&ask_pool.amount.to_string())? - ask_asset_amount;
 
     //         /**********************************************************************************************
     //         // inGivenOut                                                                                //
@@ -126,13 +124,10 @@ pub(crate) fn compute_offer_amount(
         token_precision,
     )?;
 
-    let before_commission_deduction = adjust_precision(
-        before_commission_deduction.atomics(),
-        before_commission_deduction.decimal_places() as u8,
-        token_precision,
-    )?;
+    let offer_amount_including_fee = (Uint256::from(real_offer) * inv_one_minus_commission).try_into()?;
+    let total_fee = offer_amount_including_fee - real_offer;
 
-    Ok((real_offer, Uint128::zero(), before_commission_deduction))
+    Ok((offer_amount_including_fee, Uint128::zero(), total_fee))
 }
 
 // --------x--------x--------x--------x--------x--------x--------

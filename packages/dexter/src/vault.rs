@@ -91,10 +91,6 @@ impl FeeInfo {
 
     // Returns the number of tokens charged as protocol fee
     pub fn calculate_total_fee_breakup(&self, total_fee: Uint128) -> Uint128 {
-        // println!(
-        //     "calculate_total_fee_breakup:: protocol_fee_percent = {}, dev_fee_percent = {}",
-        //     self.protocol_fee_percent, self.dev_fee_percent
-        // );
         let protocol_fee: Uint128 =
             total_fee * Decimal::from_ratio(self.protocol_fee_percent, Uint128::from(100u128));
 

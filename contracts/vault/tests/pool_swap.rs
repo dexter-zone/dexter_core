@@ -441,6 +441,10 @@ fn test_swap() {
             },
         )
         .unwrap();
+    let keeper_offer_token_balance: Uint128 = app
+        .wrap()
+        .query_balance("fee_collector".to_string(), denom1.to_string())
+        .unwrap().amount;
 
     // Execute Swap :: GiveOut Type
     // VAULT -::- Swap -::- Execution Function
@@ -515,8 +519,13 @@ fn test_swap() {
             },
         )
         .unwrap();
+    let new_keeper_offer_token_balance: Uint128 = app
+        .wrap()
+        .query_balance("fee_collector".to_string(), denom1.to_string())
+        .unwrap().amount;
+
     assert_eq!(
-        Uint128::from(256988040u128),
+        Uint128::from(252000000u128),
         vault_ask_token_balance.balance - new_vault_ask_token_balance.balance
     );
 
@@ -524,9 +533,15 @@ fn test_swap() {
         Uint128::from(252000000u128),
         new_user_ask_token_balance.balance - user_ask_token_balance.balance
     );
+
+    // Fee is not charged in ask token but in offer token
     assert_eq!(
-        Uint128::from(4988040u128),
+        Uint128::from(0u128),
         new_keeper_ask_token_balance.balance - keeper_ask_token_balance.balance
+    );
+    assert_eq!(
+        Uint128::from(5457256u128),
+        new_keeper_offer_token_balance - keeper_offer_token_balance
     );
 
     // VAULT -::- Swap -::- Execution Function
