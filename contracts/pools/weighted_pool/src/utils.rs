@@ -1,6 +1,8 @@
+use std::ops::Mul;
 use std::str::FromStr;
 
 use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128, Uint256};
+use dexter::DecimalCheckedOps;
 use dexter::asset::{Asset, DecimalAsset};
 use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
 use dexter::pool::{ResponseType};
@@ -9,6 +11,7 @@ use crate::error::ContractError;
 use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
 use crate::state::{get_precision, get_weight, Twap, WeightedAsset};
 use dexter::vault::FEE_PRECISION;
+
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
@@ -48,6 +51,15 @@ pub(crate) fn compute_swap(
     //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
+
+    println!("here in swap");
+    // print all the function params in one statement
+    println!(
+        "offer_asset: {:?}, offer_pool: {:?}, offer_weight: {:?}, ask_pool: {:?}, ask_weight: {:?}",
+        offer_asset, offer_pool, offer_weight, ask_pool, ask_weight
+    );
+
+    
     let return_amount = solve_constant_function_invariant(
         Decimal::from_str(&offer_pool.amount.to_string())?,
         Decimal::from_str(&pool_post_swap_in_balance.to_string())?,
@@ -110,6 +122,14 @@ pub(crate) fn compute_offer_amount(
     //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
+    println!("here");
+    // print all function params
+    println!(
+        "ask_pool.amount: {}, pool_post_swap_out_balance: {}, ask_weight: {}, offer_pool.amount: {}, offer_weight: {}",
+        ask_pool.amount, pool_post_swap_out_balance, ask_weight, offer_pool.amount, offer_weight
+    );
+
+
     let real_offer = solve_constant_function_invariant(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         pool_post_swap_out_balance,
@@ -149,6 +169,8 @@ pub fn accumulate_prices(
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
+    println!("accumulate_prices");
+
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
     if block_time <= twap.block_time_last {
@@ -207,9 +229,15 @@ pub fn maximal_exact_ratio_join(
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
-    let mut min_share = Decimal::one();
+    // This value is calculated according to 18 decimal precision for LP Token.
+    // It should be changed if the precision of LP Token is changed to a different value.
+    let mut min_share = Decimal::new(Uint128::from(1_000_000_000_000_000_000_000_000_000_000_000_000u128));
+    println!("min share raw: {}", min_share);
+
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
+
+    println!("total share {}", total_share);
 
     for (asset_in, weighted_pool_in) in act_assets_in
         .clone()
@@ -221,10 +249,24 @@ pub fn maximal_exact_ratio_join(
         }
         // denom will never be 0 as long as total_share > 0
         let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
+
+        println!("\n\n------ ");
+
+        println!("asset_in: {:?}", act_assets_in);
+        println!("weighted_pool_in: {:?}", weighted_pool_in);
+        println!("share ratio: {}", share_ratio);
+
+        println!("------\n\n");
+
         min_share = min_share.min(share_ratio);
         max_share = max_share.max(share_ratio);
         asset_shares.push(share_ratio);
     }
+
+    // Min and max shares
+    println!("min_share: {}", min_share);
+    println!("max_share: {}", max_share);
+    
 
     let new_shares = min_share * total_share;
     let mut rem_assets = vec![];
@@ -271,6 +313,13 @@ pub fn calc_single_asset_join(
     total_shares: Uint128,
 ) -> StdResult<(Uint128, Uint128)> {
     let in_precision = get_precision(deps.storage, &asset_in.info)?;
+
+    println!("calc_single_asset_join: asset_in: {:?}", asset_in);
+    // print all params
+    println!(
+        "calc_single_asset_join: total_fee_bps: {:?}, pool_asset_weighted: {:?}, total_shares: {:?}",
+        total_fee_bps, pool_asset_weighted, total_shares
+    );
 
     // Asset weights already normalized
     calc_minted_shares_given_single_asset_in(

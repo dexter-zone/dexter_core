@@ -442,8 +442,13 @@ pub fn query_on_join_pool(
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
 
+    println!("Pool assets weighted: {:?}", pool_assets_weighted);
+
     // Vector which will store fee charged info
     let mut fee_vec: Vec<Asset> = vec![];
+
+    // Print act assets
+    println!("act_assets_in: {:?}", act_assets_in);
 
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
@@ -531,6 +536,11 @@ pub fn query_on_join_pool(
         } else {
             maximal_exact_ratio_join(act_assets_in.clone(), &pool_assets_weighted, total_share)?
         };
+
+    
+    println!("\n num_shares: {:?}", num_shares);
+    println!("remaining_tokens_in: {:?} \n", remaining_tokens_in);
+
 
     if !err.is_success() {
         return Ok(return_join_failure(err.to_string()));

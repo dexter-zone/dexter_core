@@ -890,7 +890,7 @@ fn test_join_pool() {
         .unwrap();
 
     assert_eq!(
-        Uint128::from(17662854u128),
+        Uint128::from(17662855075318413770u128),
         new_user_lp_balance.balance - cur_user_lp_balance.balance
     );
 
@@ -1079,7 +1079,7 @@ fn test_join_auto_stake() {
         )
         .unwrap();
 
-    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
+    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000_000_000_000_000u128));
 
     // setup multistaking contract
     let multistaking_contract_address = initialize_multistaking_contract(
@@ -1155,7 +1155,7 @@ fn test_join_auto_stake() {
         )
         .unwrap();
 
-    assert_eq!(bonded_amount, Uint128::from(100_000_000u128));
+    assert_eq!(bonded_amount, Uint128::from(100_000_000_000_000_000_000u128));
 
     // Check user LP balance is still same
     let new_user_lp_balance: BalanceResponse = app
@@ -1169,5 +1169,5 @@ fn test_join_auto_stake() {
         .unwrap();
 
     // This means auto-stake didn't make any changes to user's LP balance but staked it in multistaking
-    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000u128));
+    assert_eq!(new_user_lp_balance.balance, Uint128::from(100_000_000_000_000_000_000u128));
 }

@@ -30,6 +30,10 @@ pub fn solve_constant_function_invariant(
         .checked_div(token_balance_fixed_after)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
 
+    println!("Balance before: {}", token_balance_fixed_before);
+    println!("Balance after: {}", token_balance_fixed_after);
+    println!("y: {}", y);
+
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
 
@@ -53,6 +57,15 @@ pub fn calc_minted_shares_given_single_asset_in(
     total_shares: Uint128,
     swap_fee_rate: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
+
+    println!("here in single asset in");
+    // print all the function params in single statement
+    println!(
+        "token_amount_in: {}, in_precision: {}, asset_weight_and_balance: {:?}, total_shares: {}, swap_fee_rate: {}",
+        token_amount_in, in_precision, asset_weight_and_balance, total_shares, swap_fee_rate
+    );
+
+
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
     // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
