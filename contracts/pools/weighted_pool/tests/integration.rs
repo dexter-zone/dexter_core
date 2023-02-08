@@ -1165,8 +1165,6 @@ fn test_query_on_join_pool() {
         },
     ];
 
-    println!("\n\n\n\n ------------------------------------- \n\n\n Case 2 \n\n\n\n");
-
     // We will join the pool with all assets =
     // here, we first execute -maximal_exact_ratio_join()
     // contract1 - provided assets = 63770.000000, pool liquidity = 59719.000000 || share ratio: 1.06783435757464123
@@ -1613,9 +1611,6 @@ fn test_swap() {
         },
     ];
 
-
-    println!("\n-------------------------\n\nJOIN POOL \n\n");
-
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
@@ -1680,8 +1675,6 @@ fn test_swap() {
         swap_offer_asset_res.response,
         ResponseType::Failure("Error during pool selection: Source and target assets are the same".to_string())
     );
-
-    println!("\n-------------------\n\n\nACTUAL SWAP \n\n\n");
 
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
@@ -1784,8 +1777,6 @@ fn test_swap() {
     // ask_asset : 1000contract1 amount: 1000
     // offer_asset:xprt , amount_in : 848 || ask_asset:contract1 , amount_out = 1000
     // total_fee : 25 xprt
-
-    println!("\n\n\n------------------------\n\nSWAP 2\n\n\n\n");
 
     let swap_offer_asset_res: SwapResponse = app
         .wrap()

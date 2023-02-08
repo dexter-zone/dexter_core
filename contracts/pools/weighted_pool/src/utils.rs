@@ -49,16 +49,6 @@ pub(crate) fn compute_swap(
     //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
-
-
-    println!("here in swap");
-    // print all the function params in one statement
-    println!(
-        "offer_asset: {:?}, offer_pool: {:?}, offer_weight: {:?}, ask_pool: {:?}, ask_weight: {:?}",
-        offer_asset, offer_pool, offer_weight, ask_pool, ask_weight
-    );
-
-    println!("post swap in balance: {:?}", pool_post_swap_in_balance);
     
     let return_amount = solve_constant_function_invariant(
         Decimal::from_str(&offer_pool.amount.to_string())?,
@@ -74,8 +64,6 @@ pub(crate) fn compute_swap(
         return_amount.decimal_places() as u8,
         token_precision,
     )?;
-
-    println!("precision adjusted return amount: {:?}", return_amount);
 
     // difference in return amount compared to "ideal" swap.
     Ok((return_amount, Uint128::zero()))
@@ -100,14 +88,6 @@ pub(crate) fn compute_offer_amount(
     offer_weight: Decimal,
     commission_rate: u16,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
-
-    // print all the function params in one statement
-    println!("computing offer amount");
-    println!(
-        "ask_asset: {:?}, ask_pool: {:?}, ask_weight: {:?}, offer_pool: {:?}, offer_weight: {:?}, commission_rate: {:?}",
-        ask_asset, ask_pool, ask_weight, offer_pool, offer_weight, commission_rate
-    );
-
 
     // get ask asset precisison
     let token_precision = get_precision(storage, &offer_pool.info)?;
@@ -151,10 +131,6 @@ pub(crate) fn compute_offer_amount(
     let offer_amount_including_fee = (Uint256::from(real_offer) * inv_one_minus_commission).try_into()?;
     let total_fee = offer_amount_including_fee - real_offer;
 
-    println!("offer amount including fee: {:?}", offer_amount_including_fee);
-    println!("total fee: {:?}", total_fee);
-    println!("offer amount: {:?}", real_offer);
-
     Ok((offer_amount_including_fee, Uint128::zero(), total_fee))
 }
 
@@ -177,8 +153,6 @@ pub fn accumulate_prices(
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
-    println!("\n\n accumulate_prices start \n\n");
-
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
     if block_time <= twap.block_time_last {
@@ -216,7 +190,6 @@ pub fn accumulate_prices(
 
     // Update last block time.
     twap.block_time_last = block_time;
-    println!("\n accumulate_prices end\n\n");
     Ok(())
 }
 
@@ -244,9 +217,6 @@ pub fn maximal_exact_ratio_join(
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
 
-    println!("pool assets weighted: {:?}", pool_assets_weighted);
-    println!("act assets in: {:?}", act_assets_in);
-
     for (asset_in, weighted_pool_in) in act_assets_in
         .clone()
         .into_iter()
@@ -258,23 +228,10 @@ pub fn maximal_exact_ratio_join(
         // denom will never be 0 as long as total_share > 0
         let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
 
-        println!("\n\n------ ");
-
-        println!("asset_in: {:?}", act_assets_in);
-        println!("weighted_pool_in: {:?}", weighted_pool_in);
-        println!("share ratio: {}", share_ratio);
-
-        println!("------\n\n");
-
         min_share = min_share.min(share_ratio);
         max_share = max_share.max(share_ratio);
         asset_shares.push(share_ratio);
-    }
-
-    // Min and max shares
-    println!("min_share: {}", min_share);
-    println!("max_share: {}", max_share);
-    
+    }    
 
     let new_shares = min_share * total_share;
     let mut rem_assets = vec![];
@@ -297,9 +254,6 @@ pub fn maximal_exact_ratio_join(
             // account for unused amounts
             let used_amount = min_share * weighted_pool_in.asset.amount;
             let new_amount = asset_in.amount - used_amount;
-
-            println!("Old amount: {}", weighted_pool_in.asset.amount);
-            println!("min share: {}, asset: {}, used_amount: {}, new_amount: {}", min_share, asset_in.info, used_amount, new_amount);
 
             // if coinShareRatios[i] == minShareRatio, no remainder
             if !new_amount.is_zero() {
