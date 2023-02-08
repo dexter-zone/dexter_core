@@ -10,6 +10,7 @@ use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_funct
 use crate::state::{get_precision, get_weight, Twap, WeightedAsset};
 use dexter::vault::FEE_PRECISION;
 
+
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
 // --------x--------x SWAP :: Offer and Ask amount computations  x--------x---------
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -48,6 +49,7 @@ pub(crate) fn compute_swap(
     //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
+    
     let return_amount = solve_constant_function_invariant(
         Decimal::from_str(&offer_pool.amount.to_string())?,
         Decimal::from_str(&pool_post_swap_in_balance.to_string())?,
@@ -86,6 +88,7 @@ pub(crate) fn compute_offer_amount(
     offer_weight: Decimal,
     commission_rate: u16,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
+
     // get ask asset precisison
     let token_precision = get_precision(storage, &offer_pool.info)?;
 
@@ -110,13 +113,14 @@ pub(crate) fn compute_offer_amount(
     //         **********************************************************************************************/
     // deduct swapfee on the tokensIn
     // delta balanceOut is positive(tokens inside the pool decreases)
+
     let real_offer = solve_constant_function_invariant(
         Decimal::from_str(&ask_pool.amount.to_string())?,
         pool_post_swap_out_balance,
         ask_weight,
         Decimal::from_str(&offer_pool.amount.to_string())?,
         offer_weight,
-    )?;
+    )?; 
     // adjust return amount to correct precision
     let real_offer = adjust_precision(
         real_offer.atomics(),
@@ -207,7 +211,7 @@ pub fn maximal_exact_ratio_join(
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
-    let mut min_share = Decimal::one();
+    let mut min_share = Decimal::MAX;
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
 
@@ -221,10 +225,11 @@ pub fn maximal_exact_ratio_join(
         }
         // denom will never be 0 as long as total_share > 0
         let share_ratio = Decimal::from_ratio(asset_in.amount, weighted_pool_in.asset.amount);
+
         min_share = min_share.min(share_ratio);
         max_share = max_share.max(share_ratio);
         asset_shares.push(share_ratio);
-    }
+    }    
 
     let new_shares = min_share * total_share;
     let mut rem_assets = vec![];

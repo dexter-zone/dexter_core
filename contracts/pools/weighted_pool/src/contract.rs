@@ -388,6 +388,7 @@ pub fn query_on_join_pool(
     _mint_amount: Option<Uint128>,
     _slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
+
     // Note - We follow the same logic as implemented by Osmosis here - https://github.com/osmosis-labs/osmosis/blob/2ce796c81664f9e983fb2a8a943818831deddfe2/x/gamm/pool-models/balancer/pool.go#L692
     // ------------------------------------------------------------
     // 1) Get pool current liquidity + and token weights
@@ -441,7 +442,6 @@ pub fn query_on_join_pool(
             })
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
-
     // Vector which will store fee charged info
     let mut fee_vec: Vec<Asset> = vec![];
 

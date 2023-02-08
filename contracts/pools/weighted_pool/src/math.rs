@@ -32,7 +32,6 @@ pub fn solve_constant_function_invariant(
 
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
-
     // Decimal is an unsigned so always return abs value
     let paranthetical = if y_to_weight_ratio <= Decimal::one() {
         Decimal::one().checked_sub(y_to_weight_ratio)?
@@ -76,13 +75,13 @@ pub fn calc_minted_shares_given_single_asset_in(
         balance_decimal + in_decimal,
         balance_decimal,
         asset_weight_and_balance.weight,
-        Decimal::from_atomics(total_shares, 6).unwrap(),
+        Decimal::from_atomics(total_shares, Decimal::DECIMAL_PLACES).unwrap(),
         Decimal::one(),
     )?;
     let pool_amount_out_adj = adjust_precision(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
-        6.into(),
+        Decimal::DECIMAL_PLACES as u8,
     )?;
 
     return Ok((pool_amount_out_adj, fee_charged));

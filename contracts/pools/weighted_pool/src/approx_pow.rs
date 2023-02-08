@@ -37,7 +37,7 @@ pub fn calculate_pow(
     // Since computing an integer power is easy, we split up the exponent into
     // an integer component and a fractional component.
     let integer = exp.atomics() / DECIMAL_FRACTIONAL;
-    let fractional = Decimal::from_atomics(exp.atomics() % DECIMAL_FRACTIONAL, 18)
+    let fractional = Decimal::from_atomics(exp.atomics() % DECIMAL_FRACTIONAL, Decimal::DECIMAL_PLACES)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
     let integer_pow = base.checked_pow(integer.u128() as u32)?;
 
