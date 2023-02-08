@@ -148,34 +148,6 @@
         "description": "This enum describes the key for the different Pool types supported by Dexter",
         "oneOf": [
           {
-            "description": "XYK pool type",
-            "type": "object",
-            "required": [
-              "xyk"
-            ],
-            "properties": {
-              "xyk": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Stable pool type",
-            "type": "object",
-            "required": [
-              "stable2_pool"
-            ],
-            "properties": {
-              "stable2_pool": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "Stable pool type",
             "type": "object",
             "required": [
@@ -947,34 +919,6 @@
         "PoolType": {
           "description": "This enum describes the key for the different Pool types supported by Dexter",
           "oneOf": [
-            {
-              "description": "XYK pool type",
-              "type": "object",
-              "required": [
-                "xyk"
-              ],
-              "properties": {
-                "xyk": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "Stable pool type",
-              "type": "object",
-              "required": [
-                "stable2_pool"
-              ],
-              "properties": {
-                "stable2_pool": {
-                  "type": "object",
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
             {
               "description": "Stable pool type",
               "type": "object",
