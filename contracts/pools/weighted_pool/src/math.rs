@@ -75,13 +75,13 @@ pub fn calc_minted_shares_given_single_asset_in(
         balance_decimal + in_decimal,
         balance_decimal,
         asset_weight_and_balance.weight,
-        Decimal::from_atomics(total_shares, 18).unwrap(),
+        Decimal::from_atomics(total_shares, Decimal::DECIMAL_PLACES).unwrap(),
         Decimal::one(),
     )?;
     let pool_amount_out_adj = adjust_precision(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
-        18.into(),
+        Decimal::DECIMAL_PLACES as u8,
     )?;
 
     return Ok((pool_amount_out_adj, fee_charged));

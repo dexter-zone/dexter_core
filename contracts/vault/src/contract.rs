@@ -847,7 +847,7 @@ pub fn execute_create_pool_instance(
             msg: to_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,
-                decimals: 18,
+                decimals: Decimal::DECIMAL_PLACES as u8,
                 initial_balances: vec![],
                 mint: Some(MinterResponse {
                     minter: env.contract.address.clone().to_string(),

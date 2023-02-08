@@ -65,7 +65,8 @@ pub fn instantiate(
 
     // store precisions for assets in storage
     let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
-    if greatest_precision > 18 {
+    // We cannot have precision greater than what is supported by Decimal type
+    if greatest_precision > (Decimal::DECIMAL_PLACES as u8) {
         return Err(ContractError::InvalidGreatestPrecision);
     }
 

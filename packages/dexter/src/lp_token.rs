@@ -1,6 +1,6 @@
 use crate::helper::{is_valid_name, is_valid_symbol};
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{StdError, StdResult, Uint128};
+use cosmwasm_std::{StdError, StdResult, Uint128, Decimal};
 use cw20::{Cw20Coin, Logo, MinterResponse};
 
 /// ## Description -  This structure describes the basic settings for creating a token contract.
@@ -48,8 +48,8 @@ impl InstantiateMsg {
                 "Ticker symbol is not in expected format [a-zA-Z\\-]{3,12}",
             ));
         }
-        if self.decimals > 18 {
-            return Err(StdError::generic_err("Decimals must not exceed 18"));
+        if self.decimals > (Decimal::DECIMAL_PLACES as u8) {
+            return Err(StdError::generic_err("Decimals must not exceed max allowed by the Decimal library i.e. 18"));
         }
         Ok(())
     }

@@ -211,9 +211,7 @@ pub fn maximal_exact_ratio_join(
     pool_assets_weighted: &Vec<WeightedAsset>,
     total_share: Uint128,
 ) -> StdResult<(Uint128, Vec<Asset>, ResponseType)> {
-    // This value is calculated according to 18 decimal precision for LP Token.
-    // It should be changed if the precision of LP Token is changed to a different value.
-    let mut min_share = Decimal::new(Uint128::from(1_000_000_000_000_000_000_000_000_000_000_000_000u128));
+    let mut min_share = Decimal::MAX;
     let mut max_share = Decimal::zero();
     let mut asset_shares = vec![];
 
