@@ -606,6 +606,10 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(Uint128::from(28774_000000u128), vault_bal_res.balance);
 
+    // validate vault xprt balance
+    let vault_bal_res = app.wrap().query_balance(vault_instance.clone().to_string(), "xprt");
+    assert_eq!(vault_bal_res.unwrap().amount, Uint128::new(46743_000000u128));
+
     let vault_pool_config_res: PoolInfoResponse = app
         .wrap()
         .query_wasm_smart(
@@ -654,6 +658,7 @@ fn test_query_on_join_pool() {
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
     assert_eq!(Uint128::from(100_000_000_000_000_000_000u128), pool_twap_res.total_share);
+    // TODO: verify twap rates
     assert_eq!(
         vec![
             AssetExchangeRate {
@@ -890,6 +895,37 @@ fn test_query_on_join_pool() {
     )
     .unwrap();
 
+    // Fetch current pool info
+    let pool_info: PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(vault_instance.clone(), &VaultQueryMsg::GetPoolById { pool_id: Uint128::from(1u64) })
+        .unwrap();
+
+    // Validate the pool balances post liquidity addition
+    assert_eq!(
+        vec![
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(56_742_000_000u128),
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token_instance1.clone(),
+                },
+                amount: Uint128::from(54_221_391_872u128),
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                amount: Uint128::from(49_286_849_472u128),
+            },
+        ],
+        pool_info.assets
+    );
+
     //// -----x----- Check #3 :: Success ::: Multi Asset Join Check -----x----- ////
     app.update_block(|b| {
         b.height += 17280;
@@ -918,40 +954,40 @@ fn test_query_on_join_pool() {
 
     // We will join the pool with all assets = 2977, 3177, 3477 tokens,
     // here, we first execute -maximal_exact_ratio_join()
-    // contract1 - provided assets = 2977, pool liquidity = 56742 || share ratio: 0.52465545803813753
-    // contract2 - provided assets = 3177, pool liquidity = 54548 || share ratio: 0.58242282026838747
-    // xprt - provided assets = 3477, pool liquidity = 49320 || share ratio: 0.070498783454987834
-    // ==> Number of shares to be minted = 6.614111
-    // "contract2"  used_amount: 2861.890592 new_amount: 315.109408
-    // "xprt"  used_amount: 2587.600719 new_amount: 889.399281
+    // contract1 - provided assets = 2977.000000, pool liquidity = 56742.000000 || share ratio: 0.052465545803813753
+    // contract2 - provided assets = 3177.000000, pool liquidity = 54221.391872 || share ratio: 0.058593110400041336
+    // xprt - provided assets = 3477.000000, pool liquidity = 49286.849472 || share ratio: 0.070546201212867006
+    // ==> Number of shares to be minted = 6.614111603288115245 (Precision 18)
+    // "contract2"  used_amount: 2844.754918 new_amount: 332.245082
+    // "xprt"  used_amount: 2585.861458 new_amount: 891.138542
     // ------------------------------------------------------------
     // For remaining assets, we execute -calc_single_asset_join()
-    // ------ contract2 - remaining assets = 315.109408 | pool balance = 57409.890592 (34%)
-    // token_amount_in_after_fee: 308.870241 , fee_ratio :0.980200000000000000
+    // ------ contract2 - remaining assets = 332.245082 | pool balance = 57066.146790 (34%)
+    // token_amount_in_after_fee: 325.666629 , fee_ratio :0.980200000000000000
     // weight_ratio = (weightX/weightY): 0.34
-    // y = balanceXBefore/balanceXAfter : 1.005380087608859521
-    // Calculated pow for 1.005434450187780727^0.34: 1.001825991787810573
-    // y_to_weight_ratio: 1.001844409397619078
-    // paranthetical: 0.001825991787810573
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.242272446153355588
-    // number of shares to mint for remaining assets of contract2 = 0.242272
-    // ------- xprt - remaining assets = 889.399281 | pool balance = 51907.600719 (33%)
-    // token_amount_in_after_fee: 871.522355 , fee_ratio :0.979900000000000000
+    // y = balanceXBefore/balanceXAfter : 1.005706827030015425
+    // Calculated pow for 1.005706827030015425^0.34: 1.001936678569752017
+    // y_to_weight_ratio: 1.001936678569752017
+    // paranthetical: 0.001936678569752017
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.256958363553229642
+    // number of shares to mint for remaining assets of contract2 = 0.256958363553229642
+    // ------- xprt - remaining assets = 891.138542 | pool balance = 51872.710930 (33%)
+    // token_amount_in_after_fee: 873.226657 , fee_ratio :0.979900000000000000
     // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.017670769566098945
-    // Calculated pow for 1.016789879380439024^0.33: 1.005509784151347131
+    // y = balanceXBefore/balanceXAfter : 1.0168340277834791
+    // Calculated pow for 1.0168340277834791^0.33: 1.005524191288544062
     // y_to_weight_ratio: 1.005509784151347131
-    // paranthetical: 0.005509784151347131
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.732372592353704556
-    //  number of shares to mint for remaining assets of xprt : 0.732372
+    // paranthetical: 0.005524191288544062
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.734368762076787510
+    //  number of shares to mint for remaining assets of xprt : 0.734368762076787510
     //-------------------------------------------------------------
     // Num Shares (Multi asset join) to be minted = 6.614111 + 0.242272 + 0.732372 = 7.588755
     // JoinPool-QueryResponse - Tokens to provide : 2977000000 contract1
     // JoinPool-QueryResponse - Tokens to provide : 3177000000 contract2
     // JoinPool-QueryResponse - Tokens to provide : 3477000000 xprt
-    // JoinPool-QueryResponse New shares to be minted : 7.588755
+    // JoinPool-QueryResponse New shares to be minted : 7.605438728918132397
     // JoinPool-QueryResponse Response : success
-    // JoinPool-QueryResponse Fee : None
+    // JoinPool-QueryResponse Fee : Token0: 6578453u128 xprt: 17911885u128
 
     // Check Query Response
     let join_pool_query_res: AfterJoinResponse = app
@@ -1008,6 +1044,8 @@ fn test_query_on_join_pool() {
         ],
         join_pool_query_res.provided_assets
     );
+
+
 
     // Execute function -::- Provide single asset join liquidity
     // Execute AddLiquidity via the Vault contract
@@ -1100,6 +1138,7 @@ fn test_query_on_join_pool() {
         pool_twap_res.exchange_infos
     );
 
+
     //// -----x----- Check #4 :: Success ::: Multi Asset Join Check -----x----- ////
     app.update_block(|b| {
         b.height += 17280;
@@ -1126,47 +1165,42 @@ fn test_query_on_join_pool() {
         },
     ];
 
+    println!("\n\n\n\n ------------------------------------- \n\n\n Case 2 \n\n\n\n");
+
     // We will join the pool with all assets =
     // here, we first execute -maximal_exact_ratio_join()
-    // contract1 - provided assets = 63770, pool liquidity = 59719 || share ratio: 1.067834357574641236
-    // contract2 - provided assets = 63770, pool liquidity = 57725 || share ratio: 1.104720658293633607
-    // xprt - provided assets = 54670, pool liquidity = 52797 || share ratio: 1.035475500501922457
-    // ==> Number of shares to be minted = 133.654565
-    // "contract1"  used_amount: 59719 new_amount: 4051
-    // "contract2"  used_amount: 57725 new_amount: 6045
-    // "xprt"  used_amount: 52797 new_amount: 1873
+    // contract1 - provided assets = 63770.000000, pool liquidity = 59719.000000 || share ratio: 1.06783435757464123
+    // contract2 - provided assets = 63770.0000000, pool liquidity = 57394.181663 || share ratio: 1.111088234944035532
+    // xprt - provided assets = 54670.000000, pool liquidity = 52752.385866 || share ratio: 1.036351230423417528
+    // ==> Number of shares to be minted = 138.530364562826429567
+    // "contract1"  used_amount: 61889.859129 new_amount: 1880.140871
+    // "contract2"  used_amount: 59480.530785 new_amount: 4289.469215
+    // "xprt"  used_amount: 54670.000000 new_amount: 0
     // ------------------------------------------------------------
     // For remaining assets, we execute -calc_single_asset_join()
-    // ------ contract1 - remaining assets = 4051 | pool balance = 119438 (33%)
-    // token_amount_in_after_fee: 3969.574900 , fee_ratio : 0.979900000000000000
+    // ------ contract1 - remaining assets = 1880.140871 | pool balance = 121608.859129 (33%)
+    // token_amount_in_after_fee: 1842.350039 , fee_ratio : 0.979900000000000000
+    // fee charged: 37.790832
     // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.033235443493695473
-    // Calculated pow for 1.033235443493695473^0.33: 1.010847793730373128
-    // y_to_weight_ratio: 1.010847793730373128
-    // paranthetical: 0.010847793730373128
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 2.899714304485495421
-    // number of shares to mint for remaining assets of contract2 = 2.899714
-    // ------ contract2 - remaining assets = 6045 | pool balance = 11545 (34%)
-    // token_amount_in_after_fee: 5925.309000 , fee_ratio : 0.980200000000000000
+    // y = balanceXBefore/balanceXAfter : 1.004974273163847065
+    // Calculated pow for 1.004974273163847065^0.33: 1.004974273163847065
+    // y_to_weight_ratio: 1.004974273163847065
+    // paranthetical: 0.004974273163847065
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 1.354005187210511381
+    // number of shares to mint for remaining assets of contract2 = 1.354005187210511381
+    // ------ contract2 - remaining assets = 4289.469215 | pool balance = 116874.712448 (34%)
+    // token_amount_in_after_fee: 4204.537724 , fee_ratio : 0.980200000000000000
+    // fee charged: 84.931491
     // weight_ratio = (weightX/weightY): 0.34
-    // y = balanceXBefore/balanceXAfter : 1.051323594629709831
-    // Calculated pow for 1.051323594629709831^0.34: 1.017162592012389691
-    // y_to_weight_ratio: 1.017162592012389691
-    // paranthetical: 0.017162592012389691
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 4.637484147711452082
-    // pool_amount_out: Decimal(Uint128(4637484147711452082)) , pool_amount_out_adj : 4.637484
-    // number of shares to mint for remaining assets of contract2 = 4.637484
-    // ------- xprt - remaining assets = 1873 | pool balance = 105594 (33%)
-    // token_amount_in_after_fee: 1835.352700 , fee_ratio :0.979900000000000000
-    // weight_ratio = (weightX/weightY): 0.33
-    // y = balanceXBefore/balanceXAfter : 1.017381221470916908
-    // Calculated pow for 1.017381221470916908^0.33: 1.005702724566022314
-    // y_to_weight_ratio: 1.005702724566022314
-    // paranthetical: 0.005702724566022314
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 1.567372906566626568
-    //  number of shares to mint for remaining assets of xprt :1.567372
+    // y = balanceXBefore/balanceXAfter : 1.03597474283302033
+    // Calculated pow for 1.051323594629709831^0.34: 1.012089028498860541
+    // y_to_weight_ratio: 1.012089028498860541
+    // paranthetical: 1.012089028498860541
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 3.307021684967449713
+    // number of shares to mint for remaining assets of contract2 = 1.354005187210511381
+    
     //-------------------------------------------------------------
-    // Num Shares (Multi asset join) to be minted = 6.614111 + 0.242272 + 0.732372 = 7.588755
+    // Num Shares (Multi asset join) to be minted = 138.530364562826429567 + 1.354005187210511381 + 1.354005187210511381 = 143.191391435004390661
     // JoinPool-QueryResponse - Tokens to provide : 63770000000 contract1
     // JoinPool-QueryResponse - Tokens to provide : 63770000000 contract2
     // JoinPool-QueryResponse - Tokens to provide : 54670000000 xprt
@@ -1579,6 +1613,9 @@ fn test_swap() {
         },
     ];
 
+
+    println!("\n-------------------------\n\nJOIN POOL \n\n");
+
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
@@ -1644,6 +1681,8 @@ fn test_swap() {
         ResponseType::Failure("Error during pool selection: Source and target assets are the same".to_string())
     );
 
+    println!("\n-------------------\n\n\nACTUAL SWAP \n\n\n");
+
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1675,19 +1714,20 @@ fn test_swap() {
     // offer_weight : 0.33 ask_weight : 0.33
     // ---------- SwapType::GiveIn
     // offer_asset : 1000xprt || amount = 1000
-    // pool_post_swap_in_balance: 46743.001
+    // offer asset after fee: 970xprt || amount = 970
+    // fee: 30xprt || amount = 30
+    // pool_post_swap_in_balance: 46743.00097
     // weight_ratio = (weightX/weightY): 1
-    // y = balanceXBefore/balanceXAfter : 0.999999978606422809
-    // y_to_weight_ratio: 0.999999978606422809
-    // paranthetical: 0.000000021393577191
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.001213914356971722
-    // return_amount: 0.001213914356971722
-    // return_amount (adjusted to correct precision): 1213
-    // calc_amount : 1213 || spread_amount = 0
-    // total_fee : 36
+    // y = balanceXBefore/balanceXAfter : 0.999999979248230112
+    // y_to_weight_ratio: 0.999999979248230112
+    // paranthetical: 0.000000020751769888
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.001177496926984896
+    // return_amount: 0.001177496926984896
+    // return_amount (adjusted to correct precision): 1177
+    // calc_amount : 1177 || spread_amount = 0
     // ask_asset : 1177, contract1 amount: 1177
     // offer_asset:xprt , amount_in : 1000 || ask_asset:contract1 , amount_out = 1177
-    // total_fee : 36 contract1
+    // total_fee : 30xprt 
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
@@ -1728,21 +1768,25 @@ fn test_swap() {
 
     // SwapType::GiveOut {},  XPRT --> Token0
     // offer_asset_info : xprt  ask_asset_info : contract1  amount : 1000
-    // offer_pool : xprt 46743
-    // ask_pool : contract1 56742
+    // offer_pool : xprt 46743.000000
+    // ask_pool : contract1 56742.000000
     // offer_weight : 0.33 ask_weight : 0.33
     // ---------- SwapType::GiveOut
-    // ask_asset : contract1 || amount = 1000
+    // ask_asset : contract1 || amount = 1000 (0.001000)
     // weight_ratio = (weightX/weightY): 1
-    // y = balanceXBefore/balanceXAfter : 1.000000018168690807
-    // y_to_weight_ratio: 1.000000018168690807
-    // paranthetical: 0.000000018168690807
-    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.000849259114391601
-    // calc_amount : "849" || spread_amount = "0" before_commission_deduction:"1030"
-    // total_fee : 30
+    // y = balanceXBefore/balanceXAfter : 1.000000017623630073
+    // y_to_weight_ratio: 1.000000017623630073
+    // paranthetical: 0.000000017623630073
+    // amount_y = (balanceY * (1 - (y ^ weight_ratio))): 0.000823781340502239
+    // calc_amount : "848" || spread_amount = "0"
+    // total_fee : 25
+    // offer amount excluding fee: 823
     // ask_asset : 1000contract1 amount: 1000
-    // offer_asset:xprt , amount_in : 849 || ask_asset:contract1 , amount_out = 1000
-    // total_fee : 30 contract1
+    // offer_asset:xprt , amount_in : 848 || ask_asset:contract1 , amount_out = 1000
+    // total_fee : 25 xprt
+
+    println!("\n\n\n------------------------\n\nSWAP 2\n\n\n\n");
+
     let swap_offer_asset_res: SwapResponse = app
         .wrap()
         .query_wasm_smart(
@@ -2033,19 +2077,6 @@ fn test_join_pool_large_liquidity() {
             amount: Uint128::new(1000_000000u128),
         }],
     ).unwrap();
-
-    // Print current pool liquidity
-    let pool_info: PoolInfo = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &VaultQueryMsg::GetPoolById {
-                pool_id: Uint128::from(1u128),
-            },
-        )
-        .unwrap();
-
-    println!("Pool info: {:?}", pool_info);
 
     let assets_msg_large = vec![
         Asset {

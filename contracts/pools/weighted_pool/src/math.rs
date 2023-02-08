@@ -25,17 +25,18 @@ pub fn solve_constant_function_invariant(
         .checked_div(token_weight_unknown)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
 
+    println!("weight ratio: {}", weight_ratio);
+
     // y = balanceXBefore/balanceXAfter
     let y = token_balance_fixed_before
         .checked_div(token_balance_fixed_after)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
 
-    println!("Balance before: {}", token_balance_fixed_before);
-    println!("Balance after: {}", token_balance_fixed_after);
     println!("y: {}", y);
 
     // amount_y = balanceY * (1 - (y ^ weight_ratio))
     let y_to_weight_ratio = calculate_pow(y, weight_ratio, None)?;
+    println!("y to weight ratio: {}", y_to_weight_ratio);
 
     // Decimal is an unsigned so always return abs value
     let paranthetical = if y_to_weight_ratio <= Decimal::one() {
@@ -44,7 +45,12 @@ pub fn solve_constant_function_invariant(
         y_to_weight_ratio.checked_sub(Decimal::one())?
     };
 
+    println!("paranthetical: {}", paranthetical);
+
+    println!("token balance unknown before: {}", token_balance_unknown_before);
     let amount_y = token_balance_unknown_before.checked_mul(paranthetical)?;
+    println!("amount y {:?}", amount_y);
+
     return Ok(amount_y);
 }
 
@@ -57,21 +63,15 @@ pub fn calc_minted_shares_given_single_asset_in(
     total_shares: Uint128,
     swap_fee_rate: Decimal,
 ) -> StdResult<(Uint128, Uint128)> {
-
-    println!("here in single asset in");
-    // print all the function params in single statement
-    println!(
-        "token_amount_in: {}, in_precision: {}, asset_weight_and_balance: {:?}, total_shares: {}, swap_fee_rate: {}",
-        token_amount_in, in_precision, asset_weight_and_balance, total_shares, swap_fee_rate
-    );
-
-
     // deduct swapfee on the in asset.
     // We don't charge swap fee on the token amount that we imagine as unswapped (the normalized weight).
     // So, effective_swapfee = swapfee * (1 - normalized_token_weight)
     let fee_ratio = fee_ratio(asset_weight_and_balance.weight, swap_fee_rate);
+    println!("fee ratio: {:?}", fee_ratio);
     let token_amount_in_after_fee = token_amount_in * fee_ratio;
+    println!("token amount in after fee: {:?}", token_amount_in_after_fee);
     let fee_charged = token_amount_in.checked_sub(token_amount_in_after_fee)?;
+    println!("fee charged: {:?}", fee_charged);
 
     let in_decimal = Decimal::from_atomics(token_amount_in_after_fee, in_precision).unwrap();
     let balance_decimal =
@@ -89,13 +89,13 @@ pub fn calc_minted_shares_given_single_asset_in(
         balance_decimal + in_decimal,
         balance_decimal,
         asset_weight_and_balance.weight,
-        Decimal::from_atomics(total_shares, 6).unwrap(),
+        Decimal::from_atomics(total_shares, 18).unwrap(),
         Decimal::one(),
     )?;
     let pool_amount_out_adj = adjust_precision(
         pool_amount_out.atomics(),
         pool_amount_out.decimal_places() as u8,
-        6.into(),
+        18.into(),
     )?;
 
     return Ok((pool_amount_out_adj, fee_charged));

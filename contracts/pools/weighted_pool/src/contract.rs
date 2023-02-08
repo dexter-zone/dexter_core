@@ -388,6 +388,10 @@ pub fn query_on_join_pool(
     _mint_amount: Option<Uint128>,
     _slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
+
+    println!("\n\n\n-------------------------------------------");
+    println!("new join pool request: {:?} \n\n", assets_in);
+
     // Note - We follow the same logic as implemented by Osmosis here - https://github.com/osmosis-labs/osmosis/blob/2ce796c81664f9e983fb2a8a943818831deddfe2/x/gamm/pool-models/balancer/pool.go#L692
     // ------------------------------------------------------------
     // 1) Get pool current liquidity + and token weights
@@ -441,14 +445,8 @@ pub fn query_on_join_pool(
             })
         })
         .collect::<StdResult<Vec<WeightedAsset>>>()?;
-
-    println!("Pool assets weighted: {:?}", pool_assets_weighted);
-
     // Vector which will store fee charged info
     let mut fee_vec: Vec<Asset> = vec![];
-
-    // Print act assets
-    println!("act_assets_in: {:?}", act_assets_in);
 
     // 2) If single token provided, do single asset join and exit.
     if act_assets_in.len() == 1 {
@@ -476,6 +474,10 @@ pub fn query_on_join_pool(
             weighted_in_asset,
             total_share,
         )?;
+
+        println!("act assets in {:?}", act_assets_in);
+        println!("num_shares: {}", num_shares);
+        println!("fee_charged: {}", fee_charged);
 
         fee_vec.push(Asset {
             amount: fee_charged,
@@ -536,7 +538,7 @@ pub fn query_on_join_pool(
         } else {
             maximal_exact_ratio_join(act_assets_in.clone(), &pool_assets_weighted, total_share)?
         };
-
+    
     
     println!("\n num_shares: {:?}", num_shares);
     println!("remaining_tokens_in: {:?} \n", remaining_tokens_in);
@@ -582,6 +584,8 @@ pub fn query_on_join_pool(
             .find(|asset| asset.asset.info.equal(&single_asset.info))
             .unwrap();
 
+        println!("Weighted in asset: {:?}", weighted_in_asset);
+
         // Get number of LP tokens to be minted and fee to be charged for the single-asset-join
         let new_num_shares_from_single: Uint128;
         let fee_charged: Uint128;
@@ -593,6 +597,9 @@ pub fn query_on_join_pool(
             new_total_shares,
         )?;
 
+        println!("new shares from single: {}", new_num_shares_from_single);
+        println!("fee charged: {}", fee_charged);
+
         fee_vec.push(Asset {
             amount: fee_charged,
             info: single_asset.info.clone(),
@@ -601,8 +608,11 @@ pub fn query_on_join_pool(
         // update current total LP supply for next iteration
         new_total_shares = new_total_shares.checked_add(new_num_shares_from_single)?;
 
+        println!("new total shares: {}", new_total_shares);
+        println!("num shares before: {}", num_shares);
         // add to number of LP tokens to be minted
         num_shares += new_num_shares_from_single;
+        println!("num_shares: {}", num_shares);
     }
 
     // Calculate the final tokens that have joined the pool. For this we add the remaining token balances joined via single asset join to the tokens that have already joined the pool.
