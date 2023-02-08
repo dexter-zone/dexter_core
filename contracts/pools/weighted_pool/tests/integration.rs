@@ -2105,7 +2105,7 @@ fn test_join_pool_large_liquidity() {
     )
     .unwrap();
 
-    app.execute_contract(
+    let response = app.execute_contract(
         alice_address.clone(),
         vault_instance.clone(),
         &msg,
@@ -2115,4 +2115,9 @@ fn test_join_pool_large_liquidity() {
         }],
     ).unwrap();
 
+    let event = response.events.iter().find(|event| event.ty == "wasm-dexter-vault::join_pool").unwrap();
+    let new_shares = event.attributes.iter().find(|attr| attr.key == "lp_tokens_minted").unwrap().value.parse::<Uint128>().unwrap();
+
+    // Shares should exactly be 10 times the default minted in first run since we exactly supplied 10x the liquidity
+    assert_eq!(new_shares, Uint128::from(1000_000_000_000_000_000_000u128));
 }
