@@ -245,7 +245,12 @@ fn initialize_stable_5_pool(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+            amp: 10u64,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false,
+            scaling_factor_manager: None,
+        }).unwrap()),
         fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
