@@ -251,6 +251,14 @@ impl Asset {
             amount: Decimal256::with_precision(self.amount, precision.into())?,
         })
     }
+
+    pub fn to_scaled_decimal_asset(&self, precision: impl Into<u32>, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
+        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
+        Ok(DecimalAsset {
+            info: self.info.clone(),
+            amount: Decimal256::with_precision(self.amount, precision.into())?.checked_div(scaling_factor).unwrap(),
+        })
+    }
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

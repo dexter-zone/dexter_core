@@ -257,7 +257,12 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
     ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
+        init_params: Some(to_binary(&StablePoolParams { 
+            amp: 100u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+         }).unwrap()),
         fee_info: Some(FeeInfo {
             total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
@@ -292,7 +297,12 @@ pub fn initialize_stable_5_pool_2_asset(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+            amp: 10u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+        }).unwrap()),
         fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
@@ -352,7 +362,12 @@ pub fn initialize_stable_5_pool(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+            amp: 10u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+        }).unwrap()),
         fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])

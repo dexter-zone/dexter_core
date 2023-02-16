@@ -1,6 +1,6 @@
 use crate::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use cosmwasm_std::{
-    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError,
+    CheckedMultiplyRatioError, ConversionOverflowError, Decimal, OverflowError, StdError, CheckedFromRatioError,
 };
 use thiserror::Error;
 
@@ -78,6 +78,15 @@ pub enum ContractError {
 
     #[error("The greatest token precision must be less than or equal to 18")]
     InvalidGreatestPrecision,
+
+    #[error("This pool doesn't support scaling factors or manager update")]
+    ScalingFactorUpdateNotSupported,
+
+    #[error("Unsupport asset")]
+    UnsupportedAsset,
+
+    #[error("Invalid scaling factor. Scaling factor should be postive non-zero value")]
+    InvalidScalingFactor,
 }
 
 impl From<OverflowError> for ContractError {
@@ -89,5 +98,11 @@ impl From<OverflowError> for ContractError {
 impl From<ConversionOverflowError> for ContractError {
     fn from(o: ConversionOverflowError) -> Self {
         StdError::from(o).into()
+    }
+}
+
+impl From<CheckedFromRatioError> for ContractError {
+    fn from(o: CheckedFromRatioError) -> Self {
+        StdError::generic_err(o.to_string()).into()
     }
 }
