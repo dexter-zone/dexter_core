@@ -286,7 +286,7 @@ fn test_swap() {
     assert_eq!(query_res.assets[0], assets_msg[0]);
     assert_eq!(query_res.assets[1], assets_msg[1]);
 
-    let swap_response = PoolQueryMsg::OnSwap { 
+    let swap_query_msg = PoolQueryMsg::OnSwap { 
         swap_type: SwapType::GiveIn {}, 
         offer_asset: AssetInfo::NativeToken {
             denom: "ustkatom".to_string(),
@@ -303,7 +303,7 @@ fn test_swap() {
         .wrap()
         .query_wasm_smart(
             pool_addr.clone(),
-            &swap_response,
+            &swap_query_msg,
         )
         .unwrap();
 
