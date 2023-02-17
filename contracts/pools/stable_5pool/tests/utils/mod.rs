@@ -1,24 +1,22 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Timestamp, Uint128, Decimal256};
+use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal256, Timestamp, Uint128};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{
-    ConfigResponse,
-    FeeResponse, FeeStructs, QueryMsg,
-};
+use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
-    PoolTypeConfig, PoolInfo, PoolType, QueryMsg as VaultQueryMsg, PoolCreationFee,
+    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg,
 };
 
-use stable5pool::state::{MathConfig, StablePoolParams, AssetScalingFactor};
+use cw20::Cw20ExecuteMsg;
 
+use itertools::Itertools;
+use stable5pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
 
 pub const EPOCH_START: u64 = 1_000_000;
-
 
 pub fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     let mut env = mock_env();
@@ -63,7 +61,13 @@ pub fn store_token_code(app: &mut App) -> u64 {
 }
 
 // Mints some Tokens to "to" recipient
-pub fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Uint128, to: String) {
+pub fn mint_some_tokens(
+    app: &mut App,
+    owner: Addr,
+    token_instance: Addr,
+    amount: Uint128,
+    to: String,
+) {
     let msg = cw20::Cw20ExecuteMsg::Mint {
         recipient: to.clone(),
         amount: amount,
@@ -76,9 +80,13 @@ pub fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-pub fn instantiate_contracts_scaling_factor(
+pub fn instantiate_contract_generic(
     app: &mut App,
     owner: &Addr,
+    fee_info: FeeInfo,
+    asset_infos: Vec<AssetInfo>,
+    scaling_factors: Vec<AssetScalingFactor>,
+    amp: u64,
 ) -> (Addr, Addr, Addr, u128) {
     let stable5pool_code_id = store_stable_pool_code(app);
     let vault_code_id = store_vault_code(app);
@@ -87,10 +95,7 @@ pub fn instantiate_contracts_scaling_factor(
     let pool_configs = vec![PoolTypeConfig {
         code_id: stable5pool_code_id,
         pool_type: PoolType::Stable5Pool {},
-        default_fee_info: FeeInfo {
-            total_fee_bps: 300u16,
-            protocol_fee_percent: 64u16,
-        },
+        default_fee_info: fee_info.clone(),
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         paused: PauseInfo::default(),
     }];
@@ -101,7 +106,7 @@ pub fn instantiate_contracts_scaling_factor(
         fee_collector: Some("fee_collector".to_string()),
         owner: owner.to_string(),
         pool_creation_fee: PoolCreationFee::default(),
-        auto_stake_impl: dexter::vault::AutoStakeImpl::None
+        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
 
     // Initialize Vault contract instance
@@ -116,42 +121,18 @@ pub fn instantiate_contracts_scaling_factor(
         )
         .unwrap();
 
-
-    let asset_infos = vec![
-        AssetInfo::NativeToken {
-            denom: "uatom".to_string(),
-        },
-        AssetInfo::NativeToken {
-            denom: "ustkatom".to_string(),
-        },
-    ];
-
-    // Initialize Stable-3-Pool contract instance
-    let current_block = app.block_info();
-    let scaling_factors = vec![
-        AssetScalingFactor {
-            asset_info: AssetInfo::NativeToken {
-                denom: "uatom".to_string(),
-            },
-            scaling_factor: Decimal256::one(),
-        },
-        AssetScalingFactor {
-            asset_info: AssetInfo::NativeToken {
-                denom: "ustkatom".to_string(),
-            },
-            scaling_factor: Decimal256::from_ratio(98u128,100u128),
-        },
-    ];
-
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams { 
-            amp: 10u64,
-            scaling_factors,
-            supports_scaling_factors_update: false,
-            scaling_factor_manager: None,
-        }).unwrap()),
+        init_params: Some(
+            to_binary(&StablePoolParams {
+                amp,
+                scaling_factors,
+                supports_scaling_factors_update: false,
+                scaling_factor_manager: None,
+            })
+            .unwrap(),
+        ),
         fee_info: None,
     };
     let res = app
@@ -175,47 +156,41 @@ pub fn instantiate_contracts_scaling_factor(
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
     assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
 
-    let assets = vec![
-        Asset {
-            info: asset_infos[0].clone(),
-            amount: Uint128::zero(),
-        },
-        Asset {
-            info: asset_infos[1].clone(),
-            amount: Uint128::zero(),
-        },
-    ];
+    let current_block = app.block_info();
 
-    //// -----x----- Check :: ConfigResponse for Stable 3 Pool -----x----- ////
+    let assets = asset_infos
+        .iter()
+        .map(|a| Asset {
+            info: a.clone(),
+            amount: Uint128::zero(),
+        })
+        .collect_vec();
 
     let pool_config_res: ConfigResponse = app
         .wrap()
         .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
+
+    assert_eq!(assets, pool_config_res.assets);
     assert_eq!(
         FeeStructs {
-            total_fee_bps: 300u16,
+            total_fee_bps: fee_info.total_fee_bps
         },
         pool_config_res.fee_info
     );
-    assert_eq!(Uint128::from(1u128), pool_config_res.pool_id);
-    assert_eq!(
-        pool_res.lp_token_addr,
-        pool_config_res.lp_token_addr
-    );
-    assert_eq!(vault_instance, pool_config_res.vault_addr);
-    assert_eq!(assets, pool_config_res.assets);
+
     assert_eq!(PoolType::Stable5Pool {}, pool_config_res.pool_type);
     assert_eq!(
         current_block.time.seconds(),
         pool_config_res.block_time_last
     );
+
     assert_eq!(
         Some(
             to_binary(&MathConfig {
-                init_amp: 10u64 * 100,
+                init_amp: amp * 100,
                 init_amp_time: EPOCH_START,
-                next_amp: 10u64 * 100,
+                next_amp: amp * 100,
                 next_amp_time: EPOCH_START,
                 greatest_precision: 6u8,
             })
@@ -224,14 +199,6 @@ pub fn instantiate_contracts_scaling_factor(
         pool_config_res.math_params
     );
 
-    //// -----x----- Check :: FeeResponse for Stable Pool -----x----- ////
-    let pool_fee_res: FeeResponse = app
-        .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::FeeParams {})
-        .unwrap();
-    assert_eq!(300u16, pool_fee_res.total_fee_bps);
-
-    //// -----x----- Check :: Pool-ID for Stable Pool -----x----- ////
     let pool_id_res: Uint128 = app
         .wrap()
         .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::PoolId {})
@@ -246,46 +213,50 @@ pub fn instantiate_contracts_scaling_factor(
     );
 }
 
+pub fn instantiate_contracts_scaling_factor(
+    app: &mut App,
+    owner: &Addr,
+) -> (Addr, Addr, Addr, u128) {
+    let asset_infos = vec![
+        AssetInfo::NativeToken {
+            denom: "uatom".to_string(),
+        },
+        AssetInfo::NativeToken {
+            denom: "ustkatom".to_string(),
+        },
+    ];
+
+    let scaling_factors = vec![
+        AssetScalingFactor {
+            asset_info: AssetInfo::NativeToken {
+                denom: "uatom".to_string(),
+            },
+            scaling_factor: Decimal256::one(),
+        },
+        AssetScalingFactor {
+            asset_info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            scaling_factor: Decimal256::from_ratio(98u128, 100u128),
+        },
+    ];
+
+    let fee_info = FeeInfo {
+        total_fee_bps: 300,
+        protocol_fee_percent: 20,
+    };
+
+    let (vault_addr, pool_addr, lp_token, current_block_time) =
+        instantiate_contract_generic(app, owner, fee_info, asset_infos, scaling_factors, 10);
+
+    return (vault_addr, pool_addr, lp_token, current_block_time);
+}
 
 pub fn instantiate_contracts_instance(
     app: &mut App,
     owner: &Addr,
 ) -> (Addr, Addr, Addr, Addr, Addr, u128) {
-    let stable5pool_code_id = store_stable_pool_code(app);
-    let vault_code_id = store_vault_code(app);
     let token_code_id = store_token_code(app);
-
-    let pool_configs = vec![PoolTypeConfig {
-        code_id: stable5pool_code_id,
-        pool_type: PoolType::Stable5Pool {},
-        default_fee_info: FeeInfo {
-            total_fee_bps: 300u16,
-            protocol_fee_percent: 64u16,
-        },
-        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-        paused: PauseInfo::default(),
-    }];
-
-    let vault_init_msg = VaultInstantiateMsg {
-        pool_configs: pool_configs.clone(),
-        lp_token_code_id: Some(token_code_id),
-        fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
-        pool_creation_fee: PoolCreationFee::default(),
-        auto_stake_impl: dexter::vault::AutoStakeImpl::None
-    };
-
-    // Initialize Vault contract instance
-    let vault_instance = app
-        .instantiate_contract(
-            vault_code_id,
-            owner.to_owned(),
-            &vault_init_msg,
-            &[],
-            "vault",
-            None,
-        )
-        .unwrap();
 
     // Create Token X
     let init_msg = TokenInstantiateMsg {
@@ -345,119 +316,106 @@ pub fn instantiate_contracts_instance(
         },
     ];
 
-    // Initialize Stable-3-Pool contract instance
-    let current_block = app.block_info();
-    let msg = VaultExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
-        asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams { 
-            amp: 10u64,
-            scaling_factors: vec![],
-            supports_scaling_factors_update: false,
-            scaling_factor_manager: None,
-        }).unwrap()),
-        fee_info: None,
+    let fee_info = FeeInfo {
+        total_fee_bps: 300,
+        protocol_fee_percent: 20,
     };
-    let res = app
-        .execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
-        .unwrap();
 
-    assert_eq!(
-        res.events[1].attributes[2],
-        attr("pool_type", "stable-5-pool")
-    );
-    let pool_res: PoolInfo = app
-        .wrap()
-        .query_wasm_smart(
-            vault_instance.clone(),
-            &VaultQueryMsg::GetPoolById {
-                pool_id: Uint128::from(1u128),
-            },
-        )
-        .unwrap();
-
-    assert_eq!(Uint128::from(1u128), pool_res.pool_id);
-    assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
-
-    let assets = vec![
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "axlusd".to_string(),
-            },
-            amount: Uint128::zero(),
-        },
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance0.clone(),
-            },
-            amount: Uint128::zero(),
-        },
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: token_instance1.clone(),
-            },
-            amount: Uint128::zero(),
-        },
-    ];
-
-    //// -----x----- Check :: ConfigResponse for Stable 3 Pool -----x----- ////
-
-    let pool_config_res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::Config {})
-        .unwrap();
-    assert_eq!(
-        FeeStructs {
-            total_fee_bps: 300u16,
-        },
-        pool_config_res.fee_info
-    );
-    assert_eq!(Uint128::from(1u128), pool_config_res.pool_id);
-    assert_eq!(
-        pool_res.lp_token_addr,
-        pool_config_res.lp_token_addr
-    );
-    assert_eq!(vault_instance, pool_config_res.vault_addr);
-    assert_eq!(assets, pool_config_res.assets);
-    assert_eq!(PoolType::Stable5Pool {}, pool_config_res.pool_type);
-    assert_eq!(
-        current_block.time.seconds(),
-        pool_config_res.block_time_last
-    );
-    assert_eq!(
-        Some(
-            to_binary(&MathConfig {
-                init_amp: 10u64 * 100,
-                init_amp_time: EPOCH_START,
-                next_amp: 10u64 * 100,
-                next_amp_time: EPOCH_START,
-                greatest_precision: 6u8,
-            })
-            .unwrap()
-        ),
-        pool_config_res.math_params
-    );
-
-    //// -----x----- Check :: FeeResponse for Stable Pool -----x----- ////
-    let pool_fee_res: FeeResponse = app
-        .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::FeeParams {})
-        .unwrap();
-    assert_eq!(300u16, pool_fee_res.total_fee_bps);
-
-    //// -----x----- Check :: Pool-ID for Stable Pool -----x----- ////
-    let pool_id_res: Uint128 = app
-        .wrap()
-        .query_wasm_smart(pool_res.pool_addr.clone(), &QueryMsg::PoolId {})
-        .unwrap();
-    assert_eq!(Uint128::from(1u128), pool_id_res);
+    let (vault_instance, pool_addr, lp_token_addr, current_block_time) =
+        instantiate_contract_generic(app, owner, fee_info, asset_infos, vec![], 10);
 
     return (
         vault_instance,
-        pool_res.pool_addr,
-        pool_res.lp_token_addr,
+        pool_addr,
+        lp_token_addr,
         token_instance0,
         token_instance1,
-        current_block.time.seconds() as u128,
+        current_block_time,
     );
+}
+
+
+pub fn add_liquidity_to_pool(
+    app: &mut App,
+    owner: &Addr,
+    user: &Addr,
+    vault_addr: Addr,
+    pool_id: Uint128,
+    assets_with_bootstrapping_amount: Vec<Asset>
+) {
+    
+    // Find CW20 assets from the bootstrapping amount and mint token to the user
+    let cw20_assets = assets_with_bootstrapping_amount
+        .iter()
+        .filter(|a| !a.info.is_native_token())
+        .map(|a| a.info.clone())
+        .collect_vec();
+
+    // Step 1: Mint CW20 tokens to the user
+    for asset in &cw20_assets {
+        let mint_msg = Cw20ExecuteMsg::Mint {
+            recipient: user.to_string(),
+            amount: Uint128::from(1_000_000_000_000_000_000u128),
+        };
+        let contract_address = asset.to_string();
+        app.execute_contract(
+            owner.clone(),
+            Addr::unchecked(contract_address),
+            &mint_msg,
+            &[],
+        )
+        .unwrap();
+    }
+
+    // Step 2: Add allowance for the pool to spend the user's tokens
+    for asset in &cw20_assets {
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_addr.to_string(),
+            amount: Uint128::from(1_000_000_000_000_000_000u128),
+            expires: None,
+        };
+        let contract_address = asset.to_string();
+        app.execute_contract(
+            user.clone(),
+            Addr::unchecked(contract_address),
+            &allowance_msg,
+            &[],
+        )
+        .unwrap();
+    }
+
+    // Step 3: Create coins vec for native tokens to be sent for joining pool
+    let native_token = assets_with_bootstrapping_amount
+        .iter()
+        .filter(|a| a.info.is_native_token())
+        .collect_vec();
+
+    let mut coins = vec![];
+    for asset in native_token {
+        let denom = asset.info.to_string();
+        coins.push(Coin {
+            denom,
+            amount: asset.amount,
+        });
+    }
+
+    // Step 4: Execute join pool
+    let msg = VaultExecuteMsg::JoinPool {
+        pool_id,
+        recipient: None,
+        lp_to_mint: None,
+        auto_stake: None,
+        slippage_tolerance: None,
+        assets: Some(assets_with_bootstrapping_amount),
+    };
+
+    app
+        .execute_contract(
+            user.clone(),
+            vault_addr.clone(),
+            &msg,
+            &coins,
+        )
+        .unwrap();
+
 }
