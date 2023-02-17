@@ -1072,6 +1072,7 @@ pub fn execute_join_pool(
 
     // Response - Emit Event
     let mut event = Event::new("dexter-vault::join_pool")
+        .add_attribute("sender", info.sender.to_string())
         .add_attribute("pool_id", pool_id.to_string())
         .add_attribute("pool_addr", pool_info.pool_addr.to_string())
         .add_attribute("auto_stake", auto_stake.unwrap_or(false).to_string())
@@ -1553,6 +1554,9 @@ pub fn execute_swap(
         .add_attribute("swap_type", swap_request.swap_type.to_string())
         .add_attribute("recipient", recipient.to_string())
         .add_attribute("sender", info.sender.clone());
+    if swap_request.max_spread.is_some() {
+        event = event.add_attribute("max_spread", swap_request.max_spread.unwrap().to_string());
+    }
 
     // Query - Query Pool Instance  to get the state transition to be handled
     // SwapResponse {}  is the response from the pool contract and has the following parameters,

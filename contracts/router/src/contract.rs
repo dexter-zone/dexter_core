@@ -119,6 +119,7 @@ pub fn execute_multihop_swap(
     minimum_receive: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let recipient = deps.api.addr_validate(recipient.unwrap_or(info.sender.clone()).as_str())?;
 
     // Validate the multiswap request
     let requests_len = requests.len();
@@ -141,7 +142,9 @@ pub fn execute_multihop_swap(
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
     // Event for indexing support
     let mut event = Event::new("dexter-router::multihop-swap")
-        .add_attribute("total_hops", requests.len().to_string());
+        .add_attribute("total_hops", requests.len().to_string())
+        .add_attribute("sender", info.sender.to_string())
+        .add_attribute("recipient", recipient.to_string());
 
     // Current ask token balance available with the router contract
     let current_ask_balance: Uint128;
@@ -249,7 +252,7 @@ pub fn execute_multihop_swap(
         multiswap_request: requests,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
-        recipient: deps.api.addr_validate(recipient.unwrap_or(info.sender).as_str())?,
+        recipient,
         minimum_receive: minimum_receive.unwrap_or(Uint128::zero()),
     }
     .to_cosmos_msg(&env.contract.address)?;
