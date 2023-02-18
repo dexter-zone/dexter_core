@@ -1,14 +1,14 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal256, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal256, Timestamp, Uint128, Decimal};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg};
+use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
-    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg,
+    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest,
 };
 
 use cw20::Cw20ExecuteMsg;
@@ -242,12 +242,12 @@ pub fn instantiate_contracts_scaling_factor(
     ];
 
     let fee_info = FeeInfo {
-        total_fee_bps: 300,
+        total_fee_bps: 30,
         protocol_fee_percent: 20,
     };
 
     let (vault_addr, pool_addr, lp_token, current_block_time) =
-        instantiate_contract_generic(app, owner, fee_info, asset_infos, scaling_factors, 10);
+        instantiate_contract_generic(app, owner, fee_info, asset_infos, scaling_factors, 100);
 
     return (vault_addr, pool_addr, lp_token, current_block_time);
 }
@@ -418,4 +418,173 @@ pub fn add_liquidity_to_pool(
         )
         .unwrap();
 
+}
+
+pub fn perform_and_test_swap_give_in(
+    app: &mut App,
+    _owner: &Addr,
+    user: &Addr,
+    vault_addr: Addr,
+    pool_addr: Addr,
+    pool_id: Uint128,
+    asset_in: Asset,
+    asset_out: AssetInfo,
+    max_spread: Option<Decimal>,
+    expected_asset_out: Uint128,
+    expected_spread: Uint128,
+    expected_fee: Asset
+) {
+    let swap_query_msg = QueryMsg::OnSwap { 
+        swap_type: SwapType::GiveIn {}, 
+        offer_asset: asset_in.info.clone(), 
+        ask_asset: asset_out.clone(),
+        amount: asset_in.amount,
+        max_spread,
+        belief_price: None
+    };
+
+    let swap_query_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &swap_query_msg)
+        .unwrap();
+
+    assert_eq!(swap_query_res.trade_params.amount_out, expected_asset_out);
+    assert_eq!(swap_query_res.trade_params.spread, expected_spread);
+    assert_eq!(swap_query_res.trade_params.amount_in, asset_in.amount);
+    assert_eq!(swap_query_res.fee, Some(expected_fee));
+
+    // If asset in is a CW20 approve the vault to spend the token
+    if !asset_in.info.is_native_token() {
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_addr.to_string(),
+            amount: Uint128::from(asset_in.amount),
+            expires: None,
+        };
+        let contract_address = asset_in.info.to_string();
+        app.execute_contract(
+            user.clone(),
+            Addr::unchecked(contract_address),
+            &allowance_msg,
+            &[],
+        )
+        .unwrap();
+    }
+
+    let coins = if asset_in.info.is_native_token() {
+        vec![Coin {
+            denom: asset_in.info.to_string(),
+            amount: asset_in.amount,
+        }]
+    } else {
+        vec![]
+    };
+
+    let swap_msg = VaultExecuteMsg::Swap {
+        swap_request: SingleSwapRequest {
+            pool_id: Uint128::from(pool_id),
+            swap_type: SwapType::GiveIn {},
+            asset_in: asset_in.info,
+            asset_out,
+            amount: asset_in.amount,
+            max_spread,
+            belief_price: None,
+        },
+        recipient: None,
+        min_receive: None,
+        max_spend: None,
+    };
+
+    app
+        .execute_contract(
+            user.clone(),
+            vault_addr.clone(),
+            &swap_msg,
+            &coins,
+        )
+        .unwrap();
+}
+
+pub fn perform_and_test_swap_give_out(
+    app: &mut App,
+    _owner: &Addr,
+    user: &Addr,
+    vault_addr: Addr,
+    pool_addr: Addr,
+    pool_id: Uint128,
+    asset_out: Asset,
+    asset_in: AssetInfo,
+    max_spread: Option<Decimal>,
+    expected_asset_in: Uint128,
+    expected_spread: Uint128,
+    expected_fee: Asset
+) {
+
+    let swap_query_msg = QueryMsg::OnSwap { 
+        swap_type: SwapType::GiveOut {}, 
+        offer_asset: asset_in.clone(), 
+        ask_asset: asset_out.info.clone(),
+        amount: asset_out.amount,
+        max_spread,
+        belief_price: None
+    };
+
+    let swap_query_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &swap_query_msg)
+        .unwrap();
+
+    assert_eq!(swap_query_res.trade_params.amount_out, asset_out.amount);
+    assert_eq!(swap_query_res.trade_params.amount_in, expected_asset_in);
+    assert_eq!(swap_query_res.fee, Some(expected_fee));
+    assert_eq!(swap_query_res.trade_params.spread, expected_spread);
+
+    // If asset in is a CW20 approve the vault to spend the token
+    if !asset_in.is_native_token() {
+        let allowance_msg = Cw20ExecuteMsg::IncreaseAllowance {
+            spender: vault_addr.to_string(),
+            amount: Uint128::from(expected_asset_in),
+            expires: None,
+        };
+        let contract_address = asset_in.to_string();
+        app.execute_contract(
+            user.clone(),
+            Addr::unchecked(contract_address),
+            &allowance_msg,
+            &[],
+        )
+        .unwrap();
+    }
+
+    let coins = if asset_in.is_native_token() {
+        vec![Coin {
+            denom: asset_in.to_string(),
+            amount: expected_asset_in,
+        }]
+    } else {
+        vec![]
+    };
+
+    let swap_msg = VaultExecuteMsg::Swap {
+        swap_request: SingleSwapRequest {
+            pool_id: Uint128::from(pool_id),
+            swap_type: SwapType::GiveOut {},
+            asset_in,
+            asset_out: asset_out.info,
+            amount: asset_out.amount,
+            max_spread,
+            belief_price: None,
+        },
+        recipient: None,
+        min_receive: None,
+        max_spend: None,
+    };
+
+    app
+        .execute_contract(
+            user.clone(),
+            vault_addr.clone(),
+            &swap_msg,
+            &coins,
+        )
+        .unwrap();
 }
