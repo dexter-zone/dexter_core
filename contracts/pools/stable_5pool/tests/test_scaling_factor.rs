@@ -1,9 +1,12 @@
-use crate::utils::{instantiate_contracts_scaling_factor, mock_app};
-use cosmwasm_std::{Addr, Coin, Uint128, Decimal};
+use crate::utils::{
+    add_liquidity_to_pool, instantiate_contracts_scaling_factor, mock_app,
+    perform_and_test_swap_give_in, perform_and_test_swap_give_out,
+};
+use cosmwasm_std::{Addr, Coin, Decimal, Uint128};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::pool::{AfterJoinResponse, QueryMsg as PoolQueryMsg, SwapResponse};
-use dexter::vault::{ExecuteMsg, QueryMsg, PoolInfoResponse, SingleSwapRequest, SwapType};
+use dexter::pool::{AfterJoinResponse, QueryMsg as PoolQueryMsg};
+use dexter::vault::{ExecuteMsg, PoolInfoResponse, QueryMsg};
 
 pub mod utils;
 
@@ -75,7 +78,10 @@ fn test_join_pool() {
 
     assert_eq!(join_pool_query_res.provided_assets[0], assets_msg[0]);
     assert_eq!(join_pool_query_res.provided_assets[1], assets_msg[1]);
-    assert_eq!(join_pool_query_res.new_shares, Uint128::new(200_000_000_000));
+    assert_eq!(
+        join_pool_query_res.new_shares,
+        Uint128::new(200_000_000_000)
+    );
 
     let msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
@@ -87,23 +93,22 @@ fn test_join_pool() {
     };
 
     // Execute the join pool message
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_addr.clone(),
-            &msg,
-            &[
-                Coin {
-                    denom: "ustkatom".to_string(),
-                    amount: Uint128::new(98_000_000_000u128),
-                },
-                Coin {
-                    denom: "uatom".to_string(),
-                    amount: Uint128::new(100_000_000_000u128),
-                },
-            ],
-        )
-        .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_addr.clone(),
+        &msg,
+        &[
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(98_000_000_000u128),
+            },
+            Coin {
+                denom: "uatom".to_string(),
+                amount: Uint128::new(100_000_000_000u128),
+            },
+        ],
+    )
+    .unwrap();
 
     // Query the vault and get the pool balances
     let query_res: PoolInfoResponse = app
@@ -157,7 +162,7 @@ fn test_join_pool() {
         join_pool_query_res.provided_assets[1],
         imbalanced_assets_msg[1]
     );
-    assert_eq!(join_pool_query_res.new_shares, Uint128::new(2_020_101_947));
+    assert_eq!(join_pool_query_res.new_shares, Uint128::new(2_020_377_540));
 
     let msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
@@ -169,29 +174,26 @@ fn test_join_pool() {
     };
 
     // Execute the join pool message
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_addr.clone(),
-            &msg,
-            &[
-                Coin {
-                    denom: "ustkatom".to_string(),
-                    amount: Uint128::new(1_000_000_000u128),
-                },
-                Coin {
-                    denom: "uatom".to_string(),
-                    amount: Uint128::new(1_000_000_000u128),
-                },
-            ],
-        )
-        .unwrap();
+    app.execute_contract(
+        alice_address.clone(),
+        vault_addr.clone(),
+        &msg,
+        &[
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(1_000_000_000u128),
+            },
+            Coin {
+                denom: "uatom".to_string(),
+                amount: Uint128::new(1_000_000_000u128),
+            },
+        ],
+    )
+    .unwrap();
 }
-
 
 #[test]
 fn test_swap() {
-
     let owner: Addr = Addr::unchecked("owner".to_string());
     let alice_address: Addr = Addr::unchecked("alice".to_string());
 
@@ -244,111 +246,97 @@ fn test_swap() {
         },
     ];
 
-    let msg = ExecuteMsg::JoinPool {
-        pool_id: Uint128::from(1u128),
-        recipient: None,
-        lp_to_mint: None,
-        auto_stake: None,
-        slippage_tolerance: None,
-        assets: Some(assets_msg.clone()),
-    };
+    let pool_id = Uint128::from(1u128);
+    add_liquidity_to_pool(
+        &mut app,
+        &owner,
+        &alice_address,
+        vault_addr.clone(),
+        pool_id,
+        assets_msg.clone(),
+    );
 
-    // Execute the join pool message
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_addr.clone(),
-            &msg,
-            &[
-                Coin {
-                    denom: "uatom".to_string(),
-                    amount: Uint128::new(1_000_000_000_000u128),
-                },
-                Coin {
-                    denom: "ustkatom".to_string(),
-                    amount: Uint128::new(980_000_000_000u128),
-                },
-            ],
-        )
-        .unwrap();
-
-    // Query the vault and get the pool balances
-    let query_res: PoolInfoResponse = app
-        .wrap()
-        .query_wasm_smart(
-            vault_addr.clone(),
-            &QueryMsg::GetPoolById {
-                pool_id: Uint128::from(1u128),
+    // Peform swap and test
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
             },
-        )
-        .unwrap();
-
-    assert_eq!(query_res.assets[0], assets_msg[0]);
-    assert_eq!(query_res.assets[1], assets_msg[1]);
-
-    let swap_query_msg = PoolQueryMsg::OnSwap { 
-        swap_type: SwapType::GiveIn {}, 
-        offer_asset: AssetInfo::NativeToken {
-            denom: "ustkatom".to_string(),
-        }, 
-        ask_asset: AssetInfo::NativeToken {
+            amount: Uint128::new(10_000_000u128),
+        },
+        AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
-        amount: Uint128::from(10_000_000u128),
-        max_spread: None,
-        belief_price: None
-    };
-
-    let swap_query_res: SwapResponse = app
-        .wrap()
-        .query_wasm_smart(
-            pool_addr.clone(),
-            &swap_query_msg,
-        )
-        .unwrap();
-
-    println!("Swap query response: {:?}", swap_query_res);
-    assert_eq!(swap_query_res.trade_params.amount_out, Uint128::from(9_897_951u128));
-    assert_eq!(swap_query_res.trade_params.spread, Uint128::from(8u128));
-    assert_eq!(swap_query_res.trade_params.amount_in, Uint128::from(10_000_000u128));
-    assert_eq!(swap_query_res.fee, Some(
-        Asset { 
-            info: AssetInfo::NativeToken { 
-                denom: "ustkatom".to_string() 
-            },
-            amount: Uint128::from(300000u128) 
-        }));
-    
-
-    // Test swap
-    let swap_msg = ExecuteMsg::Swap {
-        swap_request: SingleSwapRequest {
-            pool_id: Uint128::from(1u128),
-            swap_type: SwapType::GiveIn {},
-            asset_in: AssetInfo::NativeToken {
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(10_173_468u128),
+        Uint128::from(1u128),
+        Asset {
+            info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
             },
-            asset_out: AssetInfo::NativeToken {
+            amount: Uint128::from(30_000u128),
+        },
+    );
+
+    // Peform another swap of a large amount
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "uatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(1_017_336_485u128),
+        Uint128::from(10_453u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(3_000_000u128),
+        },
+    );
+
+    // Perform a give out swap
+    perform_and_test_swap_give_out(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
                 denom: "uatom".to_string(),
             },
-            amount: Uint128::from(10_000_000u128),
-            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-            belief_price: None,
+            amount: Uint128::new(1_000_000_000u128),
         },
-        recipient: None,
-        min_receive: None,
-        max_spend: None,
-    };
-
-    app
-        .execute_contract(
-            alice_address.clone(),
-            vault_addr.clone(),
-            &swap_msg,
-            &[Coin {
+        AssetInfo::NativeToken {
+            denom: "ustkatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(1_023_509_582u128),
+        Uint128::from(30_273u128),
+        Asset {
+            info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
-                amount: Uint128::new(10_000_000u128),
-            }],
-        )
-        .unwrap(); 
+            },
+            amount: Uint128::from(3_070_528u128),
+        },
+    );
 }
