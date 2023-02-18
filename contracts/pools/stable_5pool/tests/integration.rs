@@ -1446,7 +1446,7 @@ fn test_on_exit_pool() {
             pool_id: Uint128::from(1u128),
             recipient: None,
             assets: Some(assets_out.clone()),
-            burn_amount: Some(Uint128::from(500_000000u128)),
+            burn_amount: Some(Uint128::from(500_000_000u128)),
         })
         .unwrap(),
     };
