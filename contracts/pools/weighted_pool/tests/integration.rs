@@ -201,6 +201,7 @@ fn instantiate_contracts_instance(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
+        native_asset_precisions: vec![("xprt".to_string(), 6u8)],
         init_params: Some(
             to_binary(&WeightedParams {
                 weights: asset_infos_with_weights,
@@ -1992,6 +1993,7 @@ fn test_join_pool_large_liquidity() {
     let pool_msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
+        native_asset_precisions: vec![("xprt".to_string(), 6u8)],
         init_params: Some(
             to_binary(&WeightedParams {
                 weights: asset_infos_with_weights,

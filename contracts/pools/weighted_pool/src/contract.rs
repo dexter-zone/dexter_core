@@ -115,7 +115,7 @@ pub fn instantiate(
     store_weights(deps.branch(), asset_weights)?;
 
     // Store token precisions in the storage
-    let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
+    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos)?;
 
     // Initializing cumulative prices
     let mut cumulative_prices = vec![];

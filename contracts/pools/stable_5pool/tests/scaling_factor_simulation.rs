@@ -37,6 +37,7 @@ impl StableSwapSimulation {
     fn init(
         amplification_coefficient: u64,
         assets_with_bootstrapping_amount: Vec<Asset>,
+        native_asset_precisions: Vec<(String, u8)>,
         scaling_factors: Vec<AssetScalingFactor>,
         swap_in_amount: Uint128,
         swap_in_asset: AssetInfo,
@@ -92,6 +93,7 @@ impl StableSwapSimulation {
             &owner,
             fee_info,
             asset_infos,
+            native_asset_precisions,
             scaling_factors.clone(),
             amplification_coefficient,
         );
@@ -204,10 +206,6 @@ impl StableSwapSimulation {
                 let (amount_in, amount_out, spread) = result.unwrap();
                 
                 let trade_price = Decimal::new(amount_out).checked_div(Decimal::new(amount_in)).unwrap();
-                println!("Swap in: {:?}, Swap out: {:?}, Spread: {:?}", amount_in, amount_out, spread);
-                println!("Trade price: {:?}", trade_price);
-                println!("Pool balances: {:?}", self.find_pool_balances_by_asset());
-
                 historical_trade_prices.push((amount_in, amount_out, trade_price, spread))
             }
 
@@ -216,8 +214,6 @@ impl StableSwapSimulation {
             historical_pool_balances.push(pool_balances);
         }
 
-        // println!("Historical pool balances: {:?}", historical_pool_balances);
-        // println!("Historical trade prices: {:?}", historical_trade_prices);
         (historical_pool_balances, historical_trade_prices)
     }
 
@@ -226,6 +222,8 @@ impl StableSwapSimulation {
 
 #[test]
 fn run_stableswap_simulation() {
+
+    let write_to_file = false;
 
     let mut simulation_runner = StableSwapSimulation::init(
         10,
@@ -244,6 +242,7 @@ fn run_stableswap_simulation() {
                 amount: Uint128::new(1_000_000_000_000u128),
             },
         ],
+        vec![("uusdc".to_string(), 6), ("uusdt".to_string(), 6)],
         vec![
             AssetScalingFactor {
                 asset_info: AssetInfo::NativeToken {
@@ -267,6 +266,10 @@ fn run_stableswap_simulation() {
         },
     );
 
+    if !write_to_file {
+        return;
+    }
+
     // Write the simulation results to a file
     let mut file = File::create("simulation_results.csv").unwrap();
     file.write(b"reserves_uusdc,reserves_uusdt,amount_in,amount_out,trade_price,spread\n").unwrap();
@@ -286,6 +289,7 @@ fn run_stableswap_simulation() {
 #[test]
 fn run_metastable_simulation() {
 
+    let write_to_file = false;
     // Considering current rate:
     // 1 ATOM = 0.9800000 stkATOM
     // 1 stkATOM ~= 1.020408163265306122448979591836 uATOM
@@ -310,6 +314,11 @@ fn run_metastable_simulation() {
         },
     ];
 
+    let native_asset_precisions = vec![
+        ("uatom".to_string(), 6),
+        ("ustkatom".to_string(), 6),
+    ];
+
     let scaling_factors = vec![
         AssetScalingFactor {
             asset_info: AssetInfo::NativeToken {
@@ -328,6 +337,7 @@ fn run_metastable_simulation() {
     let mut simulation_runner = StableSwapSimulation::init(
         amp,
         assets_with_bootstrapping_amount.clone(),
+        native_asset_precisions.clone(),
         scaling_factors.clone(),
         trade_size,
         AssetInfo::NativeToken {
@@ -337,6 +347,10 @@ fn run_metastable_simulation() {
             denom: "ustkatom".to_string(),
         },
     );
+
+    if !write_to_file {
+        return;
+    }
 
     // Write the simulation results to a file
     let mut file = File::create(format!("simulation_results_metastable_{}|{}_amp={}_trade_size={}.csv", "uatom", "ustkatom", amp, trade_size)).unwrap();
@@ -348,6 +362,7 @@ fn run_metastable_simulation() {
     let mut simulation_runner = StableSwapSimulation::init(
         amp,
         assets_with_bootstrapping_amount,
+        native_asset_precisions,
         scaling_factors,
         trade_size,
         AssetInfo::NativeToken {

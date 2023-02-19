@@ -171,6 +171,8 @@ pub struct TmpPoolInfo {
     pub fee_info: FeeInfo,
     /// Assets and their respective balances
     pub assets: Vec<Asset>,
+    /// Native asset precisions
+    pub native_asset_precisions: Vec<(String, u8)>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
     /// Object of type [`Binary`] which contains any custom params required by the Pool instance for its initialization.
@@ -329,6 +331,7 @@ pub enum ExecuteMsg {
     CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
+        native_asset_precisions: Vec<(String, u8)>,
         fee_info: Option<FeeInfo>,
         init_params: Option<Binary>,
     },

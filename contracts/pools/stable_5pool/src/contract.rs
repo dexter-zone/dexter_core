@@ -13,7 +13,7 @@ use crate::error::ContractError;
 use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{
     get_precision, store_precisions, MathConfig, StablePoolParams, StablePoolUpdateParams, Twap,
-    CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor,
+    CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor, PRECISIONS,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{
@@ -64,7 +64,7 @@ pub fn instantiate(
     }
 
     // store precisions for assets in storage
-    let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
+    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos)?;
     // We cannot have precision greater than what is supported by Decimal type
     if greatest_precision > (Decimal::DECIMAL_PLACES as u8) {
         return Err(ContractError::InvalidGreatestPrecision);
@@ -420,6 +420,14 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let cur_amp = compute_current_amp(&math_config, &env)?;
 
+    let mut precisions = vec![];
+    for asset in config.assets.iter() {
+       if let AssetInfo::NativeToken { denom } = &asset.info {
+           let precision = PRECISIONS.load(deps.storage, denom.clone())?;
+           precisions.push((denom.clone(), precision));
+       }
+    }
+
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -434,7 +442,7 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
                 amp: cur_amp.checked_div(AMP_PRECISION).unwrap(),
                 scaling_factors: stable_swap_config.scaling_factors,
                 scaling_factor_manager: stable_swap_config.scaling_factor_manager,
-                supports_scaling_factors_update: stable_swap_config.supports_scaling_factors_update
+                supports_scaling_factors_update: stable_swap_config.supports_scaling_factors_update,
             })
             .unwrap(),
         ),
