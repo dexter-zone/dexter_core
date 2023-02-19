@@ -85,6 +85,7 @@ pub fn instantiate_contract_generic(
     owner: &Addr,
     fee_info: FeeInfo,
     asset_infos: Vec<AssetInfo>,
+    native_asset_precisions: Vec<(String, u8)>,
     scaling_factors: Vec<AssetScalingFactor>,
     amp: u64,
 ) -> (Addr, Addr, Addr, u128) {
@@ -124,6 +125,7 @@ pub fn instantiate_contract_generic(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
+        native_asset_precisions,
         init_params: Some(
             to_binary(&StablePoolParams {
                 amp,
@@ -241,13 +243,15 @@ pub fn instantiate_contracts_scaling_factor(
         },
     ];
 
+    let native_asset_precisions = vec![("uatom".to_string(), 6), ("ustkatom".to_string(), 6)];
+
     let fee_info = FeeInfo {
         total_fee_bps: 30,
         protocol_fee_percent: 20,
     };
 
     let (vault_addr, pool_addr, lp_token, current_block_time) =
-        instantiate_contract_generic(app, owner, fee_info, asset_infos, scaling_factors, 100);
+        instantiate_contract_generic(app, owner, fee_info, asset_infos, native_asset_precisions, scaling_factors, 100);
 
     return (vault_addr, pool_addr, lp_token, current_block_time);
 }
@@ -316,13 +320,15 @@ pub fn instantiate_contracts_instance(
         },
     ];
 
+    let native_asset_precisions = vec![("axlusd".to_string(), 6)];
+
     let fee_info = FeeInfo {
         total_fee_bps: 300,
-        protocol_fee_percent: 20,
+        protocol_fee_percent: 64,
     };
 
     let (vault_instance, pool_addr, lp_token_addr, current_block_time) =
-        instantiate_contract_generic(app, owner, fee_info, asset_infos, vec![], 10);
+        instantiate_contract_generic(app, owner, fee_info, asset_infos, native_asset_precisions, vec![], 10);
 
     return (
         vault_instance,

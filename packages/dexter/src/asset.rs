@@ -8,8 +8,6 @@ use std::fmt;
 
 use crate::querier::{query_balance, query_token_balance};
 
-pub const NATIVE_TOKEN_PRECISION: u8 = 6;
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{AssetInfo}} struct Type    x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -151,9 +149,16 @@ impl AssetInfo {
     /// Returns the number of decimals that a token has.
     /// ## Params
     /// * **querier** is an object of type [`QuerierWrapper`].
-    pub fn decimals(&self, querier: &QuerierWrapper) -> StdResult<u8> {
+    pub fn decimals(&self, native_asset_input_precisions: &Vec<(String, u8)>, querier: &QuerierWrapper) -> StdResult<u8> {
         let decimals = match &self {
-            AssetInfo::NativeToken { .. } => NATIVE_TOKEN_PRECISION,
+            AssetInfo::NativeToken { denom } => {
+                let precision = native_asset_input_precisions
+                    .iter()
+                    .find(|(asset_denom, _)| asset_denom == denom)
+                    .unwrap()
+                    .1;
+                precision
+            },
             AssetInfo::Token { contract_addr } => {
                 let res: cw20::TokenInfoResponse =
                     querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;

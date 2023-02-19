@@ -102,6 +102,9 @@ pub struct InstantiateMsg {
     pub lp_token_addr: Addr,
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
+    /// Native asset precisions
+    pub native_asset_precisions: Vec<(String, u8)>,
+    /// The Fee details of the pool
     pub fee_info: FeeStructs,
     /// Optional binary serialised parameters for custom pool types
     pub init_params: Option<Binary>,

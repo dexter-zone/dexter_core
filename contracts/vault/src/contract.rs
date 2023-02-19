@@ -196,6 +196,7 @@ pub fn execute(
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
+            native_asset_precisions,
             fee_info,
             init_params,
         } => execute_create_pool_instance(
@@ -204,6 +205,7 @@ pub fn execute(
             info,
             pool_type,
             asset_infos,
+            native_asset_precisions,
             fee_info,
             init_params,
         ),
@@ -696,6 +698,7 @@ pub fn execute_create_pool_instance(
     info: MessageInfo,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
+    native_asset_precisions: Vec<(String, u8)>,
     fee_info: Option<FeeInfo>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
@@ -815,6 +818,7 @@ pub fn execute_create_pool_instance(
         assets,
         pool_type: pool_type_config.pool_type.clone(),
         init_params,
+        native_asset_precisions
     };
 
     // Store the temporary Pool Info
@@ -932,6 +936,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                             total_fee_bps: tmp_pool_info.fee_info.total_fee_bps,
                         },
                         init_params: tmp_pool_info.init_params,
+                        native_asset_precisions: tmp_pool_info.native_asset_precisions
                     })?,
                     funds: vec![],
                     label: "dexter-pool-".to_string() + &tmp_pool_info.pool_id.to_string(),

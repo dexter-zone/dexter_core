@@ -523,6 +523,7 @@ fn test_pool_config_update() {
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
+        native_asset_precisions: vec![],
         init_params: Some(to_binary(&StablePoolParams { 
             amp: 100u64,
             supports_scaling_factors_update: false,
