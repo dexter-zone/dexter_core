@@ -271,13 +271,7 @@ impl Asset {
     }
 
     pub fn to_scaled_decimal_asset(&self, precision: impl Into<u32>, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
-        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
-        let amount = Decimal256::with_precision(self.amount, precision.into())?.checked_div(scaling_factor)
-            .map_err(|e| StdError::generic_err(format!("Error while scaling decimal asset: {}", e)))?;
-        Ok(DecimalAsset {
-            info: self.info.clone(),
-            amount,
-        })
+        self.to_decimal_asset(precision)?.with_scaling_factor(scaling_factor)
     }
 }
 
@@ -304,6 +298,27 @@ pub struct DecimalAsset {
     pub amount: Decimal256,
 }
 
+impl DecimalAsset {
+
+    pub fn with_scaling_factor(&self, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
+        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
+        let amount = self.amount.with_scaling_factor(scaling_factor)?;
+        Ok(DecimalAsset {
+            info: self.info.clone(),
+            amount,
+        })
+    }
+
+    pub fn without_scaling_factor(&self, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
+        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
+        let amount = self.amount.without_scaling_factor(scaling_factor)?;
+        Ok(DecimalAsset {
+            info: self.info.clone(),
+            amount,
+        })
+    }
+}
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x {{Decimal256Ext}} trait Type   x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -326,6 +341,16 @@ pub trait Decimal256Ext {
     fn with_precision(
         value: impl Into<Uint256>,
         precision: impl Into<u32>,
+    ) -> StdResult<Decimal256>;
+
+    fn with_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256>;
+
+    fn without_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
     ) -> StdResult<Decimal256>;
 
     fn saturating_sub(self, other: Decimal256) -> Decimal256;
@@ -386,6 +411,24 @@ impl Decimal256Ext for Decimal256 {
 
     fn saturating_sub(self, other: Decimal256) -> Decimal256 {
         Decimal256::new(self.atomics().saturating_sub(other.atomics()))
+    }
+
+    fn with_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256> {
+        // Divide by scaling factor
+        let amount = self.checked_div(scaling_factor)
+            .map_err(|e| StdError::generic_err(format!("Error while scaling decimal asset: {}", e)))?;
+
+        Ok(amount)
+    }
+
+    fn without_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256> {            
+        Ok(self.checked_mul(scaling_factor)?)
     }
 }
 

@@ -303,7 +303,7 @@ pub fn execute_update_pool_liquidity(
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
-        transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
+        transform_to_scaled_decimal_asset(deps.as_ref(), config.assets.clone())?;
 
     // Accumulate prices for the assets in the pool
     if accumulate_prices(
@@ -608,8 +608,7 @@ pub fn query_on_join_pool(
             Ok((
                 asset.to_scaled_decimal_asset(coin_precision, scaling_factor)?,
                 Decimal256::with_precision(pool, coin_precision)?
-                    .checked_div(scaling_factor.unwrap_or(Decimal256::one()))
-                    .map_err(|e| StdError::generic_err(e.to_string()))?,
+                    .with_scaling_factor(scaling_factor.unwrap_or(Decimal256::one()))?,
             ))
         })
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
@@ -682,7 +681,7 @@ pub fn query_on_join_pool(
             let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
             fee_tokens.push(Asset {
                 amount: fee_charged
-                    .checked_mul(scaling_factor)?
+                    .without_scaling_factor(scaling_factor)?
                     .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
                 info: asset_info.clone(),
             });
@@ -1041,7 +1040,7 @@ pub fn query_cumulative_price(
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
-    let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets);
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Accumulate prices of all assets in the config
     accumulate_prices(
@@ -1088,7 +1087,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
-    let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets);
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Accumulate prices of all assets in the config
     accumulate_prices(
@@ -1344,7 +1343,7 @@ fn imbalanced_withdraw(
         let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
         fee_tokens.push(Asset {
             amount: fee_charged
-                .checked_mul(scaling_factor)?
+                .without_scaling_factor(scaling_factor)?
                 .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
             info: asset_info,
         });
@@ -1507,14 +1506,17 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 
 /// ## Description
 /// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
-pub fn transform_to_decimal_asset(deps: Deps, assets: Vec<Asset>) -> Vec<DecimalAsset> {
-    assets
+pub fn transform_to_scaled_decimal_asset(deps: Deps, assets: Vec<Asset>) -> StdResult<Vec<DecimalAsset>> {
+    let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+    let scaling_factors = stableswap_config.scaling_factors();
+    
+   assets
         .iter()
         .cloned()
         .map(|asset| {
             let precision = get_precision(deps.storage, &asset.info)?;
-            asset.to_decimal_asset(precision)
+            let scaling_factor = scaling_factors.get(&asset.info).cloned();
+            asset.to_scaled_decimal_asset(precision, scaling_factor)
         })
         .collect::<StdResult<Vec<DecimalAsset>>>()
-        .unwrap()
 }
