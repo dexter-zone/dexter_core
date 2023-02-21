@@ -1340,8 +1340,10 @@ fn imbalanced_withdraw(
         let fee_charged = fee.checked_mul(difference)?;
 
         new_balances[i] -= fee_charged;
+        let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
         fee_tokens.push(Asset {
             amount: fee_charged
+                .checked_mul(scaling_factor)?
                 .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
             info: asset_info,
         });
