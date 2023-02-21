@@ -385,13 +385,13 @@ fn test_swap() {
             denom: "ustkatom".to_string(),
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
-        Uint128::from(1_023_509_582u128),
+        Uint128::from(982_978_602u128),
         Uint128::from(30_273u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
             },
-            amount: Uint128::from(3_070_528u128),
+            amount: Uint128::from(2_948_935u128),
         },
     );
 }
