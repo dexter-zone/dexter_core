@@ -8,10 +8,10 @@ use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
 
 /// The default slippage (0.5%)
-pub const DEFAULT_SLIPPAGE: &str = "0.005";
+pub const DEFAULT_SPREAD: &str = "0.005";
 
 /// The maximum allowed slippage (50%)
-pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
+pub const MAX_SPREAD: &str = "0.5";
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Gneneric struct Types      x----------------x----------------

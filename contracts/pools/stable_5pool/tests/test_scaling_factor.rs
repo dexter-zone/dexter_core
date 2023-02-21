@@ -1,13 +1,15 @@
 use crate::utils::{
     add_liquidity_to_pool, instantiate_contracts_scaling_factor, mock_app,
     perform_and_test_swap_give_in, perform_and_test_swap_give_out,
+    instantiate_contract_generic
 };
-use cosmwasm_std::{Addr, Coin, Decimal, Uint128, to_binary};
+use cosmwasm_std::{Addr, Coin, Decimal, Uint128, to_binary, Decimal256};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::{AfterJoinResponse, QueryMsg as PoolQueryMsg, AfterExitResponse};
-use dexter::vault::{ExecuteMsg, PoolInfoResponse, QueryMsg, Cw20HookMsg};
+use dexter::vault::{ExecuteMsg, PoolInfoResponse, QueryMsg, Cw20HookMsg, FeeInfo};
 use cw20::Cw20ExecuteMsg;
+use stable5pool::state::AssetScalingFactor;
 
 pub mod utils;
 
@@ -48,7 +50,7 @@ fn test_join_and_exit_pool() {
     .unwrap();
 
     let (vault_addr, pool_addr, lp_token_addr, _current_block_time) =
-        instantiate_contracts_scaling_factor(&mut app, &owner);
+        instantiate_contracts_scaling_factor(&mut app, &owner, vec![("uatom".to_string(), 6), ("ustkatom".to_string(), 6)]);
 
     let assets_msg = vec![
         Asset {
@@ -284,7 +286,7 @@ fn test_swap() {
     .unwrap();
 
     let (vault_addr, pool_addr, _lp_token_addr, _current_block_time) =
-        instantiate_contracts_scaling_factor(&mut app, &owner);
+        instantiate_contracts_scaling_factor(&mut app, &owner, vec![("uatom".to_string(), 6), ("ustkatom".to_string(), 6)]);
 
     let assets_msg = vec![
         Asset {
@@ -385,13 +387,355 @@ fn test_swap() {
             denom: "ustkatom".to_string(),
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
-        Uint128::from(982_978_602u128),
+        Uint128::from(982_978_603u128),
         Uint128::from(30_273u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
             },
             amount: Uint128::from(2_948_935u128),
+        },
+    );
+}
+
+#[test]
+fn test_swap_different_precision() {
+    let owner: Addr = Addr::unchecked("owner".to_string());
+    let alice_address: Addr = Addr::unchecked("alice".to_string());
+
+    // For this test, we consider ustakatom to have 9 decimal places and uatom to have 6 decimal places
+
+    let mut app = mock_app(
+        owner.clone(),
+        vec![
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(100_000_000_000_000_000u128),
+            },
+            Coin {
+                denom: "uatom".to_string(),
+                amount: Uint128::new(100_000_000_000_000u128),
+            },
+        ],
+    );
+
+    // Set Alice's balances
+    app.send_tokens(
+        owner.clone(),
+        alice_address.clone(),
+        &[
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(10_000_000_000_000_000u128),
+            },
+            Coin {
+                denom: "uatom".to_string(),
+                amount: Uint128::new(10_000_000_000_000u128),
+            },
+        ],
+    )
+    .unwrap();
+
+    let (vault_addr, pool_addr, _lp_token_addr, _current_block_time) =
+        instantiate_contracts_scaling_factor(
+            &mut app,
+            &owner,
+            vec![("uatom".to_string(), 6), ("ustkatom".to_string(), 9)]
+        );
+
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "uatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000_000u128),
+        },
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(980_000_000_000_000u128),
+        },
+    ];
+
+    let pool_id = Uint128::from(1u128);
+    add_liquidity_to_pool(
+        &mut app,
+        &owner,
+        &alice_address,
+        vault_addr.clone(),
+        pool_id,
+        assets_msg.clone(),
+    );
+
+    // Peform swap and test
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(10_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "uatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(10_173_468u128),
+        Uint128::from(1u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(30_000_000u128),
+        },
+    );
+
+    // Peform another swap of a large amount
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "uatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(1_017_336_485u128),
+        Uint128::from(10_453u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(3_000_000_000u128),
+        },
+    );
+
+    // Perform a give out swap
+    perform_and_test_swap_give_out(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "uatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "ustkatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(982_978_603_388u128),
+        Uint128::from(30_273u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(2_948_935_810u128),
+        },
+    );
+}
+
+
+#[test]
+fn test_swap_different_lsd_assets() {
+    let owner: Addr = Addr::unchecked("owner".to_string());
+    let alice_address: Addr = Addr::unchecked("alice".to_string());
+
+    // For this test, we consider ustakatom to have 9 decimal places and uatom to have 6 decimal places
+
+    let mut app = mock_app(
+        owner.clone(),
+        vec![
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(100_000_000_000_000_000u128),
+            },
+            Coin {
+                denom: "ustatom".to_string(),
+                amount: Uint128::new(100_000_000_000_000u128),
+            },
+        ],
+    );
+
+    // Set Alice's balances
+    app.send_tokens(
+        owner.clone(),
+        alice_address.clone(),
+        &[
+            Coin {
+                denom: "ustkatom".to_string(),
+                amount: Uint128::new(10_000_000_000_000_000u128),
+            },
+            Coin {
+                denom: "ustatom".to_string(),
+                amount: Uint128::new(10_000_000_000_000u128),
+            },
+        ],
+    )
+    .unwrap();
+
+    let fee_info = FeeInfo {
+        total_fee_bps: 30,
+        protocol_fee_percent: 20,
+    };
+
+    let scaling_factors = vec![
+        AssetScalingFactor {
+            asset_info: AssetInfo::NativeToken {
+                denom: "ustatom".to_string(),
+            },
+            scaling_factor: Decimal256::from_ratio(96u128, 100u128),
+        },
+        AssetScalingFactor {
+            asset_info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            scaling_factor: Decimal256::from_ratio(98u128, 100u128),
+        },
+    ];
+
+    let (vault_addr, pool_addr, _lp_token_addr, _current_block_time) =
+        instantiate_contract_generic(
+            &mut app,
+            &owner,
+            fee_info,
+            vec![
+                AssetInfo::NativeToken {
+                    denom: "ustatom".to_string(),
+                },
+                AssetInfo::NativeToken {
+                    denom: "ustkatom".to_string(),
+                },
+            ],
+            vec![("ustatom".to_string(), 6), ("ustkatom".to_string(), 9)],
+            scaling_factors,
+            100
+        );
+
+    let assets_msg = vec![
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustatom".to_string(),
+            },
+            amount: Uint128::new(960_000_000_000u128),
+        },
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(980_000_000_000_000u128),
+        },
+    ];
+
+    let pool_id = Uint128::from(1u128);
+    add_liquidity_to_pool(
+        &mut app,
+        &owner,
+        &alice_address,
+        vault_addr.clone(),
+        pool_id,
+        assets_msg.clone(),
+    );
+
+    // Peform swap and test
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(10_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "ustatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(9_766_529u128),
+        Uint128::from(0u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(30_000_000u128),
+        },
+    );
+
+    // Peform another swap of a large amount
+    perform_and_test_swap_give_in(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "ustatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(976_643_025u128),
+        Uint128::from(10_034u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(3_000_000_000u128),
+        },
+    );
+
+    // Perform a give out swap
+    perform_and_test_swap_give_out(
+        &mut app,
+        &owner,
+        &alice_address.clone(),
+        vault_addr.clone(),
+        pool_addr.clone(),
+        pool_id,
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustatom".to_string(),
+            },
+            amount: Uint128::new(1_000_000_000u128),
+        },
+        AssetInfo::NativeToken {
+            denom: "ustkatom".to_string(),
+        },
+        Some(Decimal::from_ratio(20u64, 100u64)),
+        Uint128::from(1_023_936_467_627u128),
+        Uint128::from(30_685u128),
+        Asset {
+            info: AssetInfo::NativeToken {
+                denom: "ustkatom".to_string(),
+            },
+            amount: Uint128::from(3_071_809_402u128),
         },
     );
 }

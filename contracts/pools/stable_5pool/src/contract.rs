@@ -20,7 +20,7 @@ use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps
+    Trade, DEFAULT_SPREAD, MAX_SPREAD, update_total_fee_bps
 };
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
@@ -885,7 +885,7 @@ pub fn query_on_swap(
 
     // Offer and ask asset precisions
     let offer_precision = get_precision(deps.storage, &offer_pool.info)?;
-    // let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
+    let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
 
     let offer_asset: Asset;
     let ask_asset: Asset;
@@ -950,7 +950,7 @@ pub fn query_on_swap(
             let ask_asset_scaled = Asset {
                 info: ask_asset_info.clone(),
                 amount,
-            }.to_scaled_decimal_asset(offer_precision, ask_asset_scaling_factor)?;
+            }.to_scaled_decimal_asset(ask_precision, ask_asset_scaling_factor)?;
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
             (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
@@ -963,6 +963,7 @@ pub fn query_on_swap(
                 &pools,
                 config.fee_info.total_fee_bps,
                 math_config.greatest_precision,
+                ask_asset_scaling_factor.map(|x| Decimal256::from(x)),
                 offer_asset_scaling_factor.map(|x| Decimal256::from(x)),
             ) {
                 Ok(res) => res,
@@ -1399,8 +1400,8 @@ pub fn assert_max_spread(
     return_amount: Uint128,
     spread_amount: Uint128,
 ) -> ResponseType {
-    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
-    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+    let default_spread = Decimal::from_str(DEFAULT_SPREAD).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_SPREAD).unwrap();
 
     let max_spread = max_spread.unwrap_or(default_spread);
     if max_spread.gt(&max_allowed_spread) {

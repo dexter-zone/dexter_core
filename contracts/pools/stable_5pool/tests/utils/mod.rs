@@ -125,7 +125,7 @@ pub fn instantiate_contract_generic(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions,
+        native_asset_precisions: native_asset_precisions.clone(),
         init_params: Some(
             to_binary(&StablePoolParams {
                 amp,
@@ -187,17 +187,24 @@ pub fn instantiate_contract_generic(
         pool_config_res.block_time_last
     );
 
+    // Find max of native_asset_precisions
+    let mut max_precision = 0u8;
+    for (_, precision) in native_asset_precisions {
+        if precision > max_precision {
+            max_precision = precision;
+        }
+    }
+
+    let math_config_binary = to_binary(&MathConfig {
+        init_amp: amp * 100,
+        init_amp_time: EPOCH_START,
+        next_amp: amp * 100,
+        next_amp_time: EPOCH_START,
+        greatest_precision: max_precision,
+    }).unwrap();
+
     assert_eq!(
-        Some(
-            to_binary(&MathConfig {
-                init_amp: amp * 100,
-                init_amp_time: EPOCH_START,
-                next_amp: amp * 100,
-                next_amp_time: EPOCH_START,
-                greatest_precision: 6u8,
-            })
-            .unwrap()
-        ),
+        Some(math_config_binary),
         pool_config_res.math_params
     );
 
@@ -218,6 +225,7 @@ pub fn instantiate_contract_generic(
 pub fn instantiate_contracts_scaling_factor(
     app: &mut App,
     owner: &Addr,
+    native_asset_precisions: Vec<(String, u8)>,
 ) -> (Addr, Addr, Addr, u128) {
     let asset_infos = vec![
         AssetInfo::NativeToken {
@@ -242,8 +250,6 @@ pub fn instantiate_contracts_scaling_factor(
             scaling_factor: Decimal256::from_ratio(98u128, 100u128),
         },
     ];
-
-    let native_asset_precisions = vec![("uatom".to_string(), 6), ("ustkatom".to_string(), 6)];
 
     let fee_info = FeeInfo {
         total_fee_bps: 30,
