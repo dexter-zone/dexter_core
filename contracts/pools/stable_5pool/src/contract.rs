@@ -13,7 +13,7 @@ use crate::error::ContractError;
 use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{
     get_precision, store_precisions, MathConfig, StablePoolParams, StablePoolUpdateParams, Twap,
-    CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor, PRECISIONS,
+    CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{
@@ -66,6 +66,31 @@ pub fn instantiate(
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
+    }
+
+    // Validate that scaling factor is specified for all the assets in the pool
+    let scaling_factor_asset_infos = params.scaling_factors.iter().map(|a| a.asset_info.clone()).sorted().collect_vec();
+    let pool_assets = msg.asset_infos.iter().sorted().cloned().collect_vec();
+
+    // validate that scaling factor is a subset of the pool_assets by iterating
+    // over the scaling_factor_asset_infos and checking if the asset_info is present in pool_assets
+    for asset_info in scaling_factor_asset_infos {
+        if !pool_assets.contains(&asset_info) {
+            return Err(ContractError::InvalidScalingFactorAssetInfo);
+        }
+    }
+
+    // Validate scaling factor manager address
+    if params.scaling_factor_manager.is_none() && params.supports_scaling_factors_update {
+        return Err(ContractError::ScalingFactorManagerNotSpecified);
+    }
+
+    if params.scaling_factor_manager.is_some() {
+        if !params.supports_scaling_factors_update {
+            return Err(ContractError::ScalingFactorManagerSpecified);
+        }
+        // Validate address
+        deps.api.addr_validate(&params.scaling_factor_manager.clone().unwrap().to_string())?;
     }
 
     // store precisions for assets in storage
@@ -423,14 +448,6 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let cur_amp = compute_current_amp(&math_config, &env)?;
 
-    let mut precisions = vec![];
-    for asset in config.assets.iter() {
-       if let AssetInfo::NativeToken { denom } = &asset.info {
-           let precision = PRECISIONS.load(deps.storage, denom.clone())?;
-           precisions.push((denom.clone(), precision));
-       }
-    }
-
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -559,12 +576,7 @@ pub fn query_on_join_pool(
     });
 
     // Sort assets because the vault expects them in order
-    act_assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    act_assets_in.sort_by_key(|a| a.info.clone());
 
     // Check asset definitions and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
@@ -670,7 +682,7 @@ pub fn query_on_join_pool(
 
             // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
             let fee_charged = fee.checked_mul(difference)?;
-            let scaling_factor = stableswap_config.scaling_factors().get(&asset_info).cloned().unwrap_or(Decimal256::one());
+            let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
             fee_tokens.push(Asset {
                 amount: fee_charged
                     .checked_mul(scaling_factor)?
@@ -741,12 +753,7 @@ pub fn query_on_exit_pool(
     if assets_out.is_some() {
         let mut assets_out_ = assets_out.clone().unwrap();
         // first sort the assets
-        assets_out_.sort_by(|a, b| {
-            a.info
-                .to_string()
-                .to_lowercase()
-                .cmp(&b.info.to_string().to_lowercase())
-        });
+        assets_out_.sort_by_key(|asset| asset.info.clone());
         let mut previous_asset: String = "".to_string();
         for asset in assets_out_.iter() {
             if previous_asset == asset.info.as_string() {
@@ -810,12 +817,7 @@ pub fn query_on_exit_pool(
     });
 
     // Sort the refund assets
-    refund_assets.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    refund_assets.sort_by_key(|a| a.info.clone());
 
     Ok(AfterExitResponse {
         assets_out: refund_assets,
@@ -1232,6 +1234,7 @@ fn imbalanced_withdraw(
         .map(|pool| (pool.info, pool.amount))
         .collect();
 
+    let scaling_factors = stableswap_config.scaling_factors();
     let mut assets_collection = assets
         .iter()
         .cloned()
@@ -1243,8 +1246,7 @@ fn imbalanced_withdraw(
                 .copied()
                 .ok_or_else(|| ContractError::InvalidAsset(asset.info.to_string()))?;
 
-            let scaling_factor = stableswap_config.scaling_factors().get(&asset.info).cloned();
-
+            let scaling_factor = scaling_factors.get(&asset.info).cloned();
             Ok((
                 asset.to_scaled_decimal_asset(precision, scaling_factor)?,
                 Decimal256::with_precision(pool, precision)?

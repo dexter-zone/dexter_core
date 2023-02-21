@@ -22,6 +22,19 @@ pub enum AssetInfo {
     NativeToken { denom: String },
 }
 
+impl PartialOrd for AssetInfo {
+    
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.to_string().to_lowercase().cmp(&other.to_string().to_lowercase()))
+    }
+}
+
+impl Ord for AssetInfo {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_string().to_lowercase().cmp(&other.to_string().to_lowercase())
+    }
+}
+
 impl fmt::Display for AssetInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

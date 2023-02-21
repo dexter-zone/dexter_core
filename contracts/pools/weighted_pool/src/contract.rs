@@ -83,12 +83,7 @@ pub fn instantiate(
     }
 
     // Sort Assets List (Weights)
-    weights.sort_by(|a, b| {
-        a.info
-            .as_string()
-            .to_lowercase()
-            .cmp(&b.info.as_string().to_lowercase())
-    });
+    weights.sort_by_key(|a| a.info.clone());
 
     // Make sure asset list in AssetInfos and WeightsList is same
     let mut index = 0;
@@ -403,12 +398,7 @@ pub fn query_on_join_pool(
 
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
-    act_assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    act_assets_in.sort_by_key(|a| a.info.clone());
 
     // Check asset definations and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
@@ -488,12 +478,7 @@ pub fn query_on_join_pool(
         });
 
         // Sort the assets in the order of the assets in the config
-        act_assets_in.sort_by(|a, b| {
-            a.info
-                .to_string()
-                .to_lowercase()
-                .cmp(&b.info.to_string().to_lowercase())
-        });
+        act_assets_in.sort_by_key(|a| a.info.clone());
 
         // Return the response
         if !num_shares.is_zero() {

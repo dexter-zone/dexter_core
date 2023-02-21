@@ -44,7 +44,7 @@ pub(crate) fn compute_swap(
         token_precision,
     )?;
     let return_amount = ask_pool.amount.to_uint128_with_precision(token_precision)? - new_ask_pool;
-    let return_amount_with_scaling_factor = Decimal256::with_precision(return_amount, token_precision as u32)?
+    let return_amount_without_scaling_factor = Decimal256::with_precision(return_amount, token_precision as u32)?
         .checked_mul(ask_asset_scaling_factor)?
         .to_uint128_with_precision(token_precision)?;
 
@@ -55,7 +55,7 @@ pub(crate) fn compute_swap(
     // We consider swap rate 1:1 in stable swap thus any difference is considered as spread.
     let spread_amount = offer_asset_amount.saturating_sub(return_amount);
 
-    Ok((return_amount_with_scaling_factor, spread_amount))
+    Ok((return_amount_without_scaling_factor, spread_amount))
 }
 
 /// ## Description
@@ -105,7 +105,7 @@ pub(crate) fn compute_offer_amount(
     )?;
 
     let offer_amount_without_scaling_factor = Decimal256::with_precision(offer_amount_with_scaling_factor, greatest_precision as u32)?
-        .checked_div(offer_asset_scaling_factor.unwrap_or(Decimal256::one()))
+        .checked_mul(offer_asset_scaling_factor.unwrap_or(Decimal256::one()))
         .unwrap();
 
     let offer_amount = offer_amount_without_scaling_factor.to_uint128_with_precision(greatest_precision)?;

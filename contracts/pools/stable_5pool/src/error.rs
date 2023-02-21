@@ -87,6 +87,15 @@ pub enum ContractError {
 
     #[error("Invalid scaling factor. Scaling factor should be postive non-zero value")]
     InvalidScalingFactor,
+
+    #[error("Invalid scaling factor asset infos. Scaling factor asset infos should be a subset of the pool asset infos")]
+    InvalidScalingFactorAssetInfo,
+
+    #[error("Scaling factor manager must be specified")]
+    ScalingFactorManagerNotSpecified,
+
+    #[error("Scaling factor manager shouldn't be specified if scaling factor is not updatable")]
+    ScalingFactorManagerSpecified,
 }
 
 impl From<OverflowError> for ContractError {
