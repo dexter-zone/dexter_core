@@ -82,6 +82,10 @@ pub fn instantiate(
     }
     event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&pool_creation_fee).unwrap());
 
+    if let AutoStakeImpl::Multistaking { contract_addr } = &msg.auto_stake_impl {
+        deps.api.addr_validate(contract_addr.as_str())?;
+    }
+
     let config = Config {
         owner: deps.api.addr_validate(&msg.owner)?,
         whitelisted_addresses: vec![],
@@ -384,6 +388,9 @@ pub fn execute_update_config(
 
     // set auto stake implementation
     if let Some(auto_stake_impl) = auto_stake_impl {
+        if let AutoStakeImpl::Multistaking { contract_addr } = &auto_stake_impl {
+            deps.api.addr_validate(contract_addr.as_str())?;
+        }
         config.auto_stake_impl = auto_stake_impl;
         event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&config.auto_stake_impl).unwrap());
     }
@@ -392,15 +399,6 @@ pub fn execute_update_config(
     if let Some(paused) = paused {
         event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
         config.paused = paused;
-    }
-
-    // Update LP token code id
-    if let Some(lp_token_code_id) = lp_token_code_id {
-        // Check if code id is valid
-        if lp_token_code_id == 0 {
-            return Err(ContractError::InvalidCodeId {});
-        }
-        config.lp_token_code_id = Some(lp_token_code_id);
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -491,6 +489,7 @@ pub fn execute_update_pool_type_config(
     }
 
     if let Some(paused) = paused {
+        event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
         pool_config.paused = paused;
     }
 
