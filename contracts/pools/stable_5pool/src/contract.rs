@@ -192,18 +192,27 @@ pub fn execute(
 /// ## Description
 fn update_scaling_factor(
     deps: DepsMut,
+    info: MessageInfo,
     asset: AssetInfo,
     scaling_factor: Decimal256,
 ) -> Result<Response, ContractError> {
-    // Access Check :: Only Vault can execute this
-    let mut stable_swap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
     let config = CONFIG.load(deps.storage)?;
+    // Access Check :: Only scaling factor manager can execute this function
+    let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+    if let Some(scaling_factor_manager) = &stableswap_config.scaling_factor_manager {
+        if &info.sender != scaling_factor_manager {
+            return Err(ContractError::Unauthorized {});
+        }
+    } else {
+        return Err(ContractError::Unauthorized {});
+    }
+    
 
-    if !stable_swap_config.supports_scaling_factors_update {
+    if !stableswap_config.supports_scaling_factors_update {
         return Err(ContractError::ScalingFactorUpdateNotSupported);
     }
 
-    let mut scaling_factors = stable_swap_config.scaling_factors;
+    let mut scaling_factors = stableswap_config.scaling_factors;
     
     let asset_found = config
         .assets
@@ -233,8 +242,8 @@ fn update_scaling_factor(
     }
 
     // Update config
-    stable_swap_config.scaling_factors = scaling_factors;
-    STABLESWAP_CONFIG.save(deps.storage, &stable_swap_config)?;
+    stableswap_config.scaling_factors = scaling_factors;
+    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     Ok(Response::new())
 }
@@ -242,20 +251,32 @@ fn update_scaling_factor(
 
 fn update_scaling_factor_manager(
     deps: DepsMut,
+    info: MessageInfo,
     scaling_factor_manager: Addr,
 ) -> Result<Response, ContractError> {
-    // Access Check :: Only Vault can execute this
-    let mut stable_swap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+    let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
 
-    if !stable_swap_config.supports_scaling_factors_update {
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    if !stableswap_config.supports_scaling_factors_update {
         return Err(ContractError::ScalingFactorUpdateNotSupported);
     }
 
     // Update config
-    stable_swap_config.scaling_factor_manager = Some(scaling_factor_manager);
-    STABLESWAP_CONFIG.save(deps.storage, &stable_swap_config)?;
+    stableswap_config.scaling_factor_manager = Some(scaling_factor_manager.clone());
+    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
+
+    // Emit an event
+    let event = Event::new("dexter-stable-swap::update_scaling_factor_manager")
+        .add_attribute("scaling_factor_manager", scaling_factor_manager.to_string());
     
-    Ok(Response::new())
+    let response = Response::new().add_event(event);
+    Ok(response)
 }
 
 /// ## Description
@@ -335,9 +356,6 @@ pub fn update_config(
     info: MessageInfo,
     params: Option<Binary>,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    let math_config = MATHCONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
     let params = params.unwrap();
 
     match from_binary::<StablePoolUpdateParams>(&params)? {
@@ -345,37 +363,16 @@ pub fn update_config(
             next_amp,
             next_amp_time,
         } => {
-            // Access Check :: Only Vault's Owner can execute this function
-            if info.sender != vault_config.owner && info.sender != config.vault_addr {
-                return Err(ContractError::Unauthorized {});
-            }
-            start_changing_amp(math_config, deps, env, next_amp, next_amp_time)?
+            start_changing_amp(deps, env, info, next_amp, next_amp_time)?
         },
         StablePoolUpdateParams::StopChangingAmp {} => {
-            // Access Check :: Only Vault's Owner can execute this function
-            if info.sender != vault_config.owner && info.sender != config.vault_addr {
-                return Err(ContractError::Unauthorized {});
-            }
-            stop_changing_amp(math_config, deps, env)?
+            stop_changing_amp( deps, env, info)?
         },
         StablePoolUpdateParams::UpdateScalingFactor { asset, scaling_factor } => {
-            // Access Check :: Only scaling factor manager can execute this function
-            let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
-            if let Some(scaling_factor_manager) = stableswap_config.scaling_factor_manager {
-                if info.sender != scaling_factor_manager {
-                    return Err(ContractError::Unauthorized {});
-                }
-            } else {
-                return Err(ContractError::Unauthorized {});
-            }
-            update_scaling_factor(deps, asset, scaling_factor)?;
+            update_scaling_factor(deps, info, asset, scaling_factor)?;
         },
         StablePoolUpdateParams::UpdateScalingFactorManager { manager } => {
-            // Access Check :: Only Vault's Owner can execute this function
-            if info.sender != vault_config.owner && info.sender != config.vault_addr {
-                return Err(ContractError::Unauthorized {});
-            }
-            update_scaling_factor_manager(deps, manager)?;
+            update_scaling_factor_manager(deps, info, manager)?;
         },
     }
 
@@ -1130,12 +1127,22 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **next_amp** is an object of type [`u64`]. This is the new value for AMP.
 /// * **next_amp_time** is an object of type [`u64`]. This is the end time when the pool amplification will be equal to `next_amp`.
 fn start_changing_amp(
-    mut math_config: MathConfig,
     deps: DepsMut,
     env: Env,
+    info: MessageInfo,
     next_amp: u64,
     next_amp_time: u64,
 ) -> Result<(), ContractError> {
+    // Load the math config from the storage
+    let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
     // Validation checks
     if next_amp == 0 || next_amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -1176,7 +1183,17 @@ fn start_changing_amp(
 /// Stop changing the AMP value. Returns [`Ok`].
 /// ## Params
 /// * **mut math_config** is an object of type [`MathConfig`]. This is a mutable reference to the pool's custom math configuration.
-fn stop_changing_amp(mut math_config: MathConfig, deps: DepsMut, env: Env) -> StdResult<()> {
+fn stop_changing_amp(deps: DepsMut, env: Env, info: MessageInfo) -> Result<(), ContractError> {
+    // Load the math config from the storage
+    let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
     let current_amp = compute_current_amp(&math_config, &env)?;
     let block_time = env.block.time.seconds();
 
