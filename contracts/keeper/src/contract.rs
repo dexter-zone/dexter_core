@@ -40,7 +40,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let cfg = Config {
-        owner: msg.owner,
+        owner: deps.api.addr_validate(msg.owner.as_str())?,
     };
 
     CONFIG.save(deps.storage, &cfg)?;

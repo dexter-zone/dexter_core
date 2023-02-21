@@ -13,3 +13,4 @@ env
 scripts/node_modules
 scripts/persistenceJS
 .idea
+.DS_Store
