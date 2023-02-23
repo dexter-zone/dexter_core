@@ -604,11 +604,11 @@ pub fn query_on_join_pool(
         .cloned()
         .map(|(asset, pool)| {
             let coin_precision = get_precision(deps.storage, &asset.info)?;
-            let scaling_factor = scaling_factors.get(&asset.info).cloned();
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
             Ok((
                 asset.to_scaled_decimal_asset(coin_precision, scaling_factor)?,
                 Decimal256::with_precision(pool, coin_precision)?
-                    .with_scaling_factor(scaling_factor.unwrap_or(Decimal256::one()))?,
+                    .with_scaling_factor(scaling_factor)?,
             ))
         })
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
@@ -849,16 +849,7 @@ pub fn query_on_swap(
     let stableswap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
 
     let scaling_factors = stableswap_config.scaling_factors().clone();
-
-    // Convert Asset to DecimalAsset types
-    let pools = config
-        .assets
-        .into_iter()
-        .map(|pool| {
-            let token_precision = get_precision(deps.storage, &pool.info)?;
-            Ok(pool.to_scaled_decimal_asset(token_precision, scaling_factors.get(&pool.info).cloned())?)
-        })
-        .collect::<StdResult<Vec<_>>>()?;
+    let pools =  transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
@@ -891,6 +882,10 @@ pub fn query_on_swap(
     let (calc_amount, spread_amount): (Uint128, Uint128);
     let total_fee: Uint128;
 
+
+    let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned().unwrap_or(Decimal256::one());
+    let offer_asset_scaling_factor = scaling_factors.get(&offer_asset_info).cloned().unwrap_or(Decimal256::one());
+
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
         SwapType::GiveIn {} => {
@@ -903,12 +898,10 @@ pub fn query_on_swap(
             total_fee = calculate_underlying_fees(amount, config.fee_info.total_fee_bps);
             let offer_amount_after_fee = amount.checked_sub(total_fee)?;
 
-            let scaling_factor = scaling_factors.get(&offer_asset_info).cloned();
-
             let offer_asset_after_fee = Asset {
                 info: offer_asset_info.clone(),
                 amount: offer_amount_after_fee,
-            }.to_scaled_decimal_asset(offer_precision, scaling_factor)?;
+            }.to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
 
             let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned();
 
@@ -943,8 +936,6 @@ pub fn query_on_swap(
                 amount,
             };
 
-            let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned();
-            let offer_asset_scaling_factor = scaling_factors.get(&offer_asset_info).cloned();
             
             let ask_asset_scaled = Asset {
                 info: ask_asset_info.clone(),
@@ -962,8 +953,8 @@ pub fn query_on_swap(
                 &pools,
                 config.fee_info.total_fee_bps,
                 math_config.greatest_precision,
-                ask_asset_scaling_factor.map(|x| Decimal256::from(x)),
-                offer_asset_scaling_factor.map(|x| Decimal256::from(x)),
+                ask_asset_scaling_factor,
+                offer_asset_scaling_factor,
             ) {
                 Ok(res) => res,
                 Err(err) => {
@@ -1263,12 +1254,11 @@ fn imbalanced_withdraw(
                 .copied()
                 .ok_or_else(|| ContractError::InvalidAsset(asset.info.to_string()))?;
 
-            let scaling_factor = scaling_factors.get(&asset.info).cloned();
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
             Ok((
                 asset.to_scaled_decimal_asset(precision, scaling_factor)?,
                 Decimal256::with_precision(pool, precision)?
-                    .checked_div(scaling_factor.unwrap_or(Decimal256::one()))
-                    .map_err(|e| StdError::generic_err(e.to_string()))?,
+                    .without_scaling_factor(scaling_factor)?,
             ))
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
@@ -1515,7 +1505,7 @@ pub fn transform_to_scaled_decimal_asset(deps: Deps, assets: Vec<Asset>) -> StdR
         .cloned()
         .map(|asset| {
             let precision = get_precision(deps.storage, &asset.info)?;
-            let scaling_factor = scaling_factors.get(&asset.info).cloned();
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
             asset.to_scaled_decimal_asset(precision, scaling_factor)
         })
         .collect::<StdResult<Vec<DecimalAsset>>>()

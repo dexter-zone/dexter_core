@@ -82,8 +82,8 @@ pub(crate) fn compute_offer_amount(
     pools: &[DecimalAsset],
     commission_rate: u16,
     greatest_precision: u8,
-    ask_asset_scaling_factor: Option<Decimal256>,
-    offer_asset_scaling_factor: Option<Decimal256>,
+    ask_asset_scaling_factor: Decimal256,
+    offer_asset_scaling_factor: Decimal256,
 ) -> StdResult<(Uint128, Uint128, Uint128)> {
     let offer_precision = get_precision(storage, &offer_pool.info)?;
     let ask_precision = get_precision(storage, &ask_asset.info)?;
@@ -112,7 +112,7 @@ pub(crate) fn compute_offer_amount(
 
     // Since we received the offer amount with the greatest precision, we need to scale it create the Decimal256 value with the greatest precision only.
     let offer_amount_without_scaling_factor = Decimal256::with_precision(offer_amount_with_scaling_factor_gp, greatest_precision as u32)?
-        .without_scaling_factor(offer_asset_scaling_factor.unwrap_or(Decimal256::one()))
+        .without_scaling_factor(offer_asset_scaling_factor)
         .unwrap();
 
     let offer_amount_including_fee = offer_amount_without_scaling_factor.checked_mul(inv_one_minus_commission)?;
@@ -127,7 +127,7 @@ pub(crate) fn compute_offer_amount(
     let spread_amount_gp = offer_amount_with_scaling_factor_excluding_fee_gp.saturating_sub(ask_asset_with_scaling_factor_gp);
 
     let spread_amount_without_scaling_factor = Decimal256::with_precision(spread_amount_gp, greatest_precision as u32)?
-        .without_scaling_factor(ask_asset_scaling_factor.unwrap_or(Decimal256::one()))?
+        .without_scaling_factor(ask_asset_scaling_factor)?
         .to_uint128_with_precision(ask_precision)?;
 
     Ok((offer_amount_including_fee_uint128, spread_amount_without_scaling_factor, fee_uint128))
@@ -204,8 +204,8 @@ pub fn accumulate_prices(
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         
-        let offer_asset_scaling_factor = scaling_factors.get(&from).cloned();
-        let ask_asset_scaling_factor = scaling_factors.get(&to).cloned();
+        let offer_asset_scaling_factor = scaling_factors.get(&from).cloned().unwrap_or(Decimal256::one());
+        let ask_asset_scaling_factor = scaling_factors.get(&to).cloned().unwrap_or(Decimal256::one());
 
         let offer_asset = DecimalAsset {
             info: from.clone(),
@@ -224,7 +224,7 @@ pub fn accumulate_prices(
             &offer_pool,
             &ask_pool,
             pools,
-            ask_asset_scaling_factor.unwrap_or(Decimal256::one()),
+            ask_asset_scaling_factor,
         )?;
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);

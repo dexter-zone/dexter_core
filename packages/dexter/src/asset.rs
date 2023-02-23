@@ -292,7 +292,7 @@ impl Asset {
         })
     }
 
-    pub fn to_scaled_decimal_asset(&self, precision: impl Into<u32>, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
+    pub fn to_scaled_decimal_asset(&self, precision: impl Into<u32>, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
         self.to_decimal_asset(precision)?.with_scaling_factor(scaling_factor)
     }
 }
@@ -322,8 +322,7 @@ pub struct DecimalAsset {
 
 impl DecimalAsset {
 
-    pub fn with_scaling_factor(&self, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
-        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
+    pub fn with_scaling_factor(&self, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
         let amount = self.amount.with_scaling_factor(scaling_factor)?;
         Ok(DecimalAsset {
             info: self.info.clone(),
@@ -331,8 +330,7 @@ impl DecimalAsset {
         })
     }
 
-    pub fn without_scaling_factor(&self, scaling_factor: Option<Decimal256>) -> StdResult<DecimalAsset> {
-        let scaling_factor = scaling_factor.unwrap_or(Decimal256::one());
+    pub fn without_scaling_factor(&self, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
         let amount = self.amount.without_scaling_factor(scaling_factor)?;
         Ok(DecimalAsset {
             info: self.info.clone(),
@@ -435,6 +433,7 @@ impl Decimal256Ext for Decimal256 {
         Decimal256::new(self.atomics().saturating_sub(other.atomics()))
     }
 
+    #[inline]
     fn with_scaling_factor(
         &self,
         scaling_factor: Decimal256,
@@ -446,6 +445,7 @@ impl Decimal256Ext for Decimal256 {
         Ok(amount)
     }
 
+    #[inline(always)]
     fn without_scaling_factor(
         &self,
         scaling_factor: Decimal256,
