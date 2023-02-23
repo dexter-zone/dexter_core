@@ -215,6 +215,11 @@ fn update_scaling_factor(
     let config = CONFIG.load(deps.storage)?;
     // Access Check :: Only scaling factor manager can execute this function
     let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+
+    if !stableswap_config.supports_scaling_factors_update {
+        return Err(ContractError::ScalingFactorUpdateNotSupported);
+    }
+
     if let Some(scaling_factor_manager) = &stableswap_config.scaling_factor_manager {
         if &info.sender != scaling_factor_manager {
             return Err(ContractError::Unauthorized {});
@@ -223,11 +228,6 @@ fn update_scaling_factor(
         return Err(ContractError::Unauthorized {});
     }
     
-
-    if !stableswap_config.supports_scaling_factors_update {
-        return Err(ContractError::ScalingFactorUpdateNotSupported);
-    }
-
     let mut scaling_factors = stableswap_config.scaling_factors;
     
     let asset_found = config
