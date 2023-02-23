@@ -1,11 +1,11 @@
 use crate::utils::{
     add_liquidity_to_pool, instantiate_contracts_scaling_factor, mock_app,
     perform_and_test_swap_give_in, perform_and_test_swap_give_out,
-    instantiate_contract_generic
+    instantiate_contract_generic, validate_culumative_prices,
 };
 use cosmwasm_std::{Addr, Coin, Decimal, Uint128, to_binary, Decimal256};
 use cw_multi_test::Executor;
-use dexter::asset::{Asset, AssetInfo};
+use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
 use dexter::pool::{AfterJoinResponse, QueryMsg as PoolQueryMsg, AfterExitResponse};
 use dexter::vault::{ExecuteMsg, PoolInfoResponse, QueryMsg, Cw20HookMsg, FeeInfo};
 use cw20::Cw20ExecuteMsg;
@@ -561,15 +561,24 @@ fn test_swap_different_lsd_assets() {
 
     // For this test, we consider ustakatom to have 9 decimal places and uatom to have 6 decimal places
 
+    let stk_atom_asset = AssetInfo::NativeToken {
+        denom: "ustkatom".to_string(),
+    };
+
+    let st_atom_asset = AssetInfo::NativeToken {
+        denom: "ustatom".to_string(),
+    };
+
+
     let mut app = mock_app(
         owner.clone(),
         vec![
             Coin {
-                denom: "ustkatom".to_string(),
+                denom: stk_atom_asset.denom().unwrap(),
                 amount: Uint128::new(100_000_000_000_000_000u128),
             },
             Coin {
-                denom: "ustatom".to_string(),
+                denom: st_atom_asset.denom().unwrap(),
                 amount: Uint128::new(100_000_000_000_000u128),
             },
         ],
@@ -581,11 +590,11 @@ fn test_swap_different_lsd_assets() {
         alice_address.clone(),
         &[
             Coin {
-                denom: "ustkatom".to_string(),
+                denom: stk_atom_asset.denom().unwrap(),
                 amount: Uint128::new(10_000_000_000_000_000u128),
             },
             Coin {
-                denom: "ustatom".to_string(),
+                denom: st_atom_asset.denom().unwrap(),
                 amount: Uint128::new(10_000_000_000_000u128),
             },
         ],
@@ -599,15 +608,11 @@ fn test_swap_different_lsd_assets() {
 
     let scaling_factors = vec![
         AssetScalingFactor {
-            asset_info: AssetInfo::NativeToken {
-                denom: "ustatom".to_string(),
-            },
+            asset_info: st_atom_asset.clone(),
             scaling_factor: Decimal256::from_ratio(96u128, 100u128),
         },
         AssetScalingFactor {
-            asset_info: AssetInfo::NativeToken {
-                denom: "ustkatom".to_string(),
-            },
+            asset_info: stk_atom_asset.clone(),
             scaling_factor: Decimal256::from_ratio(98u128, 100u128),
         },
     ];
@@ -617,30 +622,19 @@ fn test_swap_different_lsd_assets() {
             &mut app,
             &owner,
             fee_info,
-            vec![
-                AssetInfo::NativeToken {
-                    denom: "ustatom".to_string(),
-                },
-                AssetInfo::NativeToken {
-                    denom: "ustkatom".to_string(),
-                },
-            ],
-            vec![("ustatom".to_string(), 6), ("ustkatom".to_string(), 9)],
+            vec![st_atom_asset.clone(), stk_atom_asset.clone()],
+            vec![(st_atom_asset.denom().unwrap(), 6), (stk_atom_asset.denom().unwrap(), 9)],
             scaling_factors,
             100
         );
 
     let assets_msg = vec![
         Asset {
-            info: AssetInfo::NativeToken {
-                denom: "ustatom".to_string(),
-            },
+            info: st_atom_asset.clone(),
             amount: Uint128::new(960_000_000_000u128),
         },
         Asset {
-            info: AssetInfo::NativeToken {
-                denom: "ustkatom".to_string(),
-            },
+            info: stk_atom_asset.clone(),
             amount: Uint128::new(980_000_000_000_000u128),
         },
     ];
@@ -655,6 +649,28 @@ fn test_swap_different_lsd_assets() {
         assets_msg.clone(),
     );
 
+    // increase block time
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(1000);
+    });
+
+    validate_culumative_prices(
+        &mut app,
+        &pool_addr,
+        vec![
+            AssetExchangeRate {
+                offer_info: st_atom_asset.clone(),
+                ask_info: stk_atom_asset.clone(),
+                rate: Uint128::from(1_020_833_322_000u64),
+            },
+            AssetExchangeRate {
+                offer_info: stk_atom_asset.clone(),
+                ask_info: st_atom_asset.clone(),
+                rate: Uint128::from(979_591_000u64),
+            }
+        ]
+    );
+
     // Peform swap and test
     perform_and_test_swap_give_in(
         &mut app,
@@ -664,23 +680,39 @@ fn test_swap_different_lsd_assets() {
         pool_addr.clone(),
         pool_id,
         Asset {
-            info: AssetInfo::NativeToken {
-                denom: "ustkatom".to_string(),
-            },
+            info: stk_atom_asset.clone(),
             amount: Uint128::new(10_000_000_000u128),
         },
-        AssetInfo::NativeToken {
-            denom: "ustatom".to_string(),
-        },
+        st_atom_asset.clone(),
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(9_766_529u128),
         Uint128::from(0u128),
         Asset {
-            info: AssetInfo::NativeToken {
-                denom: "ustkatom".to_string(),
-            },
+            info: stk_atom_asset.clone(),
             amount: Uint128::from(30_000_000u128),
         },
+    );
+
+    // increase block time
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(100);
+    });
+
+    validate_culumative_prices(
+        &mut app,
+        &pool_addr,
+        vec![
+            AssetExchangeRate {
+                offer_info: st_atom_asset.clone(),
+                ask_info: stk_atom_asset.clone(),
+                rate: Uint128::from(1_327_087_498_500u64),
+            },
+            AssetExchangeRate {
+                offer_info: stk_atom_asset.clone(),
+                ask_info: st_atom_asset.clone(),
+                rate: Uint128::from(1_273_464_300u64),
+            }
+        ]
     );
 
     // Peform another swap of a large amount
@@ -709,6 +741,28 @@ fn test_swap_different_lsd_assets() {
             },
             amount: Uint128::from(3_000_000_000u128),
         },
+    );
+
+    // increase block time
+    app.update_block(|b| {
+        b.time = b.time.plus_seconds(200);
+    });
+
+    validate_culumative_prices(
+        &mut app,
+        &pool_addr,
+        vec![
+            AssetExchangeRate {
+                offer_info: st_atom_asset.clone(),
+                ask_info: stk_atom_asset.clone(),
+                rate: Uint128::from(1_122_916_674_700u64),
+            },
+            AssetExchangeRate {
+                offer_info: stk_atom_asset.clone(),
+                ask_info: st_atom_asset.clone(),
+                rate: Uint128::from(1_077_550_100u64),
+            }
+        ]
     );
 
     // Perform a give out swap

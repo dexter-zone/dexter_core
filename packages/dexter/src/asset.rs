@@ -182,6 +182,28 @@ impl AssetInfo {
 
         Ok(decimals)
     }
+
+    pub fn denom(&self) -> StdResult<String> {
+        match &self {
+            AssetInfo::NativeToken { denom } => {
+                Ok(denom.to_string())
+            },
+            AssetInfo::Token { contract_addr: _ } => {
+                Err(StdError::generic_err("Not a native token"))
+            }
+        }
+    }
+
+    pub fn contract_addr(&self) -> StdResult<String> {
+        match &self {
+            AssetInfo::NativeToken { denom: _ } => {
+                Err(StdError::generic_err("Not a CW20 token"))
+            },
+            AssetInfo::Token { contract_addr } => {
+                Ok(contract_addr.to_string())
+            }
+        }
+    }
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

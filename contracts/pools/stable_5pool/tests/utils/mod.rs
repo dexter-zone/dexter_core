@@ -1,11 +1,13 @@
+use std::collections::HashMap;
+
 use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal256, Timestamp, Uint128, Decimal};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 
-use dexter::asset::{Asset, AssetInfo};
+use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse};
+use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest,
@@ -599,4 +601,29 @@ pub fn perform_and_test_swap_give_out(
             &coins,
         )
         .unwrap();
+}
+
+pub fn validate_culumative_prices(
+    app: &mut App,
+    pool_addr: &Addr,
+    expected_prices: Vec<AssetExchangeRate>
+) {
+
+    let cumulative_price_query = QueryMsg::CumulativePrices{};
+    let cumulative_price_response: CumulativePricesResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &cumulative_price_query)
+        .unwrap();
+    
+    // Expect price map
+    let mut expected_price_map: HashMap<(AssetInfo, AssetInfo), Uint128> = HashMap::new();
+    for expected_price in expected_prices {
+        expected_price_map.insert((expected_price.offer_info, expected_price.ask_info), expected_price.rate);
+    }
+
+    for exchange_info in cumulative_price_response.exchange_infos {
+        let key = (exchange_info.offer_info, exchange_info.ask_info);
+        let expected_price = expected_price_map.get(&key).unwrap();
+        assert_eq!(exchange_info.rate, *expected_price);
+    }
 }
