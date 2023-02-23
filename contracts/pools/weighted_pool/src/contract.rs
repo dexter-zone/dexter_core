@@ -134,7 +134,7 @@ pub fn instantiate(
 
     let config = Config {
         pool_id: msg.pool_id.clone(),
-        lp_token_addr: msg.lp_token_addr,
+        lp_token_addr: msg.lp_token_addr.clone(),
         vault_addr: msg.vault_addr.clone(),
         assets,
         pool_type: msg.pool_type.clone(),
@@ -157,7 +157,21 @@ pub fn instantiate(
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-    Ok(Response::new())
+    let event = Event::new("dexter-stable-swap::instantiate")
+        .add_attribute("pool_id", msg.pool_id)
+        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+        .add_attribute("vault_addr", msg.vault_addr)
+        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
+        .add_attribute("fee_info", msg.fee_info.to_string())
+        .add_attribute("weights", serde_json_wasm::to_string(&weights).unwrap())
+        .add_attribute("exit_fee", math_config.exit_fee.unwrap().to_string());
+
+    let response = Response::new()
+        .add_event(event)
+        .add_attribute("action", "instantiate");
+
+    Ok(response)
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------

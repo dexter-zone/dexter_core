@@ -23,6 +23,12 @@ pub struct FeeStructs {
     pub total_fee_bps: u16,
 }
 
+impl Display for FeeStructs {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        fmt.write_str(format!("total_fee_bps : {}", self.total_fee_bps).as_str())
+    }
+}
+
 /// ## Description
 /// This struct describes the main control config of pool.
 #[cw_serde]

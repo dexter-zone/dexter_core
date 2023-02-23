@@ -122,7 +122,7 @@ pub fn instantiate(
 
     let config = Config {
         pool_id: msg.pool_id.clone(),
-        lp_token_addr: msg.lp_token_addr,
+        lp_token_addr: msg.lp_token_addr.clone(),
         vault_addr: msg.vault_addr.clone(),
         assets,
         pool_type: msg.pool_type.clone(),
@@ -144,9 +144,9 @@ pub fn instantiate(
     };
 
     let stableswap_config = StableSwapConfig {
-        scaling_factor_manager: params.scaling_factor_manager,
+        scaling_factor_manager: params.scaling_factor_manager.clone(),
         supports_scaling_factors_update: params.supports_scaling_factors_update,
-        scaling_factors: params.scaling_factors,
+        scaling_factors: params.scaling_factors.clone(),
     };
 
     // Store config, MathConfig and twap in storage
@@ -155,7 +155,23 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
-    Ok(Response::new())
+    let event = Event::new("dexter-stable-swap::instantiate")
+        .add_attribute("pool_id", msg.pool_id)
+        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
+        .add_attribute("vault_addr", msg.vault_addr)
+        .add_attribute("fee_info", msg.fee_info.to_string())
+        .add_attribute("amp", params.amp.to_string())
+        .add_attribute("scaling_factor_manager", params.scaling_factor_manager.map(|a| a.to_string()).unwrap_or("".to_string()))
+        .add_attribute("supports_scaling_factors_update", params.supports_scaling_factors_update.to_string())
+        .add_attribute("scaling_factors", serde_json_wasm::to_string(&params.scaling_factors).unwrap());
+
+    let response = Response::new()
+        .add_event(event)
+        .add_attribute("action", "instantiate");
+
+    Ok(response)
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -236,7 +252,7 @@ fn update_scaling_factor(
         scaling_factors[asset_index].scaling_factor = scaling_factor;
     } else {
         scaling_factors.push(AssetScalingFactor {
-            asset_info: asset,
+            asset_info: asset.clone(),
             scaling_factor,
         });
     }
@@ -245,7 +261,13 @@ fn update_scaling_factor(
     stableswap_config.scaling_factors = scaling_factors;
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
-    Ok(Response::new())
+    // Emit an event
+    let event = Event::new("dexter-stable-swap::update_scaling_factor")
+        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+        .add_attribute("scaling_factor", scaling_factor.to_string());
+    
+    let response = Response::new().add_event(event);
+    Ok(response)
 }
 
 
