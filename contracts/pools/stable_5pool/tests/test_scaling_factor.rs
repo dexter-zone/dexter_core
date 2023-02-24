@@ -668,7 +668,7 @@ fn test_swap_different_lsd_assets() {
         pool_addr.clone(),
         pool_id,
         assets_msg.clone(),
-        Uint128::new(1_000_000_000_000u128),
+        Uint128::new(2_000_000_000_000_000u128),
     );
 
     // increase block time
