@@ -33,6 +33,11 @@ const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Maximum number of assets supported by the pool
+const MAX_ASSETS: usize = 5;
+/// Minimum number of assets supported by the pool
+const MIN_ASSETS: usize = 2;
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -53,7 +58,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // Validate number of assets
-    if msg.asset_infos.len() > 5 || msg.asset_infos.len() < 2 {
+    if msg.asset_infos.len() > MAX_ASSETS || msg.asset_infos.len() < MIN_ASSETS {
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
