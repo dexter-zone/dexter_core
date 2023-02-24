@@ -92,6 +92,15 @@ pub struct AssetScalingFactor {
     pub scaling_factor: Decimal256,
 }
 
+impl AssetScalingFactor {
+    pub fn new(asset_info: AssetInfo, scaling_factor: Decimal256) -> Self {
+        Self {
+            asset_info,
+            scaling_factor,
+        }
+    }
+}
+
 /// This enum stores the options available to start and stop changing a stableswap pool's amplification.
 #[cw_serde]
 pub enum StablePoolUpdateParams {

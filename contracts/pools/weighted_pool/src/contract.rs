@@ -165,7 +165,7 @@ pub fn instantiate(
         .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
         .add_attribute("fee_info", msg.fee_info.to_string())
         .add_attribute("weights", serde_json_wasm::to_string(&weights).unwrap())
-        .add_attribute("exit_fee", math_config.exit_fee.unwrap().to_string());
+        .add_attribute("exit_fee", exit_fee.unwrap_or(Decimal::zero()).to_string());
 
     let response = Response::new()
         .add_event(event)

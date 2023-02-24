@@ -99,7 +99,7 @@ impl StableSwapSimulation {
         );
 
         // Let's add liquidity corresponding to the bootstrapping amount to the pool
-        add_liquidity_to_pool(&mut app, &owner, &user,  vault_addr.clone(), Uint128::from(1u64), assets_with_bootstrapping_amount.clone());
+        add_liquidity_to_pool(&mut app, &owner, &user,  vault_addr.clone(), Uint128::from(1u64), pool_addr.clone(), assets_with_bootstrapping_amount.clone());
 
         Self {
             amplification_coefficient,

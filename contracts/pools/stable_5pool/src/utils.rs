@@ -34,7 +34,7 @@ pub(crate) fn compute_swap(
 ) -> StdResult<(Uint128, Uint128)> {
     // get ask asset precision
     let ask_asset_precision = get_precision(storage, &ask_pool.info)?;
-
+    
     let new_ask_pool = calc_y(
         &offer_asset,
         &ask_pool.info,

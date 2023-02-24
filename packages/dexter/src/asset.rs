@@ -45,6 +45,16 @@ impl fmt::Display for AssetInfo {
 }
 
 impl AssetInfo {
+
+    pub fn native_token(denom: String) -> Self {
+        AssetInfo::NativeToken { denom }
+    }
+
+    pub fn token(contract_addr: Addr) -> Self {
+        AssetInfo::Token { contract_addr }
+    }
+
+
     pub fn as_string(&self) -> String {
         match self {
             AssetInfo::NativeToken { denom } => denom.to_string(),
@@ -226,6 +236,12 @@ impl fmt::Display for Asset {
 }
 
 impl Asset {
+
+    pub fn new(info: AssetInfo, amount: Uint128) -> Self {
+        Self { info, amount }
+    }
+
+
     /// Returns true if the token is native. Otherwise returns false.
     pub fn is_native_token(&self) -> bool {
         self.info.is_native_token()

@@ -163,9 +163,15 @@ pub fn instantiate(
         .add_attribute("vault_addr", msg.vault_addr)
         .add_attribute("fee_info", msg.fee_info.to_string())
         .add_attribute("amp", params.amp.to_string())
-        .add_attribute("scaling_factor_manager", params.scaling_factor_manager.map(|a| a.to_string()).unwrap_or("".to_string()))
         .add_attribute("supports_scaling_factors_update", params.supports_scaling_factors_update.to_string())
         .add_attribute("scaling_factors", serde_json_wasm::to_string(&params.scaling_factors).unwrap());
+
+    // Add scaling_factor_manager attribute if present
+    let event = if params.scaling_factor_manager.is_some() {
+        event.add_attribute("scaling_factor_manager", params.scaling_factor_manager.unwrap().to_string())
+    } else {
+        event
+    };
 
     let response = Response::new()
         .add_event(event)
@@ -1292,12 +1298,14 @@ fn imbalanced_withdraw(
             if !assets.iter().any(|asset| asset.info == pool_info) {
                 let precision = get_precision(deps.storage, &pool_info)?;
 
+                let scaling_factor = scaling_factors.get(&pool_info).cloned().unwrap_or(Decimal256::one());
                 assets_collection.push((
                     DecimalAsset {
                         amount: Decimal256::zero(),
                         info: pool_info,
                     },
-                    Decimal256::with_precision(pool_amount, precision)?,
+                    Decimal256::with_precision(pool_amount, precision)?
+                        .with_scaling_factor(scaling_factor)?,
                 ));
             }
             Ok(())

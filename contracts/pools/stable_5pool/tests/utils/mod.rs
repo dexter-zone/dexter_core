@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal256, Timestamp, Uint128, Decimal};
-use cw20::MinterResponse;
+use cw20::{MinterResponse, Cw20QueryMsg, BalanceResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse};
+use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse, AfterExitResponse, AfterJoinResponse};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
-    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest,
+    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest, Cw20HookMsg,
 };
 
 use cw20::Cw20ExecuteMsg;
@@ -355,11 +355,12 @@ pub fn add_liquidity_to_pool(
     user: &Addr,
     vault_addr: Addr,
     pool_id: Uint128,
-    assets_with_bootstrapping_amount: Vec<Asset>
-) {
+    pool_addr: Addr,
+    amount_to_add: Vec<Asset>,
+) -> Uint128 {
     
     // Find CW20 assets from the bootstrapping amount and mint token to the user
-    let cw20_assets = assets_with_bootstrapping_amount
+    let cw20_assets = amount_to_add
         .iter()
         .filter(|a| !a.info.is_native_token())
         .map(|a| a.info.clone())
@@ -399,7 +400,7 @@ pub fn add_liquidity_to_pool(
     }
 
     // Step 3: Create coins vec for native tokens to be sent for joining pool
-    let native_token = assets_with_bootstrapping_amount
+    let native_token = amount_to_add
         .iter()
         .filter(|a| a.info.is_native_token())
         .collect_vec();
@@ -413,6 +414,18 @@ pub fn add_liquidity_to_pool(
         });
     }
 
+    // Step 4: Do the query to get to join pool once
+    let query_msg = QueryMsg::OnJoinPool {
+        assets_in: Some(amount_to_add.clone()),
+        mint_amount: None,
+        slippage_tolerance: None,
+    };
+
+    let res: AfterJoinResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.as_str(), &query_msg)
+        .unwrap();
+
     // Step 4: Execute join pool
     let msg = VaultExecuteMsg::JoinPool {
         pool_id,
@@ -420,7 +433,7 @@ pub fn add_liquidity_to_pool(
         lp_to_mint: None,
         auto_stake: None,
         slippage_tolerance: None,
-        assets: Some(assets_with_bootstrapping_amount),
+        assets: Some(amount_to_add),
     };
 
     app
@@ -432,6 +445,69 @@ pub fn add_liquidity_to_pool(
         )
         .unwrap();
 
+    res.new_shares
+}
+
+
+pub fn query_cw20_balance(
+    app: &mut App,
+    user: &Addr,
+    contract_addr: Addr,
+) -> Uint128 {
+    let query_msg = Cw20QueryMsg::Balance {
+        address: user.to_string(),
+    };
+    let res: BalanceResponse = app
+        .wrap()
+        .query_wasm_smart(contract_addr.as_str(), &query_msg)
+        .unwrap();
+
+    res.balance
+}
+
+pub fn query_bank_balance(
+    app: &mut App,
+    user: &Addr,
+    denom: String,
+) -> Uint128 {
+
+    let res: Coin = app
+        .wrap()
+        .query_balance(user.clone(), denom)
+        .unwrap();
+
+    res.amount
+}
+
+
+pub fn perform_and_test_add_liquidity(
+    app: &mut App,
+    owner: &Addr,
+    user: &Addr,
+    vault_addr: Addr,
+    lp_token_addr: Addr,
+    pool_addr: Addr,
+    pool_id: Uint128,
+    amount_to_add: Vec<Asset>,
+    expected_lp_token_amount: Uint128,
+) {
+    let lp_token_before = query_cw20_balance(app, user, lp_token_addr.clone());
+
+    let new_shares_from_query = add_liquidity_to_pool(app, owner, user, vault_addr.clone(), pool_id, pool_addr, amount_to_add);
+
+    let lp_token_after = query_cw20_balance(app, user, lp_token_addr.clone());
+
+    assert_eq!(
+        new_shares_from_query,
+        expected_lp_token_amount,
+        "Unexpected LP token amount from query"
+    );
+
+    assert_eq!(
+        lp_token_after,
+        lp_token_before + expected_lp_token_amount,
+        "Unexpected LP token amount after adding liquidity"
+    );
 }
 
 pub fn perform_and_test_swap_give_in(
@@ -614,7 +690,7 @@ pub fn validate_culumative_prices(
         .wrap()
         .query_wasm_smart(pool_addr.clone(), &cumulative_price_query)
         .unwrap();
-    
+
     // Expect price map
     let mut expected_price_map: HashMap<(AssetInfo, AssetInfo), Uint128> = HashMap::new();
     for expected_price in expected_prices {
@@ -626,4 +702,158 @@ pub fn validate_culumative_prices(
         let expected_price = expected_price_map.get(&key).unwrap();
         assert_eq!(exchange_info.rate, *expected_price);
     }
+}
+
+pub fn create_cw20_asset(
+    app: &mut App,
+    owner: &Addr,
+    token_code_id: u64,
+    name: String,
+    symbol: String,
+    decimals: u8,
+) -> Addr {
+    // Create Token X
+    let init_msg = TokenInstantiateMsg {
+        name: name.clone(),
+        symbol,
+        decimals,
+        initial_balances: vec![],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+    let token_instance0 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &init_msg,
+            &[],
+            name,
+            None,
+        )
+        .unwrap();
+
+    return token_instance0;
+}
+
+pub fn perform_and_test_exit_pool(
+    app: &mut App,
+    user: &Addr,
+    vault_addr: Addr,
+    pool_addr: Addr,
+    pool_id: Uint128,
+    lp_token_addr: Addr,
+    burn_amount: Uint128,
+    expected_asset_out: Vec<Asset>,
+    expected_fee: Option<Vec<Asset>>
+) {
+
+    let exit_query_msg = QueryMsg::OnExitPool {
+        burn_amount: Some(burn_amount),
+        assets_out: None,  
+    };
+
+    let exit_query_res: AfterExitResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &exit_query_msg)
+        .unwrap();
+
+    assert_eq!(exit_query_res.assets_out, expected_asset_out);
+    assert_eq!(exit_query_res.fee, expected_fee);
+
+    let exit_pool_hook_msg = Cw20HookMsg::ExitPool {
+        pool_id,
+        assets: None,
+        burn_amount: Some(burn_amount),
+        recipient: None,
+    };
+
+    let exit_msg = Cw20ExecuteMsg::Send {
+        contract: vault_addr.to_string(),
+        amount: burn_amount,
+        msg: to_binary(&exit_pool_hook_msg).unwrap(),
+    };
+
+    // Execute the exit pool message
+    app.execute_contract(
+        user.clone(),
+        lp_token_addr.clone(),
+        &exit_msg,
+        &[],
+    ).unwrap();
+
+}
+
+
+pub fn perform_and_test_imbalanced_exit(
+    app: &mut App,
+    user: &Addr,
+    vault_addr: Addr,
+    pool_addr: Addr,
+    pool_id: Uint128,
+    lp_token_addr: Addr,
+    assets_out: Vec<Asset>,
+    expected_burn_amount: Uint128,
+    expected_fee: Option<Vec<Asset>>
+) {
+    
+    let exit_query_msg = QueryMsg::OnExitPool {
+        // Keep some scope for error. Need to fix this burn API like right now!
+        burn_amount: Some(expected_burn_amount.checked_mul(Uint128::from(2u128)).unwrap()),
+        assets_out: Some(assets_out.clone()),  
+    };
+
+    let exit_query_res: AfterExitResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &exit_query_msg)
+        .unwrap();
+
+    let assets_out_actual_map = assets_out.iter().map(|asset| (asset.info.clone(), asset.amount)).collect::<HashMap<AssetInfo, Uint128>>();
+
+    for asset in assets_out.iter() {
+        let actual_amount = assets_out_actual_map.get(&asset.info).unwrap();
+        assert_eq!(asset.amount, *actual_amount);
+    }
+
+    let sorted_fee = exit_query_res.fee.map(|mut a| {
+        a.sort_by_key(|i| i.info.clone());
+        a
+    });
+
+    assert_eq!(sorted_fee, expected_fee);
+    assert_eq!(exit_query_res.burn_shares, expected_burn_amount);
+
+    let exit_pool_hook_msg = Cw20HookMsg::ExitPool {
+        pool_id,
+        assets: Some(assets_out.clone()),
+        burn_amount: None,
+        recipient: None,
+    };
+
+    let exit_msg = Cw20ExecuteMsg::Send {
+        contract: vault_addr.to_string(),
+        amount: expected_burn_amount,
+        msg: to_binary(&exit_pool_hook_msg).unwrap(),
+    };
+
+    // Execute the exit pool message
+    app.execute_contract(
+        user.clone(),
+        lp_token_addr.clone(),
+        &exit_msg,
+        &[],
+    ).unwrap();
+    
+}
+
+pub fn log_pool_info(app: &mut App, pool_addr: &Addr) {
+    let pool_info_query = QueryMsg::Config{};
+    let pool_info_response: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &pool_info_query)
+        .unwrap();
+
+    println!("Pool Info: {:?}", pool_info_response);
 }
