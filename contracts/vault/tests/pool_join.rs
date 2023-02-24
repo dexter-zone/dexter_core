@@ -177,7 +177,6 @@ fn test_join_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -201,9 +200,8 @@ fn test_join_pool() {
     let stable5_pool_join_msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(stable5_pool_id),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
 
@@ -332,11 +330,40 @@ fn test_join_pool() {
     )
         .unwrap();
 
+    // Provide liquidity to empty stable 5 pool by asking more LP that feasible => should fail
+    assert_eq!("MinReceiveError - return amount 5000000000 is less than minimum requested amount 5000000001", app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &ExecuteMsg::JoinPool {
+            pool_id: Uint128::from(stable5_pool_id),
+            recipient: None,
+            min_lp_to_receive: Some(join_pool_query_res.new_shares + Uint128::one()), // just ask for more LP to receive than what would actually be received
+            auto_stake: None,
+            assets: Some(assets_msg.clone()),
+        },
+        &[
+            Coin {
+                denom: denom0.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+            Coin {
+                denom: denom1.clone(),
+                amount: Uint128::new(1000_000000u128),
+            },
+        ],
+    ).unwrap_err().root_cause().to_string());
+
     // Provide liquidity to empty stable 5 pool => should work. No fee is charged
     app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
-        &stable5_pool_join_msg,
+        &ExecuteMsg::JoinPool {
+            pool_id: Uint128::from(stable5_pool_id),
+            recipient: None,
+            min_lp_to_receive: Some(join_pool_query_res.new_shares), // just ask for exact LP to receive as what would actually be received
+            auto_stake: None,
+            assets: Some(assets_msg.clone()),
+        },
         &[
             Coin {
                 denom: denom0.clone(),
@@ -348,7 +375,7 @@ fn test_join_pool() {
             },
         ],
     )
-    .unwrap();
+        .unwrap();
 
     // Pool Config
     let pool_config_res: Pool_ConfigResponse = app
@@ -469,7 +496,6 @@ fn test_join_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -481,9 +507,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -637,9 +662,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[Coin {
@@ -706,9 +730,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -791,9 +814,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -866,9 +888,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[],
@@ -1050,9 +1071,8 @@ fn test_join_auto_stake() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -1126,9 +1146,8 @@ fn test_join_auto_stake() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: Some(true),
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[

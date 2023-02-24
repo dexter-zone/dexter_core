@@ -389,9 +389,8 @@ fn test_update_config() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
     app.execute_contract(
@@ -638,7 +637,6 @@ fn test_query_on_join_pool() {
             &QueryMsg::OnJoinPool {
                 assets_in: None,
                 mint_amount: Some(Uint128::from(1000_000_000u128)),
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -697,7 +695,6 @@ fn test_query_on_join_pool() {
             &QueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -733,9 +730,8 @@ fn test_query_on_join_pool() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
 
@@ -1009,7 +1005,6 @@ fn test_query_on_join_pool() {
             &QueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
             },
         )
         .unwrap();
@@ -1020,9 +1015,8 @@ fn test_query_on_join_pool() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: Some("recipient".to_string()),
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
         assets: Some(assets_msg.clone()),
     };
 
@@ -1196,7 +1190,6 @@ fn test_query_on_join_pool() {
             &QueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
             },
         )
         .unwrap();
@@ -1210,9 +1203,8 @@ fn test_query_on_join_pool() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: Some("recipient".to_string()),
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
         assets: Some(assets_msg.clone()),
     };
 
@@ -1263,7 +1255,6 @@ fn test_query_on_join_pool() {
             &QueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: Some(Decimal::from_ratio(49u128, 100u128)),
             },
         )
         .unwrap();
@@ -1341,9 +1332,8 @@ fn test_on_exit_pool() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
     app.execute_contract(
@@ -2001,9 +1991,8 @@ fn test_swap() {
     let msg = VaultExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
     app.execute_contract(

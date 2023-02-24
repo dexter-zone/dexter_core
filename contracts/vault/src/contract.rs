@@ -216,8 +216,7 @@ pub fn execute(
             pool_id,
             recipient,
             assets,
-            lp_to_mint,
-            slippage_tolerance,
+            min_lp_to_receive,
             auto_stake,
         } => execute_join_pool(
             deps,
@@ -226,8 +225,7 @@ pub fn execute(
             pool_id,
             recipient,
             assets,
-            lp_to_mint,
-            slippage_tolerance,
+            min_lp_to_receive,
             auto_stake,
         ),
         ExecuteMsg::Swap {
@@ -996,7 +994,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
 /// * **pool_id** is the id of the pool to be joined.
 /// * **op_recipient** Optional parameter. If provided, the Vault will transfer the LP tokens to the provided address.
 /// * **assets_in** Optional parameter. It is the list of assets the user is willing to provide to join the pool
-/// * **lp_to_mint** Optional parameter. The number of LP tokens the user wants to get against the provided assets.
+/// * **min_lp_to_receive** Optional parameter. The minimum number of LP tokens the user wants to receive against the provided assets.
 /// * **auto_stake** Optional parameter. If provided, the Vault will automatically stake the provided assets with the multistaking contract.
 pub fn execute_join_pool(
     deps: DepsMut,
@@ -1005,8 +1003,7 @@ pub fn execute_join_pool(
     pool_id: Uint128,
     op_recipient: Option<String>,
     assets_in: Option<Vec<Asset>>,
-    lp_to_mint: Option<Uint128>,
-    slippage_tolerance: Option<Decimal>,
+    min_lp_to_receive: Option<Uint128>,
     auto_stake: Option<bool>,
 ) -> Result<Response, ContractError> {
     // Read - Vault Config
@@ -1045,8 +1042,7 @@ pub fn execute_join_pool(
             contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
                 assets_in,
-                mint_amount: lp_to_mint,
-                slippage_tolerance,
+                mint_amount: None,
             })?,
         }))?;
 
@@ -1058,6 +1054,11 @@ pub fn execute_join_pool(
     } else if pool_join_transition.new_shares.is_zero() {
         return Err(ContractError::PoolQueryFailed {
             error: "LP tokens to mint cannot be 0".to_string(),
+        });
+    } else if min_lp_to_receive.is_some() && pool_join_transition.new_shares.lt(&min_lp_to_receive.unwrap()) {
+        return Err(ContractError::MinReceiveError{
+            min_receive: min_lp_to_receive.unwrap(),
+            ask_amount: pool_join_transition.new_shares,
         });
     }
 
