@@ -271,13 +271,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::OnJoinPool {
             assets_in,
             mint_amount,
-            slippage_tolerance,
         } => to_binary(&query_on_join_pool(
             deps,
             env,
             assets_in,
             mint_amount,
-            slippage_tolerance,
         )?),
         QueryMsg::OnExitPool {
             assets_out,
@@ -386,7 +384,6 @@ pub fn query_on_join_pool(
     _env: Env,
     assets_in: Option<Vec<Asset>>,
     _mint_amount: Option<Uint128>,
-    _slippage_tolerance: Option<Decimal>,
 ) -> StdResult<AfterJoinResponse> {
 
     // Note - We follow the same logic as implemented by Osmosis here - https://github.com/osmosis-labs/osmosis/blob/2ce796c81664f9e983fb2a8a943818831deddfe2/x/gamm/pool-models/balancer/pool.go#L692

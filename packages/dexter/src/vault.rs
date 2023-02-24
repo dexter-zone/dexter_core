@@ -344,8 +344,7 @@ pub enum ExecuteMsg {
         pool_id: Uint128,
         recipient: Option<String>,
         assets: Option<Vec<Asset>>,
-        lp_to_mint: Option<Uint128>,
-        slippage_tolerance: Option<Decimal>,
+        min_lp_to_receive: Option<Uint128>,
         auto_stake: Option<bool>,
     },
     // Entry point for a swap tx between offer and ask assets. The swap request details are passed in

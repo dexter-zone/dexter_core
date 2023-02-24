@@ -177,7 +177,6 @@ fn test_join_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -201,9 +200,8 @@ fn test_join_pool() {
     let stable5_pool_join_msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(stable5_pool_id),
         recipient: None,
-        lp_to_mint: None,
+        min_lp_to_receive: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
     };
 
@@ -469,7 +467,6 @@ fn test_join_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -481,9 +478,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -637,9 +633,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[Coin {
@@ -706,9 +701,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -791,9 +785,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -866,9 +859,8 @@ fn test_join_pool() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[],
@@ -1050,9 +1042,8 @@ fn test_join_auto_stake() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -1126,9 +1117,8 @@ fn test_join_auto_stake() {
         &ExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: Some(true),
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[

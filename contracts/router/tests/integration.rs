@@ -661,9 +661,8 @@ fn test_router_functionality() {
         &VaultExecuteMsg::JoinPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[
@@ -720,9 +719,8 @@ fn test_router_functionality() {
         &VaultExecuteMsg::JoinPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
-            lp_to_mint: None,
+            min_lp_to_receive: None,
             auto_stake: None,
-            slippage_tolerance: None,
             assets: Some(assets_msg.clone()),
         },
         &[

@@ -143,8 +143,10 @@ pub enum QueryMsg {
     #[returns(AfterJoinResponse)]
     OnJoinPool {
         assets_in: Option<Vec<Asset>>,
+        // in future, it could be supplied instead of assets_in, to convey that the user should get
+        // this much LP tokens and the pool should charge as much assets_in as it needs to give
+        // mint_amount LP tokens back to user.
         mint_amount: Option<Uint128>,
-        slippage_tolerance: Option<Decimal>,
     },
     /// ## Description - Returns [`AfterExitResponse`] type which contains - `assets_out` info, number of LP shares to be burnt, the `response` of type [`ResponseType`]
     ///  and `fee` of type [`Option<Asset>`] which is the fee to be charged
