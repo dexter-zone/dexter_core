@@ -157,7 +157,7 @@ pub fn instantiate(
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-    let event = Event::new("dexter-stable-swap::instantiate")
+    let event = Event::new("dexter-weighted-pool::instantiate")
         .add_attribute("pool_id", msg.pool_id)
         .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
         .add_attribute("vault_addr", msg.vault_addr)

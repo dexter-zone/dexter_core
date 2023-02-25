@@ -1286,7 +1286,7 @@ fn imbalanced_withdraw(
             Ok((
                 asset.to_scaled_decimal_asset(precision, scaling_factor)?,
                 Decimal256::with_precision(pool, precision)?
-                    .without_scaling_factor(scaling_factor)?,
+                    .with_scaling_factor(scaling_factor)?,
             ))
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
