@@ -92,7 +92,6 @@ fn test_join_and_exit_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -107,10 +106,9 @@ fn test_join_and_exit_pool() {
     let msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(assets_msg.clone()),
+        min_lp_to_receive: None,
     };
 
     // Execute the join pool message
@@ -170,7 +168,6 @@ fn test_join_and_exit_pool() {
             &PoolQueryMsg::OnJoinPool {
                 assets_in: Some(imbalanced_assets_msg.clone()),
                 mint_amount: None,
-                slippage_tolerance: None,
             },
         )
         .unwrap();
@@ -188,10 +185,9 @@ fn test_join_and_exit_pool() {
     let msg = ExecuteMsg::JoinPool {
         pool_id: Uint128::from(1u128),
         recipient: None,
-        lp_to_mint: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(imbalanced_assets_msg),
+        min_lp_to_receive: None,
     };
 
     // Execute the join pool message

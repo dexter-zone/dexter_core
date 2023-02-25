@@ -418,7 +418,6 @@ pub fn add_liquidity_to_pool(
     let query_msg = QueryMsg::OnJoinPool {
         assets_in: Some(amount_to_add.clone()),
         mint_amount: None,
-        slippage_tolerance: None,
     };
 
     let res: AfterJoinResponse = app
@@ -430,10 +429,9 @@ pub fn add_liquidity_to_pool(
     let msg = VaultExecuteMsg::JoinPool {
         pool_id,
         recipient: None,
-        lp_to_mint: None,
         auto_stake: None,
-        slippage_tolerance: None,
         assets: Some(amount_to_add),
+        min_lp_to_receive: None,
     };
 
     app
