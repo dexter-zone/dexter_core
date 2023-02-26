@@ -34,7 +34,6 @@ pub const AMP_PRECISION: u64 = 100;
 pub(crate) fn compute_d(
     amp: Uint64,
     pools: &[Decimal256],
-    greatest_precision: u8,
 ) -> StdResult<Decimal256> {
     if pools.iter().any(|pool| pool.is_zero()) {
         return Ok(Decimal256::zero());
@@ -73,11 +72,11 @@ pub(crate) fn compute_d(
                 + (Decimal256::from_integer(n_coins.u64()) + Decimal256::one()) * d_p);
 
         if d >= d_prev {
-            if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
+            if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
             {
                 return Ok(d);
             }
-        } else if d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), greatest_precision)?
+        } else if d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
         {
             return Ok(d);
         }
@@ -100,7 +99,7 @@ pub(crate) fn calc_y(
     new_amount: Decimal256,
     pools: &[DecimalAsset],
     amp_: u64,
-    greatest_precision: u8,
+    output_precision: u8,
 ) -> StdResult<Uint128> {
     let amp = Uint64::from(amp_);
 
@@ -113,8 +112,11 @@ pub(crate) fn calc_y(
     let mut sum = Decimal256::zero();
     let pool_values = pools.iter().map(|asset| asset.amount).collect_vec();
 
-    let d = compute_d(amp, &pool_values, greatest_precision)?
-        .to_uint256_with_precision(greatest_precision)?;
+    // d is computed with the largest precision possible i.e Decimal256::DECIMAL_PLACES i.e 18
+    let d = compute_d(amp, &pool_values)?
+        .to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
+
+    println!("d: {}", d);
 
     let mut c = d;
 
@@ -129,14 +131,14 @@ pub(crate) fn calc_y(
         c = c
             .checked_multiply_ratio(
                 d,
-                pool_amount.to_uint256_with_precision(greatest_precision)? * Uint256::from(n_coins),
+                pool_amount.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)? * Uint256::from(n_coins),
             )
             .map_err(|_| StdError::generic_err("CheckedMultiplyRatioError"))?;
         sum += pool_amount;
     }
 
     let c = c * d / (ann * Uint256::from(n_coins));
-    let sum = sum.to_uint256_with_precision(greatest_precision)?;
+    let sum = sum.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
 
     let b = sum + d / ann;
 
@@ -150,9 +152,28 @@ pub(crate) fn calc_y(
 
         if y >= y_prev {
             if y - y_prev <= Uint256::from(1u8) {
+                // We need to scale the value from the MAX_PRECISION to the precision of the asset
+                // We do this by dividing the value by the ratio of the two precisions
+                let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
+                println!("decimal_difference: {}", decimal_difference);
+                let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
+                println!("precision_ratio: {}", precision_ratio);
+                println!("y: {}", y);
+                let y = y.checked_div(precision_ratio)?;
+                println!("y after div: {}", y);
+                
                 return Ok(y.try_into()?);
             }
         } else if y_prev - y <= Uint256::from(1u8) {
+            // We need to scale the value from the MAX_PRECISION to the precision of the asset
+            // We do this by dividing the value by the ratio of the two precisions
+            let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
+            println!("decimal_difference: {}", decimal_difference);
+            let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
+            println!("precision_ratio: {}", precision_ratio);
+            println!("y: {}", y);
+            let y = y.checked_div(precision_ratio)?;
+            println!("y after div: {}", y);
             return Ok(y.try_into()?);
         }
     }
@@ -192,7 +213,6 @@ mod tests {
                 Decimal256::from_integer(pool2.u128()),
                 Decimal256::from_integer(pool3.u128()),
             ],
-            6,
         )
         .unwrap();
         assert_eq!(Uint256::from(sim_d), d.to_uint256());
@@ -299,7 +319,6 @@ mod tests {
                 Decimal256::from_integer(pool2.u128()),
                 Decimal256::from_integer(pool3.u128()),
             ],
-            6,
         )
         .unwrap();
 

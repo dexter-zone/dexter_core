@@ -331,7 +331,7 @@ fn test_join_pool() {
         .unwrap();
 
     // Provide liquidity to empty stable 5 pool by asking more LP that feasible => should fail
-    assert_eq!("MinReceiveError - return amount 5000000000 is less than minimum requested amount 5000000001", app.execute_contract(
+    assert_eq!("MinReceiveError - return amount 5000000000000000000000 is less than minimum requested amount 5000000000000000000001", app.execute_contract(
         owner.clone(),
         vault_instance.clone(),
         &ExecuteMsg::JoinPool {

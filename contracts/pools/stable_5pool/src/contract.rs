@@ -656,14 +656,14 @@ pub fn query_on_join_pool(
         .iter()
         .map(|(_, pool)| *pool)
         .collect_vec();
-    let init_d = compute_d(amp.into(), &old_balances, math_config.greatest_precision)?;
+    let init_d = compute_d(amp.into(), &old_balances)?;
 
     // Invariant (D) after deposit added
     let mut new_balances = assets_collection
         .iter()
         .map(|(deposit, pool)| Ok(pool + deposit.amount))
         .collect::<StdResult<Vec<_>>>()?;
-    let deposit_d = compute_d(amp.into(), &new_balances, math_config.greatest_precision)?;
+    let deposit_d = compute_d(amp.into(), &new_balances)?;
 
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
@@ -719,16 +719,15 @@ pub fn query_on_join_pool(
         let after_fee_d = compute_d(
             Uint64::from(amp),
             &new_balances,
-            math_config.greatest_precision,
         )?;
 
         let tokens_to_mint =
-            Decimal256::with_precision(total_share, math_config.greatest_precision)?
+            Decimal256::with_precision(total_share, Decimal256::DECIMAL_PLACES)?
                 .checked_multiply_ratio(after_fee_d.saturating_sub(init_d), init_d)?;
         tokens_to_mint
     };
 
-    let mint_amount = mint_amount.to_uint128_with_precision(math_config.greatest_precision)?;
+    let mint_amount = mint_amount.to_uint128_with_precision(Decimal256::DECIMAL_PLACES)?;
 
     // If the mint amount is zero, then return a `Failure` response
     if mint_amount.is_zero() {
@@ -980,7 +979,6 @@ pub fn query_on_swap(
                 &ask_pool,
                 &pools,
                 config.fee_info.total_fee_bps,
-                math_config.greatest_precision,
                 ask_asset_scaling_factor,
                 offer_asset_scaling_factor,
             ) {
@@ -1323,7 +1321,6 @@ fn imbalanced_withdraw(
     let init_d = compute_d(
         amp,
         &old_balances,
-        math_config.greatest_precision,
     )?;
 
     // Invariant (D) after assets withdrawn
@@ -1334,7 +1331,6 @@ fn imbalanced_withdraw(
     let withdraw_d = compute_d(
         amp,
         &new_balances,
-        math_config.greatest_precision,
     )?;
 
     // total_fee_bps * N_COINS / (4 * (N_COINS - 1))
@@ -1373,7 +1369,6 @@ fn imbalanced_withdraw(
     let after_fee_d = compute_d(
         amp,
         &new_balances,
-        math_config.greatest_precision,
     )?;
 
     let total_share = Uint256::from(total_share);

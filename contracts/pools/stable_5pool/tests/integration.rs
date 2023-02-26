@@ -428,7 +428,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(Some(vec![]), join_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(3000u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(3000_000000_000000u128), join_pool_query_res.new_shares);
 
     // Returned assets are in sorted order
     assert_eq!(
@@ -616,7 +616,7 @@ fn test_query_on_join_pool() {
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
 
-    assert_eq!(Uint128::from(3000u128), pool_twap_res.total_share);
+    assert_eq!(Uint128::from(3000_000000_000000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
             AssetExchangeRate {
@@ -737,7 +737,7 @@ fn test_query_on_join_pool() {
         )
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(217u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(217_995_261_723_832u128), join_pool_query_res.new_shares);
 
     // Execute AddLiquidity via the Vault contract
     let msg = VaultExecuteMsg::JoinPool {
@@ -779,7 +779,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(217u128), recepient_bal_res.balance);
+    assert_eq!(Uint128::from(217_995_261_723_832u128), recepient_bal_res.balance);
 
     let vault_bal_res: BalanceResponse = app
         .wrap()
@@ -923,7 +923,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(3685346858u128),
+        Uint128::from(3686487023559690549804u128),
         join_pool_query_res.new_shares
     );
 
@@ -988,7 +988,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1416399370u128),
+        Uint128::from(1416837573911030650529u128),
         join_pool_query_res.new_shares
     );
 }
@@ -1103,7 +1103,7 @@ fn test_on_exit_pool() {
         .wrap()
         .query_wasm_smart(&lp_token_addr.clone(), &Cw20QueryMsg::TokenInfo {})
         .unwrap();
-    assert_eq!(Uint128::from(3000000000u128), lp_supply.total_supply);
+    assert_eq!(Uint128::from(300_0000000_000000_000000u128), lp_supply.total_supply);
 
     //// -----x----- Check #1 :: Error ::: Wrong token -----x----- ////
 
@@ -1154,13 +1154,13 @@ fn test_on_exit_pool() {
             pool_addr.clone(),
             &QueryMsg::OnExitPool {
                 assets_out: None,
-                burn_amount: Some(Uint128::from(5000u128)),
+                burn_amount: Some(Uint128::from(5000_000000_000000u128)),
             },
         )
         .unwrap();
     assert_eq!(Some(vec![]), exit_pool_query_res.fee);
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
-    assert_eq!(Uint128::from(5000u128), exit_pool_query_res.burn_shares);
+    assert_eq!(Uint128::from(5000_000000_000000u128), exit_pool_query_res.burn_shares);
     assert_eq!(
         vec![
             Asset {
@@ -1187,12 +1187,12 @@ fn test_on_exit_pool() {
 
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(5000u128),
+        amount: Uint128::from(5000_000000_000000u128),
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             assets: None,
-            burn_amount: Some(Uint128::from(5000u128)),
+            burn_amount: Some(Uint128::from(5000_000000_000000u128)),
         })
         .unwrap(),
     };
@@ -1209,7 +1209,7 @@ fn test_on_exit_pool() {
         .wrap()
         .query_wasm_smart(&lp_token_addr.clone(), &Cw20QueryMsg::TokenInfo {})
         .unwrap();
-    assert_eq!(Uint128::from(2999995000u128), lp_supply.total_supply);
+    assert_eq!(Uint128::from(2999995000000000000000u128), lp_supply.total_supply);
 
     let vault_bal_res: BalanceResponse = app
         .wrap()
@@ -1281,7 +1281,7 @@ fn test_on_exit_pool() {
         .wrap()
         .query_wasm_smart(&pool_addr.clone(), &QueryMsg::CumulativePrices {})
         .unwrap();
-    assert_eq!(Uint128::from(2999995000u128), pool_twap_res.total_share);
+    assert_eq!(Uint128::from(29_99_995_000_000_000_000_000u128), pool_twap_res.total_share);
     assert_eq!(
         vec![
             AssetExchangeRate {
@@ -1291,7 +1291,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -1300,7 +1300,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1309,7 +1309,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string()
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1318,7 +1318,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1327,7 +1327,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string()
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1336,7 +1336,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(999999991810u128),
+                rate: Uint128::from(999999991900u128),
             }
         ],
         pool_twap_res.exchange_infos
@@ -1387,7 +1387,7 @@ fn test_on_exit_pool() {
             pool_addr.clone(),
             &QueryMsg::OnExitPool {
                 assets_out: Some(assets_out.clone()),
-                burn_amount: Some(Uint128::from(500_000000u128)),
+                burn_amount: Some(Uint128::from(500_000000_000000_000000u128)),
             },
         )
         .unwrap();
@@ -1402,7 +1402,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(479662098u128),
+        Uint128::from(479_662_097_799_569_595_469u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
@@ -1491,7 +1491,7 @@ fn test_on_exit_pool() {
             pool_addr.clone(),
             &QueryMsg::OnExitPool {
                 assets_out: Some(assets_out.clone()),
-                burn_amount: Some(Uint128::from(5000_000000u128)),
+                burn_amount: Some(Uint128::from(5000_000000_000000_000000u128)),
             },
         )
         .unwrap();
@@ -1506,7 +1506,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1734283091u128),
+        Uint128::from(1734283090619359785410u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
@@ -1597,7 +1597,7 @@ fn test_on_exit_pool() {
             pool_addr.clone(),
             &QueryMsg::OnExitPool {
                 assets_out: Some(assets_out.clone()),
-                burn_amount: Some(Uint128::from(50000_000000u128)),
+                burn_amount: Some(Uint128::from(50000_000000_000000_000000u128)),
             },
         )
         .unwrap();
@@ -1612,7 +1612,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1976713421u128),
+        Uint128::from(1_976_713_420_765_243_272_086u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
@@ -1930,7 +1930,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(5341177u128)
+        Uint128::from(5341176u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1966,7 +1966,7 @@ fn test_swap() {
     assert_eq!(
         swap_offer_asset_res.response,
         ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.066984666082474226".to_string()
+            "error : Operation exceeds max spread limit. Current spread = 0.066984666048109965".to_string()
         )
     );
     assert_eq!(
