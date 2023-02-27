@@ -155,7 +155,7 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
-    let event = Event::new("dexter-stable-swap::instantiate")
+    let event = Event::new("dexter-stable-swap-pool::instantiate")
         .add_attribute("pool_id", msg.pool_id)
         .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
         .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
@@ -268,7 +268,7 @@ fn update_scaling_factor(
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     // Emit an event
-    let event = Event::new("dexter-stable-swap::update_scaling_factor")
+    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor")
         .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
         .add_attribute("scaling_factor", scaling_factor.to_string());
     
@@ -300,7 +300,7 @@ fn update_scaling_factor_manager(
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     // Emit an event
-    let event = Event::new("dexter-stable-swap::update_scaling_factor_manager")
+    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor_manager")
         .add_attribute("scaling_factor_manager", scaling_factor_manager.to_string());
     
     let response = Response::new().add_event(event);
