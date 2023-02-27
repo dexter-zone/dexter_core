@@ -950,29 +950,29 @@ fn test_router_functionality() {
                 asset_in: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },
-                offered_amount: Uint128::from(999995u128),
+                offered_amount: Uint128::from(999997u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                received_amount: Uint128::from(969996u128)
+                received_amount: Uint128::from(969997u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(2u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance1.clone()
                 },
-                offered_amount: Uint128::from(969996u128),
+                offered_amount: Uint128::from(969997u128),
                 asset_out: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                received_amount: Uint128::from(940889u128)
+                received_amount: Uint128::from(940890u128)
             },
             SimulatedTrade {
                 pool_id: Uint128::from(1u128),
                 asset_in: AssetInfo::Token {
                     contract_addr: token_instance2.clone()
                 },
-                offered_amount: Uint128::from(940889u128),
+                offered_amount: Uint128::from(940890u128),
                 asset_out: AssetInfo::NativeToken {
                     denom: denom0.clone()
                 },

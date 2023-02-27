@@ -258,7 +258,7 @@ fn test_exit_pool() {
     // test test_exit_pool ... ok
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(500_000000u128),
+        amount: Uint128::from(500_000000_000000_000000u128),
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
@@ -268,7 +268,7 @@ fn test_exit_pool() {
                 },
                 amount: Uint128::from(100_000000u128),
             }]),
-            burn_amount: Some(Uint128::from(500_000000u128)),
+            burn_amount: Some(Uint128::from(500_000000_000000_000000u128)),
         })
         .unwrap(),
     };
@@ -353,7 +353,7 @@ fn test_exit_pool() {
 
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
-        amount: Uint128::from(500_000000u128),
+        amount: Uint128::from(500_000000_000000_000000u128),
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
@@ -377,7 +377,7 @@ fn test_exit_pool() {
                     amount: Uint128::from(257_000000u128),
                 },
             ]),
-            burn_amount: Some(Uint128::from(500_000000u128)),
+            burn_amount: Some(Uint128::from(500_000000_000000_000000u128)),
         })
         .unwrap(),
     };
@@ -398,7 +398,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(394669090u128),
+        Uint128::from(394669089467585656459u128),
         cur_user_lp_balance.balance - new_user_lp_balance.balance
     );
 
