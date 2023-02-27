@@ -44,9 +44,6 @@ pub(crate) fn compute_swap(
         ask_asset_precision,
     )?;
 
-    println!("new_ask_pool: {}", new_ask_pool);
-    println!("ask_pool: {}", ask_pool.amount);
-
     let return_amount = ask_pool.amount.to_uint128_with_precision(ask_asset_precision)?.checked_sub(new_ask_pool)?;
     let return_amount_without_scaling_factor = Decimal256::with_precision(return_amount, ask_asset_precision as u32)?
         .without_scaling_factor(ask_asset_scaling_factor)?

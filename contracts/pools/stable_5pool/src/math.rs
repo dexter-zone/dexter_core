@@ -116,8 +116,6 @@ pub(crate) fn calc_y(
     let d = compute_d(amp, &pool_values)?
         .to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
 
-    println!("d: {}", d);
-
     let mut c = d;
 
     for pool in pools {
@@ -155,12 +153,8 @@ pub(crate) fn calc_y(
                 // We need to scale the value from the MAX_PRECISION to the precision of the asset
                 // We do this by dividing the value by the ratio of the two precisions
                 let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
-                println!("decimal_difference: {}", decimal_difference);
                 let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
-                println!("precision_ratio: {}", precision_ratio);
-                println!("y: {}", y);
                 let y = y.checked_div(precision_ratio)?;
-                println!("y after div: {}", y);
                 
                 return Ok(y.try_into()?);
             }
@@ -168,12 +162,8 @@ pub(crate) fn calc_y(
             // We need to scale the value from the MAX_PRECISION to the precision of the asset
             // We do this by dividing the value by the ratio of the two precisions
             let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
-            println!("decimal_difference: {}", decimal_difference);
             let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
-            println!("precision_ratio: {}", precision_ratio);
-            println!("y: {}", y);
             let y = y.checked_div(precision_ratio)?;
-            println!("y after div: {}", y);
             return Ok(y.try_into()?);
         }
     }

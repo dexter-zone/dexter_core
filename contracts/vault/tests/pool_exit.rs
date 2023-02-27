@@ -268,7 +268,7 @@ fn test_exit_pool() {
                 },
                 amount: Uint128::from(100_000000u128),
             }]),
-            burn_amount: Some(Uint128::from(500_00000_000000_0000000u128)),
+            burn_amount: Some(Uint128::from(500_000000_000000_000000u128)),
         })
         .unwrap(),
     };
