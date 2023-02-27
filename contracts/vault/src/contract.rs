@@ -1,4 +1,5 @@
 #[cfg(not(feature = "library"))]
+use itertools::Itertools;
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
@@ -196,6 +197,7 @@ pub fn execute(
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
+            native_asset_precisions,
             fee_info,
             init_params,
         } => execute_create_pool_instance(
@@ -204,6 +206,7 @@ pub fn execute(
             info,
             pool_type,
             asset_infos,
+            native_asset_precisions,
             fee_info,
             init_params,
         ),
@@ -696,6 +699,7 @@ pub fn execute_create_pool_instance(
     info: MessageInfo,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
+    native_asset_precisions: Vec<(String, u8)>,
     fee_info: Option<FeeInfo>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
@@ -718,6 +722,23 @@ pub fn execute_create_pool_instance(
             return Err(ContractError::PoolTypeCreationDisabled);
         }
         AllowPoolInstantiation::Everyone => {}
+    }
+
+    // Validate if the native asset precision has been provided for all native assets
+    let native_asset_denoms = asset_infos.iter().filter_map(|a| match a {
+        AssetInfo::NativeToken { denom } => Some(denom),
+        _ => None,
+    }).sorted().collect_vec();
+    
+    let denoms_of_precisions_supplied = native_asset_precisions.iter().map(|(k, _)| k).sorted().collect_vec();
+
+    if native_asset_denoms != denoms_of_precisions_supplied {
+        return Err(ContractError::InvalidNativeAssetPrecisionList);
+    }
+    
+    // We only support precisions upto 18 decimal places, reject if any asset has precision greater than 18
+    if native_asset_precisions.iter().any(|p| p.1 > 18) {
+        return Err(ContractError::UnsupportedPrecision);
     }
 
     let mut execute_msgs = vec![];
@@ -773,11 +794,7 @@ pub fn execute_create_pool_instance(
     }
 
     // Sort Assets List
-    asset_infos.sort_by(|a, b| {
-        a.to_string()
-            .to_lowercase()
-            .cmp(&b.to_string().to_lowercase())
-    });
+    asset_infos.sort();
 
     let mut assets: Vec<Asset> = vec![];
     let mut event = Event::new("dexter-vault::create_pool");
@@ -815,6 +832,7 @@ pub fn execute_create_pool_instance(
         assets,
         pool_type: pool_type_config.pool_type.clone(),
         init_params,
+        native_asset_precisions
     };
 
     // Store the temporary Pool Info
@@ -932,6 +950,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                             total_fee_bps: tmp_pool_info.fee_info.total_fee_bps,
                         },
                         init_params: tmp_pool_info.init_params,
+                        native_asset_precisions: tmp_pool_info.native_asset_precisions
                     })?,
                     funds: vec![],
                     label: "dexter-pool-".to_string() + &tmp_pool_info.pool_id.to_string(),

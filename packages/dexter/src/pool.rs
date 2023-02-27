@@ -8,10 +8,10 @@ use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
 
 /// The default slippage (0.5%)
-pub const DEFAULT_SLIPPAGE: &str = "0.005";
+pub const DEFAULT_SPREAD: &str = "0.005";
 
 /// The maximum allowed slippage (50%)
-pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
+pub const MAX_SPREAD: &str = "0.5";
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Gneneric struct Types      x----------------x----------------
@@ -21,6 +21,12 @@ pub const MAX_ALLOWED_SLIPPAGE: &str = "0.5";
 #[cw_serde]
 pub struct FeeStructs {
     pub total_fee_bps: u16,
+}
+
+impl Display for FeeStructs {
+    fn fmt(&self, fmt: &mut Formatter) -> Result {
+        fmt.write_str(format!("total_fee_bps : {}", self.total_fee_bps).as_str())
+    }
 }
 
 /// ## Description
@@ -102,6 +108,9 @@ pub struct InstantiateMsg {
     pub lp_token_addr: Addr,
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
+    /// Native asset precisions
+    pub native_asset_precisions: Vec<(String, u8)>,
+    /// The Fee details of the pool
     pub fee_info: FeeStructs,
     /// Optional binary serialised parameters for custom pool types
     pub init_params: Option<Binary>,

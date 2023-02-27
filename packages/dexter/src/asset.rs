@@ -8,8 +8,6 @@ use std::fmt;
 
 use crate::querier::{query_balance, query_token_balance};
 
-pub const NATIVE_TOKEN_PRECISION: u8 = 6;
-
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    {{AssetInfo}} struct Type    x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -24,6 +22,19 @@ pub enum AssetInfo {
     NativeToken { denom: String },
 }
 
+impl PartialOrd for AssetInfo {
+    
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.to_string().to_lowercase().cmp(&other.to_string().to_lowercase()))
+    }
+}
+
+impl Ord for AssetInfo {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_string().to_lowercase().cmp(&other.to_string().to_lowercase())
+    }
+}
+
 impl fmt::Display for AssetInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -34,6 +45,16 @@ impl fmt::Display for AssetInfo {
 }
 
 impl AssetInfo {
+
+    pub fn native_token(denom: String) -> Self {
+        AssetInfo::NativeToken { denom }
+    }
+
+    pub fn token(contract_addr: Addr) -> Self {
+        AssetInfo::Token { contract_addr }
+    }
+
+
     pub fn as_string(&self) -> String {
         match self {
             AssetInfo::NativeToken { denom } => denom.to_string(),
@@ -151,9 +172,16 @@ impl AssetInfo {
     /// Returns the number of decimals that a token has.
     /// ## Params
     /// * **querier** is an object of type [`QuerierWrapper`].
-    pub fn decimals(&self, querier: &QuerierWrapper) -> StdResult<u8> {
+    pub fn decimals(&self, native_asset_input_precisions: &Vec<(String, u8)>, querier: &QuerierWrapper) -> StdResult<u8> {
         let decimals = match &self {
-            AssetInfo::NativeToken { .. } => NATIVE_TOKEN_PRECISION,
+            AssetInfo::NativeToken { denom } => {
+                let precision = native_asset_input_precisions
+                    .iter()
+                    .find(|(asset_denom, _)| asset_denom == denom)
+                    .unwrap()
+                    .1;
+                precision
+            },
             AssetInfo::Token { contract_addr } => {
                 let res: cw20::TokenInfoResponse =
                     querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;
@@ -163,6 +191,28 @@ impl AssetInfo {
         };
 
         Ok(decimals)
+    }
+
+    pub fn denom(&self) -> StdResult<String> {
+        match &self {
+            AssetInfo::NativeToken { denom } => {
+                Ok(denom.to_string())
+            },
+            AssetInfo::Token { contract_addr: _ } => {
+                Err(StdError::generic_err("Not a native token"))
+            }
+        }
+    }
+
+    pub fn contract_addr(&self) -> StdResult<String> {
+        match &self {
+            AssetInfo::NativeToken { denom: _ } => {
+                Err(StdError::generic_err("Not a CW20 token"))
+            },
+            AssetInfo::Token { contract_addr } => {
+                Ok(contract_addr.to_string())
+            }
+        }
     }
 }
 
@@ -186,6 +236,12 @@ impl fmt::Display for Asset {
 }
 
 impl Asset {
+
+    pub fn new(info: AssetInfo, amount: Uint128) -> Self {
+        Self { info, amount }
+    }
+
+
     /// Returns true if the token is native. Otherwise returns false.
     pub fn is_native_token(&self) -> bool {
         self.info.is_native_token()
@@ -251,6 +307,10 @@ impl Asset {
             amount: Decimal256::with_precision(self.amount, precision.into())?,
         })
     }
+
+    pub fn to_scaled_decimal_asset(&self, precision: impl Into<u32>, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
+        self.to_decimal_asset(precision)?.with_scaling_factor(scaling_factor)
+    }
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -276,6 +336,25 @@ pub struct DecimalAsset {
     pub amount: Decimal256,
 }
 
+impl DecimalAsset {
+
+    pub fn with_scaling_factor(&self, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
+        let amount = self.amount.with_scaling_factor(scaling_factor)?;
+        Ok(DecimalAsset {
+            info: self.info.clone(),
+            amount,
+        })
+    }
+
+    pub fn without_scaling_factor(&self, scaling_factor: Decimal256) -> StdResult<DecimalAsset> {
+        let amount = self.amount.without_scaling_factor(scaling_factor)?;
+        Ok(DecimalAsset {
+            info: self.info.clone(),
+            amount,
+        })
+    }
+}
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x {{Decimal256Ext}} trait Type   x----------------x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -298,6 +377,16 @@ pub trait Decimal256Ext {
     fn with_precision(
         value: impl Into<Uint256>,
         precision: impl Into<u32>,
+    ) -> StdResult<Decimal256>;
+
+    fn with_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256>;
+
+    fn without_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
     ) -> StdResult<Decimal256>;
 
     fn saturating_sub(self, other: Decimal256) -> Decimal256;
@@ -358,6 +447,26 @@ impl Decimal256Ext for Decimal256 {
 
     fn saturating_sub(self, other: Decimal256) -> Decimal256 {
         Decimal256::new(self.atomics().saturating_sub(other.atomics()))
+    }
+
+    #[inline]
+    fn with_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256> {
+        // Divide by scaling factor
+        let amount = self.checked_div(scaling_factor)
+            .map_err(|e| StdError::generic_err(format!("Error while scaling decimal asset: {}", e)))?;
+
+        Ok(amount)
+    }
+
+    #[inline(always)]
+    fn without_scaling_factor(
+        &self,
+        scaling_factor: Decimal256,
+    ) -> StdResult<Decimal256> {            
+        Ok(self.checked_mul(scaling_factor)?)
     }
 }
 

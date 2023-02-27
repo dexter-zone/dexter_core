@@ -129,6 +129,12 @@ pub enum ContractError {
 
     #[error("Fee collector address is not configured")]
     FeeCollectorNotSet,
+
+    #[error("Invalid native asset precision list provided. It should only and exactly contain all native assets of the pool")]
+    InvalidNativeAssetPrecisionList,
+
+    #[error("Non zero precision value upto 18 is supported")]
+    UnsupportedPrecision
 }
 
 impl From<OverflowError> for ContractError {

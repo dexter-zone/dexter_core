@@ -1,5 +1,7 @@
 pub mod utils;
 
+use std::vec;
+
 use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
@@ -94,7 +96,13 @@ fn test_create_pool_instance() {
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams {amp: 100u64}).unwrap()),
+        native_asset_precisions: vec![],
+        init_params: Some(to_binary(&StablePoolParams {
+            amp: 100u64,
+            scaling_factor_manager: None,
+            supports_scaling_factors_update: false,
+            scaling_factors: vec![]
+        }).unwrap()),
         fee_info: None,
     };
 
@@ -466,7 +474,13 @@ fn test_pool_creation_fee() {
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
+        native_asset_precisions: vec![],
+        init_params: Some(to_binary(&StablePoolParams { 
+            amp: 100u64,
+            scaling_factor_manager: None,
+            supports_scaling_factors_update: false,
+            scaling_factors: vec![],
+        }).unwrap()),
         fee_info: None,
     };
 

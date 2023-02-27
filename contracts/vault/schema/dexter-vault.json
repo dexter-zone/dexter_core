@@ -571,6 +571,7 @@
             "type": "object",
             "required": [
               "asset_infos",
+              "native_asset_precisions",
               "pool_type"
             ],
             "properties": {
@@ -599,6 +600,24 @@
                     "type": "null"
                   }
                 ]
+              },
+              "native_asset_precisions": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer",
+                      "format": "uint8",
+                      "minimum": 0.0
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
               },
               "pool_type": {
                 "$ref": "#/definitions/PoolType"

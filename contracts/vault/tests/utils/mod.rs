@@ -257,7 +257,13 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
     ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&StablePoolParams { amp: 100u64 }).unwrap()),
+        native_asset_precisions: vec![],
+        init_params: Some(to_binary(&StablePoolParams { 
+            amp: 100u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+         }).unwrap()),
         fee_info: Some(FeeInfo {
             total_fee_bps: 1_000u16,
             protocol_fee_percent: 49u16,
@@ -275,7 +281,7 @@ pub fn initialize_stable_5_pool_2_asset(
     denom0: String,
 ) -> (Addr, Addr, Uint128) {
     let asset_infos = vec![
-        AssetInfo::NativeToken { denom: denom0 },
+        AssetInfo::NativeToken { denom: denom0.clone() },
         AssetInfo::Token {
             contract_addr: token_instance0.clone(),
         },
@@ -292,7 +298,13 @@ pub fn initialize_stable_5_pool_2_asset(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        native_asset_precisions: vec![(denom0.clone(), 6u8)],
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+            amp: 10u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+        }).unwrap()),
         fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
@@ -328,8 +340,8 @@ pub fn initialize_stable_5_pool(
     denom1: String,
 ) -> (Addr, Addr, Uint128) {
     let asset_infos = vec![
-        AssetInfo::NativeToken { denom: denom0 },
-        AssetInfo::NativeToken { denom: denom1 },
+        AssetInfo::NativeToken { denom: denom0.clone() },
+        AssetInfo::NativeToken { denom: denom1.clone() },
         AssetInfo::Token {
             contract_addr: token_instance1.clone(),
         },
@@ -352,7 +364,13 @@ pub fn initialize_stable_5_pool(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { amp: 10u64 }).unwrap()),
+        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
+        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+            amp: 10u64,
+            scaling_factor_manager: None,
+            scaling_factors: vec![],
+            supports_scaling_factors_update: false
+        }).unwrap()),
         fee_info: None,
     };
     app.execute_contract(Addr::unchecked(owner), vault_instance.clone(), &msg, &[])
@@ -406,11 +424,11 @@ pub fn initialize_weighted_pool(
     ];
     let asset_infos_with_weights = vec![
         Asset {
-            info: AssetInfo::NativeToken { denom: denom0 },
+            info: AssetInfo::NativeToken { denom: denom0.clone() },
             amount: Uint128::from(20u128),
         },
         Asset {
-            info: AssetInfo::NativeToken { denom: denom1 },
+            info: AssetInfo::NativeToken { denom: denom1.clone() },
             amount: Uint128::from(20u128),
         },
         Asset {
@@ -443,6 +461,7 @@ pub fn initialize_weighted_pool(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
+        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
         init_params: Some(
             to_binary(&weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,

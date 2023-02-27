@@ -83,12 +83,7 @@ pub fn instantiate(
     }
 
     // Sort Assets List (Weights)
-    weights.sort_by(|a, b| {
-        a.info
-            .as_string()
-            .to_lowercase()
-            .cmp(&b.info.as_string().to_lowercase())
-    });
+    weights.sort_by_key(|a| a.info.clone());
 
     // Make sure asset list in AssetInfos and WeightsList is same
     let mut index = 0;
@@ -115,7 +110,7 @@ pub fn instantiate(
     store_weights(deps.branch(), asset_weights)?;
 
     // Store token precisions in the storage
-    let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
+    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos)?;
 
     // Initializing cumulative prices
     let mut cumulative_prices = vec![];
@@ -139,7 +134,7 @@ pub fn instantiate(
 
     let config = Config {
         pool_id: msg.pool_id.clone(),
-        lp_token_addr: msg.lp_token_addr,
+        lp_token_addr: msg.lp_token_addr.clone(),
         vault_addr: msg.vault_addr.clone(),
         assets,
         pool_type: msg.pool_type.clone(),
@@ -162,7 +157,21 @@ pub fn instantiate(
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-    Ok(Response::new())
+    let event = Event::new("dexter-weighted-pool::instantiate")
+        .add_attribute("pool_id", msg.pool_id)
+        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+        .add_attribute("vault_addr", msg.vault_addr)
+        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
+        .add_attribute("fee_info", msg.fee_info.to_string())
+        .add_attribute("weights", serde_json_wasm::to_string(&weights).unwrap())
+        .add_attribute("exit_fee", exit_fee.unwrap_or(Decimal::zero()).to_string());
+
+    let response = Response::new()
+        .add_event(event)
+        .add_attribute("action", "instantiate");
+
+    Ok(response)
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -403,12 +412,7 @@ pub fn query_on_join_pool(
 
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
-    act_assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    act_assets_in.sort_by_key(|a| a.info.clone());
 
     // Check asset definations and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
@@ -488,12 +492,7 @@ pub fn query_on_join_pool(
         });
 
         // Sort the assets in the order of the assets in the config
-        act_assets_in.sort_by(|a, b| {
-            a.info
-                .to_string()
-                .to_lowercase()
-                .cmp(&b.info.to_string().to_lowercase())
-        });
+        act_assets_in.sort_by_key(|a| a.info.clone());
 
         // Return the response
         if !num_shares.is_zero() {

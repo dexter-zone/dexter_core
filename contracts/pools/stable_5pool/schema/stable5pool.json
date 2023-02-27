@@ -11,6 +11,7 @@
       "asset_infos",
       "fee_info",
       "lp_token_addr",
+      "native_asset_precisions",
       "pool_id",
       "pool_type",
       "vault_addr"
@@ -24,7 +25,12 @@
         }
       },
       "fee_info": {
-        "$ref": "#/definitions/FeeStructs"
+        "description": "The Fee details of the pool",
+        "allOf": [
+          {
+            "$ref": "#/definitions/FeeStructs"
+          }
+        ]
       },
       "init_params": {
         "description": "Optional binary serialised parameters for custom pool types",
@@ -44,6 +50,25 @@
             "$ref": "#/definitions/Addr"
           }
         ]
+      },
+      "native_asset_precisions": {
+        "description": "Native asset precisions",
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        }
       },
       "pool_id": {
         "description": "Pool ID",

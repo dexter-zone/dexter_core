@@ -1,7 +1,7 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
+    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64, Addr,
 };
 use cw2::set_contract_version;
 use itertools::Itertools;
@@ -13,14 +13,14 @@ use crate::error::ContractError;
 use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{
     get_precision, store_precisions, MathConfig, StablePoolParams, StablePoolUpdateParams, Twap,
-    CONFIG, MATHCONFIG, TWAPINFO,
+    CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{
     return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
     AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
     ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE, update_total_fee_bps
+    Trade, DEFAULT_SPREAD, MAX_SPREAD, update_total_fee_bps
 };
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
@@ -68,8 +68,33 @@ pub fn instantiate(
         return Err(ContractError::IncorrectAmp {});
     }
 
+    // Validate that scaling factor is specified for all the assets in the pool
+    let scaling_factor_asset_infos = params.scaling_factors.iter().map(|a| a.asset_info.clone()).sorted().collect_vec();
+    let pool_assets = msg.asset_infos.iter().sorted().cloned().collect_vec();
+
+    // validate that scaling factor is a subset of the pool_assets by iterating
+    // over the scaling_factor_asset_infos and checking if the asset_info is present in pool_assets
+    for asset_info in scaling_factor_asset_infos {
+        if !pool_assets.contains(&asset_info) {
+            return Err(ContractError::InvalidScalingFactorAssetInfo);
+        }
+    }
+
+    // Validate scaling factor manager address
+    if params.scaling_factor_manager.is_none() && params.supports_scaling_factors_update {
+        return Err(ContractError::ScalingFactorManagerNotSpecified);
+    }
+
+    if params.scaling_factor_manager.is_some() {
+        if !params.supports_scaling_factors_update {
+            return Err(ContractError::ScalingFactorManagerSpecified);
+        }
+        // Validate address
+        deps.api.addr_validate(&params.scaling_factor_manager.clone().unwrap().to_string())?;
+    }
+
     // store precisions for assets in storage
-    let greatest_precision = store_precisions(deps.branch(), &msg.asset_infos)?;
+    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos)?;
     // We cannot have precision greater than what is supported by Decimal type
     if greatest_precision > (Decimal::DECIMAL_PLACES as u8) {
         return Err(ContractError::InvalidGreatestPrecision);
@@ -97,7 +122,7 @@ pub fn instantiate(
 
     let config = Config {
         pool_id: msg.pool_id.clone(),
-        lp_token_addr: msg.lp_token_addr,
+        lp_token_addr: msg.lp_token_addr.clone(),
         vault_addr: msg.vault_addr.clone(),
         assets,
         pool_type: msg.pool_type.clone(),
@@ -118,12 +143,41 @@ pub fn instantiate(
         greatest_precision,
     };
 
+    let stableswap_config = StableSwapConfig {
+        scaling_factor_manager: params.scaling_factor_manager.clone(),
+        supports_scaling_factors_update: params.supports_scaling_factors_update,
+        scaling_factors: params.scaling_factors.clone(),
+    };
+
     // Store config, MathConfig and twap in storage
     CONFIG.save(deps.storage, &config)?;
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
+    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
-    Ok(Response::new())
+    let event = Event::new("dexter-stable-swap-pool::instantiate")
+        .add_attribute("pool_id", msg.pool_id)
+        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
+        .add_attribute("vault_addr", msg.vault_addr)
+        .add_attribute("fee_info", msg.fee_info.to_string())
+        .add_attribute("amp", params.amp.to_string())
+        .add_attribute("supports_scaling_factors_update", params.supports_scaling_factors_update.to_string())
+        .add_attribute("scaling_factors", serde_json_wasm::to_string(&params.scaling_factors).unwrap());
+
+    // Add scaling_factor_manager attribute if present
+    let event = if params.scaling_factor_manager.is_some() {
+        event.add_attribute("scaling_factor_manager", params.scaling_factor_manager.unwrap().to_string())
+    } else {
+        event
+    };
+
+    let response = Response::new()
+        .add_event(event)
+        .add_attribute("action", "instantiate");
+
+    Ok(response)
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -158,6 +212,102 @@ pub fn execute(
 }
 
 /// ## Description
+fn update_scaling_factor(
+    deps: DepsMut,
+    info: MessageInfo,
+    asset: AssetInfo,
+    scaling_factor: Decimal256,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    // Access Check :: Only scaling factor manager can execute this function
+    let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+
+    if !stableswap_config.supports_scaling_factors_update {
+        return Err(ContractError::ScalingFactorUpdateNotSupported);
+    }
+
+    if let Some(scaling_factor_manager) = &stableswap_config.scaling_factor_manager {
+        if &info.sender != scaling_factor_manager {
+            return Err(ContractError::Unauthorized {});
+        }
+    } else {
+        return Err(ContractError::Unauthorized {});
+    }
+    
+    let mut scaling_factors = stableswap_config.scaling_factors;
+    
+    let asset_found = config
+        .assets
+        .iter()
+        .find(|a| a.info.as_string() == asset.as_string());
+
+    if asset_found.is_none() {
+        return Err(ContractError::UnsupportedAsset);
+    }
+
+    if !(scaling_factor > Decimal256::zero()) {
+        return Err(ContractError::InvalidScalingFactor);
+    }
+
+    // Update or insert scaling factor for this asset in scaling factors vector
+    let asset_index = scaling_factors
+        .iter()
+        .position(|a| a.asset_info == asset);
+
+    if let Some(asset_index) = asset_index {
+        scaling_factors[asset_index].scaling_factor = scaling_factor;
+    } else {
+        scaling_factors.push(AssetScalingFactor {
+            asset_info: asset.clone(),
+            scaling_factor,
+        });
+    }
+
+    // Update config
+    stableswap_config.scaling_factors = scaling_factors;
+    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
+
+    // Emit an event
+    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor")
+        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+        .add_attribute("scaling_factor", scaling_factor.to_string());
+    
+    let response = Response::new().add_event(event);
+    Ok(response)
+}
+
+
+fn update_scaling_factor_manager(
+    deps: DepsMut,
+    info: MessageInfo,
+    scaling_factor_manager: Addr,
+) -> Result<Response, ContractError> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+    let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    if !stableswap_config.supports_scaling_factors_update {
+        return Err(ContractError::ScalingFactorUpdateNotSupported);
+    }
+
+    // Update config
+    stableswap_config.scaling_factor_manager = Some(scaling_factor_manager.clone());
+    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
+
+    // Emit an event
+    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor_manager")
+        .add_attribute("scaling_factor_manager", scaling_factor_manager.to_string());
+    
+    let response = Response::new().add_event(event);
+    Ok(response)
+}
+
+/// ## Description
 /// Admin Access by Vault :: Callable only by Dexter::Vault --> Updates locally stored asset balances state. Operation --> Updates locally stored [`Asset`] state
 ///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
 ///
@@ -181,7 +331,7 @@ pub fn execute_update_pool_liquidity(
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
     let decimal_assets: Vec<DecimalAsset> =
-        transform_to_decimal_asset(deps.as_ref(), config.assets.clone());
+        transform_to_scaled_decimal_asset(deps.as_ref(), config.assets.clone())?;
 
     // Accumulate prices for the assets in the pool
     if accumulate_prices(
@@ -234,22 +384,24 @@ pub fn update_config(
     info: MessageInfo,
     params: Option<Binary>,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    let math_config = MATHCONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
     let params = params.unwrap();
-
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
-        return Err(ContractError::Unauthorized {});
-    }
 
     match from_binary::<StablePoolUpdateParams>(&params)? {
         StablePoolUpdateParams::StartChangingAmp {
             next_amp,
             next_amp_time,
-        } => start_changing_amp(math_config, deps, env, next_amp, next_amp_time)?,
-        StablePoolUpdateParams::StopChangingAmp {} => stop_changing_amp(math_config, deps, env)?,
+        } => {
+            start_changing_amp(deps, env, info, next_amp, next_amp_time)?
+        },
+        StablePoolUpdateParams::StopChangingAmp {} => {
+            stop_changing_amp( deps, env, info)?
+        },
+        StablePoolUpdateParams::UpdateScalingFactor { asset, scaling_factor } => {
+            update_scaling_factor(deps, info, asset, scaling_factor)?;
+        },
+        StablePoolUpdateParams::UpdateScalingFactorManager { manager } => {
+            update_scaling_factor_manager(deps, info, manager)?;
+        },
     }
 
     Ok(Response::default())
@@ -317,8 +469,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// * **deps** is the object of type [`Deps`].
 pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
     let config: Config = CONFIG.load(deps.storage)?;
+    let stable_swap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let cur_amp = compute_current_amp(&math_config, &env)?;
+
     Ok(ConfigResponse {
         pool_id: config.pool_id,
         lp_token_addr: config.lp_token_addr,
@@ -331,6 +485,9 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
         additional_params: Some(
             to_binary(&StablePoolParams {
                 amp: cur_amp.checked_div(AMP_PRECISION).unwrap(),
+                scaling_factors: stable_swap_config.scaling_factors,
+                scaling_factor_manager: stable_swap_config.scaling_factor_manager,
+                supports_scaling_factors_update: stable_swap_config.supports_scaling_factors_update,
             })
             .unwrap(),
         ),
@@ -388,6 +545,7 @@ pub fn query_on_join_pool(
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
 
     // Sort the assets in the order of the assets in the config
     let mut act_assets_in = assets_in.unwrap();
@@ -443,12 +601,7 @@ pub fn query_on_join_pool(
     });
 
     // Sort assets because the vault expects them in order
-    act_assets_in.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    act_assets_in.sort_by_key(|a| a.info.clone());
 
     // Check asset definitions and make sure no asset is repeated
     let mut previous_asset: String = "".to_string();
@@ -471,15 +624,19 @@ pub fn query_on_join_pool(
         }
     }
 
+    let scaling_factors = stableswap_config.scaling_factors();
+
     // Convert to Decimal types
     let assets_collection = assets_collection
         .iter()
         .cloned()
         .map(|(asset, pool)| {
             let coin_precision = get_precision(deps.storage, &asset.info)?;
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
             Ok((
-                asset.to_decimal_asset(coin_precision)?,
-                Decimal256::with_precision(pool, coin_precision)?,
+                asset.to_scaled_decimal_asset(coin_precision, scaling_factor)?,
+                Decimal256::with_precision(pool, coin_precision)?
+                    .with_scaling_factor(scaling_factor)?,
             ))
         })
         .collect::<StdResult<Vec<(DecimalAsset, Decimal256)>>>()?;
@@ -549,8 +706,10 @@ pub fn query_on_join_pool(
 
             // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
             let fee_charged = fee.checked_mul(difference)?;
+            let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
             fee_tokens.push(Asset {
                 amount: fee_charged
+                    .without_scaling_factor(scaling_factor)?
                     .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
                 info: asset_info.clone(),
             });
@@ -618,12 +777,7 @@ pub fn query_on_exit_pool(
     if assets_out.is_some() {
         let mut assets_out_ = assets_out.clone().unwrap();
         // first sort the assets
-        assets_out_.sort_by(|a, b| {
-            a.info
-                .to_string()
-                .to_lowercase()
-                .cmp(&b.info.to_string().to_lowercase())
-        });
+        assets_out_.sort_by_key(|asset| asset.info.clone());
         let mut previous_asset: String = "".to_string();
         for asset in assets_out_.iter() {
             if previous_asset == asset.info.as_string() {
@@ -687,12 +841,7 @@ pub fn query_on_exit_pool(
     });
 
     // Sort the refund assets
-    refund_assets.sort_by(|a, b| {
-        a.info
-            .to_string()
-            .to_lowercase()
-            .cmp(&b.info.to_string().to_lowercase())
-    });
+    refund_assets.sort_by_key(|a| a.info.clone());
 
     Ok(AfterExitResponse {
         assets_out: refund_assets,
@@ -725,19 +874,10 @@ pub fn query_on_swap(
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
     let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let stableswap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
 
-    // Convert Asset to DecimalAsset types
-    let pools = config
-        .assets
-        .into_iter()
-        .map(|pool| {
-            let token_precision = get_precision(deps.storage, &pool.info)?;
-            Ok(DecimalAsset {
-                info: pool.info,
-                amount: Decimal256::with_precision(pool.amount, token_precision)?,
-            })
-        })
-        .collect::<StdResult<Vec<_>>>()?;
+    let scaling_factors = stableswap_config.scaling_factors().clone();
+    let pools =  transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Get the current balances of the Offer and ask assets from the supported assets list
     let (offer_pool, ask_pool) = match select_pools(
@@ -763,12 +903,16 @@ pub fn query_on_swap(
 
     // Offer and ask asset precisions
     let offer_precision = get_precision(deps.storage, &offer_pool.info)?;
-    // let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
+    let ask_precision = get_precision(deps.storage, &ask_pool.info)?;
 
     let offer_asset: Asset;
     let ask_asset: Asset;
     let (calc_amount, spread_amount): (Uint128, Uint128);
     let total_fee: Uint128;
+
+
+    let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned().unwrap_or(Decimal256::one());
+    let offer_asset_scaling_factor = scaling_factors.get(&offer_asset_info).cloned().unwrap_or(Decimal256::one());
 
     // Based on swap_type, we set the amount to either offer_asset or ask_asset pool
     match swap_type {
@@ -785,7 +929,9 @@ pub fn query_on_swap(
             let offer_asset_after_fee = Asset {
                 info: offer_asset_info.clone(),
                 amount: offer_amount_after_fee,
-            }.to_decimal_asset(offer_precision)?;
+            }.to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
+
+            let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned();
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount) = match compute_swap(
@@ -796,6 +942,7 @@ pub fn query_on_swap(
                 &offer_pool,
                 &ask_pool,
                 &pools,
+                ask_asset_scaling_factor.unwrap_or(Decimal256::one())
             ) {
                 Ok(res) => res,
                 Err(err) => {
@@ -817,17 +964,25 @@ pub fn query_on_swap(
                 amount,
             };
 
+            
+            let ask_asset_scaled = Asset {
+                info: ask_asset_info.clone(),
+                amount,
+            }.to_scaled_decimal_asset(ask_precision, ask_asset_scaling_factor)?;
+
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
             (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
-                &ask_asset,
+                &ask_asset_scaled,
                 &offer_pool,
                 &ask_pool,
                 &pools,
                 config.fee_info.total_fee_bps,
                 math_config.greatest_precision,
+                ask_asset_scaling_factor,
+                offer_asset_scaling_factor,
             ) {
                 Ok(res) => res,
                 Err(err) => {
@@ -837,6 +992,7 @@ pub fn query_on_swap(
                     )))
                 }
             };
+
             
             offer_asset = Asset {
                 info: offer_asset_info.clone(),
@@ -903,7 +1059,7 @@ pub fn query_cumulative_price(
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
-    let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets);
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Accumulate prices of all assets in the config
     accumulate_prices(
@@ -950,7 +1106,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
 
     // Convert Vec<Asset> to Vec<DecimalAsset> type
-    let decimal_assets: Vec<DecimalAsset> = transform_to_decimal_asset(deps, config.assets);
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
 
     // Accumulate prices of all assets in the config
     accumulate_prices(
@@ -990,12 +1146,22 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **next_amp** is an object of type [`u64`]. This is the new value for AMP.
 /// * **next_amp_time** is an object of type [`u64`]. This is the end time when the pool amplification will be equal to `next_amp`.
 fn start_changing_amp(
-    mut math_config: MathConfig,
     deps: DepsMut,
     env: Env,
+    info: MessageInfo,
     next_amp: u64,
     next_amp_time: u64,
 ) -> Result<(), ContractError> {
+    // Load the math config from the storage
+    let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
     // Validation checks
     if next_amp == 0 || next_amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -1036,7 +1202,17 @@ fn start_changing_amp(
 /// Stop changing the AMP value. Returns [`Ok`].
 /// ## Params
 /// * **mut math_config** is an object of type [`MathConfig`]. This is a mutable reference to the pool's custom math configuration.
-fn stop_changing_amp(mut math_config: MathConfig, deps: DepsMut, env: Env) -> StdResult<()> {
+fn stop_changing_amp(deps: DepsMut, env: Env, info: MessageInfo) -> Result<(), ContractError> {
+    // Load the math config from the storage
+    let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let config: Config = CONFIG.load(deps.storage)?;
+    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
+
+    // Access Check :: Only Vault's Owner can execute this function
+    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+        return Err(ContractError::Unauthorized {});
+    }
+
     let current_amp = compute_current_amp(&math_config, &env)?;
     let block_time = env.block.time.seconds();
 
@@ -1084,6 +1260,8 @@ fn imbalanced_withdraw(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
+    let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+
     // Store Pool balances in a hashMap
     let pools: HashMap<_, _> = config
         .assets
@@ -1092,6 +1270,7 @@ fn imbalanced_withdraw(
         .map(|pool| (pool.info, pool.amount))
         .collect();
 
+    let scaling_factors = stableswap_config.scaling_factors();
     let mut assets_collection = assets
         .iter()
         .cloned()
@@ -1103,9 +1282,11 @@ fn imbalanced_withdraw(
                 .copied()
                 .ok_or_else(|| ContractError::InvalidAsset(asset.info.to_string()))?;
 
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
             Ok((
-                asset.to_decimal_asset(precision)?,
-                Decimal256::with_precision(pool, precision)?,
+                asset.to_scaled_decimal_asset(precision, scaling_factor)?,
+                Decimal256::with_precision(pool, precision)?
+                    .with_scaling_factor(scaling_factor)?,
             ))
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
@@ -1117,12 +1298,14 @@ fn imbalanced_withdraw(
             if !assets.iter().any(|asset| asset.info == pool_info) {
                 let precision = get_precision(deps.storage, &pool_info)?;
 
+                let scaling_factor = scaling_factors.get(&pool_info).cloned().unwrap_or(Decimal256::one());
                 assets_collection.push((
                     DecimalAsset {
                         amount: Decimal256::zero(),
                         info: pool_info,
                     },
-                    Decimal256::with_precision(pool_amount, precision)?,
+                    Decimal256::with_precision(pool_amount, precision)?
+                        .with_scaling_factor(scaling_factor)?,
                 ));
             }
             Ok(())
@@ -1177,8 +1360,10 @@ fn imbalanced_withdraw(
         let fee_charged = fee.checked_mul(difference)?;
 
         new_balances[i] -= fee_charged;
+        let scaling_factor = scaling_factors.get(&asset_info).cloned().unwrap_or(Decimal256::one());
         fee_tokens.push(Asset {
             amount: fee_charged
+                .without_scaling_factor(scaling_factor)?
                 .to_uint128_with_precision(get_precision(deps.storage, &asset_info)?)?,
             info: asset_info,
         });
@@ -1234,8 +1419,8 @@ pub fn assert_max_spread(
     return_amount: Uint128,
     spread_amount: Uint128,
 ) -> ResponseType {
-    let default_spread = Decimal::from_str(DEFAULT_SLIPPAGE).unwrap();
-    let max_allowed_spread = Decimal::from_str(MAX_ALLOWED_SLIPPAGE).unwrap();
+    let default_spread = Decimal::from_str(DEFAULT_SPREAD).unwrap();
+    let max_allowed_spread = Decimal::from_str(MAX_SPREAD).unwrap();
 
     let max_spread = max_spread.unwrap_or(default_spread);
     if max_spread.gt(&max_allowed_spread) {
@@ -1341,14 +1526,17 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 
 /// ## Description
 /// Converts [`Vec<Asset>`] to [`Vec<DecimalAsset>`].
-pub fn transform_to_decimal_asset(deps: Deps, assets: Vec<Asset>) -> Vec<DecimalAsset> {
-    assets
+pub fn transform_to_scaled_decimal_asset(deps: Deps, assets: Vec<Asset>) -> StdResult<Vec<DecimalAsset>> {
+    let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
+    let scaling_factors = stableswap_config.scaling_factors();
+    
+   assets
         .iter()
         .cloned()
         .map(|asset| {
             let precision = get_precision(deps.storage, &asset.info)?;
-            asset.to_decimal_asset(precision)
+            let scaling_factor = scaling_factors.get(&asset.info).cloned().unwrap_or(Decimal256::one());
+            asset.to_scaled_decimal_asset(precision, scaling_factor)
         })
         .collect::<StdResult<Vec<DecimalAsset>>>()
-        .unwrap()
 }

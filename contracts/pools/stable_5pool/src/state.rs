@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128};
+use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128, Addr, Decimal256};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::AssetInfo;
 use dexter::pool::Config;
@@ -7,13 +9,14 @@ use dexter::pool::Config;
 /// ## Description
 /// Stores config at the given key
 pub const CONFIG: Item<Config> = Item::new("config");
+/// Stores extra config for stableswap at the given key
+pub const STABLESWAP_CONFIG: Item<StableSwapConfig> = Item::new("stableswap_config");
 
 ///  Stores Twap prices for the tokens supported by the pool
 pub const TWAPINFO: Item<Twap> = Item::new("twap");
 
 /// Stores custom config at the given key which can be different between different dexter pools
 pub const MATHCONFIG: Item<MathConfig> = Item::new("math_config");
-
 /// ## Description
 /// This struct describes the main math config of pool.
 #[cw_serde]
@@ -28,6 +31,33 @@ pub struct MathConfig {
     pub next_amp_time: u64,
     /// The greatest precision of assets in the pool
     pub greatest_precision: u8,
+}
+
+#[cw_serde]
+pub struct StableSwapConfig {
+    pub supports_scaling_factors_update: bool,
+    pub scaling_factors: Vec<AssetScalingFactor>,
+    // This address is allowed to update scaling factors. This address is required if support_scaling_factors_update is true.
+    pub scaling_factor_manager: Option<Addr>,
+}
+
+impl StableSwapConfig {
+    pub fn scaling_factors(&self) -> HashMap<AssetInfo, Decimal256> {
+        let mut scaling_factors = HashMap::new();
+        for scaling_factor in &self.scaling_factors {
+            scaling_factors.insert(scaling_factor.asset_info.clone(), scaling_factor.scaling_factor);
+        }
+        scaling_factors
+    }
+
+    pub fn get_scaling_factor_for(&self, asset_info: &AssetInfo) -> Option<Decimal256> {
+        for scaling_factor in &self.scaling_factors {
+            if scaling_factor.asset_info == *asset_info {
+                return Some(scaling_factor.scaling_factor);
+            }
+        }
+        None
+    }
 }
 
 /// ## Description
@@ -48,6 +78,27 @@ pub struct Twap {
 pub struct StablePoolParams {
     /// The current stableswap pool amplification
     pub amp: u64,
+    /// Support scaling factors update
+    pub supports_scaling_factors_update: bool,
+    /// Scaling factors
+    pub scaling_factors: Vec<AssetScalingFactor>,
+    /// Scaling factor manager
+    pub scaling_factor_manager: Option<Addr>,
+}
+
+#[cw_serde]
+pub struct AssetScalingFactor {
+    pub asset_info: AssetInfo,
+    pub scaling_factor: Decimal256,
+}
+
+impl AssetScalingFactor {
+    pub fn new(asset_info: AssetInfo, scaling_factor: Decimal256) -> Self {
+        Self {
+            asset_info,
+            scaling_factor,
+        }
+    }
 }
 
 /// This enum stores the options available to start and stop changing a stableswap pool's amplification.
@@ -55,6 +106,8 @@ pub struct StablePoolParams {
 pub enum StablePoolUpdateParams {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},
+    UpdateScalingFactorManager { manager: Addr },
+    UpdateScalingFactor { asset: AssetInfo, scaling_factor: Decimal256 },
 }
 
 // ----------------x----------------x----------------x----------------
@@ -66,11 +119,11 @@ pub const PRECISIONS: Map<String, u8> = Map::new("precisions");
 
 /// ## Description
 /// Store all token precisions and return the greatest one.
-pub(crate) fn store_precisions(deps: DepsMut, asset_infos: &[AssetInfo]) -> StdResult<u8> {
+pub(crate) fn store_precisions(deps: DepsMut, native_asset_precision: &Vec<(String, u8)>, asset_infos: &[AssetInfo]) -> StdResult<u8> {
     let mut max = 0u8;
 
     for asset_info in asset_infos {
-        let precision = asset_info.decimals(&deps.querier)?;
+        let precision = asset_info.decimals(native_asset_precision, &deps.querier)?;
         max = max.max(precision);
         PRECISIONS.save(deps.storage, asset_info.to_string(), &precision)?;
     }
