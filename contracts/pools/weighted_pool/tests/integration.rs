@@ -5,10 +5,8 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{
-    AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg,
-    FeeResponse, FeeStructs, QueryMsg, ResponseType, SwapResponse,
-};
+use dexter::pool::{AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, FeeStructs, QueryMsg, ResponseType, SwapResponse};
+use dexter::vault;
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
@@ -1385,8 +1383,10 @@ fn test_on_exit_pool() {
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
-            assets: None,
-            burn_amount: Some(Uint128::from(50u8)),
+            exit_type: vault::ExitType::ExactLpBurn {
+                lp_to_burn: Uint128::from(50u8),
+                min_assets_out: None,
+            },
         })
         .unwrap(),
     };
@@ -1406,8 +1406,10 @@ fn test_on_exit_pool() {
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
-            assets: None,
-            burn_amount: Some(Uint128::from(0u128)),
+            exit_type: vault::ExitType::ExactLpBurn {
+                lp_to_burn: Uint128::from(0u128),
+                min_assets_out: None,
+            },
         })
         .unwrap(),
     };
@@ -1428,8 +1430,7 @@ fn test_on_exit_pool() {
         .query_wasm_smart(
             pool_addr.clone(),
             &QueryMsg::OnExitPool {
-                assets_out: None,
-                burn_amount: Some(Uint128::from(5000_000_000_000_000u128)),
+                exit_type: ExitType::ExactLpBurn(Uint128::from(5000_000_000_000_000u128)),
             },
         )
         .unwrap();
@@ -1465,8 +1466,10 @@ fn test_on_exit_pool() {
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
-            assets: None,
-            burn_amount: Some(Uint128::from(5000_000_000_000_000u128)),
+            exit_type: vault::ExitType::ExactLpBurn {
+                lp_to_burn: Uint128::from(5000_000_000_000_000u128),
+                min_assets_out: None,
+            },
         })
         .unwrap(),
     };

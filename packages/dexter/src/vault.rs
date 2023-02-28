@@ -377,9 +377,20 @@ pub enum Cw20HookMsg {
     ExitPool {
         pool_id: Uint128,
         recipient: Option<String>,
-        assets: Option<Vec<Asset>>,
-        burn_amount: Option<Uint128>,
+        exit_type: ExitType,
     },
+}
+
+#[cw_serde]
+pub enum ExitType {
+    ExactLpBurn {
+        lp_to_burn: Uint128,
+        min_assets_out: Option<Vec<Asset>>,
+    },
+    ExactAssetsOut {
+        assets_out: Vec<Asset>,
+        max_lp_to_burn: Option<Uint128>,
+    }
 }
 
 /// Returns the [`PoolType`]'s Configuration settings  in custom [`PoolConfigResponse`] struct

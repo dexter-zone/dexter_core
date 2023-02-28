@@ -161,8 +161,7 @@ pub enum QueryMsg {
     ///  and `fee` of type [`Option<Asset>`] which is the fee to be charged
     #[returns(AfterExitResponse)]
     OnExitPool {
-        assets_out: Option<Vec<Asset>>,
-        burn_amount: Option<Uint128>,
+        exit_type: ExitType,
     },
     /// ## Description - Returns [`SwapResponse`] type which contains - `trade_params` info, the `response` of type [`ResponseType`] and `fee` of type [`Option<Asset>`] which is the fee to be charged
     #[returns(SwapResponse)]
@@ -183,6 +182,16 @@ pub enum QueryMsg {
     /// ## Description - Returns information about the cumulative prices in a [`CumulativePricesResponse`] object.
     #[returns(CumulativePricesResponse)]
     CumulativePrices {},
+}
+
+#[cw_serde]
+pub enum ExitType {
+    /// provide this to convey that you want exactly these assets out, irrespective of how much LP
+    /// tokens need to be burned for that.
+    ExactLpBurn(Uint128),
+    /// provide this to convey that only this much LP tokens should be burned,
+    /// irrespective of how much assets you will get back.
+    ExactAssetsOut(Vec<Asset>),
 }
 
 /// ## Description

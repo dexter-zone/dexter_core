@@ -11,9 +11,10 @@ use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Decimal256, Uint128};
 use cw20::Cw20ExecuteMsg;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
-use dexter::pool::{AfterExitResponse, AfterJoinResponse, QueryMsg as PoolQueryMsg};
+use dexter::pool::{AfterExitResponse, AfterJoinResponse, ExitType, QueryMsg as PoolQueryMsg};
 use dexter::vault::{Cw20HookMsg, ExecuteMsg, FeeInfo, PoolInfoResponse, QueryMsg};
 use itertools::Itertools;
+use dexter::vault;
 use stable5pool::state::AssetScalingFactor;
 
 pub mod utils;
@@ -214,8 +215,7 @@ fn test_join_and_exit_pool() {
         .query_wasm_smart(
             pool_addr.clone(),
             &PoolQueryMsg::OnExitPool {
-                assets_out: None,
-                burn_amount: Some(uint128_with_precision!(200_000u64, Decimal256::DECIMAL_PLACES)),
+                exit_type: ExitType::ExactLpBurn(uint128_with_precision!(200_000u64, Decimal256::DECIMAL_PLACES)),
             },
         )
         .unwrap();
@@ -242,8 +242,10 @@ fn test_join_and_exit_pool() {
 
     let exit_pool_hook_msg = Cw20HookMsg::ExitPool {
         pool_id: Uint128::from(1u128),
-        assets: None,
-        burn_amount: Some(2_000_000_000u128.into()),
+        exit_type: vault::ExitType::ExactLpBurn {
+            lp_to_burn: 2_000_000_000u128.into(),
+            min_assets_out: None,
+        },
         recipient: None,
     };
 

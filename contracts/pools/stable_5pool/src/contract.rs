@@ -16,12 +16,7 @@ use crate::state::{
     CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse,
-    AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse,
-    ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse,
-    Trade, DEFAULT_SPREAD, MAX_SPREAD, update_total_fee_bps
-};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, MAX_SPREAD, update_total_fee_bps, ExitType};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
@@ -435,9 +430,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             mint_amount,
         )?),
         QueryMsg::OnExitPool {
-            assets_out,
-            burn_amount,
-        } => to_binary(&query_on_exit_pool(deps, env, assets_out, burn_amount)?),
+            exit_type,
+        } => to_binary(&query_on_exit_pool(deps, env, exit_type)?),
         QueryMsg::OnSwap {
             swap_type,
             offer_asset,
@@ -758,67 +752,65 @@ pub fn query_on_join_pool(
 pub fn query_on_exit_pool(
     deps: Deps,
     env: Env,
-    assets_out: Option<Vec<Asset>>,
-    burn_amount: Option<Uint128>,
+    exit_type: ExitType,
 ) -> StdResult<AfterExitResponse> {
-    // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
-    if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure("Burn amount is zero".to_string()));
-    }
 
     let config: Config = CONFIG.load(deps.storage)?;
-    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
 
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr.clone())?;
-
-    // Check asset definitions and make sure no asset is repeated
-    if assets_out.is_some() {
-        let mut assets_out_ = assets_out.clone().unwrap();
-        // first sort the assets
-        assets_out_.sort_by_key(|asset| asset.info.clone());
-        let mut previous_asset: String = "".to_string();
-        for asset in assets_out_.iter() {
-            if previous_asset == asset.info.as_string() {
-                return Ok(return_exit_failure(
-                    "Repeated assets in asset_in".to_string(),
-                ));
-            }
-            previous_asset = asset.info.as_string();
-        }
-    }
 
     let act_burn_amount;
     let mut fees: Vec<Asset> = vec![];
     let mut refund_assets;
 
-    let pools = config.assets.clone();
-    // If no assets are provided, we just burn the LP tokens and return the underlying assets based on their share in the pool
-    if assets_out.is_none() {
-        act_burn_amount = burn_amount.unwrap();
-        refund_assets = get_share_in_assets(pools, act_burn_amount, total_share);
-    } else {
-        // Imbalanced withdraw
-        let imb_wd_res: ImbalancedWithdrawResponse = match imbalanced_withdraw(
-            deps,
-            &env,
-            &config,
-            &math_config,
-            burn_amount.unwrap(),
-            &assets_out.clone().unwrap(),
-            total_share,
-        ) {
-            Ok(res) => res,
-            Err(err) => {
-                return Ok(return_exit_failure(format!(
-                    "Error during imbalanced_withdraw: {}",
-                    err.to_string()
-                )));
+    match exit_type {
+        ExitType::ExactLpBurn(burn_amount) => {
+            // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
+            if burn_amount.is_zero() {
+                return Ok(return_exit_failure("Burn amount is zero".to_string()));
             }
-        };
-        act_burn_amount = imb_wd_res.burn_amount;
-        fees = imb_wd_res.fee;
-        refund_assets = assets_out.unwrap();
+
+            // For ExactLpBurn, we just burn the LP tokens and return the underlying assets based on their share in the pool
+            act_burn_amount = burn_amount;
+            refund_assets = get_share_in_assets(config.assets.clone(), act_burn_amount, total_share);
+        }
+        ExitType::ExactAssetsOut(assets_out) => {
+            // Check asset definitions and make sure no asset is repeated
+            let mut assets_out_ = assets_out.clone();
+            // first sort the assets
+            assets_out_.sort_by_key(|asset| asset.info.clone());
+            let mut previous_asset: String = "".to_string();
+            for asset in assets_out_.iter() {
+                if previous_asset == asset.info.as_string() {
+                    return Ok(return_exit_failure(
+                        "Repeated assets in exact_assets_out".to_string(),
+                    ));
+                }
+                previous_asset = asset.info.as_string();
+            }
+
+            // Imbalanced withdraw
+            let imb_wd_res: ImbalancedWithdrawResponse = match imbalanced_withdraw(
+                deps,
+                &env,
+                &config,
+                &MATHCONFIG.load(deps.storage)?,
+                &assets_out.clone(),
+                total_share,
+            ) {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(return_exit_failure(format!(
+                        "Error during imbalanced_withdraw: {}",
+                        err.to_string()
+                    )));
+                }
+            };
+            act_burn_amount = imb_wd_res.burn_amount;
+            fees = imb_wd_res.fee;
+            refund_assets = assets_out;
+        }
     }
 
     // although this check isn't required given the current state of code, but better to be safe than sorry.
@@ -1250,7 +1242,6 @@ fn imbalanced_withdraw(
     env: &Env,
     config: &Config,
     math_config: &MathConfig,
-    provided_amount: Uint128,
     assets: &[Asset],
     total_share: Uint128,
 ) -> Result<ImbalancedWithdrawResponse, ContractError> {
@@ -1382,14 +1373,6 @@ fn imbalanced_withdraw(
         .checked_add(Uint256::from(1u8))?; // In case of rounding errors - make it unfavorable for the "attacker"
 
     let burn_amount = burn_amount.try_into()?;
-
-    if burn_amount > provided_amount {
-        return Err(StdError::generic_err(format!(
-            "Not enough LP tokens. You need {} LP tokens.",
-            burn_amount
-        ))
-        .into());
-    }
 
     Ok(ImbalancedWithdrawResponse {
         burn_amount,
