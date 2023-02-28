@@ -75,8 +75,8 @@ pub enum ContractError {
     #[error("Unable to exit with exact assets out as requested by the user")]
     UnableToExitWithExactAssetsOut {},
 
-    #[error("Insufficient number of LP tokens sent to the Vault")]
-    InsufficientLpTokensSent {},
+    #[error("Cannot burn more LP tokens than what's been sent by the users")]
+    InsufficientLpTokensToExit {},
 
     #[error("Invalid number of assets")]
     InvalidNumberOfAssets {},

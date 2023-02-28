@@ -1409,7 +1409,7 @@ pub fn execute_exit_pool(
     let lp_to_return: Uint128 = lp_received
         .checked_sub(pool_exit_transition.burn_shares)
         .map_err(|_| {
-            return Err(ContractError::InsufficientLpTokensSent {});
+            return Err(ContractError::InsufficientLpTokensToExit {});
         })?;
 
     //  ExecuteMsg - Stores the list of messages to be executed
