@@ -1290,7 +1290,10 @@ pub fn execute_exit_pool(
         ExitType::ExactLpBurn { lp_to_burn, min_assets_out } => {
             // ensure we have received exact lp tokens as the user wants to burn
             if lp_to_burn != lp_received {
-                return Err(ContractError::InsufficientLpTokensToExit {});
+                return Err(ContractError::ReceivedUnexpectedLpTokens {
+                    expected: lp_to_burn,
+                    received: lp_received,
+                });
             }
             // more validation on lp_to_burn should happen in each pool's query
 
@@ -1314,7 +1317,10 @@ pub fn execute_exit_pool(
 
             // ensure we have received at least as much lp tokens as the maximum user wants to burn
             if max_lp_to_burn.is_some() && max_lp_to_burn.unwrap() > lp_received {
-                return Err(ContractError::InsufficientLpTokensToExit {});
+                return Err(ContractError::ReceivedUnexpectedLpTokens {
+                    expected: max_lp_to_burn.unwrap(),
+                    received: lp_received
+                });
             }
 
             query_exit_type = pool::ExitType::ExactAssetsOut(assets_out);

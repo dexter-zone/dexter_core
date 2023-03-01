@@ -1416,7 +1416,7 @@ fn test_on_exit_pool() {
     let res = app
         .execute_contract(alice_address.clone(), lp_token_addr.clone(), &exit_msg, &[])
         .unwrap_err();
-    assert_eq!(res.root_cause().to_string(), "Amount cannot be 0");
+    assert_eq!(res.root_cause().to_string(), "ReceivedUnexpectedLpTokens - expected: 0, received: 50");
 
     //// -----x----- Check #2 :: Success ::: Successfully exit the pool -----x----- ////
 

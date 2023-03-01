@@ -56,6 +56,12 @@ pub enum ContractError {
         needed: Uint128,
     },
 
+    #[error("ReceivedUnexpectedLpTokens - expected: {expected}, received: {received}")]
+    ReceivedUnexpectedLpTokens {
+        expected: Uint128,
+        received: Uint128,
+    },
+
     #[error("Unable to burn exact LP tokens as requested by the user")]
     UnableToBurnExactLpTokens {},
 
