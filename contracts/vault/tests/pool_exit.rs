@@ -530,4 +530,100 @@ fn test_exit_pool() {
         &[],
     )
     .unwrap();
+
+    // -------x---------- Slippage Control Test -::- ExactLpBurn -------x---------
+    // -------x---------- -------x---------- -------x---------- -------x---------
+
+    let exit_msg = Cw20ExecuteMsg::Send {
+        contract: vault_instance.clone().to_string(),
+        amount: Uint128::from(5_000000_000000_000000u128),
+        msg: to_binary(&Cw20HookMsg::ExitPool {
+            pool_id: Uint128::from(weighted_pool_id),
+            recipient: None,
+            exit_type: ExitType::ExactLpBurn {
+                lp_to_burn: Uint128::from(5_000000_000000_000000u128),
+                min_assets_out: Some(vec![
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: denom0.clone(),
+                        },
+                        amount: Uint128::from(49_500000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: denom1.clone(),
+                        },
+                        amount: Uint128::from(50_000000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: token_instance1.clone(),
+                        },
+                        amount: Uint128::from(49_000000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: token_instance2.clone(),
+                        },
+                        amount: Uint128::from(0u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: token_instance3.clone(),
+                        },
+                        amount: Uint128::from(100_000000u128),
+                    },
+                ]),
+            },
+        })
+            .unwrap(),
+    };
+    assert_eq!(app.execute_contract(
+        owner.clone(),
+        weighted_lp_token_addr.clone(),
+        &exit_msg,
+        &[],
+    ).unwrap_err().root_cause().to_string(), "MinAssetOutError - return amount 49500000 is less than minimum requested amount 100000000 for asset contract3");
+
+    // -------x---------- Slippage Control Test -::- ExactAssetOut -------x---------
+    // -------x---------- -------x---------- -------x---------- -------x---------
+
+    let exit_msg = Cw20ExecuteMsg::Send {
+        contract: vault_instance.clone().to_string(),
+        amount: Uint128::from(500_000000_000000_000000u128),
+        msg: to_binary(&Cw20HookMsg::ExitPool {
+            pool_id: Uint128::from(stable5_pool_id),
+            recipient: None,
+            exit_type: ExitType::ExactAssetsOut {
+                assets_out: vec![
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: denom0.clone(),
+                        },
+                        amount: Uint128::from(125_000000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: denom1.clone(),
+                        },
+                        amount: Uint128::from(5_000000u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: token_instance2.clone(),
+                        },
+                        amount: Uint128::from(257_000000u128),
+                    },
+                ],
+                max_lp_to_burn: Some(Uint128::from(404_374980_780408_081409u128)),
+            },
+        })
+            .unwrap(),
+    };
+    assert_eq!(app.execute_contract(
+        owner.clone(),
+        stable5_lp_token_addr.clone(),
+        &exit_msg,
+        &[]
+    ).unwrap_err().root_cause().to_string(), "MaxLpToBurnError - burn amount 404374980780408081410 is more than maximum LP to burn 404374980780408081409 allowed by the user");
 }
