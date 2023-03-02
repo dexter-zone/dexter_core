@@ -381,12 +381,17 @@ pub enum Cw20HookMsg {
     },
 }
 
+/// This struct describes the ways one can choose to exit from a pool.
 #[cw_serde]
 pub enum ExitType {
+    /// provide this to convey that only this much LP tokens should be burned,
+    /// irrespective of how much assets you will get back.
     ExactLpBurn {
         lp_to_burn: Uint128,
         min_assets_out: Option<Vec<Asset>>,
     },
+    /// provide this to convey that you want exactly these assets out, irrespective of how much LP
+    /// tokens need to be burned for that.
     ExactAssetsOut {
         assets_out: Vec<Asset>,
         max_lp_to_burn: Option<Uint128>,

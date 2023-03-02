@@ -1365,7 +1365,10 @@ pub fn execute_exit_pool(
     match exit_type {
         ExitType::ExactLpBurn { lp_to_burn, min_assets_out } => {
             if pool_exit_transition.burn_shares != lp_to_burn {
-                return Err(ContractError::UnableToBurnExactLpTokens {});
+                return Err(ContractError::PoolExitTransitionLpToBurnMismatch {
+                    expected_to_burn: lp_to_burn,
+                    actual_burn: pool_exit_transition.burn_shares,
+                });
             }
             if let Some(_) = min_assets_out {
                 for a in pool_exit_transition.assets_out.clone() {
@@ -1381,23 +1384,21 @@ pub fn execute_exit_pool(
             }
         }
         ExitType::ExactAssetsOut { assets_out, max_lp_to_burn } => {
-            let mut assets_out_map: HashMap<String, Uint128> = HashMap::with_capacity(assets_out.len());
-            assets_out.into_iter().for_each(|a| {
-                if a.amount.gt(&Uint128::zero()) {
-                    assets_out_map.insert(a.info.to_string(), a.amount);
-                }
-            });
+            let assets_out_map: HashMap<String, Uint128> = assets_out
+                .iter()
+                .filter(|a| a.amount.gt(&Uint128::zero()))
+                .map(|a| (a.info.to_string(), a.amount))
+                .collect();
             for a in pool_exit_transition.assets_out.clone() {
-                let is_exact_asset_out = match assets_out_map.get(a.info.to_string().as_str()) {
-                    None => {
-                        a.amount == Uint128::zero()
-                    },
-                    Some(exact_asset_out_amount) => {
-                        a.amount == exact_asset_out_amount
-                    }
-                };
-                if !is_exact_asset_out {
-                    return Err(ContractError::UnableToExitWithExactAssetsOut {});
+                let asset_out_amount = assets_out_map
+                    .get(a.info.to_string().as_str())
+                    .cloned()
+                    .unwrap_or(Uint128::zero());
+                if a.amount != asset_out_amount {
+                    return Err(ContractError::PoolExitTransitionAssetsOutMismatch {
+                        expected_assets_out: serde_json_wasm::to_string(&assets_out).unwrap(),
+                        actual_assets_out: serde_json_wasm::to_string(&pool_exit_transition.assets_out).unwrap(),
+                    });
                 }
             }
             if let Some(max_lp_to_burn) = max_lp_to_burn {

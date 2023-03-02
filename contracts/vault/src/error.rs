@@ -62,8 +62,17 @@ pub enum ContractError {
         received: Uint128,
     },
 
-    #[error("Unable to burn exact LP tokens as requested by the user")]
-    UnableToBurnExactLpTokens {},
+    #[error("PoolExitTransitionLpToBurnMismatch - expected_to_burn: {expected_to_burn}, actual_burn: {actual_burn}")]
+    PoolExitTransitionLpToBurnMismatch {
+        expected_to_burn: Uint128,
+        actual_burn: Uint128,
+    },
+
+    #[error("PoolExitTransitionAssetsOutMismatch - expected_assets_out: {expected_assets_out}, actual_assets_out: {actual_assets_out}")]
+    PoolExitTransitionAssetsOutMismatch {
+        expected_assets_out: String,
+        actual_assets_out: String,
+    },
 
     #[error("MinAssetOutError - return amount {return_amount} is less than minimum requested amount {min_receive} for asset {asset_info}")]
     MinAssetOutError {
@@ -77,9 +86,6 @@ pub enum ContractError {
         burn_amount: Uint128,
         max_lp_to_burn: Uint128,
     },
-
-    #[error("Unable to exit with exact assets out as requested by the user")]
-    UnableToExitWithExactAssetsOut {},
 
     #[error("Cannot burn more LP tokens than what's been sent by the users")]
     InsufficientLpTokensToExit {},

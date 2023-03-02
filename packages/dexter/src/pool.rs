@@ -184,13 +184,14 @@ pub enum QueryMsg {
     CumulativePrices {},
 }
 
+/// This struct describes the ways one can choose to exit from a pool.
 #[cw_serde]
 pub enum ExitType {
-    /// provide this to convey that you want exactly these assets out, irrespective of how much LP
-    /// tokens need to be burned for that.
-    ExactLpBurn(Uint128),
     /// provide this to convey that only this much LP tokens should be burned,
     /// irrespective of how much assets you will get back.
+    ExactLpBurn(Uint128),
+    /// provide this to convey that you want exactly these assets out, irrespective of how much LP
+    /// tokens need to be burned for that.
     ExactAssetsOut(Vec<Asset>),
 }
 
