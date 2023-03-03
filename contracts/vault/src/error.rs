@@ -134,7 +134,16 @@ pub enum ContractError {
     InvalidNativeAssetPrecisionList,
 
     #[error("Non zero precision value upto 18 is supported")]
-    UnsupportedPrecision
+    UnsupportedPrecision,
+
+    #[error("Invalid native asset denom {denom}. Supplied denom must have a non zero supply on the chain")]
+    InvalidNativeAssetDenom { denom: String },
+
+    #[error("Invalid cw20 token address {address}. Supplied address must be a valid cw20 token address and must have a non zero supply on the chain")]
+    InvalidCw20TokenAddress { address: String },
+
+    #[error("Invalid cw20 token address {address}. Not able to query the token info based on CW20 standard on the address due to error {err}")]
+    Cw20TokenAddressQueryError { address: String, err: String },
 }
 
 impl From<OverflowError> for ContractError {

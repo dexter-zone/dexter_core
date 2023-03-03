@@ -2,7 +2,7 @@ use crate::pool;
 use crate::{asset::AssetInfo, vault};
 use cosmwasm_std::{
     to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper, QueryRequest, StdResult, Uint128,
-    WasmQuery,
+    WasmQuery, Coin,
 };
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 
@@ -79,6 +79,17 @@ pub fn query_token_precision(querier: &QuerierWrapper, asset_info: AssetInfo) ->
             res.decimals
         }
     })
+}
+
+/// Query total supply of a denom
+pub fn query_denom_supply(querier: &QuerierWrapper, denom: String) -> StdResult<Uint128> {
+    let res: Coin = querier.query_supply(denom)?;
+    Ok(res.amount)
+}
+
+// Query token info for a cw20 token
+pub fn query_token_info(querier: &QuerierWrapper, contract_addr: Addr) -> StdResult<TokenInfoResponse> {
+    querier.query_wasm_smart(contract_addr, &Cw20QueryMsg::TokenInfo {})
 }
 
 /// Returns the configuration for the Vault contract.

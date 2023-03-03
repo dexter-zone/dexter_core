@@ -1,3 +1,4 @@
+use dexter::querier::{query_denom_supply, query_token_info};
 #[cfg(not(feature = "library"))]
 use itertools::Itertools;
 use crate::error::ContractError;
@@ -729,9 +730,40 @@ pub fn execute_create_pool_instance(
         AssetInfo::NativeToken { denom } => Some(denom),
         _ => None,
     }).sorted().collect_vec();
+
+    // CW20 token addresses
+    let cw20_token_addresses = asset_infos.iter().filter_map(|a| match a {
+        AssetInfo::Token { contract_addr } => Some(contract_addr),
+        _ => None,
+    }).sorted().collect_vec();
+
+    // We consider a native denom to be valid if there is some supply of it in the network
+    for denom in &native_asset_denoms {
+        let supply = query_denom_supply(&deps.querier, denom.to_string())?;
+        if supply.is_zero() {
+            return Err(ContractError::InvalidNativeAssetDenom {
+                denom: denom.to_string(),
+            });
+        }
+    }
+
+    // We consider a cw20 token address to be valid if by doing a info query on it and doing a supply check.
+    // While this doesn't exact ensure that the token is valid and conform to the cw20 standard,
+    // it does ensure that the address is valid and some contract is deployed at that address.
+    for address in cw20_token_addresses {
+        let token_info = query_token_info(&deps.querier, address.clone())
+            .map_err(|err| ContractError::Cw20TokenAddressQueryError {
+                address: address.to_string(),
+                err: err.to_string(),
+            })?;
+        if token_info.total_supply.is_zero() {
+            return Err(ContractError::InvalidCw20TokenAddress {
+                address: address.to_string(),
+            });
+        }
+    }
     
     let denoms_of_precisions_supplied = native_asset_precisions.iter().map(|(k, _)| k).sorted().collect_vec();
-
     if native_asset_denoms != denoms_of_precisions_supplied {
         return Err(ContractError::InvalidNativeAssetPrecisionList);
     }
