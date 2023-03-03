@@ -384,14 +384,25 @@ pub enum Cw20HookMsg {
 /// This struct describes the ways one can choose to exit from a pool.
 #[cw_serde]
 pub enum ExitType {
-    /// provide this to convey that only this much LP tokens should be burned,
+    /// Provide this to convey that only this much LP tokens should be burned,
     /// irrespective of how much assets you will get back.
+    /// It accepts an optional `min_assets_out` parameter for slippage control.
+    /// If the parameter is provided and the assets being given out by burning
+    /// `lp_to_burn` LP tokens is less than `min_assets_out`, then the tx will fail.
+    /// Since this works via a CW20 hook, you need to send exactly `lp_to_burn`
+    /// LP tokens, otherwise the tx will fail.
     ExactLpBurn {
         lp_to_burn: Uint128,
         min_assets_out: Option<Vec<Asset>>,
     },
-    /// provide this to convey that you want exactly these assets out, irrespective of how much LP
+    /// Provide this to convey that you want exactly these assets out, irrespective of how much LP
     /// tokens need to be burned for that.
+    /// It accepts an optional `max_lp_to_burn` parameter for slippage control.
+    /// If the parameter is provided and the LP token that get burned for getting
+    /// the `assets_out` is more than `max_lp_to_burn`, then the tx will fail.
+    /// Since this works via a CW20 hook, you need to send at least `max_lp_to_burn`
+    /// LP tokens, otherwise the tx will fail. If you send more tokens, they will be
+    /// returned back.
     ExactAssetsOut {
         assets_out: Vec<Asset>,
         max_lp_to_burn: Option<Uint128>,
