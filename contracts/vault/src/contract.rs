@@ -21,14 +21,11 @@ use dexter::helper::{
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
-use dexter::vault::{
-    AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg,
-    ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo,
-    PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType,
-};
+use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType};
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
+use dexter::pool;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "crates.io:dexter-vault";
@@ -294,33 +291,23 @@ pub fn receive_cw20(
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     let sender = cw20_msg.sender;
-    let amount_transferred = cw20_msg.amount;
+    let lp_received = cw20_msg.amount;
 
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::ExitPool {
             pool_id,
             recipient,
-            assets,
-            mut burn_amount,
+            exit_type
         } => {
-            // Check if amount is valid or not
-            if burn_amount.is_some() && burn_amount.unwrap() != amount_transferred {
-                return Err(ContractError::InvalidAmount {});
-            }
-            burn_amount = Some(amount_transferred);
-
-            let act_recepient = recipient.unwrap_or(sender.clone());
-            let sender = sender.clone();
-
             execute_exit_pool(
                 deps,
                 env,
                 info,
                 pool_id,
-                act_recepient,
+                recipient.unwrap_or(sender.clone()),
                 sender,
-                assets,
-                burn_amount,
+                exit_type,
+                lp_received,
             )
         }
     }
@@ -1279,8 +1266,8 @@ pub fn execute_exit_pool(
     pool_id: Uint128,
     recipient: String,
     sender: String,
-    assets_out: Option<Vec<Asset>>,
-    burn_amount: Option<Uint128>,
+    exit_type: ExitType,
+    lp_received: Uint128,
 ) -> Result<Response, ContractError> {
     // Read - Vault config
     let config = CONFIG.load(deps.storage)?;
@@ -1293,6 +1280,51 @@ pub fn execute_exit_pool(
     // Error - Check if the LP token sent is valid
     if info.sender != pool_info.lp_token_addr {
         return Err(ContractError::Unauthorized {});
+    }
+
+    let query_exit_type: pool::ExitType;
+    let mut min_assets_out_map: HashMap<String, Uint128> = HashMap::new();
+
+    // Check if exit_type is valid or not
+    match exit_type.clone() {
+        ExitType::ExactLpBurn { lp_to_burn, min_assets_out } => {
+            // ensure we have received exact lp tokens as the user wants to burn
+            if lp_to_burn != lp_received {
+                return Err(ContractError::ReceivedUnexpectedLpTokens {
+                    expected: lp_to_burn,
+                    received: lp_received,
+                });
+            }
+            // more validation on lp_to_burn should happen in each pool's query
+
+            // Check - user should specify all the pool assets in min_assets_out if specifying at all
+            if let Some(min_assets_out) = min_assets_out {
+                min_assets_out.into_iter().for_each(|a| {
+                   min_assets_out_map.insert(a.info.to_string(), a.amount);
+                });
+
+                for a in pool_info.assets.clone() {
+                    if min_assets_out_map.get(a.info.to_string().as_str()).is_none() {
+                        return  Err(ContractError::MismatchedAssets {});
+                    }
+                }
+            }
+
+            query_exit_type = pool::ExitType::ExactLpBurn(lp_to_burn);
+        }
+        ExitType::ExactAssetsOut { max_lp_to_burn, assets_out } => {
+            // validate assets_out => this should happen in each pool's exit query
+
+            // ensure we have received at least as much lp tokens as the maximum user wants to burn
+            if max_lp_to_burn.is_some() && max_lp_to_burn.unwrap() > lp_received {
+                return Err(ContractError::ReceivedUnexpectedLpTokens {
+                    expected: max_lp_to_burn.unwrap(),
+                    received: lp_received
+                });
+            }
+
+            query_exit_type = pool::ExitType::ExactAssetsOut(assets_out);
+        }
     }
 
     //  Query - Query the Pool Contract to get the state transition to be handled
@@ -1308,8 +1340,7 @@ pub fn execute_exit_pool(
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
             msg: to_binary(&dexter::pool::QueryMsg::OnExitPool {
-                assets_out,
-                burn_amount,
+               exit_type: query_exit_type
             })?,
         }))?;
 
@@ -1330,20 +1361,63 @@ pub fn execute_exit_pool(
         return Err(ContractError::BurnAmountZero {});
     }
 
-    // Param - Number of LP shares to be returned to the user
-    let lp_to_return: Uint128;
-
-    // Error - If Lp token to burn > Lp tokens transferred by the user
-    if pool_exit_transition.burn_shares > burn_amount.unwrap() {
-        return Err(ContractError::InsufficientLpTokensToExit {});
-    } else {
-        // TODO: Somehow by the above if check we are enforcing that the burn_amount must always be provided.
-        //  So, why keep burn_amount as optional?
-        //  Once we are sure we don't need this for any future versions, maybe we can make it required.
-        lp_to_return = burn_amount
-            .unwrap()
-            .checked_sub(pool_exit_transition.burn_shares)?;
+    // Check - ExitType validations
+    match exit_type {
+        ExitType::ExactLpBurn { lp_to_burn, min_assets_out } => {
+            if pool_exit_transition.burn_shares != lp_to_burn {
+                return Err(ContractError::PoolExitTransitionLpToBurnMismatch {
+                    expected_to_burn: lp_to_burn,
+                    actual_burn: pool_exit_transition.burn_shares,
+                });
+            }
+            if let Some(_) = min_assets_out {
+                for a in pool_exit_transition.assets_out.clone() {
+                    let min_amount = min_assets_out_map.get(a.info.to_string().as_str()).unwrap();
+                    if a.amount.lt(min_amount) {
+                        return Err(ContractError::MinAssetOutError {
+                            return_amount: a.amount,
+                            min_receive: *min_amount,
+                            asset_info: a.info,
+                        });
+                    }
+                }
+            }
+        }
+        ExitType::ExactAssetsOut { assets_out, max_lp_to_burn } => {
+            let assets_out_map: HashMap<String, Uint128> = assets_out
+                .iter()
+                .filter(|a| a.amount.gt(&Uint128::zero()))
+                .map(|a| (a.info.to_string(), a.amount))
+                .collect();
+            for a in pool_exit_transition.assets_out.clone() {
+                let asset_out_amount = assets_out_map
+                    .get(a.info.to_string().as_str())
+                    .cloned()
+                    .unwrap_or(Uint128::zero());
+                if a.amount != asset_out_amount {
+                    return Err(ContractError::PoolExitTransitionAssetsOutMismatch {
+                        expected_assets_out: serde_json_wasm::to_string(&assets_out).unwrap(),
+                        actual_assets_out: serde_json_wasm::to_string(&pool_exit_transition.assets_out).unwrap(),
+                    });
+                }
+            }
+            if let Some(max_lp_to_burn) = max_lp_to_burn {
+                if pool_exit_transition.burn_shares > max_lp_to_burn {
+                    return Err(ContractError::MaxLpToBurnError {
+                        burn_amount: pool_exit_transition.burn_shares,
+                        max_lp_to_burn,
+                    })
+                }
+            }
+        }
     }
+
+    // Param - Number of LP shares to be returned to the user
+    let lp_to_return: Uint128 = lp_received
+        .checked_sub(pool_exit_transition.burn_shares)
+        .map_err(|_| {
+            return ContractError::InsufficientLpTokensToExit {};
+        })?;
 
     //  ExecuteMsg - Stores the list of messages to be executed
     let mut execute_msgs: Vec<CosmosMsg> = vec![];

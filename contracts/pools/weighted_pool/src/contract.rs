@@ -7,8 +7,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, select_pools};
-// use dexter::helper::decimal2decimal256;
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_total_fee_bps};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_total_fee_bps, ExitType};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
@@ -287,9 +286,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             mint_amount,
         )?),
         QueryMsg::OnExitPool {
-            assets_out,
-            burn_amount,
-        } => to_binary(&query_on_exit_pool(deps, env, assets_out, burn_amount)?),
+            exit_type
+        } => to_binary(&query_on_exit_pool(deps, env, exit_type)?),
         QueryMsg::OnSwap {
             swap_type,
             offer_asset,
@@ -623,12 +621,20 @@ pub fn query_on_join_pool(
 pub fn query_on_exit_pool(
     deps: Deps,
     _env: Env,
-    _assets_out: Option<Vec<Asset>>,
-    burn_amount: Option<Uint128>,
+    exit_type: ExitType,
 ) -> StdResult<AfterExitResponse> {
-    // If the user has not provided number of LP tokens to be burnt, then return a `Failure` response
-    if burn_amount.is_none() || burn_amount.unwrap().is_zero() {
-        return Ok(return_exit_failure("Burn amount is zero".to_string()));
+    let act_burn_shares: Uint128;
+
+    match exit_type {
+        ExitType::ExactLpBurn(burn_amount) => {
+            if burn_amount.is_zero() {
+                return Ok(return_exit_failure("Burn amount is zero".to_string()));
+            }
+            act_burn_shares = burn_amount;
+        }
+        ExitType::ExactAssetsOut(_) => {
+            return Ok(return_exit_failure("unsupported exit_type: ExactAssetsOut".to_string()));
+        }
     }
 
     let config: Config = CONFIG.load(deps.storage)?;
@@ -636,7 +642,6 @@ pub fn query_on_exit_pool(
 
     // Total share of LP tokens minted by the pool
     let total_share = query_supply(&deps.querier, config.lp_token_addr)?;
-    let act_burn_shares = burn_amount.unwrap();
 
     if act_burn_shares > total_share {
         return Ok(return_exit_failure(

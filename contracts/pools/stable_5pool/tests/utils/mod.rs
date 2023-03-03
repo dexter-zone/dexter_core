@@ -7,7 +7,7 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::asset::{Asset, AssetInfo, AssetExchangeRate};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
-use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse, AfterExitResponse, AfterJoinResponse};
+use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse, AfterExitResponse, AfterJoinResponse, ExitType};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest, Cw20HookMsg,
@@ -16,6 +16,8 @@ use dexter::vault::{
 use cw20::Cw20ExecuteMsg;
 
 use itertools::Itertools;
+use dexter::pool::ExitType::ExactLpBurn;
+use dexter::vault;
 use stable5pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
 
 pub const EPOCH_START: u64 = 1_000_000;
@@ -749,8 +751,7 @@ pub fn perform_and_test_exit_pool(
 ) {
 
     let exit_query_msg = QueryMsg::OnExitPool {
-        burn_amount: Some(burn_amount),
-        assets_out: None,  
+        exit_type: ExactLpBurn(burn_amount),
     };
 
     let exit_query_res: AfterExitResponse = app
@@ -763,8 +764,10 @@ pub fn perform_and_test_exit_pool(
 
     let exit_pool_hook_msg = Cw20HookMsg::ExitPool {
         pool_id,
-        assets: None,
-        burn_amount: Some(burn_amount),
+        exit_type: vault::ExitType::ExactLpBurn {
+            lp_to_burn: burn_amount,
+            min_assets_out: None,
+        },
         recipient: None,
     };
 
@@ -798,9 +801,7 @@ pub fn perform_and_test_imbalanced_exit(
 ) {
     
     let exit_query_msg = QueryMsg::OnExitPool {
-        // Keep some scope for error. Need to fix this burn API like right now!
-        burn_amount: Some(expected_burn_amount.checked_mul(Uint128::from(2u128)).unwrap()),
-        assets_out: Some(assets_out.clone()),  
+        exit_type: ExitType::ExactAssetsOut(assets_out.clone()),
     };
 
     let exit_query_res: AfterExitResponse = app
@@ -825,8 +826,10 @@ pub fn perform_and_test_imbalanced_exit(
 
     let exit_pool_hook_msg = Cw20HookMsg::ExitPool {
         pool_id,
-        assets: Some(assets_out.clone()),
-        burn_amount: None,
+        exit_type: vault::ExitType::ExactAssetsOut {
+            assets_out: assets_out.clone(),
+            max_lp_to_burn: Some(expected_burn_amount),
+        },
         recipient: None,
     };
 

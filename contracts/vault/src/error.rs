@@ -1,5 +1,6 @@
 use cosmwasm_std::{OverflowError, StdError, Uint128};
 use thiserror::Error;
+use dexter::asset::AssetInfo;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
@@ -53,6 +54,37 @@ pub enum ContractError {
         denom: String,
         sent: Uint128,
         needed: Uint128,
+    },
+
+    #[error("ReceivedUnexpectedLpTokens - expected: {expected}, received: {received}")]
+    ReceivedUnexpectedLpTokens {
+        expected: Uint128,
+        received: Uint128,
+    },
+
+    #[error("PoolExitTransitionLpToBurnMismatch - expected_to_burn: {expected_to_burn}, actual_burn: {actual_burn}")]
+    PoolExitTransitionLpToBurnMismatch {
+        expected_to_burn: Uint128,
+        actual_burn: Uint128,
+    },
+
+    #[error("PoolExitTransitionAssetsOutMismatch - expected_assets_out: {expected_assets_out}, actual_assets_out: {actual_assets_out}")]
+    PoolExitTransitionAssetsOutMismatch {
+        expected_assets_out: String,
+        actual_assets_out: String,
+    },
+
+    #[error("MinAssetOutError - return amount {return_amount} is less than minimum requested amount {min_receive} for asset {asset_info}")]
+    MinAssetOutError {
+        return_amount: Uint128,
+        min_receive: Uint128,
+        asset_info: AssetInfo,
+    },
+
+    #[error("MaxLpToBurnError - burn amount {burn_amount} is more than maximum LP to burn {max_lp_to_burn} allowed by the user")]
+    MaxLpToBurnError {
+        burn_amount: Uint128,
+        max_lp_to_burn: Uint128,
     },
 
     #[error("Cannot burn more LP tokens than what's been sent by the users")]
