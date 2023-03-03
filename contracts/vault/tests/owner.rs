@@ -15,7 +15,7 @@ fn test_update_owner() {
 
     // New owner
     let msg = ExecuteMsg::ProposeNewOwner {
-        owner: new_owner.clone(),
+        new_owner: new_owner.clone(),
         expires_in: 100, // seconds
     };
 

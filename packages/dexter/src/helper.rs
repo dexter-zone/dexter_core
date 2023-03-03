@@ -3,12 +3,22 @@ use crate::error::ContractError;
 use crate::vault::FEE_PRECISION;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    attr, to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env,
+    to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw20_base::msg::ExecuteMsg as CW20ExecuteMsg;
 use cw_storage_plus::Item;
 use itertools::Itertools;
+
+// ----------------x----------------x----------------x----------------x----------------x----------------
+// ----------------x                       Event related helpers                       x----------------
+// ----------------x----------------x----------------x----------------x----------------x----------------
+
+pub const ATTR_SENDER: &str = "sender";
+
+pub fn new_event(name: impl Into<String>, info: &MessageInfo) -> Event {
+    Event::new(name).add_attribute(ATTR_SENDER, info.sender.to_string())
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x       Ownership Update helper functions          x----------------
@@ -37,6 +47,7 @@ pub fn propose_new_owner(
     expires_in: u64,
     owner: Addr,
     proposal: Item<OwnershipProposal>,
+    event_name: impl Into<String>,
 ) -> StdResult<Response> {
     if info.sender != owner {
         return Err(StdError::generic_err("Unauthorized"));
@@ -57,10 +68,11 @@ pub fn propose_new_owner(
         },
     )?;
 
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "propose_new_owner"),
-        attr("new_owner", new_owner),
-    ]))
+    Ok(Response::new().add_event(
+        new_event(event_name, &info)
+            .add_attribute("new_owner", new_owner)
+            .add_attribute("expires_in", expires_in.to_string())
+    ))
 }
 
 /// ## Description - Removes a request to change ownership. Only owner can execute it
@@ -71,13 +83,14 @@ pub fn drop_ownership_proposal(
     info: MessageInfo,
     owner: Addr,
     proposal: Item<OwnershipProposal>,
+    event_name: impl Into<String>,
 ) -> StdResult<Response> {
     if info.sender != owner {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
     proposal.remove(deps.storage);
-    Ok(Response::new().add_attributes(vec![attr("action", "drop_ownership_proposal")]))
+    Ok(Response::new().add_event(new_event(event_name, &info)))
 }
 
 /// ## Description
@@ -90,6 +103,7 @@ pub fn claim_ownership(
     env: Env,
     ownership_proposal: Item<OwnershipProposal>,
     callback: fn(DepsMut, Addr) -> StdResult<()>,
+    event_name: impl Into<String>,
 ) -> StdResult<Response> {
     let proposal: OwnershipProposal = ownership_proposal
         .load(deps.storage)
@@ -106,10 +120,7 @@ pub fn claim_ownership(
     ownership_proposal.remove(deps.storage);
     callback(deps, proposal.owner.clone())?;
 
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "claim_ownership"),
-        attr("new_owner", proposal.owner),
-    ]))
+    Ok(Response::new().add_event(new_event(event_name, &info)))
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

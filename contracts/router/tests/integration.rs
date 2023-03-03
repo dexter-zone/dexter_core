@@ -1125,7 +1125,7 @@ fn test_router_functionality() {
     // Amount returned from the last hop swap: Uint128(807954)
     // Hop is over. Checking if minimum receive amount is met. Minimum receive amount: "0" Amount returned from the last hop swap: "807954"
     let multihop_swap_msg = ExecuteMsg::ExecuteMultihopSwap {
-        multiswap_request: multiswap_request_msg,
+        requests: multiswap_request_msg,
         recipient: None,
         offer_amount: Uint128::from(885277u128),
         minimum_receive: None,

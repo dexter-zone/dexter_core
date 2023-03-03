@@ -1,13 +1,13 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, MessageInfo, Response, StdError, StdResult, Uint128,
+    MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::helper::{calculate_underlying_fees, select_pools};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_total_fee_bps, ExitType};
+use dexter::helper::{calculate_underlying_fees, new_event, select_pools};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_fee, ExitType};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
@@ -53,7 +53,7 @@ const MIN_ASSETS: usize = 2;
 pub fn instantiate(
     mut deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -156,21 +156,17 @@ pub fn instantiate(
     MATHCONFIG.save(deps.storage, &math_config)?;
     TWAPINFO.save(deps.storage, &twap)?;
 
-    let event = Event::new("dexter-weighted-pool::instantiate")
-        .add_attribute("pool_id", msg.pool_id)
-        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
-        .add_attribute("vault_addr", msg.vault_addr)
-        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
-        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
-        .add_attribute("fee_info", msg.fee_info.to_string())
-        .add_attribute("weights", serde_json_wasm::to_string(&weights).unwrap())
-        .add_attribute("exit_fee", exit_fee.unwrap_or(Decimal::zero()).to_string());
-
-    let response = Response::new()
-        .add_event(event)
-        .add_attribute("action", "instantiate");
-
-    Ok(response)
+    Ok(Response::new().add_event(
+        new_event("dexter-weighted-pool::instantiate", &info)
+            .add_attribute("pool_id", msg.pool_id)
+            .add_attribute("vault_addr", msg.vault_addr)
+            .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+            .add_attribute("asset_infos", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+            .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
+            .add_attribute("fee_info", msg.fee_info.to_string())
+            .add_attribute("weights", serde_json_wasm::to_string(&weights).unwrap())
+            .add_attribute("exit_fee", exit_fee.unwrap_or(Decimal::zero()).to_string())
+    ))
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -195,11 +191,11 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
         ExecuteMsg::UpdateFee { total_fee_bps } => {
-            update_total_fee_bps(deps, env, info, total_fee_bps, CONFIG)
+            update_fee(deps, env, info, total_fee_bps, CONFIG, "dexter-weighted-pool::update_fee")
                 .map_err(|e| e.into())
         },
         ExecuteMsg::UpdateLiquidity { assets } => {
-            execute_update_pool_liquidity(deps, env, info, assets)
+            execute_update_liquidity(deps, env, info, assets)
         }
     }
 }
@@ -210,7 +206,7 @@ pub fn execute(
 ///
 /// ## Params
 /// * **assets** is a field of type [`Vec<Asset>`]. It is a sorted list of `Asset` which contain the token type details and new updates balances of tokens as accounted by the pool
-pub fn execute_update_pool_liquidity(
+pub fn execute_update_liquidity(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -246,16 +242,12 @@ pub fn execute_update_pool_liquidity(
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::update_liquidity")
-        .add_attribute("pool_id", config.pool_id.to_string())
-        .add_attribute("vault_address", config.vault_addr)
-        .add_attribute(
-            "pool_assets",
-            serde_json_wasm::to_string(&config.assets).unwrap(),
-        )
-        .add_attribute("block_time_last", twap.block_time_last.to_string());
-
-    Ok(Response::new().add_event(event))
+    Ok(Response::new().add_event(
+        new_event("dexter-weighted-pool::update_liquidity", &info)
+            .add_attribute("assets", serde_json_wasm::to_string(&config.assets).unwrap())
+            .add_attribute("pool_id", config.pool_id.to_string())
+            .add_attribute("twap_block_time_last", twap.block_time_last.to_string())
+    ))
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------

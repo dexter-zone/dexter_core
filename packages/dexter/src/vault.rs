@@ -360,7 +360,7 @@ pub enum ExecuteMsg {
     },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {
-        owner: String,
+        new_owner: String,
         expires_in: u64,
     },
     /// DropOwnershipProposal removes the existing offer for the new owner.
@@ -441,7 +441,7 @@ pub type ConfigResponse = Config;
 
 #[cw_serde]
 pub struct AssetFeeBreakup {
-    pub asset: AssetInfo,
+    pub asset_info: AssetInfo,
     pub total_fee: Uint128,
     pub protocol_fee: Uint128,
 }

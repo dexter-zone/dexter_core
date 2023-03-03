@@ -106,7 +106,7 @@ pub enum ContractError {
     DeadlineExpired {},
 
     #[error("Amount cannot be 0")]
-    InvalidAmount {},
+    AmountCannotBeZero {},
 
     #[error("Cannot swap same tokens")]
     SameTokenError {},
