@@ -96,6 +96,9 @@ pub enum ContractError {
 
     #[error("Scaling factor manager shouldn't be specified if scaling factor is not updatable")]
     ScalingFactorManagerSpecified,
+
+    #[error("Invalid max allowed spread. Max allowed spread should be positive non-zero value less than 1")]
+    InvalidMaxAllowedSpread,
 }
 
 impl From<OverflowError> for ContractError {

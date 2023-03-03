@@ -251,6 +251,7 @@ fn initialize_stable_5_pool(
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
             scaling_factor_manager: None,
+            max_allowed_spread: Decimal::from_ratio(50u128, 100u128)
         }).unwrap()),
         fee_info: None,
     };

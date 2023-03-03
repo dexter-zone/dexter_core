@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128, Addr, Decimal256};
+use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128, Addr, Decimal256, Decimal};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::AssetInfo;
 use dexter::pool::Config;
@@ -35,7 +35,15 @@ pub struct MathConfig {
 
 #[cw_serde]
 pub struct StableSwapConfig {
+    /// Max allowed spread between the price of the asset and the price of the pool.
+    /// If the spread is greater than this value, the swap will fail.
+    /// This value is configurable by the Pool Manager.
+    /// Max allowed spread is in the range (0, 1) non-inclusive.
+    pub max_allowed_spread: Decimal,
+    /// If this is true, then the scaling factors can be updated by the scaling_factor_manager.
     pub supports_scaling_factors_update: bool,
+    /// The vector of scaling factors for each asset in the pool.
+    /// The scaling factor is used to scale the volume of the asset in the pool for the stableswap invariant calculations.
     pub scaling_factors: Vec<AssetScalingFactor>,
     // This address is allowed to update scaling factors. This address is required if support_scaling_factors_update is true.
     pub scaling_factor_manager: Option<Addr>,
@@ -78,6 +86,8 @@ pub struct Twap {
 pub struct StablePoolParams {
     /// The current stableswap pool amplification
     pub amp: u64,
+    /// Max allowed spread for the trades
+    pub max_allowed_spread: Decimal,
     /// Support scaling factors update
     pub supports_scaling_factors_update: bool,
     /// Scaling factors
@@ -108,6 +118,7 @@ pub enum StablePoolUpdateParams {
     StopChangingAmp {},
     UpdateScalingFactorManager { manager: Addr },
     UpdateScalingFactor { asset_info: AssetInfo, scaling_factor: Decimal256 },
+    UpdateMaxAllowedSpread { max_allowed_spread: Decimal },
 }
 
 // ----------------x----------------x----------------x----------------
