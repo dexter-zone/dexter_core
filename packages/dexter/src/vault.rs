@@ -107,7 +107,7 @@ impl FeeInfo {
 pub struct Config {
     /// The admin address that controls settings for factory, pools and tokenomics contracts
     pub owner: Addr,
-    /// Additional allowed addresses that can create pools. If empty, only owner can create pools
+    /// Additional allowed addresses to create/manage pools. If empty, only owner can create/manage pools
     pub whitelisted_addresses: Vec<Addr>,
     /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: Option<u64>,
@@ -206,6 +206,9 @@ pub struct PauseInfo {
     /// True if deposits are paused
     pub deposit: bool,
     // We aren't allowing pause for withdrawals as of now.
+    // We allow pause of imbalanced withdraws to protect LPs from being drained by malicious actors
+    // in case any token supply is compromised.
+    pub imbalanced_withdraw: bool,
 }
 
 #[cw_serde]
@@ -418,7 +421,7 @@ pub enum QueryMsg {
     #[returns[ConfigResponse]]
     Config {},
     /// Return PoolConfig
-    #[returns(PoolConfigResponse)]
+    #[returns(PoolTypeConfigResponse)]
     QueryRegistry { pool_type: PoolType },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
@@ -446,7 +449,7 @@ pub struct AssetFeeBreakup {
     pub protocol_fee: Uint128,
 }
 
-pub type PoolConfigResponse = Option<PoolTypeConfig>;
+pub type PoolTypeConfigResponse = Option<PoolTypeConfig>;
 
 /// ## Description -  A custom struct for query response that returns the
 /// current stored state of a Pool Instance identified by either pool_id or pool_address.

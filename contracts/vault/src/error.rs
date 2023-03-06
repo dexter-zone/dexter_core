@@ -166,7 +166,10 @@ pub enum ContractError {
     InvalidNativeAssetPrecisionList,
 
     #[error("Non zero precision value upto 18 is supported")]
-    UnsupportedPrecision
+    UnsupportedPrecision,
+
+    #[error("Imbalanced exit is paused. Normal exit for a pool is always allowed")]
+    ImbalancedExitPaused,
 }
 
 impl From<OverflowError> for ContractError {

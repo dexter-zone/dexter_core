@@ -21,7 +21,7 @@ use dexter::helper::{
 };
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
-use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType};
+use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType};
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
@@ -402,7 +402,9 @@ pub fn execute_update_pause_info(
     pause_info: PauseInfo,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if !config.whitelisted_addresses.contains(&info.sender) {
+
+    // either vault owner or whitelisted address can update the pause info
+    if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender) {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -1277,6 +1279,9 @@ pub fn execute_exit_pool(
         .load(deps.storage, pool_id.to_string().as_bytes())
         .or(Err(ContractError::InvalidPoolId {}))?;
 
+    // Read - Get the PoolConfig {} for the pool
+    let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
+
     // Error - Check if the LP token sent is valid
     if info.sender != pool_info.lp_token_addr {
         return Err(ContractError::Unauthorized {});
@@ -1313,6 +1318,12 @@ pub fn execute_exit_pool(
             query_exit_type = pool::ExitType::ExactLpBurn(lp_to_burn);
         }
         ExitType::ExactAssetsOut { max_lp_to_burn, assets_out } => {
+
+            // Validate if exit is paused for imbalanced withdrawals
+            if config.paused.imbalanced_withdraw || pool_config.paused.imbalanced_withdraw || pool_info.paused.deposit {
+                return Err(ContractError::ImbalancedExitPaused);
+            }
+
             // validate assets_out => this should happen in each pool's exit query
 
             // ensure we have received at least as much lp tokens as the maximum user wants to burn
@@ -1887,7 +1898,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 ///
 /// ## Params
 /// * **pool_type** is the object of type [`PoolType`]. Its the pool type for which the configuration is requested.
-pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolConfigResponse> {
+pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolTypeConfigResponse> {
     let pool_config =
         REGISTRY
             .load(deps.storage, pool_type.to_string())
