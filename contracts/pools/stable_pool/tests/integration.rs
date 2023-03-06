@@ -307,6 +307,47 @@ fn test_update_config() {
 
     let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 20u64);
+
+    // Change max allowed spread limits for trades
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+                max_allowed_spread: Decimal::percent(90),
+            })
+            .unwrap(),
+        ),
+    };
+
+    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[]).unwrap();
+    
+    // validate max allowed spread change
+    let res: ConfigResponse = app
+        .wrap()
+        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
+        .unwrap();
+
+    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    assert_eq!(params.max_allowed_spread, Decimal::percent(90));
+
+    // try updating max spread to an invalid value
+    let msg = ExecuteMsg::UpdateConfig {
+        params: Some(
+            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+                max_allowed_spread: Decimal::percent(100),
+            })
+            .unwrap(),
+        ),
+    };
+
+    let resp = app
+        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
+        .unwrap_err();
+
+    assert_eq!(
+        resp.root_cause().to_string(),
+        "Invalid max allowed spread. Max allowed spread should be positive non-zero value less than 1"
+    );
+
 }
 
 /// Tests the following -
