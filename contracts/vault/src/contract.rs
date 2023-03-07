@@ -1320,7 +1320,7 @@ pub fn execute_exit_pool(
         ExitType::ExactAssetsOut { max_lp_to_burn, assets_out } => {
 
             // Validate if exit is paused for imbalanced withdrawals
-            if config.paused.imbalanced_withdraw || pool_config.paused.imbalanced_withdraw || pool_info.paused.deposit {
+            if config.paused.imbalanced_withdraw || pool_config.paused.imbalanced_withdraw || pool_info.paused.imbalanced_withdraw {
                 return Err(ContractError::ImbalancedExitPaused);
             }
 
