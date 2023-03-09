@@ -61,9 +61,9 @@ fn store_token_code(app: &mut App) -> u64 {
 
 fn store_stable5_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable5pool::contract::execute,
-        stable5pool::contract::instantiate,
-        stable5pool::contract::query,
+        stable_pool::contract::execute,
+        stable_pool::contract::instantiate,
+        stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
@@ -246,7 +246,7 @@ fn initialize_stable_5_pool(
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+        init_params: Some(to_binary(&stable_pool::state::StablePoolParams {
             amp: 10u64,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
@@ -1125,7 +1125,7 @@ fn test_router_functionality() {
     // Amount returned from the last hop swap: Uint128(807954)
     // Hop is over. Checking if minimum receive amount is met. Minimum receive amount: "0" Amount returned from the last hop swap: "807954"
     let multihop_swap_msg = ExecuteMsg::ExecuteMultihopSwap {
-        multiswap_request: multiswap_request_msg,
+        requests: multiswap_request_msg,
         recipient: None,
         offer_amount: Uint128::from(885277u128),
         minimum_receive: None,

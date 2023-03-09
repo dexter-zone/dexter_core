@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 use std::vec;
+use const_format::concatcp;
 
 use crate::error::ContractError;
 use crate::state::CONFIG;
-use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery, Api};
+use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery, Api, Event};
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
+use dexter::helper::{EventExt};
 use dexter::pool::ResponseType;
 use dexter::router::{return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest, InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade, MAX_SWAP_OPERATIONS};
 use dexter::vault::{self, SingleSwapRequest, SwapType};
@@ -23,7 +25,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -33,7 +35,11 @@ pub fn instantiate(
     };
 
     CONFIG.save(deps.storage, &cfg)?;
-    Ok(Response::default())
+
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
+            .add_attribute("dexter_vault", msg.dexter_vault)
+    ))
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -49,7 +55,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::ExecuteMultihopSwap {
-            multiswap_request,
+            requests,
             offer_amount,
             recipient,
             minimum_receive,
@@ -57,7 +63,7 @@ pub fn execute(
             deps,
             env,
             info,
-            multiswap_request,
+            requests,
             offer_amount,
             recipient,
             minimum_receive,
@@ -80,7 +86,7 @@ fn handle_callback(
     }
     match msg {
         CallbackMsg::ContinueHopSwap {
-            multiswap_request,
+            requests,
             offer_asset,
             prev_ask_amount,
             recipient,
@@ -89,7 +95,7 @@ fn handle_callback(
             deps,
             env,
             info,
-            multiswap_request,
+            requests,
             offer_asset,
             prev_ask_amount,
             recipient,
@@ -140,11 +146,15 @@ pub fn execute_multihop_swap(
 
     // CosmosMsgs to be sent in the response
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
+    let minimum_receive = minimum_receive.unwrap_or(Uint128::zero());
+
     // Event for indexing support
-    let mut event = Event::new("dexter-router::multihop-swap")
-        .add_attribute("total_hops", requests.len().to_string())
-        .add_attribute("sender", info.sender.to_string())
-        .add_attribute("recipient", recipient.to_string());
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::multihop_swap"), &info)
+        .add_attribute("requests", serde_json_wasm::to_string(&requests).unwrap())
+        .add_attribute("offer_amount", offer_amount.to_string())
+        .add_attribute("recipient", recipient.to_string())
+        .add_attribute("minimum_receive", minimum_receive.to_string())
+        .add_attribute("hops_left", requests.len().to_string());
 
     // Current ask token balance available with the router contract
     let current_ask_balance: Uint128;
@@ -213,10 +223,6 @@ pub fn execute_multihop_swap(
         max_spread: first_hop.max_spread,
         belief_price: first_hop.belief_price,
     };
-    event = event.add_attribute("first_hop_pool_id", first_hop.pool_id.to_string());
-    event = event.add_attribute("first_hop_asset_in", first_hop.asset_in.to_string());
-    event = event.add_attribute("offer_amount", offer_amount.to_string());
-    event = event.add_attribute("first_hop_asset_out", first_hop.asset_out.to_string());
 
     // Need to send native tokens if the offer asset is native token
     let coins: Vec<Coin> = if first_hop.asset_in.is_native_token() {
@@ -249,11 +255,11 @@ pub fn execute_multihop_swap(
     // CallbackMsg - Add Callback Msg as we need to continue with the hops
     requests.remove(0);
     let arb_chain_msg = CallbackMsg::ContinueHopSwap {
-        multiswap_request: requests,
+        requests: requests,
         offer_asset: first_hop_swap_request.asset_out,
         prev_ask_amount: current_ask_balance,
         recipient,
-        minimum_receive: minimum_receive.unwrap_or(Uint128::zero()),
+        minimum_receive,
     }
     .to_cosmos_msg(&env.contract.address)?;
     execute_msgs.push(arb_chain_msg);
@@ -295,7 +301,7 @@ pub fn continue_hop_swap(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
-    mut multiswap_request: Vec<HopSwapRequest>,
+    mut requests: Vec<HopSwapRequest>,
     offer_asset: AssetInfo,
     prev_ask_amount: Uint128,
     recipient: Addr,
@@ -310,26 +316,26 @@ pub fn continue_hop_swap(
     // Amount returned from the last hop swap
     let amount_returned_prev_hop = asset_balance.checked_sub(prev_ask_amount)?;
 
+    // Event for indexing support
+    let event = Event::new(concatcp!(CONTRACT_NAME, "::continue_hop_swap"))
+        .add_attribute("hops_left", requests.len().to_string())
+        .add_attribute("amount_returned_last_hop", amount_returned_prev_hop.to_string());
+
     // ExecuteMsgs
     let mut response = Response::new();
     let mut execute_msgs: Vec<CosmosMsg> = vec![];
     let current_ask_balance: Uint128;
 
     // If Hop is over, check if the minimum receive amount is met and transfer the tokens to the recipient
-    if multiswap_request.len() == 0 {
+    if requests.len() == 0 {
         if amount_returned_prev_hop < minimum_receive {
             return Err(ContractError::InvalidMultihopSwapRequest {
                 msg: format!("Minimum receive amount not met. Swap failed. Amount received = {} Minimum receive amount = {}", amount_returned_prev_hop, minimum_receive),
             });
         }
         execute_msgs.push(offer_asset.create_transfer_msg(recipient, amount_returned_prev_hop)?);
-
-        response = response.add_attribute(
-            "amount_returned_last_hop",
-            amount_returned_prev_hop.to_string(),
-        );
     } else {
-        let next_hop = multiswap_request[0].clone();
+        let next_hop = requests[0].clone();
 
         // Asset returned from prev hop needs to match the asset to be used for the next hop
         if !offer_asset.equal(&next_hop.asset_in.clone()) {
@@ -391,34 +397,24 @@ pub fn continue_hop_swap(
         execute_msgs.push(next_hop_execute_msg);
 
         // Get current balance of the ask asset (Native) token
-        current_ask_balance = multiswap_request[0]
+        current_ask_balance = requests[0]
             .asset_out
             .query_for_balance(&deps.querier, env.contract.address.clone())?;
 
         // Add Callback Msg as we need to continue with the hops
-        multiswap_request.remove(0);
+        requests.remove(0);
         let arb_chain_msg = CallbackMsg::ContinueHopSwap {
-            multiswap_request: multiswap_request,
+            requests,
             offer_asset: next_hop_swap_request.asset_out.clone(),
             prev_ask_amount: current_ask_balance,
-            recipient: recipient,
-            minimum_receive: minimum_receive,
+            recipient,
+            minimum_receive,
         }
         .to_cosmos_msg(&env.contract.address)?;
         execute_msgs.push(arb_chain_msg);
-
-        response = response
-            .add_attribute(
-                "amount_returned_prev_hop",
-                amount_returned_prev_hop.to_string(),
-            )
-            .add_attribute(
-                "current_hop_ask_asset",
-                next_hop_swap_request.asset_out.to_string(),
-            );
     }
 
-    response = response.add_messages(execute_msgs);
+    response = response.add_messages(execute_msgs).add_event(event);
 
     Ok(response)
 }

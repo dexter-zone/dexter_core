@@ -36,7 +36,7 @@ pub struct HopSwapRequest {
 pub enum ExecuteMsg {
     /// ExecuteMultihopSwap processes multiple swaps via dexter pools
     ExecuteMultihopSwap {
-        multiswap_request: Vec<HopSwapRequest>,
+        requests: Vec<HopSwapRequest>,
         offer_amount: Uint128,
         recipient: Option<Addr>,
         minimum_receive: Option<Uint128>,
@@ -48,7 +48,7 @@ pub enum ExecuteMsg {
 #[cw_serde]
 pub enum CallbackMsg {
     ContinueHopSwap {
-        multiswap_request: Vec<HopSwapRequest>,
+        requests: Vec<HopSwapRequest>,
         offer_asset: AssetInfo,
         prev_ask_amount: Uint128,
         recipient: Addr,

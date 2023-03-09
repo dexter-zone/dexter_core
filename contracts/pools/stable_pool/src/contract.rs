@@ -1,8 +1,6 @@
+use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64, Addr,
-};
+use cosmwasm_std::{entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64, Addr, Event};
 use cw2::set_contract_version;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -16,15 +14,15 @@ use crate::state::{
     CONFIG, MATHCONFIG, TWAPINFO, StableSwapConfig, STABLESWAP_CONFIG, AssetScalingFactor,
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, MAX_SPREAD, update_total_fee_bps, ExitType};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, MAX_SPREAD, update_fee, ExitType};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools};
+use dexter::helper::{calculate_underlying_fees, EventExt, get_share_in_assets, select_pools};
 use dexter::querier::{query_supply, query_vault_config};
 use dexter::vault::{SwapType, FEE_PRECISION};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter::stable5swap_pool";
+const CONTRACT_NAME: &str = "dexter-stable-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -47,7 +45,7 @@ const MIN_ASSETS: usize = 2;
 pub fn instantiate(
     mut deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -150,12 +148,12 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
-    let event = Event::new("dexter-stable-swap-pool::instantiate")
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
         .add_attribute("pool_id", msg.pool_id)
-        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
-        .add_attribute("assets", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
-        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
         .add_attribute("vault_addr", msg.vault_addr)
+        .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
+        .add_attribute("asset_infos", serde_json_wasm::to_string(&msg.asset_infos).unwrap())
+        .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&msg.native_asset_precisions).unwrap())
         .add_attribute("fee_info", msg.fee_info.to_string())
         .add_attribute("amp", params.amp.to_string())
         .add_attribute("supports_scaling_factors_update", params.supports_scaling_factors_update.to_string())
@@ -169,8 +167,7 @@ pub fn instantiate(
     };
 
     let response = Response::new()
-        .add_event(event)
-        .add_attribute("action", "instantiate");
+        .add_event(event);
 
     Ok(response)
 }
@@ -197,11 +194,11 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig { params } => update_config(deps, env, info, params),
         ExecuteMsg::UpdateFee { total_fee_bps } => {
-            update_total_fee_bps(deps, env, info, total_fee_bps, CONFIG)
+            update_fee(deps, env, info, total_fee_bps, CONFIG, CONTRACT_NAME)
                 .map_err(|e| e.into())
         },
         ExecuteMsg::UpdateLiquidity { assets } => {
-            execute_update_pool_liquidity(deps, env, info, assets)
+            execute_update_liquidity(deps, env, info, assets)
         }
     }
 }
@@ -210,7 +207,7 @@ pub fn execute(
 fn update_scaling_factor(
     deps: DepsMut,
     info: MessageInfo,
-    asset: AssetInfo,
+    asset_info: AssetInfo,
     scaling_factor: Decimal256,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
@@ -234,7 +231,7 @@ fn update_scaling_factor(
     let asset_found = config
         .assets
         .iter()
-        .find(|a| a.info.as_string() == asset.as_string());
+        .find(|a| a.info.as_string() == asset_info.as_string());
 
     if asset_found.is_none() {
         return Err(ContractError::UnsupportedAsset);
@@ -247,13 +244,13 @@ fn update_scaling_factor(
     // Update or insert scaling factor for this asset in scaling factors vector
     let asset_index = scaling_factors
         .iter()
-        .position(|a| a.asset_info == asset);
+        .position(|a| a.asset_info == asset_info);
 
     if let Some(asset_index) = asset_index {
         scaling_factors[asset_index].scaling_factor = scaling_factor;
     } else {
         scaling_factors.push(AssetScalingFactor {
-            asset_info: asset.clone(),
+            asset_info: asset_info.clone(),
             scaling_factor,
         });
     }
@@ -263,12 +260,11 @@ fn update_scaling_factor(
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     // Emit an event
-    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor")
-        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
-        .add_attribute("scaling_factor", scaling_factor.to_string());
-    
-    let response = Response::new().add_event(event);
-    Ok(response)
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::update_scaling_factor"), &info)
+            .add_attribute("asset_info", serde_json_wasm::to_string(&asset_info).unwrap())
+            .add_attribute("scaling_factor", scaling_factor.to_string())
+    ))
 }
 
 
@@ -295,11 +291,10 @@ fn update_scaling_factor_manager(
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     // Emit an event
-    let event = Event::new("dexter-stable-swap-pool::update_scaling_factor_manager")
-        .add_attribute("scaling_factor_manager", scaling_factor_manager.to_string());
-    
-    let response = Response::new().add_event(event);
-    Ok(response)
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::update_scaling_factor_manager"), &info)
+            .add_attribute("scaling_factor_manager", scaling_factor_manager.to_string())
+    ))
 }
 
 /// ## Description
@@ -308,7 +303,7 @@ fn update_scaling_factor_manager(
 ///
 /// ## Params
 /// * **assets** is a field of type [`Vec<Asset>`]. It is a sorted list of `Asset` which contain the token type details and new updates balances of tokens as accounted by the pool
-pub fn execute_update_pool_liquidity(
+pub fn execute_update_liquidity(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -351,16 +346,12 @@ pub fn execute_update_pool_liquidity(
     config.block_time_last = env.block.time.seconds();
     CONFIG.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::update_liquidity")
-        .add_attribute("pool_id", config.pool_id.to_string())
-        .add_attribute("vault_address", config.vault_addr)
-        .add_attribute(
-            "pool_assets",
-            serde_json_wasm::to_string(&config.assets).unwrap(),
-        )
-        .add_attribute("block_time_last", twap.block_time_last.to_string());
-
-    Ok(Response::new().add_event(event))
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_liquidity"), &info)
+            .add_attribute("assets", serde_json_wasm::to_string(&config.assets).unwrap())
+            .add_attribute("pool_id", config.pool_id.to_string())
+            .add_attribute("twap_block_time_last", twap.block_time_last.to_string())
+    ))
 }
 
 /// ## Description
@@ -379,27 +370,23 @@ pub fn update_config(
     info: MessageInfo,
     params: Option<Binary>,
 ) -> Result<Response, ContractError> {
-    let params = params.unwrap();
-
-    match from_binary::<StablePoolUpdateParams>(&params)? {
+    match from_binary::<StablePoolUpdateParams>(&params.unwrap())? {
         StablePoolUpdateParams::StartChangingAmp {
             next_amp,
             next_amp_time,
         } => {
-            start_changing_amp(deps, env, info, next_amp, next_amp_time)?
+            start_changing_amp(deps, env, info, next_amp, next_amp_time)
         },
         StablePoolUpdateParams::StopChangingAmp {} => {
-            stop_changing_amp( deps, env, info)?
+            stop_changing_amp( deps, env, info)
         },
-        StablePoolUpdateParams::UpdateScalingFactor { asset, scaling_factor } => {
-            update_scaling_factor(deps, info, asset, scaling_factor)?;
+        StablePoolUpdateParams::UpdateScalingFactor { asset_info, scaling_factor } => {
+            update_scaling_factor(deps, info, asset_info, scaling_factor)
         },
         StablePoolUpdateParams::UpdateScalingFactorManager { manager } => {
-            update_scaling_factor_manager(deps, info, manager)?;
+            update_scaling_factor_manager(deps, info, manager)
         },
     }
-
-    Ok(Response::default())
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
@@ -1141,7 +1128,7 @@ fn start_changing_amp(
     info: MessageInfo,
     next_amp: u64,
     next_amp_time: u64,
-) -> Result<(), ContractError> {
+) -> Result<Response, ContractError> {
     // Load the math config from the storage
     let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let config: Config = CONFIG.load(deps.storage)?;
@@ -1185,14 +1172,18 @@ fn start_changing_amp(
     // Update the storage
     MATHCONFIG.save(deps.storage, &math_config)?;
 
-    Ok(())
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::start_changing_amp"), &info)
+            .add_attribute("next_amp", next_amp.to_string())
+            .add_attribute("next_amp_time", next_amp_time.to_string())
+    ))
 }
 
 /// ## Description
 /// Stop changing the AMP value. Returns [`Ok`].
 /// ## Params
 /// * **mut math_config** is an object of type [`MathConfig`]. This is a mutable reference to the pool's custom math configuration.
-fn stop_changing_amp(deps: DepsMut, env: Env, info: MessageInfo) -> Result<(), ContractError> {
+fn stop_changing_amp(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, ContractError> {
     // Load the math config from the storage
     let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let config: Config = CONFIG.load(deps.storage)?;
@@ -1214,7 +1205,9 @@ fn stop_changing_amp(deps: DepsMut, env: Env, info: MessageInfo) -> Result<(), C
     // now (block_time < next_amp_time) is always False, so we return the saved AMP
     MATHCONFIG.save(deps.storage, &math_config)?;
 
-    Ok(())
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::stop_changing_amp"), &info)
+    ))
 }
 
 // --------x--------x--------x--------x--------x--------

@@ -2,14 +2,12 @@
 use crate::error::ContractError;
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
-use cosmwasm_std::{
-    Addr, attr, Attribute, Binary, Deps, DepsMut, entry_point, Env, MessageInfo, Response,
-    StdError, StdResult, to_binary, Uint128,
-};
+use const_format::concatcp;
+use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128};
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner};
+use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -34,7 +32,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -44,7 +42,10 @@ pub fn instantiate(
     };
 
     CONFIG.save(deps.storage, &cfg)?;
-    Ok(Response::default())
+    Ok(Response::new().add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
+            .add_attribute("owner", msg.owner.to_string())
+    ))
 }
 
 // ----------------x----------------x----------------x------------------x----------------x----------------
@@ -88,13 +89,14 @@ pub fn execute(
                 expires_in,
                 config.owner,
                 OWNERSHIP_PROPOSAL,
+                CONTRACT_NAME,
             )
             .map_err(|e| e.into())
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -105,7 +107,7 @@ pub fn execute(
                 })?;
 
                 Ok(())
-            })
+            }, CONTRACT_NAME)
             .map_err(|e| e.into())
         }
     }
@@ -122,8 +124,6 @@ fn withdraw(
     amount: Uint128,
     recipient: Option<Addr>,
 ) -> Result<Response, ContractError> {
-    let mut attributes = vec![attr("action", "withdraw")];
-
     let config = CONFIG.load(deps.storage)?;
 
     // Permission check
@@ -142,11 +142,15 @@ fn withdraw(
     let recipient = deps.api.addr_validate(recipient.as_str())?;
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
-    attributes.push(Attribute::new("recipient", &recipient));
-
     Ok(Response::new()
         .add_message(transfer_msg)
-        .add_attributes(attributes))
+        .add_event(
+            Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
+                .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+                .add_attribute("amount", amount.to_string())
+                .add_attribute("recipient", recipient.to_string())
+        )
+    )
 }
 
 

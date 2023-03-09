@@ -9,7 +9,7 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg, PoolCreationFee};
-use stable5pool::state::StablePoolParams;
+use stable_pool::state::StablePoolParams;
 
 use crate::utils::{dummy_pool_creation_msg, instantiate_contract, mock_app, store_token_code};
 

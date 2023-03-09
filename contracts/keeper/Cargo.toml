@@ -31,9 +31,10 @@ serde = { version = "1.0.152", default-features = false, features = ["derive"] }
 thiserror = "1.0.38"
 cosmwasm-schema = "1.2.1"
 serde-json-wasm = "0.5.0"
+const_format = "0.2.30"
 
 [dev-dependencies]
 cosmwasm-schema = "1.2.1"
 dexter-vault = {path = "../vault"}
-stable5pool = {path = "../pools/stable_5pool"}
+stable-pool = {path = "../pools/stable_pool" }
 cw-multi-test = "0.16.2"

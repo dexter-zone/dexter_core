@@ -6,6 +6,7 @@ use crate::vault::{PoolType, SwapType};
 use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
+use crate::helper::{EventExt};
 
 /// The default slippage (0.5%)
 pub const DEFAULT_SPREAD: &str = "0.005";
@@ -286,12 +287,13 @@ pub struct CumulativePricesResponse {
 // ----------------x----------------x     Helper response functions       x----------------x------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-pub fn update_total_fee_bps(
+pub fn update_fee(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
     total_fee_bps: u16,
     config_item: Item<Config>,
+    contract_name: impl Into<String>,
 ) -> StdResult<Response> {
     let mut config = config_item.load(deps.storage)?;
 
@@ -303,9 +305,10 @@ pub fn update_total_fee_bps(
     config.fee_info.total_fee_bps = total_fee_bps;
     config_item.save(deps.storage, &config)?;
 
-    let event = Event::new("dexter-pool::update_total_fee_bps")
-        .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string());
-    Ok(Response::new().add_event(event))
+    Ok(Response::new().add_event(
+        Event::from_info(contract_name.into() + "::update_fee", &info)
+            .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string())
+    ))
 }
 
 pub fn return_join_failure(error: String) -> AfterJoinResponse {
