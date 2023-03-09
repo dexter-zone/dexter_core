@@ -8,11 +8,8 @@ use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
 use crate::helper::{EventExt};
 
-/// The default slippage (0.5%)
+/// The default spread (0.5%)
 pub const DEFAULT_SPREAD: &str = "0.005";
-
-/// The maximum allowed slippage (50%)
-pub const MAX_SPREAD: &str = "0.5";
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Gneneric struct Types      x----------------x----------------

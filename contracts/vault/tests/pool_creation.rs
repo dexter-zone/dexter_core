@@ -2,7 +2,7 @@ pub mod utils;
 
 use std::vec;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary, Decimal};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
@@ -101,7 +101,8 @@ fn test_create_pool_instance() {
             amp: 100u64,
             scaling_factor_manager: None,
             supports_scaling_factors_update: false,
-            scaling_factors: vec![]
+            scaling_factors: vec![],
+            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };
@@ -480,6 +481,7 @@ fn test_pool_creation_fee() {
             scaling_factor_manager: None,
             supports_scaling_factors_update: false,
             scaling_factors: vec![],
+            max_allowed_spread: Decimal::from_ratio(50u128, 100u128)
         }).unwrap()),
         fee_info: None,
     };
