@@ -5,7 +5,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::vault::{Cw20HookMsg, ExecuteMsg, ExitType};
+use dexter::vault::{Cw20HookMsg, ExecuteMsg, ExitType, PauseInfoUpdateType, PauseInfo, QueryMsg, PoolTypeConfigResponse};
 
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool,
@@ -387,6 +387,7 @@ fn test_exit_pool() {
     };
     app.execute_contract(owner.clone(), stable5_lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
+    
 
     // Checks -
     // - Tokens transferred to the Vault.
@@ -475,6 +476,41 @@ fn test_exit_pool() {
         Uint128::from(1063959u128),
         new_keeper_token2_balance.balance - keeper_token2_balance.balance
     );
+
+    // Let's pause the imbalanced exit from the pool and re-execute the same exit
+    let pause_msg = ExecuteMsg::UpdatePauseInfo { 
+        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::Stable5Pool {  }),
+        pause_info: PauseInfo {
+            swap: false,
+            deposit: false,
+            imbalanced_withdraw: true,
+        },
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &pause_msg,
+        &[],
+    ).unwrap();
+
+    // validate if config is updated on the pool type level
+    let config: PoolTypeConfigResponse = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance.clone(),
+            &QueryMsg::QueryRegistry {
+                pool_type: dexter::vault::PoolType::Stable5Pool {},
+            },
+        )
+        .unwrap();
+
+    assert_eq!(config.unwrap().paused.imbalanced_withdraw, true);
+
+    let root_cause = app.execute_contract(owner.clone(), stable5_lp_token_addr.clone(), &exit_msg, &[]).unwrap_err().root_cause().to_string();
+    assert_eq!(root_cause, "Imbalanced exit is paused. Normal exit for a pool is always allowed".to_string());
+
+    // Normal exit as done below should continue to work
 
     // When its normal withdraw from a stable-5-pool. No fee charged
     // VAULT -::- Exit Pool -::- Execution Function
@@ -584,6 +620,24 @@ fn test_exit_pool() {
         &exit_msg,
         &[],
     ).unwrap_err().root_cause().to_string(), "MinAssetOutError - return amount 49500000 is less than minimum requested amount 100000000 for asset contract3");
+
+    // Allow imbalanced exit to test below
+    // Let's pause the imbalanced exit from the pool and re-execute the same exit
+    let pause_msg = ExecuteMsg::UpdatePauseInfo { 
+        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::Stable5Pool {  }),
+        pause_info: PauseInfo {
+            swap: false,
+            deposit: false,
+            imbalanced_withdraw: false,
+        },
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        vault_instance.clone(),
+        &pause_msg,
+        &[],
+    ).unwrap();
 
     // -------x---------- Slippage Control Test -::- ExactAssetOut -------x---------
     // -------x---------- -------x---------- -------x---------- -------x---------

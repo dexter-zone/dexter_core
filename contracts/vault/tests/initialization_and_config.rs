@@ -7,7 +7,7 @@ use dexter::asset::AssetInfo;
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
-    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
+    ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfoResponse,
     PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
 use stable_pool::state::StablePoolParams;
@@ -80,11 +80,12 @@ fn proper_initialization() {
     assert_eq!(PauseInfo {
         deposit: false,
         swap: false,
+        imbalanced_withdraw: false
     }, config_res.paused);
 
     // Check Stabl-5-Pool Config
     // ---------------------
-    let stable5pool_config_res: PoolConfigResponse = app
+    let stable5pool_config_res: PoolTypeConfigResponse = app
         .wrap()
         .query_wasm_smart(
             &vault_instance,
@@ -109,7 +110,7 @@ fn proper_initialization() {
 
     // Check Weighted Config
     // ---------------------
-    let weightedpool_config_res: PoolConfigResponse = app
+    let weightedpool_config_res: PoolTypeConfigResponse = app
         .wrap()
         .query_wasm_smart(
             &vault_instance,
@@ -257,7 +258,7 @@ fn test_add_to_registery() {
     let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Stable5Pool {},
     };
-    let registery_res: PoolConfigResponse =
+    let registery_res: PoolTypeConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
     assert!(registery_res.is_some());
@@ -360,7 +361,7 @@ fn test_add_to_registery() {
     let msg = QueryMsg::QueryRegistry {
         pool_type: PoolType::Weighted {},
     };
-    let registery_res: PoolConfigResponse =
+    let registery_res: PoolTypeConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
     assert!(registery_res.is_some());
@@ -403,6 +404,7 @@ fn update_config() {
     let pause_info = PauseInfo{
         swap: true,
         deposit: false,
+        imbalanced_withdraw: false
     };
 
     let msg = ExecuteMsg::UpdateConfig {
@@ -559,6 +561,7 @@ fn test_pool_config_update() {
     let pause_info = PauseInfo {
         swap: true,
         deposit: true,
+        imbalanced_withdraw: false
     };
 
     // update config for this pool now
@@ -652,7 +655,7 @@ fn test_update_pause_info() {
     // assert the pause status via queries before updating
 
     // pool type config
-    let res: PoolConfigResponse = app.wrap()
+    let res: PoolTypeConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
             &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}
@@ -668,7 +671,7 @@ fn test_update_pause_info() {
     assert_eq!(res.paused, PauseInfo::default());
 
     // update the pause info for type
-    let expected_pause_info = PauseInfo { deposit: true, swap: false };
+    let expected_pause_info = PauseInfo { deposit: true, swap: false, imbalanced_withdraw: false };
     app.execute_contract(
         user_addr.clone(),
         vault_instance.clone(),
@@ -682,7 +685,7 @@ fn test_update_pause_info() {
     // assert the pause status via queries after updating only for pool type
 
     // pool type config
-    let res: PoolConfigResponse = app.wrap()
+    let res: PoolTypeConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
             &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}

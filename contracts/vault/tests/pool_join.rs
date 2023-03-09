@@ -187,7 +187,7 @@ fn test_join_pool() {
         fee_collector: None,
         auto_stake_impl: None,
         pool_creation_fee: None,
-        paused: Some(PauseInfo{deposit: true, swap: false}),
+        paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -228,7 +228,7 @@ fn test_join_pool() {
         fee_collector: None,
         auto_stake_impl: None,
         pool_creation_fee: None,
-        paused: Some(PauseInfo{deposit: false, swap: false}),
+        paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -243,7 +243,7 @@ fn test_join_pool() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        paused: Some(PauseInfo{deposit: true, swap: false}),
+        paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -275,7 +275,7 @@ fn test_join_pool() {
         pool_type: PoolType::Stable5Pool {},
         allow_instantiation: None,
         new_fee_info: None,
-        paused: Some(PauseInfo{deposit: false, swap: false}),
+        paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -289,7 +289,7 @@ fn test_join_pool() {
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
-        paused: Some(PauseInfo{deposit: true, swap: false}),
+        paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -320,7 +320,7 @@ fn test_join_pool() {
     let msg = ExecuteMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
-        paused: Some(PauseInfo{deposit: false, swap: false}),
+        paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
