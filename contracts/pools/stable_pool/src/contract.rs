@@ -101,6 +101,11 @@ pub fn instantiate(
             .addr_validate(&params.scaling_factor_manager.clone().unwrap().to_string())?;
     }
 
+    // validate max allowed spread
+    if !(params.max_allowed_spread > Decimal::zero() && params.max_allowed_spread < Decimal::one()) {
+        return Err(ContractError::InvalidMaxAllowedSpread);
+    }
+
     // store precisions for assets in storage
     let greatest_precision = store_precisions(
         deps.branch(),
@@ -143,7 +148,7 @@ pub fn instantiate(
     };
 
     let twap = Twap {
-        cumulative_prices: cumulative_prices,
+        cumulative_prices,
         block_time_last: 0,
     };
 
