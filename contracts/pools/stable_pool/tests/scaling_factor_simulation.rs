@@ -9,7 +9,7 @@ use cosmwasm_std::{Uint128, Addr, Coin, Decimal, Decimal256};
 use cw_multi_test::{App, Executor};
 use dexter::{asset::{AssetInfo, Asset}, vault::{FeeInfo, ExecuteMsg, SwapType, SingleSwapRequest}, pool::{SwapResponse, ConfigResponse}};
 use itertools::Itertools;
-use stable5pool::state::AssetScalingFactor;
+use stable_pool::state::AssetScalingFactor;
 use dexter::pool::QueryMsg as PoolQueryMsg;
 
 use crate::utils::*;

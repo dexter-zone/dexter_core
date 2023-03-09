@@ -61,9 +61,9 @@ fn store_token_code(app: &mut App) -> u64 {
 
 fn store_stable5_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable5pool::contract::execute,
-        stable5pool::contract::instantiate,
-        stable5pool::contract::query,
+        stable_pool::contract::execute,
+        stable_pool::contract::instantiate,
+        stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
@@ -246,7 +246,7 @@ fn initialize_stable_5_pool(
         pool_type: PoolType::Stable5Pool {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
-        init_params: Some(to_binary(&stable5pool::state::StablePoolParams { 
+        init_params: Some(to_binary(&stable_pool::state::StablePoolParams {
             amp: 10u64,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,

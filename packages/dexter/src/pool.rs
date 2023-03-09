@@ -3,10 +3,10 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType};
-use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
-use crate::helper::new_event;
+use crate::helper::{EventExt};
 
 /// The default slippage (0.5%)
 pub const DEFAULT_SPREAD: &str = "0.005";
@@ -293,7 +293,7 @@ pub fn update_fee(
     info: MessageInfo,
     total_fee_bps: u16,
     config_item: Item<Config>,
-    event_name: impl Into<String>,
+    contract_name: impl Into<String>,
 ) -> StdResult<Response> {
     let mut config = config_item.load(deps.storage)?;
 
@@ -306,7 +306,7 @@ pub fn update_fee(
     config_item.save(deps.storage, &config)?;
 
     Ok(Response::new().add_event(
-        new_event(event_name, &info)
+        Event::from_info(contract_name.into() + "::update_fee", &info)
             .add_attribute("total_fee_bps", config.fee_info.total_fee_bps.to_string())
     ))
 }

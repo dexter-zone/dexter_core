@@ -13,12 +13,10 @@ use cosmwasm_std::{
 use protobuf::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use const_format::concatcp;
 
 use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
-use dexter::helper::{
-    ATTR_SENDER, build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal,
-    find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, new_event, propose_new_owner,
-};
+use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType};
@@ -28,7 +26,7 @@ use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 use dexter::pool;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "crates.io:dexter-vault";
+const CONTRACT_NAME: &str = "dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
@@ -64,7 +62,7 @@ pub fn instantiate(
         return Err(ContractError::PoolTypeConfigDuplicate {});
     }
     
-    let mut event = new_event("dexter-vault::instantiate", &info)
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
         .add_attribute("owner", msg.owner.clone())
         .add_attribute("pool_configs", serde_json_wasm::to_string(&msg.pool_configs).unwrap());
 
@@ -243,14 +241,14 @@ pub fn execute(
                 expires_in,
                 config.owner,
                 OWNERSHIP_PROPOSAL,
-                "dexter-vault::propose_new_owner"
+                CONTRACT_NAME
             )
             .map_err(|e| e.into())
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, "dexter-vault::drop_ownership_proposal")
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -261,7 +259,7 @@ pub fn execute(
                 })?;
 
                 Ok(())
-            }, "dexter-vault::claim_ownership")
+            }, CONTRACT_NAME)
             .map_err(|e| e.into())
         }
     }
@@ -332,7 +330,7 @@ pub fn execute_update_config(
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
-    let mut event = new_event("dexter-vault::update_config", &info);
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     // permission check
     if info.sender.clone() != config.owner {
@@ -398,7 +396,7 @@ pub fn execute_update_pause_info(
         return Err(ContractError::Unauthorized {});
     }
 
-    let event = new_event("dexter-vault::update_pause_info", &info)
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pause_info"), &info)
         .add_attribute("update_type", serde_json_wasm::to_string(&update_type).unwrap())
         .add_attribute("pause_info", serde_json_wasm::to_string(&pause_info).unwrap());
 
@@ -449,7 +447,7 @@ pub fn execute_update_pool_type_config(
         .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
 
     // Emit Event
-    let mut event = new_event("dexter-vault::update_pool_type_config", &info)
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_type_config"), &info)
         .add_attribute("pool_type", pool_type.to_string());
 
     // Update allow instantiation
@@ -502,7 +500,7 @@ fn execute_update_pool_config(
     let mut pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
 
     // Emit Event
-    let mut event = new_event("dexter-vault::update_pool_config", &info)
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_config"), &info)
         .add_attribute("pool_id", pool_id);
 
     let mut msgs: Vec<CosmosMsg> = vec![];
@@ -574,7 +572,7 @@ fn execute_add_address_to_whitelist(
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-vault::add_address_to_whitelist", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::add_address_to_whitelist"), &info)
             .add_attribute("address", address.to_string())
     ))
 }
@@ -605,7 +603,7 @@ fn execute_remove_address_from_whitelist(
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-vault::remove_address_from_whitelist", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::remove_address_from_whitelist"), &info)
             .add_attribute("address", address.to_string())
     ))
 }
@@ -657,7 +655,7 @@ pub fn execute_add_to_registry(
     )?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-vault::add_to_registry", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::add_to_registry"), &info)
             .add_attribute("pool_type_config", serde_json_wasm::to_string(&pool_type_config).unwrap())
     ))
 }
@@ -819,7 +817,7 @@ pub fn execute_create_pool_instance(
     let token_symbol = get_lp_token_symbol();
 
     // Emit Event
-    let event = new_event("dexter-vault::create_pool_instance", &info)
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::create_pool_instance"), &info)
         .add_attribute("pool_type", pool_type.to_string())
         .add_attribute("asset_infos", serde_json_wasm::to_string(&asset_infos).unwrap())
         .add_attribute("native_asset_precisions", serde_json_wasm::to_string(&native_asset_precisions).unwrap())
@@ -889,7 +887,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
             // Update the LP token address in the temporary pool info
             let lp_token_addr = deps.api.addr_validate(res.get_contract_address())?;
 
-            event = Event::new("dexter-vault::reply::lp_token_init")
+            event = Event::new(concatcp!(CONTRACT_NAME, "::reply::lp_token_init"))
                 .add_attribute("pool_id", tmp_pool_info.pool_id.to_string())
                 .add_attribute("lp_token_addr", lp_token_addr.to_string());
             
@@ -939,7 +937,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
         INSTANTIATE_POOL_REPLY_ID => {
             let pool_addr = deps.api.addr_validate(res.get_contract_address())?;
 
-            event = Event::new("dexter-vault::reply::pool_init")
+            event = Event::new(concatcp!(CONTRACT_NAME, "::reply::pool_init"))
                 .add_attribute("pool_id", tmp_pool_info.pool_id.to_string())
                 .add_attribute("pool_addr", pool_addr.to_string());
 
@@ -1211,7 +1209,7 @@ pub fn execute_join_pool(
 
     // Response - Emit Event
     Ok(Response::new().add_messages(execute_msgs).add_event(
-        new_event("dexter-vault::join_pool", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::join_pool"), &info)
             .add_attribute("pool_id", pool_id.to_string())
             .add_attribute("recipient", recipient.to_string())
             .add_attribute("assets", serde_json_wasm::to_string(&pool_join_transition.provided_assets).unwrap())
@@ -1526,8 +1524,8 @@ pub fn execute_exit_pool(
     ACTIVE_POOLS.save(deps.storage, &pool_id.to_string().as_bytes(), &pool_info)?;
 
     Ok(Response::new().add_messages(execute_msgs).add_event(
-        Event::new("dexter-vault::exit_pool")
-            .add_attribute(ATTR_SENDER, sender.clone())
+        // can't use info here as the msg sender would be the cw20 contract in that case
+        Event::from_sender(concatcp!(CONTRACT_NAME, "::exit_pool"), sender.clone())
             .add_attribute("pool_id", pool_id.to_string())
             .add_attribute("recipient", recipient.to_string())
             .add_attribute("lp_tokens_burnt", pool_exit_transition.burn_shares.to_string())
@@ -1633,7 +1631,7 @@ pub fn execute_swap(
     };
 
     // Indexing - Make Event for indexing support
-    let mut event = new_event("dexter-vault::swap", &info)
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::swap"), &info)
         .add_attribute("pool_id", swap_request.pool_id.to_string())
         .add_attribute("pool_addr", pool_info.pool_addr.to_string())
         .add_attribute("asset_in", serde_json_wasm::to_string(&offer_asset).unwrap())

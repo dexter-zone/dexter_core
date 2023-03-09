@@ -2,14 +2,12 @@
 use crate::error::ContractError;
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
-use cosmwasm_std::{
-    Addr, Binary, Deps, DepsMut, entry_point, Env, MessageInfo, Response,
-    StdError, StdResult, to_binary, Uint128,
-};
+use const_format::concatcp;
+use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128};
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use dexter::helper::{claim_ownership, drop_ownership_proposal, new_event, propose_new_owner};
+use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -45,7 +43,7 @@ pub fn instantiate(
 
     CONFIG.save(deps.storage, &cfg)?;
     Ok(Response::new().add_event(
-        new_event("dexter-keeper::instantiate", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("owner", msg.owner.to_string())
     ))
 }
@@ -91,14 +89,14 @@ pub fn execute(
                 expires_in,
                 config.owner,
                 OWNERSHIP_PROPOSAL,
-                "dexter-keeper::propose_new_owner",
+                CONTRACT_NAME,
             )
             .map_err(|e| e.into())
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, "dexter-keeper::drop_ownership_proposal")
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -109,7 +107,7 @@ pub fn execute(
                 })?;
 
                 Ok(())
-            }, "dexter-keeper::claim_ownership")
+            }, CONTRACT_NAME)
             .map_err(|e| e.into())
         }
     }
@@ -147,7 +145,7 @@ fn withdraw(
     Ok(Response::new()
         .add_message(transfer_msg)
         .add_event(
-            new_event("dexter-keeper::withdraw", &info)
+            Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
                 .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
                 .add_attribute("amount", amount.to_string())
                 .add_attribute("recipient", recipient.to_string())

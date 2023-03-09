@@ -1,6 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 
+use const_format::concatcp;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
@@ -21,9 +22,10 @@ use dexter::{
 };
 
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw2::set_contract_version;
 use cw_storage_plus::Bound;
 use dexter::asset::Asset;
-use dexter::helper::{ATTR_SENDER, new_event};
+use dexter::helper::{EventExt};
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
     RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS,
@@ -40,6 +42,11 @@ use crate::{
     },
 };
 
+/// Contract name that is used for migration.
+const CONTRACT_NAME: &str = "dexter-multi-staking";
+/// Contract version that is used for migration.
+const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 type ContractResult<T> = Result<T, ContractError>;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -49,6 +56,8 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     CONFIG.save(
         deps.storage,
         &Config {
@@ -60,7 +69,7 @@ pub fn instantiate(
     )?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-multistaking::instantiate", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("owner", msg.owner.to_string())
             .add_attribute("unlock_period", msg.unlock_period.to_string())
             .add_attribute(
@@ -160,14 +169,14 @@ pub fn execute(
                 expires_in,
                 config.owner,
                 OWNERSHIP_PROPOSAL,
-                "dexter-multistaking::propose_new_owner",
+                CONTRACT_NAME,
             )?;
             Ok(response)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, "dexter-multistaking::drop_ownership_proposal")
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -178,7 +187,7 @@ pub fn execute(
                 })?;
 
                 Ok(())
-            }, "dexter-multistaking::claim_ownership")
+            }, CONTRACT_NAME)
             .map_err(|e| e.into())
         }
     }
@@ -198,7 +207,7 @@ fn update_config(
         return Err(ContractError::Unauthorized);
     }
 
-    let mut event = new_event("dexter-multistaking::update_config", &info);
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     if let Some(reward_schedule_proposal_start_delay) = minimum_reward_schedule_proposal_start_delay {
         config.minimum_reward_schedule_proposal_start_delay = reward_schedule_proposal_start_delay;
@@ -276,7 +285,7 @@ fn claim_unallocated_reward(
         creator_claimable_reward_state.amount,
     )?;
 
-    let event = new_event("dexter-multistaking::claim_unallocated_reward", &info)
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::claim_unallocated_reward"), &info)
         .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
         .add_attribute("asset", reward_schedule.asset.as_string())
         .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
@@ -365,7 +374,7 @@ fn allow_lp_token(
     CONFIG.save(deps.storage, &config)?;
 
     let response = Response::new().add_event(
-        new_event("dexter-multistaking::allow_lp_token", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::allow_lp_token"), &info)
             .add_attribute("lp_token", lp_token.to_string()),
     );
     Ok(response)
@@ -386,7 +395,7 @@ fn remove_lp_token(
     CONFIG.save(deps.storage, &config)?;
 
     let response = Response::new().add_event(
-        new_event("dexter-multistaking::remove_lp_token", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::remove_lp_token"), &info)
             .add_attribute("lp_token", lp_token.to_string()),
     );
 
@@ -437,8 +446,7 @@ pub fn propose_reward_schedule(
     )?;
 
     Ok(Response::new().add_event(
-        Event::new("dexter-multistaking::propose_reward_schedule")
-            .add_attribute(ATTR_SENDER, proposer.to_string())
+        Event::from_sender(concatcp!(CONTRACT_NAME, "::propose_reward_schedule"), proposer)
             .add_attribute("lp_token", lp_token.to_string())
             .add_attribute("title", title)
             .add_attribute("start_block_time", start_block_time.to_string())
@@ -547,7 +555,7 @@ pub fn review_reward_schedule_proposals(
     }
 
     Ok(Response::new().add_event(
-        new_event("dexter-multistaking::review_reward_schedule_proposals", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"), &info)
             .add_attribute(
                 "accepted_proposals",
                 serde_json_wasm::to_string(&accepted_reward_proposals).unwrap(),
@@ -581,7 +589,7 @@ pub fn drop_reward_schedule_proposal(
     REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
 
     Ok(Response::new().add_event(
-        new_event("dexter-multistaking::drop_reward_schedule_proposal", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::drop_reward_schedule_proposal"), &info)
             .add_attribute("proposal_id", proposal_id.to_string())
     ).add_message(msg))
 }
@@ -754,8 +762,9 @@ pub fn bond(
     // Increase user bond amount
     USER_BONDED_LP_TOKENS.save(deps.storage, (&lp_token, &user), &user_updated_bond_amount)?;
 
-    let event = Event::new("dexter-multistaking::bond")
-        .add_attribute(ATTR_SENDER, user) // explicitly using `sender` as name for consistency across contracts
+    // even though the msg sender might be a CW20 contract,
+    // in the event, we are only concerned with the actual human sender
+    let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::bond"), user)
         .add_attribute("lp_token", lp_token)
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
@@ -839,7 +848,7 @@ pub fn unbond(
 
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &unlocks)?;
 
-    let event = new_event("dexter-multistaking::unbond", &info)
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::unbond"), &info)
         .add_attribute("lp_token", lp_token)
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
@@ -950,7 +959,7 @@ pub fn unlock(deps: DepsMut, env: Env, info: MessageInfo, lp_token: Addr) -> Con
         .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
 
     let mut response = Response::new().add_event(
-        new_event("dexter-multistaking::unlock", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::unlock"), &info)
             .add_attribute("lp_token", lp_token.clone())
             .add_attribute("amount", total_unlocked_amount)
     );
@@ -987,8 +996,7 @@ fn withdraw_pending_reward(
     let pending_reward = asset_staker_info.pending_reward;
 
     if pending_reward > Uint128::zero() {
-        let event = Event::new("dexter-multistaking::withdraw_reward")
-            .add_attribute(ATTR_SENDER, user)
+        let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::withdraw_reward"), user)
             .add_attribute("lp_token", lp_token)
             .add_attribute("asset", asset_staker_info.asset.to_string())
             .add_attribute("amount", pending_reward);
@@ -1039,7 +1047,7 @@ pub fn withdraw(
     // At each withdraw, we withdraw all earned rewards by the user.
     // If we keep a track of the reward at the subgraph level, then that much data can really suffice.
     response = response.add_event(
-        new_event("dexter-multistaking::withdraw", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
             .add_attribute("lp_token", lp_token.clone())
     );
     Ok(response)

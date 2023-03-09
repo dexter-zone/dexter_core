@@ -1,5 +1,5 @@
 [package]
-name = "stable5pool"
+name = "stable-pool"
 version = "1.0.0"
 authors = ["AstroTechLabs"]
 edition = "2021"
@@ -36,6 +36,7 @@ protobuf = { version = "2", features = ["with-bytes"] }
 itertools = "0.10.5"
 serde-json-wasm = "0.5.0"
 cosmwasm-schema = "1.2.1"
+const_format = "0.2.30"
 
 [dev-dependencies]
 anyhow = "1.0"

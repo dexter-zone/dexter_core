@@ -29,9 +29,9 @@ fn instantiate_contracts(
     let vault_code_id = router.store_code(vault_contract);
 
     let stable5_contract = Box::new(ContractWrapper::new_with_empty(
-        stable5pool::contract::execute,
-        stable5pool::contract::instantiate,
-        stable5pool::contract::query,
+        stable_pool::contract::execute,
+        stable_pool::contract::instantiate,
+        stable_pool::contract::query,
     ));
     let stable5_code_id = router.store_code(stable5_contract);
 

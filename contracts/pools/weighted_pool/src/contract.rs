@@ -1,4 +1,5 @@
 #[cfg(not(feature = "library"))]
+use const_format::concatcp;
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128,
@@ -6,7 +7,7 @@ use cosmwasm_std::{
 
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
-use dexter::helper::{calculate_underlying_fees, new_event, select_pools};
+use dexter::helper::{calculate_underlying_fees, EventExt, select_pools};
 use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_fee, ExitType};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
@@ -23,9 +24,10 @@ use crate::utils::{
 };
 
 use std::vec;
+use cosmwasm_std::Event;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter::fixed_weighted_pool";
+const CONTRACT_NAME: &str = "dexter-weighted-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -157,7 +159,7 @@ pub fn instantiate(
     TWAPINFO.save(deps.storage, &twap)?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-weighted-pool::instantiate", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("pool_id", msg.pool_id)
             .add_attribute("vault_addr", msg.vault_addr)
             .add_attribute("lp_token_addr", msg.lp_token_addr.to_string())
@@ -191,7 +193,7 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig { .. } => Err(ContractError::NonSupported {}),
         ExecuteMsg::UpdateFee { total_fee_bps } => {
-            update_fee(deps, env, info, total_fee_bps, CONFIG, "dexter-weighted-pool::update_fee")
+            update_fee(deps, env, info, total_fee_bps, CONFIG, CONTRACT_NAME)
                 .map_err(|e| e.into())
         },
         ExecuteMsg::UpdateLiquidity { assets } => {
@@ -243,7 +245,7 @@ pub fn execute_update_liquidity(
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-weighted-pool::update_liquidity", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::update_liquidity"), &info)
             .add_attribute("assets", serde_json_wasm::to_string(&config.assets).unwrap())
             .add_attribute("pool_id", config.pool_id.to_string())
             .add_attribute("twap_block_time_last", twap.block_time_last.to_string())

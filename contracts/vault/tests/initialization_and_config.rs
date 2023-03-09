@@ -10,7 +10,7 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolConfigResponse, PoolInfoResponse,
     PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
-use stable5pool::state::StablePoolParams;
+use stable_pool::state::StablePoolParams;
 
 use crate::utils::{initialize_3_tokens, initialize_stable_5_pool_2_asset, instantiate_contract, mock_app, store_stable5_pool_code, store_token_code, store_vault_code, store_weighted_pool_code};
 

@@ -18,7 +18,7 @@ use cw20::Cw20ExecuteMsg;
 use itertools::Itertools;
 use dexter::pool::ExitType::ExactLpBurn;
 use dexter::vault;
-use stable5pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
+use stable_pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -48,9 +48,9 @@ pub fn store_vault_code(app: &mut App) -> u64 {
 
 pub fn store_stable_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable5pool::contract::execute,
-        stable5pool::contract::instantiate,
-        stable5pool::contract::query,
+        stable_pool::contract::execute,
+        stable_pool::contract::instantiate,
+        stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }

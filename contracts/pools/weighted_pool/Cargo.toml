@@ -35,6 +35,7 @@ thiserror = "1.0.38"
 protobuf = { version = "2", features = ["with-bytes"] }
 serde-json-wasm = "0.5.0"
 cosmwasm-schema = "1.2.1"
+const_format = "0.2.30"
 
 [dev-dependencies]
 cw-multi-test = "0.16.2"

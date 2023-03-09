@@ -14,10 +14,30 @@ use itertools::Itertools;
 // ----------------x                       Event related helpers                       x----------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
-pub const ATTR_SENDER: &str = "sender";
+const ATTR_SENDER: &str = "sender";
 
-pub fn new_event(name: impl Into<String>, info: &MessageInfo) -> Event {
-    Event::new(name).add_attribute(ATTR_SENDER, info.sender.to_string())
+/// This trait helps implement certain conventions for events across all contracts. Such as:
+/// * Using `sender` as the name for the human sender of the message instead of using multiple
+/// aliases like `user`, `address`, etc. in different contracts.
+/// * Ensuring that we always add the `sender` attribute and that it is the first attribute.
+pub trait EventExt {
+    /// Picks up the `sender` attribute from the passed `info` param.
+    fn from_info(name: impl Into<String>, info: &MessageInfo) -> Event;
+
+    /// Picks up the `sender` attribute from the passed `sender` param.
+    /// Useful in scenarios where the info param isn't available.
+    fn from_sender(name: impl Into<String>, sender: impl Into<String>) -> Event;
+}
+
+impl EventExt for Event {
+
+    fn from_info(name: impl Into<String>, info: &MessageInfo) -> Event {
+        Event::new(name).add_attribute(ATTR_SENDER, info.sender.to_string())
+    }
+
+    fn from_sender(name: impl Into<String>, sender: impl Into<String>) -> Event {
+        Event::new(name).add_attribute(ATTR_SENDER, sender)
+    }
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -47,7 +67,7 @@ pub fn propose_new_owner(
     expires_in: u64,
     owner: Addr,
     proposal: Item<OwnershipProposal>,
-    event_name: impl Into<String>,
+    contract_name: impl Into<String>,
 ) -> StdResult<Response> {
     if info.sender != owner {
         return Err(StdError::generic_err("Unauthorized"));
@@ -69,7 +89,7 @@ pub fn propose_new_owner(
     )?;
 
     Ok(Response::new().add_event(
-        new_event(event_name, &info)
+        Event::from_info(contract_name.into() + "::propose_new_owner" , &info)
             .add_attribute("new_owner", new_owner)
             .add_attribute("expires_in", expires_in.to_string())
     ))
@@ -83,14 +103,14 @@ pub fn drop_ownership_proposal(
     info: MessageInfo,
     owner: Addr,
     proposal: Item<OwnershipProposal>,
-    event_name: impl Into<String>,
+    contract_name: impl Into<String>,
 ) -> StdResult<Response> {
     if info.sender != owner {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
     proposal.remove(deps.storage);
-    Ok(Response::new().add_event(new_event(event_name, &info)))
+    Ok(Response::new().add_event(Event::from_info(contract_name.into() + "::drop_ownership_proposal", &info)))
 }
 
 /// ## Description
@@ -103,7 +123,7 @@ pub fn claim_ownership(
     env: Env,
     ownership_proposal: Item<OwnershipProposal>,
     callback: fn(DepsMut, Addr) -> StdResult<()>,
-    event_name: impl Into<String>,
+    contract_name: impl Into<String>,
 ) -> StdResult<Response> {
     let proposal: OwnershipProposal = ownership_proposal
         .load(deps.storage)
@@ -120,7 +140,7 @@ pub fn claim_ownership(
     ownership_proposal.remove(deps.storage);
     callback(deps, proposal.owner.clone())?;
 
-    Ok(Response::new().add_event(new_event(event_name, &info)))
+    Ok(Response::new().add_event(Event::from_info(contract_name.into() + "::claim_ownership", &info)))
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

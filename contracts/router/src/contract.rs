@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::vec;
+use const_format::concatcp;
 
 use crate::error::ContractError;
 use crate::state::CONFIG;
@@ -7,7 +8,7 @@ use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::helper::new_event;
+use dexter::helper::{EventExt};
 use dexter::pool::ResponseType;
 use dexter::router::{return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest, InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade, MAX_SWAP_OPERATIONS};
 use dexter::vault::{self, SingleSwapRequest, SwapType};
@@ -36,7 +37,7 @@ pub fn instantiate(
     CONFIG.save(deps.storage, &cfg)?;
 
     Ok(Response::new().add_event(
-        new_event("dexter-router::instantiate", &info)
+        Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("dexter_vault", msg.dexter_vault)
     ))
 }
@@ -148,7 +149,7 @@ pub fn execute_multihop_swap(
     let minimum_receive = minimum_receive.unwrap_or(Uint128::zero());
 
     // Event for indexing support
-    let event = new_event("dexter-router::multihop_swap", &info)
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::multihop_swap"), &info)
         .add_attribute("requests", serde_json_wasm::to_string(&requests).unwrap())
         .add_attribute("offer_amount", offer_amount.to_string())
         .add_attribute("recipient", recipient.to_string())
@@ -316,7 +317,7 @@ pub fn continue_hop_swap(
     let amount_returned_prev_hop = asset_balance.checked_sub(prev_ask_amount)?;
 
     // Event for indexing support
-    let event = Event::new("dexter-router::continue_hop_swap")
+    let event = Event::new(concatcp!(CONTRACT_NAME, "::continue_hop_swap"))
         .add_attribute("hops_left", requests.len().to_string())
         .add_attribute("amount_returned_last_hop", amount_returned_prev_hop.to_string());
 

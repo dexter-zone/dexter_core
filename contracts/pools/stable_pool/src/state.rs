@@ -107,7 +107,7 @@ pub enum StablePoolUpdateParams {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},
     UpdateScalingFactorManager { manager: Addr },
-    UpdateScalingFactor { asset: AssetInfo, scaling_factor: Decimal256 },
+    UpdateScalingFactor { asset_info: AssetInfo, scaling_factor: Decimal256 },
 }
 
 // ----------------x----------------x----------------x----------------
