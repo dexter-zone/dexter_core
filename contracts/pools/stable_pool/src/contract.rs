@@ -19,10 +19,10 @@ use crate::state::{
 };
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure, update_total_fee_bps,
+    return_exit_failure, return_join_failure, return_swap_failure,
     AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
     CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg,
-    QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD,
+    QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee,
 };
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
@@ -368,11 +368,10 @@ fn update_max_allowed_spread(
     STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
 
     // Emit an event
-    let event = Event::new("dexter-stable-swap-pool::update_max_allowed_spread")
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::update_max_allowed_spread"), &info)
         .add_attribute("max_allowed_spread", max_allowed_spread.to_string());
 
-    let response = Response::new().add_event(event);
-    Ok(response)
+    Ok(Response::new().add_event(event))
 }
 
 /// ## Description
@@ -465,7 +464,7 @@ pub fn update_config(
             update_scaling_factor_manager(deps, info, manager)
         }
         StablePoolUpdateParams::UpdateMaxAllowedSpread { max_allowed_spread } => {
-            update_max_allowed_spread(deps, info, max_allowed_spread)?;
+            update_max_allowed_spread(deps, info, max_allowed_spread)
         }
     }
 }
