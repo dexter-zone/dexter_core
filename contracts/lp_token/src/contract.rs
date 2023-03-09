@@ -13,7 +13,7 @@ use cw20_base::ContractError;
 use dexter::lp_token::{InstantiateMsg, MigrateMsg};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "lp-token";
+const CONTRACT_NAME: &str = "dexter-lp-token";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
