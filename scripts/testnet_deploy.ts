@@ -215,7 +215,7 @@ async function Demo() {
       proposal_id: 0,
     },
     {
-      name: "Stable5Swap Pool",
+      name: "StableSwapSwap Pool",
       path: "../artifacts/stable5pool.wasm",
       proposal_id: 0,
     },
@@ -903,7 +903,7 @@ async function Demo() {
       proposal_id: 0,
     },
     {
-      name: "Stable5swap Pool",
+      name: "StableSwapswap Pool",
       codeId: network.stable5swap_pool_contract_code_id,
       proposal_id: 0,
     },

@@ -64,7 +64,7 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    // Stable5swap parameters
+    // StableSwapswap parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -474,7 +474,7 @@ pub fn update_config(
     }
 }
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: Stable5 POOL::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: StableSwap POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 /// ## Description

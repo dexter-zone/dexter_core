@@ -176,10 +176,10 @@
             "description": "Stable pool type",
             "type": "object",
             "required": [
-              "stable5_pool"
+              "stable_swap"
             ],
             "properties": {
-              "stable5_pool": {
+              "stable_swap": {
                 "type": "object",
                 "additionalProperties": false
               }
@@ -469,16 +469,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "slippage_tolerance": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Decimal"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
             "additionalProperties": false
@@ -496,25 +486,12 @@
         "properties": {
           "on_exit_pool": {
             "type": "object",
+            "required": [
+              "exit_type"
+            ],
             "properties": {
-              "assets_out": {
-                "type": [
-                  "array",
-                  "null"
-                ],
-                "items": {
-                  "$ref": "#/definitions/Asset"
-                }
-              },
-              "burn_amount": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Uint128"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "exit_type": {
+                "$ref": "#/definitions/ExitType"
               }
             },
             "additionalProperties": false
@@ -701,6 +678,40 @@
       "Decimal": {
         "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
         "type": "string"
+      },
+      "ExitType": {
+        "description": "This struct describes the ways one can choose to exit from a pool.",
+        "oneOf": [
+          {
+            "description": "provide this to convey that only this much LP tokens should be burned, irrespective of how much assets you will get back.",
+            "type": "object",
+            "required": [
+              "exact_lp_burn"
+            ],
+            "properties": {
+              "exact_lp_burn": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "provide this to convey that you want exactly these assets out, irrespective of how much LP tokens need to be burned for that.",
+            "type": "object",
+            "required": [
+              "exact_assets_out"
+            ],
+            "properties": {
+              "exact_assets_out": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/Asset"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SwapType": {
         "description": "This enum describes available Swap types.",
@@ -948,10 +959,10 @@
               "description": "Stable pool type",
               "type": "object",
               "required": [
-                "stable5_pool"
+                "stable_swap"
               ],
               "properties": {
-                "stable5_pool": {
+                "stable_swap": {
                   "type": "object",
                   "additionalProperties": false
                 }

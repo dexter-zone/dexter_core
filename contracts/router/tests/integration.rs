@@ -77,7 +77,7 @@ fn store_weighted_pool_code(app: &mut App) -> u64 {
     app.store_code(pool_contract)
 }
 
-// Initialize a vault with Stable5, Weighted pools
+// Initialize a vault with StableSwap, Weighted pools
 fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     let weighted_pool_code_id = store_weighted_pool_code(app);
     let stable5_pool_code_id = store_stable5_pool_code(app);
