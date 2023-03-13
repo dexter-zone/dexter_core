@@ -479,7 +479,7 @@ fn test_exit_pool() {
 
     // Let's pause the imbalanced exit from the pool and re-execute the same exit
     let pause_msg = ExecuteMsg::UpdatePauseInfo { 
-        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::Stable5Pool {  }),
+        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::StableSwap {  }),
         pause_info: PauseInfo {
             swap: false,
             deposit: false,
@@ -500,7 +500,7 @@ fn test_exit_pool() {
         .query_wasm_smart(
             &vault_instance.clone(),
             &QueryMsg::QueryRegistry {
-                pool_type: dexter::vault::PoolType::Stable5Pool {},
+                pool_type: dexter::vault::PoolType::StableSwap {},
             },
         )
         .unwrap();
@@ -624,7 +624,7 @@ fn test_exit_pool() {
     // Allow imbalanced exit to test below
     // Let's pause the imbalanced exit from the pool and re-execute the same exit
     let pause_msg = ExecuteMsg::UpdatePauseInfo { 
-        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::Stable5Pool {  }),
+        update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::StableSwap {  }),
         pause_info: PauseInfo {
             swap: false,
             deposit: false,

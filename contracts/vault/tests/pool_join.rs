@@ -240,7 +240,7 @@ fn test_join_pool() {
 
     // pause deposits specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
@@ -272,7 +272,7 @@ fn test_join_pool() {
 
     // resume deposits specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),

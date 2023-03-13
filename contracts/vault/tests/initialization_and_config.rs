@@ -26,7 +26,7 @@ fn proper_initialization() {
     let pool_configs = vec![
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
@@ -90,7 +90,7 @@ fn proper_initialization() {
         .query_wasm_smart(
             &vault_instance,
             &QueryMsg::QueryRegistry {
-                pool_type: PoolType::Stable5Pool {},
+                pool_type: PoolType::StableSwap {},
             },
         )
         .unwrap();
@@ -98,7 +98,7 @@ fn proper_initialization() {
     assert!(stable5pool_config_res.is_some());
     let stable5pool_config_res = stable5pool_config_res.unwrap();
     assert_eq!(stable5_pool_code_id, stable5pool_config_res.code_id);
-    assert_eq!(PoolType::Stable5Pool {}, stable5pool_config_res.pool_type);
+    assert_eq!(PoolType::StableSwap {}, stable5pool_config_res.pool_type);
     assert_eq!(
         pool_configs[0].default_fee_info,
         stable5pool_config_res.default_fee_info
@@ -138,7 +138,7 @@ fn proper_initialization() {
     let pool_configs = vec![
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
@@ -148,7 +148,7 @@ fn proper_initialization() {
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,
@@ -183,7 +183,7 @@ fn proper_initialization() {
 
     let pool_configs = vec![PoolTypeConfig {
         code_id: stable5_pool_code_id,
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         default_fee_info: FeeInfo {
             total_fee_bps: 30000u16,
             protocol_fee_percent: 49u16,
@@ -224,7 +224,7 @@ fn test_add_to_registery() {
 
     let pool_configs = vec![PoolTypeConfig {
         code_id: stable5_pool_code_id,
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         default_fee_info: FeeInfo {
             total_fee_bps: 300u16,
             protocol_fee_percent: 49u16,
@@ -256,7 +256,7 @@ fn test_add_to_registery() {
         .unwrap();
 
     let msg = QueryMsg::QueryRegistry {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
     };
     let registery_res: PoolTypeConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
@@ -265,7 +265,7 @@ fn test_add_to_registery() {
     let pool_config_res = registery_res.unwrap();
 
     assert_eq!(stable5_pool_code_id, pool_config_res.code_id);
-    assert_eq!(PoolType::Stable5Pool {}, pool_config_res.pool_type);
+    assert_eq!(PoolType::StableSwap {}, pool_config_res.pool_type);
     assert_eq!(
         pool_configs[0].default_fee_info,
         pool_config_res.default_fee_info
@@ -280,7 +280,7 @@ fn test_add_to_registery() {
     let msg = ExecuteMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 10_0u16,
                 protocol_fee_percent: 49u16,
@@ -523,7 +523,7 @@ fn test_pool_config_update() {
     ];
 
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
         init_params: Some(to_binary(&StablePoolParams { 
@@ -659,7 +659,7 @@ fn test_update_pause_info() {
     let res: PoolTypeConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}
+            &QueryMsg::QueryRegistry {pool_type: PoolType::StableSwap {}}
         ).unwrap();
     assert_eq!(res.unwrap().paused, PauseInfo::default());
 
@@ -677,7 +677,7 @@ fn test_update_pause_info() {
         user_addr.clone(),
         vault_instance.clone(),
         &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolType(PoolType::Stable5Pool {}),
+            update_type: PauseInfoUpdateType::PoolType(PoolType::StableSwap {}),
             pause_info: expected_pause_info.clone(),
         },
         &[],
@@ -689,7 +689,7 @@ fn test_update_pause_info() {
     let res: PoolTypeConfigResponse = app.wrap()
         .query_wasm_smart(
             vault_instance.clone(),
-            &QueryMsg::QueryRegistry {pool_type: PoolType::Stable5Pool {}}
+            &QueryMsg::QueryRegistry {pool_type: PoolType::StableSwap {}}
         ).unwrap();
     assert_eq!(res.unwrap().paused, expected_pause_info.clone());
 

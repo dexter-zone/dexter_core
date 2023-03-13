@@ -15,7 +15,7 @@ pub const TWAP_PRECISION: u16 = 9u16;
 #[cw_serde]
 pub enum PoolType {
     /// Stable pool type
-    Stable5Pool {},
+    StableSwap {},
     /// Weighted pool type
     Weighted {},
     /// Custom pool type
@@ -27,7 +27,7 @@ impl Display for PoolType {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
             PoolType::Weighted {} => fmt.write_str("weighted"),
-            PoolType::Stable5Pool {} => fmt.write_str("stable-5-pool"),
+            PoolType::StableSwap {} => fmt.write_str("stable-swap"),
             PoolType::Custom(pool_type) => fmt.write_str(format!("custom-{}", pool_type).as_str()),
         }
     }

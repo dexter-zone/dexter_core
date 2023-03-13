@@ -39,7 +39,7 @@ fn instantiate_contracts(
     let msg = dexter::vault::InstantiateMsg {
         pool_configs: vec![PoolTypeConfig {
             code_id: stable5_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 0u16,
                 protocol_fee_percent: 50u16,
