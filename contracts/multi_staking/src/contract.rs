@@ -1248,7 +1248,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             to_binary(&creator_claimable_reward).map_err(ContractError::from)
         },
-        QueryMsg::Config => {
+        QueryMsg::Config {} => {
             let config = CONFIG.load(deps.storage)?;
             to_binary(&config).map_err(ContractError::from)
         }

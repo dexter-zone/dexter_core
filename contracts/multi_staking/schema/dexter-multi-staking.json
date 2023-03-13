@@ -466,10 +466,17 @@
     "oneOf": [
       {
         "description": "Returns current config of the contract",
-        "type": "string",
-        "enum": [
+        "type": "object",
+        "required": [
           "config"
-        ]
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       },
       {
         "description": "Returns currently unclaimed rewards for a user for a give LP token If a future block time is provided, it will return the unclaimed rewards till that block time.",
