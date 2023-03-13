@@ -545,7 +545,7 @@ fn test_pool_config_update() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     let pool_id: u64 = 1;
 

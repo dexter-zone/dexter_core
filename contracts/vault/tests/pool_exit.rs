@@ -236,7 +236,7 @@ fn test_exit_pool() {
     // -------x---------- Stable-5-swap-POOL -::- WITHDRAW LIQUIDITY -------x---------
     // -------x---------- -------x---------- -------x---------- -------x--------------
 
-    // When you withdraw only 1 token from a stable-5-pool
+    // When you withdraw only 1 token from a stable-swap-pool
     // VAULT -::- Exit Pool -::- Execution Function
     // Stable-5-Pool : Imbalanced Withdraw
     // Stable-5-Pool : Initial D : 5000
@@ -277,7 +277,7 @@ fn test_exit_pool() {
     app.execute_contract(owner.clone(), stable5_lp_token_addr.clone(), &exit_msg, &[])
         .unwrap();
 
-    // When you withdraw multiple tokens from a stable-5-pool
+    // When you withdraw multiple tokens from a stable-swap-pool
     // VAULT -::- Exit Pool -::- Execution Function
     // Stable-5-Pool : Imbalanced Withdraw
     // Stable-5-Pool : Initial D : 4898.647724421098219454
@@ -512,7 +512,7 @@ fn test_exit_pool() {
 
     // Normal exit as done below should continue to work
 
-    // When its normal withdraw from a stable-5-pool. No fee charged
+    // When its normal withdraw from a stable-swap-pool. No fee charged
     // VAULT -::- Exit Pool -::- Execution Function
     // act_burn_amount: 50000000
     // Transfering total "11095988" "contract1" to the User. Total Fee : "0" (protocol_fee="0", dev_fee="0" LP fee="0"). Liquidity withdrawn = "11095988" "contract1"

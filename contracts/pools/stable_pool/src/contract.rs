@@ -64,7 +64,7 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    // StableSwapswap parameters
+    // StableSwap Pool parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});

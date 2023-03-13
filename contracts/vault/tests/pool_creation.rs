@@ -116,7 +116,7 @@ fn test_create_pool_instance() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     let pool_res: PoolInfo = app
         .wrap()
@@ -495,7 +495,7 @@ fn test_pool_creation_fee() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     // Add fee for pool creation
     let msg = ExecuteMsg::UpdateConfig {
@@ -578,7 +578,7 @@ fn test_pool_creation_fee() {
             &[coin(100_000_000u128, "uxprt")],
         ).unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
     
     // validate that fee collector has received the fee
     let fee_collector = Addr::unchecked("fee_collector".to_string());
