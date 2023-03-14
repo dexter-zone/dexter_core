@@ -347,7 +347,7 @@ pub fn bond_lp_tokens(
         &Cw20ExecuteMsg::Send {
             contract: multistaking_contract.to_string(),
             amount,
-            msg: to_binary(&Cw20HookMsg::Bond {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::Bond { beneficiary_user: None }).unwrap(),
         },
         &vec![],
     )

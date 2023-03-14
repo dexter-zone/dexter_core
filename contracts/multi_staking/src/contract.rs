@@ -601,16 +601,17 @@ pub fn receive_cw20(
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     match from_binary(&cw20_msg.msg)? {
-        Cw20HookMsg::Bond {} => {
+        Cw20HookMsg::Bond { beneficiary_user } => {
             let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
-            bond(deps, env, cw20_sender.clone(), cw20_sender, token_address, cw20_msg.amount)
-        }
-        Cw20HookMsg::BondForBeneficiary { beneficiary } => {
-            let token_address = info.sender;
-            let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
-            let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
-            bond(deps, env, cw20_sender, beneficiary, token_address, cw20_msg.amount)
+            
+            let user = if let Some(beneficiary_user) = beneficiary_user {
+                deps.api.addr_validate(beneficiary_user.as_str())?
+            } else {
+                cw20_sender.clone()
+            };
+
+            bond(deps, env, cw20_sender.clone(), user, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::ProposeRewardSchedule {
             lp_token,
@@ -717,6 +718,15 @@ fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult
     Ok(())
 }
 
+/// This function is called when a user wants to bond their LP tokens either directly or through the vault
+/// This function will update the user's bond amount and the total bond amount for the given LP token
+/// ### Params:
+/// **sender**: This is the address that sent the cw20 token. 
+/// This is not necessarily the user address since vault can bond on behalf of the user
+/// **user**: This is the user address that owns the bonded tokens and will receive rewards
+/// This user is elligible to withdraw the tokens after unbonding and not the sender
+/// **lp_token**: The LP token address
+/// **amount**: The amount of LP tokens to bond
 pub fn bond(
     mut deps: DepsMut,
     env: Env,

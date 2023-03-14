@@ -70,11 +70,6 @@ pub fn instantiate(
         return Err(ContractError::IncorrectAmp {});
     }
 
-    // validate scaling factor manager address if present
-    if let Some(scaling_factor_manager) = &params.scaling_factor_manager {
-        deps.api.addr_validate(scaling_factor_manager.clone().as_str())?;
-    }
-
     // Validate that scaling factor is specified for all the assets in the pool
     let scaling_factor_asset_infos = params
         .scaling_factors

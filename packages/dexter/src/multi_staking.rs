@@ -215,11 +215,14 @@ pub enum QueryMsg {
 
 #[cw_serde]
 pub enum Cw20HookMsg {
-    /// This hook message is called from LP token contract when user wants to bond it.
-    /// This is a single message flow vs. two message allowance flow. 
-    Bond {},
-    /// This hook message is called when a different address is bonding on user's behalf.
-    BondForBeneficiary { beneficiary: Addr },
+    /// This hook message is called from LP token contract when to bond tokens
+    /// This is a single message flow vs. two message allowance flow.
+    /// If beneficiary user is provided, then the tokens are bonded on behalf of the beneficiary user. 
+    /// i.e. beneficiary user is the user who has ownership of the LP tokens being bonded
+    /// If beneficiary user is not provided, then the tokens are bonded on behalf of the caller.
+    Bond { 
+        beneficiary_user: Option<Addr> 
+    },
     /// This hook message is sent from a CW20 asset contract to propose a reward schedule for some LP.
     /// The LP Token contract must be in the allowed_lp_tokens list.
     ProposeRewardSchedule {

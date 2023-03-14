@@ -1976,8 +1976,8 @@ fn build_mint_lp_token_msg(
                 msg: to_binary(&Cw20ExecuteMsg::Send {
                     contract: contract_addr.to_string(),
                     amount,
-                    msg: to_binary(&dexter::multi_staking::Cw20HookMsg::BondForBeneficiary {
-                        beneficiary: recipient,
+                    msg: to_binary(&dexter::multi_staking::Cw20HookMsg::Bond {
+                        beneficiary_user: Some(recipient),
                     })?,
                 })?,
                 funds: vec![],
