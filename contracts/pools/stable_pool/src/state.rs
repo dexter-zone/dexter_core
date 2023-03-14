@@ -91,6 +91,12 @@ pub struct StablePoolParams {
     /// Support scaling factors update
     pub supports_scaling_factors_update: bool,
     /// Scaling factors
+    /// The scaling factor is used to scale the volume of the asset in the pool for the stableswap invariant calculations.
+    /// This allows to support assets which are not equal in value but are highly correlated in price.
+    /// The usecases of this are:
+    /// 1. Liquid staking tokens (e.g. stkATOM, stkXPRT, etc.) which differ in price to the base asset by a C-Ratio accruing the rewards earned from staking.
+    /// 2. Yield bearing tokens (e.g. aTokens, cTokens, etc.) which differ in price to the base asset by a C-Ratio accruing the interest earned from lending.
+    /// 3. Related synthetic assets which follow the price of the base assets by a defined mechanism.
     pub scaling_factors: Vec<AssetScalingFactor>,
     /// Scaling factor manager
     pub scaling_factor_manager: Option<Addr>,

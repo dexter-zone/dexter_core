@@ -99,6 +99,9 @@ pub enum ContractError {
 
     #[error("Invalid max allowed spread. Max allowed spread should be positive non-zero value less than 1")]
     InvalidMaxAllowedSpread,
+    
+    #[error("Duplicate asset info in scaling factors")]
+    DuplicateAssetInfoInScalingFactors,
 }
 
 impl From<OverflowError> for ContractError {
