@@ -12,7 +12,7 @@ use dexter::router::{
 use dexter::vault::{
     ConfigResponse as VaultConfigResponse, ExecuteMsg as VaultExecuteMsg, FeeInfo,
     InstantiateMsg as VaultInstantiateMsg, PoolTypeConfig, PoolInfoResponse, PoolType,
-    QueryMsg as VaultQueryMsg, SwapType, PoolCreationFee, AutoStakeImpl, PauseInfo,
+    QueryMsg as VaultQueryMsg, SwapType, PoolCreationFee, AutoStakeImpl, PauseInfo, NativeAssetPrecisionInfo,
 };
 
 const EPOCH_START: u64 = 1_000_000;
@@ -245,7 +245,13 @@ fn initialize_stable_5_pool(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
+        native_asset_precisions: vec![NativeAssetPrecisionInfo {
+            denom: denom0.clone(),
+            precision: 6u8,
+        }, NativeAssetPrecisionInfo {
+            denom: denom1.clone(),
+            precision: 6u8,
+        }],
         init_params: Some(to_binary(&stable_pool::state::StablePoolParams {
             amp: 10u64,
             scaling_factors: vec![],
@@ -343,7 +349,16 @@ fn initialize_weighted_pool(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
+        native_asset_precisions: vec![
+            NativeAssetPrecisionInfo {
+                denom: denom0.clone(),
+                precision: 6u8,
+            }, 
+            NativeAssetPrecisionInfo {
+                denom: denom1.clone(),
+                precision: 6u8,
+            }
+        ],
         init_params: Some(
             to_binary(&weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,

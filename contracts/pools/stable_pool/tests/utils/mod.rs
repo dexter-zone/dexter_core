@@ -10,7 +10,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{ConfigResponse, FeeStructs, QueryMsg, SwapResponse, CumulativePricesResponse, AfterExitResponse, AfterJoinResponse, ExitType};
 use dexter::vault::{
     ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
-    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest, Cw20HookMsg,
+    PoolCreationFee, PoolInfo, PoolType, PoolTypeConfig, QueryMsg as VaultQueryMsg, SwapType, SingleSwapRequest, Cw20HookMsg, NativeAssetPrecisionInfo,
 };
 
 use cw20::Cw20ExecuteMsg;
@@ -126,6 +126,14 @@ pub fn instantiate_contract_generic(
         )
         .unwrap();
 
+    let native_asset_precisions = native_asset_precisions
+        .into_iter()
+        .map(|(k, v)| NativeAssetPrecisionInfo {
+            denom: k,
+            precision: v,
+        })
+        .collect_vec();
+
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
@@ -194,9 +202,9 @@ pub fn instantiate_contract_generic(
 
     // Find max of native_asset_precisions
     let mut max_precision = 0u8;
-    for (_, precision) in native_asset_precisions {
-        if precision > max_precision {
-            max_precision = precision;
+    for precision in native_asset_precisions.iter() {
+        if precision.precision > max_precision {
+            max_precision = precision.precision;
         }
     }
 

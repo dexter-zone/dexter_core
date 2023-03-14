@@ -4,6 +4,7 @@ use cw_storage_plus::{Item, Map};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::Config;
+use dexter::vault::NativeAssetPrecisionInfo;
 
 /// ## Description
 /// Stores config at the given key
@@ -46,11 +47,27 @@ pub struct Twap {
 
 /// ## Description
 /// Store all token precisions and return the greatest one.
-pub(crate) fn store_precisions(deps: DepsMut, native_asset_precisions: &Vec<(String, u8)>, asset_infos: &[AssetInfo]) -> StdResult<u8> {
+pub(crate) fn store_precisions(deps: DepsMut, native_asset_precisions: &Vec<NativeAssetPrecisionInfo>, asset_infos: &[AssetInfo]) -> StdResult<u8> {
     let mut max = 0u8;
 
-    for asset_info in asset_infos {
-        let precision = asset_info.decimals(native_asset_precisions, &deps.querier)?;
+    for asset_info in asset_infos {   
+        let querier = &deps.querier;
+        let precision = match asset_info {
+            AssetInfo::NativeToken { denom } => {
+                let precision = native_asset_precisions
+                    .iter()
+                    .find(|info| &info.denom.clone() == denom)
+                    .unwrap()
+                    .precision;
+                precision
+            },
+            AssetInfo::Token { contract_addr } => {
+                let res: cw20::TokenInfoResponse =
+                    querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;
+
+                res.decimals
+            }
+        };
         max = max.max(precision);
         PRECISIONS.save(deps.storage, asset_info.to_string(), &precision)?;
     }

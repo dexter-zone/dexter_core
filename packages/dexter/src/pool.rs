@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
-use crate::vault::{PoolType, SwapType};
+use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
 use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::Item;
@@ -107,7 +107,7 @@ pub struct InstantiateMsg {
     /// Assets supported by the pool
     pub asset_infos: Vec<AssetInfo>,
     /// Native asset precisions
-    pub native_asset_precisions: Vec<(String, u8)>,
+    pub native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
     /// The Fee details of the pool
     pub fee_info: FeeStructs,
     /// Optional binary serialised parameters for custom pool types
