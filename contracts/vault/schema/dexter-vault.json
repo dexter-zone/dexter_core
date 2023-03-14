@@ -633,6 +633,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Updates the pool config for a pool with the specified `pool_id`. This can be used to update the fee, pause info, etc. for a pool.",
         "type": "object",
         "required": [
           "update_pool_config"
@@ -663,6 +664,32 @@
                     "type": "null"
                   }
                 ]
+              },
+              "pool_id": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Updates the pool params for a pool with the specified `pool_id`.",
+        "type": "object",
+        "required": [
+          "update_pool_params"
+        ],
+        "properties": {
+          "update_pool_params": {
+            "type": "object",
+            "required": [
+              "params",
+              "pool_id"
+            ],
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/Binary"
               },
               "pool_id": {
                 "$ref": "#/definitions/Uint128"

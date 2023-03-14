@@ -235,16 +235,12 @@
         "properties": {
           "update_config": {
             "type": "object",
+            "required": [
+              "params"
+            ],
             "properties": {
               "params": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Binary"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/definitions/Binary"
               }
             },
             "additionalProperties": false
