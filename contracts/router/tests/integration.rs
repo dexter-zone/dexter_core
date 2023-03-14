@@ -77,7 +77,7 @@ fn store_weighted_pool_code(app: &mut App) -> u64 {
     app.store_code(pool_contract)
 }
 
-// Initialize a vault with Stable5, Weighted pools
+// Initialize a vault with StableSwap, Weighted pools
 fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
     let weighted_pool_code_id = store_weighted_pool_code(app);
     let stable5_pool_code_id = store_stable5_pool_code(app);
@@ -98,7 +98,7 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         },
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 64u16,
@@ -243,7 +243,7 @@ fn initialize_stable_5_pool(
         .unwrap();
     let next_pool_id = vault_config_res.next_pool_id;
     let msg = VaultExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
         init_params: Some(to_binary(&stable_pool::state::StablePoolParams {
@@ -405,7 +405,7 @@ fn proper_initialization() {
     let pool_configs = vec![
         PoolTypeConfig {
             code_id: stable5_pool_code_id,
-            pool_type: PoolType::Stable5Pool {},
+            pool_type: PoolType::StableSwap {},
             default_fee_info: FeeInfo {
                 total_fee_bps: 300u16,
                 protocol_fee_percent: 49u16,

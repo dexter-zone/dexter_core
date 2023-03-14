@@ -120,11 +120,11 @@ fn test_join_pool() {
     // -------x---------- -------x---------- -------x---------- -------x----------
 
     // VAULT -::- Join Pool -::- Execution Function
-    // --- Stable5Pool:OnJoinPool Query : Begin ---
+    // --- StableSwap Pool:OnJoinPool Query : Begin ---
     // init_d: 0
     // deposit_d: 5000
     // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
-    // --- Stable5Pool:OnJoinPool Query :: End ---
+    // --- StableSwap Pool:OnJoinPool Query :: End ---
     // Following assets are to be transferred by the user to the Vault:
     // ::: "contract1" "1000000000"
     // ::: "contract2" "1000000000"
@@ -240,7 +240,7 @@ fn test_join_pool() {
 
     // pause deposits specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
@@ -272,7 +272,7 @@ fn test_join_pool() {
 
     // resume deposits specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
@@ -432,7 +432,7 @@ fn test_join_pool() {
     assert_eq!(Uint128::from(1000_000000u128), vault_token3_balance.balance);
 
     // VAULT -::- Join Pool -::- Execution Function
-    // --- Stable5Pool:OnJoinPool Query : Begin ---
+    // --- StableSwap Pool:OnJoinPool Query : Begin ---
     // init_d: 5000
     // deposit_d: 11036.237493754238660601
     // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
@@ -442,7 +442,7 @@ fn test_join_pool() {
     // For token0, fee is charged on 73.24749875084773212 amount, which is difference b/w 2207.24749875084773212 (ideal_balance) and 2134 (new_balance). Fee charged:0.686695300789197488
     // For token1, fee is charged on 259.24749875084773212 amount, which is difference b/w 2207.24749875084773212 (ideal_balance) and 1948 (new_balance). Fee charged:2.430445300789197488
     // after_fee_d (Invariant computed for - total tokens provided as liquidity - total fee): 11025.030251953726515704
-    // --- Stable5Pool:OnJoinPool Query :: End ---
+    // --- StableSwap Pool:OnJoinPool Query :: End ---
     // Following assets are to be transferred by the user to the Vault:
     // ::: "contract1" "1453000000"
     // ::: "contract2" "945000000"
@@ -619,7 +619,7 @@ fn test_join_pool() {
 
     // Provide only 2 of 5 assets liquidity to stable 5 pool. Fee is charged
     // VAULT -::- Join Pool -::- Execution Function
-    // --- Stable5Pool:OnJoinPool Query : Begin ---
+    // --- StableSwap Pool:OnJoinPool Query : Begin ---
     // init_d: 11029.064881254479322174
     // deposit_d: 12287.337905948465585852
     // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
@@ -629,7 +629,7 @@ fn test_join_pool() {
     // For token0, fee is charged on 270.588462146246137888 amount, which is difference b/w 2376.972053853753862112 (ideal_balance) and 2647.560516 (new_balance). Fee charged:2.536766832621057542
     // For token1, fee is charged on 222.064033072200704588 amount, which is difference b/w 2168.508549072200704588 (ideal_balance) and 1946.444516 (new_balance). Fee charged:2.081850310051881605
     // after_fee_d (Invariant computed for - total tokens provided as liquidity - total fee): 12272.475667670006139966
-    // --- Stable5Pool:OnJoinPool Query :: End ---
+    // --- StableSwap Pool:OnJoinPool Query :: End ---
     // Following assets are to be transferred by the user to the Vault:
     // ::: "contract1" "0"
     // ::: "contract2" "745000000"

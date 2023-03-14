@@ -197,11 +197,15 @@
         "type": "object",
         "required": [
           "deposit",
+          "imbalanced_withdraw",
           "swap"
         ],
         "properties": {
           "deposit": {
             "description": "True if deposits are paused",
+            "type": "boolean"
+          },
+          "imbalanced_withdraw": {
             "type": "boolean"
           },
           "swap": {
@@ -249,10 +253,10 @@
             "description": "Stable pool type",
             "type": "object",
             "required": [
-              "stable5_pool"
+              "stable_swap"
             ],
             "properties": {
-              "stable5_pool": {
+              "stable_swap": {
                 "type": "object",
                 "additionalProperties": false
               }
@@ -629,6 +633,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Updates the pool config for a pool with the specified `pool_id`. This can be used to update the fee, pause info, etc. for a pool.",
         "type": "object",
         "required": [
           "update_pool_config"
@@ -670,6 +675,32 @@
         "additionalProperties": false
       },
       {
+        "description": "Updates the pool params for a pool with the specified `pool_id`.",
+        "type": "object",
+        "required": [
+          "update_pool_params"
+        ],
+        "properties": {
+          "update_pool_params": {
+            "type": "object",
+            "required": [
+              "params",
+              "pool_id"
+            ],
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/Binary"
+              },
+              "pool_id": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
         "type": "object",
         "required": [
           "join_pool"
@@ -696,7 +727,7 @@
                   "null"
                 ]
               },
-              "lp_to_mint": {
+              "min_lp_to_receive": {
                 "anyOf": [
                   {
                     "$ref": "#/definitions/Uint128"
@@ -713,16 +744,6 @@
                 "type": [
                   "string",
                   "null"
-                ]
-              },
-              "slippage_tolerance": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Decimal"
-                  },
-                  {
-                    "type": "null"
-                  }
                 ]
               }
             },
@@ -789,7 +810,7 @@
             "type": "object",
             "required": [
               "expires_in",
-              "owner"
+              "new_owner"
             ],
             "properties": {
               "expires_in": {
@@ -797,7 +818,7 @@
                 "format": "uint64",
                 "minimum": 0.0
               },
-              "owner": {
+              "new_owner": {
                 "type": "string"
               }
             },
@@ -1009,11 +1030,15 @@
         "type": "object",
         "required": [
           "deposit",
+          "imbalanced_withdraw",
           "swap"
         ],
         "properties": {
           "deposit": {
             "description": "True if deposits are paused",
+            "type": "boolean"
+          },
+          "imbalanced_withdraw": {
             "type": "boolean"
           },
           "swap": {
@@ -1089,10 +1114,10 @@
             "description": "Stable pool type",
             "type": "object",
             "required": [
-              "stable5_pool"
+              "stable_swap"
             ],
             "properties": {
-              "stable5_pool": {
+              "stable_swap": {
                 "type": "object",
                 "additionalProperties": false
               }
@@ -1367,10 +1392,10 @@
             "description": "Stable pool type",
             "type": "object",
             "required": [
-              "stable5_pool"
+              "stable_swap"
             ],
             "properties": {
-              "stable5_pool": {
+              "stable_swap": {
                 "type": "object",
                 "additionalProperties": false
               }
@@ -1494,7 +1519,7 @@
           ]
         },
         "whitelisted_addresses": {
-          "description": "Additional allowed addresses that can create pools. If empty, only owner can create pools",
+          "description": "Additional allowed addresses to create/manage pools. If empty, only owner can create/manage pools",
           "type": "array",
           "items": {
             "$ref": "#/definitions/Addr"
@@ -1618,11 +1643,15 @@
           "type": "object",
           "required": [
             "deposit",
+            "imbalanced_withdraw",
             "swap"
           ],
           "properties": {
             "deposit": {
               "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "imbalanced_withdraw": {
               "type": "boolean"
             },
             "swap": {
@@ -1847,11 +1876,15 @@
           "type": "object",
           "required": [
             "deposit",
+            "imbalanced_withdraw",
             "swap"
           ],
           "properties": {
             "deposit": {
               "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "imbalanced_withdraw": {
               "type": "boolean"
             },
             "swap": {
@@ -1868,10 +1901,10 @@
               "description": "Stable pool type",
               "type": "object",
               "required": [
-                "stable5_pool"
+                "stable_swap"
               ],
               "properties": {
-                "stable5_pool": {
+                "stable_swap": {
                   "type": "object",
                   "additionalProperties": false
                 }
@@ -2091,11 +2124,15 @@
           "type": "object",
           "required": [
             "deposit",
+            "imbalanced_withdraw",
             "swap"
           ],
           "properties": {
             "deposit": {
               "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "imbalanced_withdraw": {
               "type": "boolean"
             },
             "swap": {
@@ -2112,10 +2149,10 @@
               "description": "Stable pool type",
               "type": "object",
               "required": [
-                "stable5_pool"
+                "stable_swap"
               ],
               "properties": {
-                "stable5_pool": {
+                "stable_swap": {
                   "type": "object",
                   "additionalProperties": false
                 }
@@ -2202,11 +2239,15 @@
           "type": "object",
           "required": [
             "deposit",
+            "imbalanced_withdraw",
             "swap"
           ],
           "properties": {
             "deposit": {
               "description": "True if deposits are paused",
+              "type": "boolean"
+            },
+            "imbalanced_withdraw": {
               "type": "boolean"
             },
             "swap": {
@@ -2223,10 +2264,10 @@
               "description": "Stable pool type",
               "type": "object",
               "required": [
-                "stable5_pool"
+                "stable_swap"
               ],
               "properties": {
-                "stable5_pool": {
+                "stable_swap": {
                   "type": "object",
                   "additionalProperties": false
                 }

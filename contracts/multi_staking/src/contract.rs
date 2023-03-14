@@ -150,7 +150,7 @@ pub fn execute(
                 })?,
             });
 
-            let response = bond(deps, env, sender, lp_token, amount)?;
+            let response = bond(deps, env, sender.clone(), sender, lp_token, amount)?;
             Ok(response.add_message(transfer_msg))
         }
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info, lp_token, amount),
@@ -601,15 +601,17 @@ pub fn receive_cw20(
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     match from_binary(&cw20_msg.msg)? {
-        Cw20HookMsg::Bond {} => {
+        Cw20HookMsg::Bond { beneficiary_user } => {
             let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
-            bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
-        }
-        Cw20HookMsg::BondForBeneficiary { beneficiary } => {
-            let token_address = info.sender;
-            let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
-            bond(deps, env, beneficiary, token_address, cw20_msg.amount)
+            
+            let user = if let Some(beneficiary_user) = beneficiary_user {
+                deps.api.addr_validate(beneficiary_user.as_str())?
+            } else {
+                cw20_sender.clone()
+            };
+
+            bond(deps, env, cw20_sender.clone(), user, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::ProposeRewardSchedule {
             lp_token,
@@ -716,9 +718,19 @@ fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult
     Ok(())
 }
 
+/// This function is called when a user wants to bond their LP tokens either directly or through the vault
+/// This function will update the user's bond amount and the total bond amount for the given LP token
+/// ### Params:
+/// **sender**: This is the address that sent the cw20 token. 
+/// This is not necessarily the user address since vault can bond on behalf of the user
+/// **user**: This is the user address that owns the bonded tokens and will receive rewards
+/// This user is elligible to withdraw the tokens after unbonding and not the sender
+/// **lp_token**: The LP token address
+/// **amount**: The amount of LP tokens to bond
 pub fn bond(
     mut deps: DepsMut,
     env: Env,
+    sender: Addr,
     user: Addr,
     lp_token: Addr,
     amount: Uint128,
@@ -764,7 +776,8 @@ pub fn bond(
 
     // even though the msg sender might be a CW20 contract,
     // in the event, we are only concerned with the actual human sender
-    let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::bond"), user)
+    let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::bond"), sender)
+        .add_attribute("user", user)
         .add_attribute("lp_token", lp_token)
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
@@ -1248,7 +1261,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             to_binary(&creator_claimable_reward).map_err(ContractError::from)
         },
-        QueryMsg::Config => {
+        QueryMsg::Config {} => {
             let config = CONFIG.load(deps.storage)?;
             to_binary(&config).map_err(ContractError::from)
         }

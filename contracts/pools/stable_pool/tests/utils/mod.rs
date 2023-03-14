@@ -99,7 +99,7 @@ pub fn instantiate_contract_generic(
 
     let pool_configs = vec![PoolTypeConfig {
         code_id: stable5pool_code_id,
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         default_fee_info: fee_info.clone(),
         allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
         paused: PauseInfo::default(),
@@ -127,7 +127,7 @@ pub fn instantiate_contract_generic(
         .unwrap();
 
     let msg = VaultExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: native_asset_precisions.clone(),
         init_params: Some(
@@ -148,7 +148,7 @@ pub fn instantiate_contract_generic(
 
     assert_eq!(
         res.events[1].attributes[2],
-        attr("pool_type", "stable-5-pool")
+        attr("pool_type", "stable-swap")
     );
     let pool_res: PoolInfo = app
         .wrap()
@@ -161,7 +161,7 @@ pub fn instantiate_contract_generic(
         .unwrap();
 
     assert_eq!(Uint128::from(1u128), pool_res.pool_id);
-    assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
+    assert_eq!(PoolType::StableSwap {}, pool_res.pool_type);
 
     let current_block = app.block_info();
 
@@ -186,7 +186,7 @@ pub fn instantiate_contract_generic(
         pool_config_res.fee_info
     );
 
-    assert_eq!(PoolType::Stable5Pool {}, pool_config_res.pool_type);
+    assert_eq!(PoolType::StableSwap {}, pool_config_res.pool_type);
     assert_eq!(
         current_block.time.seconds(),
         pool_config_res.block_time_last

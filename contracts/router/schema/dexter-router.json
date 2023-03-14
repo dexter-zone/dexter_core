@@ -32,8 +32,8 @@
           "execute_multihop_swap": {
             "type": "object",
             "required": [
-              "multiswap_request",
-              "offer_amount"
+              "offer_amount",
+              "requests"
             ],
             "properties": {
               "minimum_receive": {
@@ -45,12 +45,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              "multiswap_request": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/HopSwapRequest"
-                }
               },
               "offer_amount": {
                 "$ref": "#/definitions/Uint128"
@@ -64,6 +58,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "requests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/HopSwapRequest"
+                }
               }
             },
             "additionalProperties": false
@@ -151,20 +151,14 @@
                 "type": "object",
                 "required": [
                   "minimum_receive",
-                  "multiswap_request",
                   "offer_asset",
                   "prev_ask_amount",
-                  "recipient"
+                  "recipient",
+                  "requests"
                 ],
                 "properties": {
                   "minimum_receive": {
                     "$ref": "#/definitions/Uint128"
-                  },
-                  "multiswap_request": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/HopSwapRequest"
-                    }
                   },
                   "offer_asset": {
                     "$ref": "#/definitions/AssetInfo"
@@ -174,6 +168,12 @@
                   },
                   "recipient": {
                     "$ref": "#/definitions/Addr"
+                  },
+                  "requests": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/HopSwapRequest"
+                    }
                   }
                 },
                 "additionalProperties": false

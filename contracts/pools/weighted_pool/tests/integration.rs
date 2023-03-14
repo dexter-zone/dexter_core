@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, Binary};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
@@ -357,7 +357,7 @@ fn test_update_config() {
         .execute_contract(
             alice_address.clone(),
             pool_addr.clone(),
-            &ExecuteMsg::UpdateConfig { params: None },
+            &ExecuteMsg::UpdateConfig { params: Binary::from(vec![]) },
             &[],
         )
         .unwrap_err();

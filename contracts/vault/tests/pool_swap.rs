@@ -258,7 +258,7 @@ fn test_swap() {
     // Execute Swap :: GiveIn Type
     // VAULT -::- Swap -::- Execution Function
     // Offer asset: token1 Ask asset: contract2 Swap Type: "give-in" Amount: 252000000
-    // --- Stable5Pool:OnSwap Query :: Start ---
+    // --- StableSwap Pool:OnSwap Query :: Start ---
     // SwapType::GiveIn
     // In compute_swap() fn, we calculate the new ask pool balance which is 753939768 and calculate the return amount (cur_pool_balance - new_pool_balance) which is 246060232
     // fee yet to be charged: 7381806, hence return amount (actual return amount - total_fee) = 238678426
@@ -320,7 +320,7 @@ fn test_swap() {
 
     // pause swaps specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: true, imbalanced_withdraw: false}),
@@ -347,7 +347,7 @@ fn test_swap() {
 
     // resume swaps specifically for stable 5 pool type
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
@@ -447,7 +447,7 @@ fn test_swap() {
     // Execute Swap :: GiveOut Type
     // VAULT -::- Swap -::- Execution Function
     // Offer asset: token1 Ask asset: contract2 Swap Type: "give-out" Amount: 252000000
-    // --- Stable5Pool:OnSwap Query :: Start ---
+    // --- StableSwap Pool:OnSwap Query :: Start ---
     // SwapType::GiveOut
     // In compute_offer_amount() fn, we calculate the new ask offer pool balance which is 1537249235 based on updated ask_pool balance which includes ask_amount + total fee yet to be charged. ask_amount = 252000000, ask_amount_before_commission = 259.793814
     // offer amount = 285249235, total fee = 7793814
@@ -544,7 +544,7 @@ fn test_swap() {
 
     // VAULT -::- Swap -::- Execution Function
     // Offer asset: token1 Ask asset: contract2 Swap Type: "give-out" Amount: 252000000
-    // --- Stable5Pool:OnSwap Query :: Start ---
+    // --- StableSwap Pool:OnSwap Query :: Start ---
     // SwapType::GiveOut
     // In compute_offer_amount() fn, we calculate the new ask offer pool balance which is 1537249235 based on updated ask_pool balance which includes ask_amount + total fee yet to be charged. ask_amount = 252000000, ask_amount_before_commission = 259.793814
     // offer amount = 285249235, total fee = 7793814

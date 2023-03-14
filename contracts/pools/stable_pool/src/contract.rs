@@ -64,7 +64,7 @@ pub fn instantiate(
         return Err(ContractError::InvalidNumberOfAssets {});
     }
 
-    // Stable5swap parameters
+    // StableSwap Pool parameters
     let params: StablePoolParams = from_binary(&msg.init_params.unwrap())?;
     if params.amp == 0 || params.amp > MAX_AMP {
         return Err(ContractError::IncorrectAmp {});
@@ -77,6 +77,12 @@ pub fn instantiate(
         .map(|a| a.asset_info.clone())
         .sorted()
         .collect_vec();
+
+    // validate that no duplicate asset_infos are present in scaling_factor_asset_infos
+    if scaling_factor_asset_infos.len() != scaling_factor_asset_infos.iter().unique().count() {
+        return Err(ContractError::DuplicateAssetInfoInScalingFactors);
+    }
+
     let pool_assets = msg.asset_infos.iter().sorted().cloned().collect_vec();
 
     // validate that scaling factor is a subset of the pool_assets by iterating
@@ -84,6 +90,13 @@ pub fn instantiate(
     for asset_info in scaling_factor_asset_infos {
         if !pool_assets.contains(&asset_info) {
             return Err(ContractError::InvalidScalingFactorAssetInfo);
+        }
+    }
+
+    // validate that scaling factor is greater than 0 for all the assets
+    for asset_scaling_factor in &params.scaling_factors {
+        if !(asset_scaling_factor.scaling_factor > Decimal256::zero()) {
+            return Err(ContractError::InvalidScalingFactor);
         }
     }
 
@@ -321,6 +334,9 @@ fn update_scaling_factor_manager(
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
     let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
 
+    // validate scaling factor manager address
+    deps.api.addr_validate(scaling_factor_manager.as_str())?;
+
     // Access Check :: Only Vault's Owner can execute this function
     if info.sender != vault_config.owner && info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
@@ -453,9 +469,9 @@ pub fn update_config(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    params: Option<Binary>,
+    params: Binary,
 ) -> Result<Response, ContractError> {
-    match from_binary::<StablePoolUpdateParams>(&params.unwrap())? {
+    match from_binary::<StablePoolUpdateParams>(&params)? {
         StablePoolUpdateParams::StartChangingAmp {
             next_amp,
             next_amp_time,
@@ -474,7 +490,7 @@ pub fn update_config(
     }
 }
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
-// ----------------x----------------x  :::: Stable5 POOL::QUERIES Implementation   ::::  x----------------x----------------
+// ----------------x----------------x  :::: StableSwap POOL::QUERIES Implementation   ::::  x----------------x----------------
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 
 /// ## Description
@@ -992,8 +1008,6 @@ pub fn query_on_swap(
             }
             .to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
 
-            let ask_asset_scaling_factor = scaling_factors.get(&ask_asset_info).cloned();
-
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
             (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
@@ -1003,7 +1017,7 @@ pub fn query_on_swap(
                 &offer_pool,
                 &ask_pool,
                 &pools,
-                ask_asset_scaling_factor.unwrap_or(Decimal256::one()),
+                ask_asset_scaling_factor,
             ) {
                 Ok(res) => res,
                 Err(err) => {

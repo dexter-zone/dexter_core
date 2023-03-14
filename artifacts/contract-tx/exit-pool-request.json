@@ -1,7 +1,0 @@
-{
-    "send": {
-        "amount": "10000",
-        "msg": "RECEIVE_BINARY_DATA",
-        "contract": "persistence14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sjvz4fk"
-    }   
-}

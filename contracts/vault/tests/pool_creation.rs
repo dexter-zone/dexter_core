@@ -94,7 +94,7 @@ fn test_create_pool_instance() {
     ];
 
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
         init_params: Some(to_binary(&StablePoolParams {
@@ -116,7 +116,7 @@ fn test_create_pool_instance() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     let pool_res: PoolInfo = app
         .wrap()
@@ -153,7 +153,7 @@ fn test_create_pool_instance() {
         pool_res.pool_addr
     );
     assert_eq!(assets, pool_res.assets);
-    assert_eq!(PoolType::Stable5Pool {}, pool_res.pool_type);
+    assert_eq!(PoolType::StableSwap {}, pool_res.pool_type);
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn test_pool_creation_whitelist() {
 
     // disable pool creation for everyone
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: Some(AllowPoolInstantiation::Nobody),
         new_fee_info: None,
         paused: None,
@@ -305,7 +305,7 @@ fn test_pool_creation_whitelist() {
 
     // enable pool creation for only whitelisted addresses
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         allow_instantiation: Some(AllowPoolInstantiation::OnlyWhitelistedAddresses),
         new_fee_info: None,
         paused: None,
@@ -473,7 +473,7 @@ fn test_pool_creation_fee() {
 
     // No pool creation fee
     let msg = ExecuteMsg::CreatePoolInstance {
-        pool_type: PoolType::Stable5Pool {},
+        pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
         init_params: Some(to_binary(&StablePoolParams { 
@@ -495,7 +495,7 @@ fn test_pool_creation_fee() {
         )
         .unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     // Add fee for pool creation
     let msg = ExecuteMsg::UpdateConfig {
@@ -578,7 +578,7 @@ fn test_pool_creation_fee() {
             &[coin(100_000_000u128, "uxprt")],
         ).unwrap();
 
-    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-5-pool"));
+    assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
     
     // validate that fee collector has received the fee
     let fee_collector = Addr::unchecked("fee_collector".to_string());

@@ -156,13 +156,11 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with incorrect next amp   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: MAX_AMP + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -178,13 +176,11 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with big difference between the old and new amp value   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 100 * MAX_AMP_CHANGE + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -200,13 +196,12 @@ fn test_update_config() {
     //  ########### Check :: Failure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
+        
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -225,13 +220,11 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -265,13 +258,11 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 15,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -291,7 +282,7 @@ fn test_update_config() {
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+        params: to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap(),
     };
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
         .unwrap();
@@ -310,12 +301,10 @@ fn test_update_config() {
 
     // Change max allowed spread limits for trades
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(90),
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[]).unwrap();
@@ -331,12 +320,10 @@ fn test_update_config() {
 
     // try updating max spread to an invalid value
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(100),
             })
             .unwrap(),
-        ),
     };
 
     let resp = app
@@ -438,7 +425,7 @@ fn test_query_on_join_pool() {
         },
     ];
 
-    // -------x---- Stable5Pool -::- QueryOnJoinPool ----x---------
+    // -------x---- StableSwap Pool -::- QueryOnJoinPool ----x---------
     // assets_in: Some([Asset { info: Token { contract_addr: Addr("contract1") }, amount: Uint128(1000) }, Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1000) }, Asset { info: AssetInfo::NativeToken { denom: "axlusd".to_string() }, amount: Uint128(1000) }])
     // assets_in sorted
     // act_assets_in: [Asset { info: AssetInfo::NativeToken { denom: "axlusd".to_string() }, amount: Uint128(1000) }, Asset { info: Token { contract_addr: Addr("contract1") }, amount: Uint128(1000) }, Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1000) }]
@@ -733,7 +720,7 @@ fn test_query_on_join_pool() {
         },
     ];
 
-    // -------x---- Stable5Pool -::- QueryOnJoinPool ----x---------
+    // -------x---- StableSwap Pool -::- QueryOnJoinPool ----x---------
     // asset:"axlusd" Provided amount:"109" Pool Liquidity:"1000"
     // asset:"contract1" Provided amount:"111" Pool Liquidity:"1000"
     // amp: 1000
@@ -904,7 +891,7 @@ fn test_query_on_join_pool() {
         },
     ];
 
-    // -------x---- Stable5Pool -::- QueryOnJoinPool ----x---------
+    // -------x---- StableSwap Pool -::- QueryOnJoinPool ----x---------
     // assets_in: Some([Asset { info: AssetInfo::NativeToken { denom: "axlusd".to_string() }, amount: Uint128(1090000000) }, Asset { info: Token { contract_addr: Addr("contract1") }, amount: Uint128(1110000000) }, Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1500000000) }])
     // assets_in sorted
     // act_assets_in: [Asset { info: AssetInfo::NativeToken { denom: "axlusd".to_string() }, amount: Uint128(1090000000) }, Asset { info: Token { contract_addr: Addr("contract1") }, amount: Uint128(1110000000) }, Asset { info: Token { contract_addr: Addr("contract2") }, amount: Uint128(1500000000) }]
@@ -1007,8 +994,8 @@ fn test_query_on_join_pool() {
         b.time = Timestamp::from_seconds(_current_block.time.seconds() + 90)
     });
 
-    // -------x---- Stable5Pool -::- QueryOnJoinPool ----x---------
-    // --- Stable5Pool:OnJoinPool Query : Begin ---
+    // -------x---- StableSwap Pool -::- QueryOnJoinPool ----x---------
+    // --- StableSwap Pool:OnJoinPool Query : Begin ---
     // init_d: 3691.212147126202104076
     // deposit_d: 5129.699875790924368109
     // Fee will be charged only during imbalanced provide i.e. if invariant D was changed
@@ -1034,7 +1021,7 @@ fn test_query_on_join_pool() {
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnExitPool for Stable5 Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnExitPool for StableSwap Pool and the returned  [`AfterExitResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::ExitPool - Token transfer from vault to recepient and LP tokens to be burnt are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
@@ -1701,7 +1688,7 @@ fn test_on_exit_pool() {
 }
 
 /// Tests the following -
-/// Pool::QueryMsg::OnSwap - for Stable5 Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
+/// Pool::QueryMsg::OnSwap - for StableSwap Pool and the returned  [`SwapResponse`] struct to check if the math calculations are correct
 /// Vault::ExecuteMsg::Swap - Token transfers of [`OfferAsset`], [`AskAsset`], and the fee charged are processed as expected and Balances are updated correctly
 /// Vault::ExecuteMsg::UpdateLiquidity - Executed by the Vault at the end of join pool tx execution to update pool balances as stored in the Pool contract which are used for computations
 #[test]
