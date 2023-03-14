@@ -338,10 +338,17 @@ pub enum ExecuteMsg {
         fee_info: Option<FeeInfo>,
         init_params: Option<Binary>,
     },
+    /// Updates the pool config for a pool with the specified `pool_id`.
+    /// This can be used to update the fee, pause info, etc. for a pool.
     UpdatePoolConfig {
         pool_id: Uint128,
         fee_info: Option<FeeInfo>,
-        paused: Option<PauseInfo>
+        paused: Option<PauseInfo>,
+    },
+    /// Updates the pool params for a pool with the specified `pool_id`.
+    UpdatePoolParams {
+        pool_id: Uint128,
+        params: Binary,
     },
 
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and

@@ -156,13 +156,11 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with incorrect next amp   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: MAX_AMP + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -178,13 +176,11 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with big difference between the old and new amp value   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 100 * MAX_AMP_CHANGE + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -200,13 +196,12 @@ fn test_update_config() {
     //  ########### Check :: Failure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds(),
             })
             .unwrap(),
-        ),
+        
     };
     let resp = app
         .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -225,13 +220,11 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -265,13 +258,11 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 15,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
@@ -291,7 +282,7 @@ fn test_update_config() {
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap()),
+        params: to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap(),
     };
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
         .unwrap();
@@ -310,12 +301,10 @@ fn test_update_config() {
 
     // Change max allowed spread limits for trades
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(90),
             })
             .unwrap(),
-        ),
     };
 
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[]).unwrap();
@@ -331,12 +320,10 @@ fn test_update_config() {
 
     // try updating max spread to an invalid value
     let msg = ExecuteMsg::UpdateConfig {
-        params: Some(
-            to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(100),
             })
             .unwrap(),
-        ),
     };
 
     let resp = app

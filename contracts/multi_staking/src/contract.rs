@@ -150,7 +150,7 @@ pub fn execute(
                 })?,
             });
 
-            let response = bond(deps, env, sender, lp_token, amount)?;
+            let response = bond(deps, env, sender.clone(), sender, lp_token, amount)?;
             Ok(response.add_message(transfer_msg))
         }
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info, lp_token, amount),
@@ -604,12 +604,13 @@ pub fn receive_cw20(
         Cw20HookMsg::Bond {} => {
             let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
-            bond(deps, env, cw20_sender, token_address, cw20_msg.amount)
+            bond(deps, env, cw20_sender.clone(), cw20_sender, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::BondForBeneficiary { beneficiary } => {
             let token_address = info.sender;
+            let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
             let beneficiary = deps.api.addr_validate(beneficiary.as_str())?;
-            bond(deps, env, beneficiary, token_address, cw20_msg.amount)
+            bond(deps, env, cw20_sender, beneficiary, token_address, cw20_msg.amount)
         }
         Cw20HookMsg::ProposeRewardSchedule {
             lp_token,
@@ -719,6 +720,7 @@ fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult
 pub fn bond(
     mut deps: DepsMut,
     env: Env,
+    sender: Addr,
     user: Addr,
     lp_token: Addr,
     amount: Uint128,
@@ -764,7 +766,8 @@ pub fn bond(
 
     // even though the msg sender might be a CW20 contract,
     // in the event, we are only concerned with the actual human sender
-    let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::bond"), user)
+    let event = Event::from_sender(concatcp!(CONTRACT_NAME, "::bond"), sender)
+        .add_attribute("user", user)
         .add_attribute("lp_token", lp_token)
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)

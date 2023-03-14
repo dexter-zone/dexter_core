@@ -201,6 +201,9 @@ pub fn execute(
             fee_info,
             paused,
         } => execute_update_pool_config(deps, info, pool_id, fee_info, paused),
+        ExecuteMsg::UpdatePoolParams { pool_id, params } => {
+            execute_update_pool_params(deps, info, pool_id, params)
+        },
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -542,6 +545,42 @@ fn execute_update_pool_config(
 
     Ok(response)
 }
+
+
+fn execute_update_pool_params(
+    deps: DepsMut,
+    info: MessageInfo,
+    pool_id: Uint128,
+    params: Binary,
+) -> Result<Response, ContractError> {
+    // permission check - only Owner can update any pool config.
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender.clone() != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    let pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
+
+    // Emit Event
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_params"), &info)
+        .add_attribute("pool_id", pool_id);
+
+    // create pool update config message and send it to the pool contract
+    let msg = WasmMsg::Execute {
+        contract_addr: pool.pool_addr.to_string(),
+        funds: vec![],
+        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateConfig {
+            params,
+        })?,
+    };
+
+    let response = Response::new()
+        .add_event(event)
+        .add_message(msg);
+
+    Ok(response)
+}
+
 
 fn execute_add_address_to_whitelist(
     deps: DepsMut,
