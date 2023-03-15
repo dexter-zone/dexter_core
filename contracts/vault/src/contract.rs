@@ -19,7 +19,7 @@ use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
 use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
-use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType};
+use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo};
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
@@ -716,7 +716,7 @@ pub fn execute_create_pool_instance(
     info: MessageInfo,
     pool_type: PoolType,
     mut asset_infos: Vec<AssetInfo>,
-    native_asset_precisions: Vec<(String, u8)>,
+    native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
     fee_info: Option<FeeInfo>,
     init_params: Option<Binary>,
 ) -> Result<Response, ContractError> {
@@ -747,14 +747,14 @@ pub fn execute_create_pool_instance(
         _ => None,
     }).sorted().collect_vec();
     
-    let denoms_of_precisions_supplied = native_asset_precisions.iter().map(|(k, _)| k).sorted().collect_vec();
+    let denoms_of_precisions_supplied = native_asset_precisions.iter().map(|k| &k.denom).sorted().collect_vec();
 
     if native_asset_denoms != denoms_of_precisions_supplied {
         return Err(ContractError::InvalidNativeAssetPrecisionList);
     }
     
     // We only support precisions upto 18 decimal places, reject if any asset has precision greater than 18
-    if native_asset_precisions.iter().any(|p| p.1 > 18) {
+    if native_asset_precisions.iter().any(|p| p.precision > 18) {
         return Err(ContractError::UnsupportedPrecision);
     }
 

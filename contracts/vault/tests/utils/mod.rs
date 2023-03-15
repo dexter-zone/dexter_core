@@ -7,7 +7,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
-    PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo,
+    PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo, NativeAssetPrecisionInfo,
 };
 use stable_pool::state::StablePoolParams;
 
@@ -299,7 +299,10 @@ pub fn initialize_stable_5_pool_2_asset(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![(denom0.clone(), 6u8)],
+        native_asset_precisions: vec![NativeAssetPrecisionInfo {
+            denom: denom0.clone(),
+            precision: 6u8,
+        }],
         init_params: Some(to_binary(&StablePoolParams {
             amp: 10u64,
             scaling_factor_manager: None,
@@ -366,7 +369,15 @@ pub fn initialize_stable_5_pool(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
+        native_asset_precisions: vec![
+            NativeAssetPrecisionInfo {
+                denom: denom0.clone(),
+                precision: 6u8,
+            },
+            NativeAssetPrecisionInfo {
+                denom: denom1.clone(),
+                precision: 6u8,
+            },],
         init_params: Some(to_binary(&StablePoolParams {
             amp: 10u64,
             scaling_factor_manager: None,
@@ -464,7 +475,15 @@ pub fn initialize_weighted_pool(
     let msg = ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![(denom0.clone(), 6u8), (denom1.clone(), 6u8)],
+        native_asset_precisions: vec![
+            NativeAssetPrecisionInfo {
+                denom: denom0.clone(),
+                precision: 6u8,
+            },
+            NativeAssetPrecisionInfo {
+                denom: denom1.clone(),
+                precision: 6u8,
+            },],
         init_params: Some(
             to_binary(&weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,

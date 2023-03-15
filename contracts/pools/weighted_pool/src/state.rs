@@ -45,20 +45,6 @@ pub struct Twap {
 // ----------------x----------------x----------------x----------------
 
 /// ## Description
-/// Store all token precisions and return the greatest one.
-pub(crate) fn store_precisions(deps: DepsMut, native_asset_precisions: &Vec<(String, u8)>, asset_infos: &[AssetInfo]) -> StdResult<u8> {
-    let mut max = 0u8;
-
-    for asset_info in asset_infos {
-        let precision = asset_info.decimals(native_asset_precisions, &deps.querier)?;
-        max = max.max(precision);
-        PRECISIONS.save(deps.storage, asset_info.to_string(), &precision)?;
-    }
-
-    Ok(max)
-}
-
-/// ## Description
 /// Loads precision of the given asset info.
 pub(crate) fn get_precision(storage: &dyn Storage, asset_info: &AssetInfo) -> StdResult<u8> {
     PRECISIONS.load(storage, asset_info.to_string())

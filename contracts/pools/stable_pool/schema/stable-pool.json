@@ -55,19 +55,7 @@
         "description": "Native asset precisions",
         "type": "array",
         "items": {
-          "type": "array",
-          "items": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          ],
-          "maxItems": 2,
-          "minItems": 2
+          "$ref": "#/definitions/NativeAssetPrecisionInfo"
         }
       },
       "pool_id": {
@@ -164,6 +152,24 @@
           "total_fee_bps": {
             "type": "integer",
             "format": "uint16",
+            "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
+      },
+      "NativeAssetPrecisionInfo": {
+        "type": "object",
+        "required": [
+          "denom",
+          "precision"
+        ],
+        "properties": {
+          "denom": {
+            "type": "string"
+          },
+          "precision": {
+            "type": "integer",
+            "format": "uint8",
             "minimum": 0.0
           }
         },

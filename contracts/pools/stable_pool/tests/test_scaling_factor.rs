@@ -15,6 +15,7 @@ use dexter::pool::{AfterExitResponse, AfterJoinResponse, ExitType, QueryMsg as P
 use dexter::vault::{Cw20HookMsg, ExecuteMsg, FeeInfo, PoolInfoResponse, QueryMsg};
 use itertools::Itertools;
 use dexter::vault;
+
 use stable_pool::state::AssetScalingFactor;
 
 pub mod utils;

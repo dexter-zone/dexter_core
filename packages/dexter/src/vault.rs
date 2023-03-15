@@ -98,6 +98,12 @@ impl FeeInfo {
     }
 }
 
+#[cw_serde]
+pub struct NativeAssetPrecisionInfo {
+    pub denom: String,
+    pub precision: u8,
+}
+
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Generic struct Types      x----------------x-------------------
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -172,7 +178,7 @@ pub struct TmpPoolInfo {
     /// Assets and their respective balances
     pub assets: Vec<Asset>,
     /// Native asset precisions
-    pub native_asset_precisions: Vec<(String, u8)>,
+    pub native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
     /// The pools type (provided in a [`PoolType`])
     pub pool_type: PoolType,
     /// Object of type [`Binary`] which contains any custom params required by the Pool instance for its initialization.
@@ -334,7 +340,7 @@ pub enum ExecuteMsg {
     CreatePoolInstance {
         pool_type: PoolType,
         asset_infos: Vec<AssetInfo>,
-        native_asset_precisions: Vec<(String, u8)>,
+        native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
         fee_info: Option<FeeInfo>,
         init_params: Option<Binary>,
     },

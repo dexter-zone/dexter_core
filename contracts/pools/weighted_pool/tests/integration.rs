@@ -6,7 +6,7 @@ use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, FeeStructs, QueryMsg, ResponseType, SwapResponse};
-use dexter::vault;
+use dexter::vault::{self, NativeAssetPrecisionInfo};
 use dexter::vault::{
     Cw20HookMsg, ExecuteMsg as VaultExecuteMsg, FeeInfo, InstantiateMsg as VaultInstantiateMsg, PauseInfo,
     PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
@@ -199,7 +199,10 @@ fn instantiate_contracts_instance(
     let msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![("xprt".to_string(), 6u8)],
+        native_asset_precisions: vec![NativeAssetPrecisionInfo {
+            denom: "xprt".to_string(),
+            precision: 6,
+        }],
         init_params: Some(
             to_binary(&WeightedParams {
                 weights: asset_infos_with_weights,
@@ -1983,7 +1986,10 @@ fn test_join_pool_large_liquidity() {
     let pool_msg = VaultExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.to_vec(),
-        native_asset_precisions: vec![("xprt".to_string(), 6u8)],
+        native_asset_precisions: vec![NativeAssetPrecisionInfo {
+            denom: "xprt".to_string(),
+            precision: 6,
+        }],
         init_params: Some(
             to_binary(&WeightedParams {
                 weights: asset_infos_with_weights,
