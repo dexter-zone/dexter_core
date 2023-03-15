@@ -8,16 +8,13 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, EventExt, select_pools};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, update_fee, ExitType};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, store_precisions, SwapResponse, Trade, update_fee, ExitType};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
 use crate::error::ContractError;
 use crate::math::get_normalized_weight;
-use crate::state::{
-    get_precision, get_weight, store_precisions, store_weights, MathConfig, Twap, WeightedAsset,
-    WeightedParams, CONFIG, MATHCONFIG, TWAPINFO,
-};
+use crate::state::{get_precision, get_weight, store_weights, MathConfig, Twap, WeightedAsset, WeightedParams, CONFIG, MATHCONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{
     accumulate_prices, calc_single_asset_join, compute_offer_amount, compute_swap,
     maximal_exact_ratio_join, transform_to_decimal_asset, update_pool_state_for_joins,
@@ -111,7 +108,7 @@ pub fn instantiate(
     store_weights(deps.branch(), asset_weights)?;
 
     // Store token precisions in the storage
-    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos)?;
+    let greatest_precision = store_precisions(deps.branch(), &msg.native_asset_precisions, &msg.asset_infos, PRECISIONS)?;
 
     // Initializing cumulative prices
     let mut cumulative_prices = vec![];

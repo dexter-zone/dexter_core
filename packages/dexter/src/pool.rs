@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
@@ -5,7 +6,7 @@ use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
 use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
-use cw_storage_plus::Item;
+use cw_storage_plus::{Item, Map};
 use crate::helper::{EventExt};
 
 /// The default spread (0.5%)
@@ -336,4 +337,39 @@ pub fn return_swap_failure(error: String) -> SwapResponse {
         response: ResponseType::Failure(error),
         fee: None,
     }
+}
+
+
+/// ## Description
+/// Store all token precisions and return the greatest one.
+pub fn store_precisions(
+    deps: DepsMut,
+    native_asset_precisions: &Vec<NativeAssetPrecisionInfo>,
+    asset_infos: &[AssetInfo],
+    precisions: Map<String, u8>,
+) -> StdResult<u8> {
+    let mut max = 0u8;
+
+    let native_asset_precisions = native_asset_precisions
+        .into_iter()
+        .map(|info| (info.denom.clone(), info.precision))
+        .collect::<HashMap<String, u8>>();
+
+    for asset_info in asset_infos {
+        let precision = match asset_info {
+            AssetInfo::NativeToken { denom } => {
+                native_asset_precisions.get(&denom.clone()).cloned().unwrap()
+            },
+            AssetInfo::Token { contract_addr } => {
+                let res: cw20::TokenInfoResponse =
+                    deps.querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;
+
+                res.decimals
+            }
+        };
+        max = max.max(precision);
+        precisions.save(deps.storage, asset_info.to_string(), &precision)?;
+    }
+
+    Ok(max)
 }

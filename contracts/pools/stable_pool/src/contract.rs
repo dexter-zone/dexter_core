@@ -12,18 +12,9 @@ use std::vec;
 
 use crate::error::ContractError;
 use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use crate::state::{
-    get_precision, store_precisions, AssetScalingFactor, MathConfig, StablePoolParams,
-    StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG,
-    TWAPINFO,
-};
+use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{
-    return_exit_failure, return_join_failure, return_swap_failure,
-    AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse,
-    CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg,
-    QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee,
-};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee, store_precisions};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools, EventExt};
@@ -124,6 +115,7 @@ pub fn instantiate(
         deps.branch(),
         &msg.native_asset_precisions,
         &msg.asset_infos,
+        PRECISIONS,
     )?;
     // We cannot have precision greater than what is supported by Decimal type
     if greatest_precision > (Decimal::DECIMAL_PLACES as u8) {

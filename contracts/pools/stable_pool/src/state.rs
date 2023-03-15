@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{DepsMut, StdResult, Storage, Uint128, Addr, Decimal256, Decimal};
+use cosmwasm_std::{StdResult, Storage, Uint128, Addr, Decimal256, Decimal};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::AssetInfo;
 use dexter::pool::Config;
-use dexter::vault::NativeAssetPrecisionInfo;
 
 /// ## Description
 /// Stores config at the given key
@@ -134,36 +133,6 @@ pub enum StablePoolUpdateParams {
 
 /// Stores map of AssetInfo (as String) -> precision
 pub const PRECISIONS: Map<String, u8> = Map::new("precisions");
-
-/// ## Description
-/// Store all token precisions and return the greatest one.
-pub(crate) fn store_precisions(deps: DepsMut, native_asset_precisions: &Vec<NativeAssetPrecisionInfo>, asset_infos: &[AssetInfo]) -> StdResult<u8> {
-    let mut max = 0u8;
-
-    for asset_info in asset_infos {   
-        let querier = &deps.querier;
-        let precision = match asset_info {
-            AssetInfo::NativeToken { denom } => {
-                let precision = native_asset_precisions
-                    .iter()
-                    .find(|info| &info.denom.clone() == denom)
-                    .unwrap()
-                    .precision;
-                precision
-            },
-            AssetInfo::Token { contract_addr } => {
-                let res: cw20::TokenInfoResponse =
-                    querier.query_wasm_smart(contract_addr, &cw20::Cw20QueryMsg::TokenInfo {})?;
-
-                res.decimals
-            }
-        };
-        max = max.max(precision);
-        PRECISIONS.save(deps.storage, asset_info.to_string(), &precision)?;
-    }
-
-    Ok(max)
-}
 
 /// ## Description
 /// Loads precision of the given asset info.
