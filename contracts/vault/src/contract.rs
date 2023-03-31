@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use const_format::concatcp;
 
 use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
-use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner};
+use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, DEFAULT_LIMIT, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, MAX_LIMIT, propose_new_owner};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
 use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo};
@@ -1860,6 +1860,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
         QueryMsg::QueryRegistry { pool_type } => to_binary(&query_registry(deps, pool_type)?),
+        QueryMsg::Pools { start_after, limit } => to_binary(&query_pools(deps, start_after, limit)?),
         QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
@@ -1885,6 +1886,30 @@ pub fn query_registry(deps: Deps, pool_type: PoolType) -> StdResult<PoolTypeConf
                 ContractError::PoolTypeConfigNotFound {}.to_string(),
             )))?;
     Ok(Some(pool_config))
+}
+
+/// ## Description - Returns the current stored state of the queried pools
+///
+/// ## Params
+/// * **start_after** is the object of type [`Uint128`]. Its the pool id after which you want to query the pool states.
+/// * **limit** is the number of pools you want in a page.
+pub fn query_pools(deps: Deps, start_after: Option<Uint128>, limit: Option<u32>) -> StdResult<Vec<PoolInfoResponse>> {
+    let config = CONFIG.load(deps.storage)?;
+
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
+    let start = start_after.unwrap_or_default().u128() + 1u128;
+
+    let mut end = start + Uint128::from(limit).u128();
+    if end > config.next_pool_id.u128() {
+        end = config.next_pool_id.u128();
+    }
+
+    let mut response: Vec<PoolInfoResponse>= vec![];
+    for pool_id in start..end {
+        response.push(ACTIVE_POOLS.load(deps.storage, Uint128::from(pool_id).to_string().as_bytes())?);
+    }
+
+    Ok(response)
 }
 
 /// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure

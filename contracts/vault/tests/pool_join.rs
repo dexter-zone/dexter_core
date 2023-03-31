@@ -8,7 +8,8 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
-use dexter::vault::{ExecuteMsg, PauseInfo, PoolType};
+use dexter::vault::{ExecuteMsg, PauseInfo, PoolInfoResponse, PoolType, QueryMsg};
+use dexter::vault::PoolType::{StableSwap, Weighted};
 
 use crate::utils::{
     increase_token_allowance, initialize_3_tokens,
@@ -93,6 +94,19 @@ fn test_join_pool() {
         Uint128::new(10000000_000000u128),
     );
 
+    // check pools query before creating pools
+    let pool_infos: Vec<PoolInfoResponse> = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::Pools {
+                start_after: None,
+                limit: None
+            },
+        )
+        .unwrap();
+    assert_eq!(pool_infos.len(), 0);
+
     // Create STABLE-5-POOL pool
     let (stable5_pool_addr, stable5_lp_token_addr, stable5_pool_id) = initialize_stable_5_pool(
         &mut app,
@@ -115,6 +129,48 @@ fn test_join_pool() {
         denom0.clone(),
         denom1.clone(),
     );
+
+    // check pools query after creating pools
+    let pool_infos: Vec<PoolInfoResponse> = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::Pools {
+                start_after: None,
+                limit: None
+            },
+        )
+        .unwrap();
+    assert_eq!(pool_infos.len(), 2);
+    assert_eq!(pool_infos[0].pool_type, StableSwap {});
+    assert_eq!(pool_infos[1].pool_type, Weighted {});
+
+    // check pools query with custom start & limit
+    let pool_infos: Vec<PoolInfoResponse> = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::Pools {
+                start_after: Some(Uint128::one()),
+                limit: Some(1)
+            },
+        )
+        .unwrap();
+    assert_eq!(pool_infos.len(), 1);
+    assert_eq!(pool_infos[0].pool_type, Weighted {});
+
+    // check pools query for non-existent pools
+    let pool_infos: Vec<PoolInfoResponse> = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::Pools {
+                start_after: Some(Uint128::from(2u128)),
+                limit: None
+            },
+        )
+        .unwrap();
+    assert_eq!(pool_infos.len(), 0);
 
     // -------x---------- STABLE-5-POOL -::- PROVIDE LIQUIDITY -------x----------
     // -------x---------- -------x---------- -------x---------- -------x----------

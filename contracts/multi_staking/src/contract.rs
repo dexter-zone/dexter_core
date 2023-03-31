@@ -25,7 +25,7 @@ use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 use cw2::set_contract_version;
 use cw_storage_plus::Bound;
 use dexter::asset::Asset;
-use dexter::helper::{EventExt};
+use dexter::helper::{DEFAULT_LIMIT, EventExt, MAX_LIMIT};
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
     RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS,
@@ -1065,10 +1065,6 @@ pub fn withdraw(
     );
     Ok(response)
 }
-
-// settings for pagination
-const MAX_LIMIT: u32 = 30;
-const DEFAULT_LIMIT: u32 = 10;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
