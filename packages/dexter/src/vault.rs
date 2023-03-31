@@ -434,6 +434,9 @@ pub enum QueryMsg {
     /// Return PoolConfig
     #[returns(PoolTypeConfigResponse)]
     QueryRegistry { pool_type: PoolType },
+    /// Returns the info of all the pools matching the given pagination params
+    #[returns(Vec<PoolInfoResponse>)]
+    Pools { start_after: Option<Uint128>, limit: Option<u32> },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
     GetPoolById { pool_id: Uint128 },
