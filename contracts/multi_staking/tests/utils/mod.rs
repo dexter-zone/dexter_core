@@ -26,8 +26,10 @@ pub fn instantiate_multi_staking_contract(
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
         unlock_period: 1000,
+        keeper_addr: None,
         // 3 day delay
         minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
+        instant_unbond_fee_bp: 500u64,
     };
 
     let multi_staking_instance = app
@@ -364,6 +366,40 @@ pub fn unbond_lp_tokens(
         sender.clone(), 
         multistaking_contract.clone(),
         &ExecuteMsg::Unbond { lp_token: lp_token_addr.clone(), amount: Some(amount) },
+        &vec![],
+    )
+}
+
+pub fn instant_unbond_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    sender: &Addr,
+    amount: Uint128,
+) -> anyhow::Result<AppResponse> {
+    app.execute_contract(
+        sender.clone(), 
+        multistaking_contract.clone(),
+        &ExecuteMsg::InstantUnbond { lp_token: lp_token_addr.clone(), amount },
+        &vec![],
+    )
+}
+
+pub fn instant_unlock_lp_tokens(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    sender: &Addr,
+    token_lock_ids: Vec<u64>
+) -> anyhow::Result<AppResponse> {
+    let msg = ExecuteMsg::InstantUnlock {
+        lp_token: lp_token_addr.clone(), 
+        token_lock_ids
+    };
+    app.execute_contract(
+        sender.clone(), 
+        multistaking_contract.clone(),
+        &msg,
         &vec![],
     )
 }

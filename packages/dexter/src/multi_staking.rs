@@ -17,11 +17,20 @@ pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 pub struct InstantiateMsg {
     pub owner: Addr,
     pub unlock_period: u64,
-    pub minimum_reward_schedule_proposal_start_delay: u64
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub keeper_addr: Option<Addr>,
+    /// value between 0 and 1000 (0% to 10%) are allowed
+    pub instant_unbond_fee_bp: u64,
 }
 
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V2 {
+        keeper_addr: Option<Addr>,
+        /// value between 0 and 10 (0% to 10%) are allowed
+        instant_unbond_fee_percentage: u64,
+    }
+}
 
 #[cw_serde]
 pub struct AssetRewardState {
@@ -108,6 +117,8 @@ pub struct ReviewProposedRewardSchedule {
 pub struct Config {
     /// owner has privilege to add/remove allowed lp tokens for reward
     pub owner: Addr,
+    /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
+    pub keeper: Option<Addr>,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds
@@ -116,7 +127,10 @@ pub struct Config {
     pub unlock_period: u64,
     /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
     /// This is to give enough time to review the proposal.
-    pub minimum_reward_schedule_proposal_start_delay: u64
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
+    /// value between 0 and 1000 (0% to 10%) are allowed
+    pub instant_unbond_fee_bp: u64,
 }
 
 #[cw_serde]
@@ -291,10 +305,27 @@ pub enum ExecuteMsg {
         lp_token: Addr,
         amount: Option<Uint128>,
     },
+    /// Instantly unbonds LP tokens from the contract.
+    /// No locking period is applied. The tokens are withdrawn from the contract and sent to the user.
+    /// A penalty is applied to the amount being unbonded.
+    /// The penalty is calculated as a percentage of the amount being unbonded and sent to the contract keeper as a fee.
+    InstantUnbond {
+        lp_token: Addr,
+        amount: Uint128,
+    },
     /// Unlocks the tokens which are locked for a locking period.
     /// After unlocking, the tokens are withdrawn from the contract and sent to the user.
     Unlock {
         lp_token: Addr,
+    },
+    /// Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
+    /// which are in a locked state post normal unbonding.
+    /// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
+    /// occurs and the user has the LP tokens in a locked state after unbonding.
+    /// Penalty fee is same as instant unbonding.
+    InstantUnlock {
+        lp_token: Addr,
+        token_lock_ids: Vec<u64>,
     },
     /// Allows to withdraw unbonded rewards for a specific LP token.
     /// The rewards are sent to the user's address.
