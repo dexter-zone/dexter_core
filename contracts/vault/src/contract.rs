@@ -1864,6 +1864,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetPoolByAddress { pool_addr } => {
             to_binary(&query_pool_by_addr(deps, pool_addr)?)
         }
+        QueryMsg::GetPoolByLpTokenAddress { lp_token_addr } => {
+            to_binary(&query_pool_by_lp_token_addr(deps, lp_token_addr)?)
+        }
     }
 }
 
@@ -1905,6 +1908,15 @@ pub fn query_pool_by_addr(deps: Deps, pool_addr: String) -> StdResult<PoolInfoRe
         msg: to_binary(&dexter::pool::QueryMsg::PoolId {})?,
     }))?;
 
+    ACTIVE_POOLS.load(deps.storage, pool_id.to_string().as_bytes())
+}
+
+/// ## Description - Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure
+/// 
+/// ## Params
+/// * **lp_token_addr** is the object of type [`String`]. Its the lp token address for which the state is requested.
+pub fn query_pool_by_lp_token_addr(deps: Deps, lp_token_addr: String) -> StdResult<PoolInfoResponse> {
+    let pool_id = LP_TOKEN_TO_POOL_ID.load(deps.storage, lp_token_addr.as_bytes())?;
     ACTIVE_POOLS.load(deps.storage, pool_id.to_string().as_bytes())
 }
 

@@ -73,6 +73,7 @@ fn instantiate_contracts(
     let keeper_code_id = router.store_code(keeper_contract);
     let k_msg = dexter::keeper::InstantiateMsg {
         owner: keeper_admin,
+        vault_address: vault_instance.clone(),
     };
     let keeper_instance = router
         .instantiate_contract(

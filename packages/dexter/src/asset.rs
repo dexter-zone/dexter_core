@@ -309,6 +309,19 @@ impl Asset {
         }
     }
 
+    pub fn query_for_balance(&self, querier: &QuerierWrapper, addr: &Addr) -> StdResult<Uint128> {
+        match &self.info {
+            AssetInfo::NativeToken { denom } => {
+                let balance = query_balance(querier, addr.clone(), denom.clone())?;
+                Ok(balance)
+            },
+            AssetInfo::Token { contract_addr } => {
+                let balance = query_token_balance(querier, contract_addr.clone(), addr.clone())?;
+                Ok(balance)
+            }
+        }
+    }
+
     pub fn to_decimal_asset(&self, precision: impl Into<u32>) -> StdResult<DecimalAsset> {
         Ok(DecimalAsset {
             info: self.info.clone(),

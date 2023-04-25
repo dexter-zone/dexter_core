@@ -11,6 +11,8 @@ use cosmwasm_std::{Addr, Uint128};
 pub struct InstantiateMsg {
     /// Owner address
     pub owner: Addr,
+    /// Vault contract address
+    pub vault_address: Addr,
 }
 
 
@@ -20,6 +22,8 @@ pub struct InstantiateMsg {
 pub struct Config {
     /// admin address
     pub owner: Addr,
+    /// Vault contract address
+    pub vault_address: Addr,
 }
 
 /// This struct describes the functions that can be executed in this contract.
@@ -34,6 +38,18 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// The recipient address. If None, the owner address will be used
         recipient: Option<Addr>,
+    },
+     /// Exit LP tokens that are received as part of instant LP unbonding fee to contain the base assets of the pool only
+     ExitLPTokens {
+        lp_token_address: String,
+        amount: Uint128,
+    },
+    /// Swap an asset contained in the keeper for a different asset using Dexter pools
+    SwapAsset{
+        offer_asset: Asset,
+        ask_asset_info: AssetInfo,
+        min_ask_amount: Option<Uint128>,
+        pool_id: Uint128
     },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {

@@ -442,6 +442,9 @@ pub enum QueryMsg {
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
     GetPoolByAddress { pool_addr: String },
+    /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
+    #[returns(PoolInfoResponse)]
+    GetPoolByLpTokenAddress { lp_token_addr: String },
 }
 
 /// ## Description -  This struct describes a migration message.

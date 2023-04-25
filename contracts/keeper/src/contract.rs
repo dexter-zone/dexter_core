@@ -3,11 +3,14 @@ use crate::error::ContractError;
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use const_format::concatcp;
-use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128};
+use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128, CosmosMsg, WasmMsg, Coin, Decimal};
 use cw2::set_contract_version;
+use cw20::{Cw20ExecuteMsg, Cw20QueryMsg};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
+use dexter::querier::query_token_balance;
+use dexter::vault::{Cw20HookMsg, PoolInfo, ExitType, SingleSwapRequest};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -39,6 +42,7 @@ pub fn instantiate(
 
     let cfg = Config {
         owner: deps.api.addr_validate(msg.owner.as_str())?,
+        vault_address: deps.api.addr_validate(msg.vault_address.as_str())?,
     };
 
     CONFIG.save(deps.storage, &cfg)?;
@@ -79,6 +83,12 @@ pub fn execute(
             amount,
             recipient,
         } => withdraw(deps, env, info, asset, amount, recipient),
+        ExecuteMsg::ExitLPTokens { lp_token_address, amount } => {
+            exit_lp_tokens(deps, env, info, lp_token_address, amount)
+        }
+        ExecuteMsg::SwapAsset { offer_asset, ask_asset_info, min_ask_amount, pool_id } => {
+            swap_asset(deps, env, info, pool_id, offer_asset, ask_asset_info, min_ask_amount)
+        }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -153,6 +163,172 @@ fn withdraw(
     )
 }
 
+fn create_dexter_exit_pool_msg(
+    deps: DepsMut,
+    env: &Env,
+    lp_token_address: Addr,
+    amount: Uint128,
+    sender: Addr,
+    recipient: Option<Addr>
+) -> Result<CosmosMsg, ContractError> {
+
+    let recipient = recipient.unwrap_or(sender.clone());
+    let recipient = recipient.to_string();
+    let sender = sender.to_string();
+
+    let config  = CONFIG.load(deps.storage)?;
+
+    let lp_token = deps.querier.query_wasm_smart(
+        lp_token_address.to_string(),
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+
+    let pool_info: PoolInfo = deps.querier.query_wasm_smart(
+        config.vault_address.to_string(),
+        &dexter::vault::QueryMsg::GetPoolByLpTokenAddress {
+            lp_token_addr: lp_token_address.to_string(),
+        }
+    )?;
+
+    let msg = Cw20ExecuteMsg::Send {
+        contract: lp_token_address.to_string(),
+        amount,
+        msg: to_binary(&Cw20HookMsg::ExitPool {
+            pool_id: pool_info.pool_id,
+            recipient: Some(recipient),
+            exit_type: ExitType::ExactLpBurn { 
+                lp_to_burn: amount,
+                min_assets_out: None 
+            }
+        })?,
+    };
+
+    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lp_token_address.to_string(),
+        funds: vec![],
+        msg: to_binary(&msg)?,
+    }))
+}
+
+
+/// Exits the specified amount of LP tokens using the specific Pool in the Dexter.
+/// This is done so keeper mostly holds the base assets rather than LP tokens
+fn exit_lp_tokens(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    lp_token_address: String,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
+    // Permission check
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // query the lp token balance using CW20 query
+    let lp_token_address = deps.api.addr_validate(lp_token_address.as_str())?;
+    let lp_token_balance = query_token_balance(
+        &deps.querier,
+        lp_token_address.clone(),
+        env.contract.address.clone(),
+    )?;
+
+    // Validate if we have enough balance as much as the owner wants to exit
+    if lp_token_balance < amount {
+        return Err(ContractError::InsufficientBalance);
+    }
+
+    // Create a dexter exit pool message and return the exited funds to the keeper itself
+    let tranfer_msg = create_dexter_exit_pool_msg(
+        deps,
+        &env,
+        lp_token_address.clone(),
+        amount,
+        env.contract.address.clone(),
+        Some(env.contract.address.clone()),
+    )?;
+
+    Ok(Response::new()
+        .add_message(tranfer_msg)
+        .add_event(
+            Event::from_info(concatcp!(CONTRACT_NAME, "::exit_lp_tokens"), &info)
+                .add_attribute("lp_token_address", lp_token_address.to_string())
+                .add_attribute("amount", amount.to_string())
+        )
+    )
+}
+
+/// Swaps the specified amount of the specified asset for another asset using the Dexter protocol.
+/// Returns a [`ContractError`] on failure.
+fn swap_asset(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    pool_id: Uint128,
+    offer_asset: Asset,
+    ask_asset_info: AssetInfo,
+    min_receive: Option<Uint128>
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
+    // Permission check
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Validate if we have enough balance
+    let balance = offer_asset.query_for_balance(&deps.querier, &env.contract.address)?;
+    if balance < offer_asset.amount {
+        return Err(ContractError::InsufficientBalance);
+    }
+
+    // Create a dexter swap message and return the swapped funds to the keeper itself
+    let swap_msg = dexter::vault::ExecuteMsg::Swap {
+        swap_request: SingleSwapRequest {
+            pool_id,
+            asset_in: offer_asset.info.clone(),
+            asset_out: ask_asset_info.clone(),
+            swap_type: dexter::vault::SwapType::GiveIn {},
+            amount: offer_asset.amount,
+            max_spread: Some(Decimal::from_ratio(5u128, 100u128)),
+            belief_price: None,
+        },
+        recipient: Some(env.contract.address.to_string()),
+        min_receive,
+        max_spend: None,
+    };
+
+    let swap_send_funds = if let AssetInfo::NativeToken { denom } = &offer_asset.info {
+        vec![Coin {
+            denom: denom.clone(),
+            amount: offer_asset.amount,
+        }]
+    } else {
+        vec![]
+    };
+
+    let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: config.vault_address.to_string(),
+        funds: swap_send_funds,
+        msg: to_binary(&swap_msg)?,
+    });
+
+    Ok(Response::new()
+        .add_message(cosmos_msg)
+        .add_event(
+            Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
+                .add_attribute("pool_id", pool_id.to_string())
+                .add_attribute("offer_asset", offer_asset.to_string())
+                .add_attribute("ask_asset_info", ask_asset_info.to_string())
+                .add_attribute("min_receive", min_receive.unwrap_or_default().to_string())
+        )
+    )
+}
+
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 // ----------------x----------------x  :::: Keeper::QUERIES Implementation   ::::  x----------------x----------------
@@ -186,6 +362,7 @@ fn query_get_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
         owner: config.owner,
+        vault_address: config.vault_address,
     })
 }
 

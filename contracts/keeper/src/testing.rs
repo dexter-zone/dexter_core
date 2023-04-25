@@ -15,6 +15,7 @@ fn proper_initialization() {
 
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
+        vault_address: Addr::unchecked("vault"),
     };
     let res = instantiate(deps.as_mut(), env, info, instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
@@ -24,6 +25,7 @@ fn proper_initialization() {
         state,
         Config {
             owner: admin,
+            vault_address: Addr::unchecked("vault"),
         }
     )
 }
