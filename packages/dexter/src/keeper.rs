@@ -77,7 +77,11 @@ pub enum QueryMsg {
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V2 {
+        vault_address: String,
+    }
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------

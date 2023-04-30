@@ -4,8 +4,8 @@ use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use const_format::concatcp;
 use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128, CosmosMsg, WasmMsg, Coin, Decimal};
-use cw2::set_contract_version;
-use cw20::{Cw20ExecuteMsg, Cw20QueryMsg};
+use cw2::{set_contract_version, get_contract_version};
+use cw20::{Cw20ExecuteMsg};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
@@ -16,6 +16,8 @@ use dexter::vault::{Cw20HookMsg, PoolInfo, ExitType, SingleSwapRequest};
 const CONTRACT_NAME: &str = "dexter-keeper";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -165,7 +167,8 @@ fn withdraw(
 
 fn create_dexter_exit_pool_msg(
     deps: DepsMut,
-    env: &Env,
+    _env: &Env,
+    vault_address: Addr,
     lp_token_address: Addr,
     amount: Uint128,
     sender: Addr,
@@ -174,16 +177,8 @@ fn create_dexter_exit_pool_msg(
 
     let recipient = recipient.unwrap_or(sender.clone());
     let recipient = recipient.to_string();
-    let sender = sender.to_string();
 
     let config  = CONFIG.load(deps.storage)?;
-
-    let lp_token = deps.querier.query_wasm_smart(
-        lp_token_address.to_string(),
-        &Cw20QueryMsg::Balance {
-            address: env.contract.address.to_string(),
-        },
-    )?;
 
     let pool_info: PoolInfo = deps.querier.query_wasm_smart(
         config.vault_address.to_string(),
@@ -193,7 +188,7 @@ fn create_dexter_exit_pool_msg(
     )?;
 
     let msg = Cw20ExecuteMsg::Send {
-        contract: lp_token_address.to_string(),
+        contract: vault_address.to_string(),
         amount,
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: pool_info.pool_id,
@@ -246,6 +241,7 @@ fn exit_lp_tokens(
     let tranfer_msg = create_dexter_exit_pool_msg(
         deps,
         &env,
+        config.vault_address,
         lp_token_address.clone(),
         amount,
         env.contract.address.clone(),
@@ -400,6 +396,39 @@ fn query_get_balances(deps: Deps, env: Env, assets: Vec<AssetInfo>) -> StdResult
 /// * **_env** is the object of type [`Env`].
 /// * **_msg** is the object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    match msg {
+        MigrateMsg::V2 {
+            vault_address,
+        } => {
+            // verify if we are running on V1 right now
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(StdError::generic_err(format!(
+                    "V2 upgrade is only supported over contract version {}. Current version is {}",
+                    CONTRACT_VERSION_V1,
+                    contract_version.version
+                )));
+            }
+
+            // validate vault address
+            let vault_address = deps.api.addr_validate(&vault_address)?;
+
+            // if vault address is not provided, check if it is valid by querying the config and parsing the response
+            let _config: dexter::vault::ConfigResponse = deps.querier.query_wasm_smart(
+                &vault_address,
+                &dexter::vault::QueryMsg::Config {},
+            )?;
+        
+
+            // update contract version
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+            // update config
+            let mut config = CONFIG.load(deps.storage)?;
+            config.vault_address = vault_address;
+        }
+    }
+
     Ok(Response::default())
 }
