@@ -1,11 +1,10 @@
 use cosmwasm_std::{Addr, Coin, Uint128};
-use cw20::{BalanceResponse, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::{
     asset::{Asset, AssetInfo},
     vault::FeeInfo,
 };
-use stable_pool::state::AssetScalingFactor;
+
 
 use crate::utils::assert_cw20_balance;
 
@@ -53,7 +52,7 @@ fn test_exit_and_swap() {
 
     let native_asset_precisions = vec![("uatom".to_string(), 6u8), ("uxprt".to_string(), 6u8)];
 
-    let (vault_addr, keeper_addr, pool_id, pool_addr, lp_token_addr) = utils::instantiate_contracts(
+    let (vault_addr, keeper_addr, pool_id, _pool_addr, lp_token_addr) = utils::instantiate_contracts(
         &mut app,
         &owner,
         &keeper_owner,

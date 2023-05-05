@@ -161,7 +161,7 @@ pub fn execute(
             instant_unbond(deps, env, info, lp_token, amount)
         }
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info, lp_token),
-        ExecuteMsg::InstantUnlock { lp_token, token_lock_ids } => instant_unlock(deps,  &env, &info, &lp_token, token_lock_ids),
+        ExecuteMsg::InstantUnlock { lp_token, token_locks } => instant_unlock(deps,  &env, &info, &lp_token, token_locks),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, info, lp_token),
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
@@ -935,6 +935,14 @@ pub fn instant_unbond(
         .unwrap_or_default();
 
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
+    
+    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
+        ContractError::CantUnbondMoreThanBonded {
+            amount_to_unbond: amount,
+            current_bond_amount,
+        }
+    })?;
+
     for asset in &lp_global_state.active_reward_assets {
         update_staking_rewards(
             asset,
@@ -953,13 +961,7 @@ pub fn instant_unbond(
     lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
     LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
 
-    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
-        ContractError::CantUnbondMoreThanBonded {
-            amount_to_unbond: amount,
-            current_bond_amount,
-        }
-    })?;
-
+   
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
         (&lp_token, &info.sender),
@@ -1143,6 +1145,50 @@ pub fn unlock(
     Ok(response)
 }
 
+/// Find the difference between two lock vectors.
+/// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
+/// 100 tokens at block 100 boths.
+/// In this case, the difference calculation must only remove one occurances of the lock if one is present in the locks_to_be_unlocked vector.
+/// Locks are by default stored by unlock time in ascending order by design, but we can sort it once more to be sure.
+/// Return both locks to keep and valid locks to be unlocked since the lock actually contain invalid locks.
+fn find_lock_difference(all_locks: Vec<TokenLock>, locks_to_be_unlocked: Vec<TokenLock>) -> (Vec<TokenLock>, Vec<TokenLock>) {
+    let mut all_locks = all_locks;
+    // sort by unlock time
+    all_locks.sort_by(|a, b| a.unlock_time.cmp(&b.unlock_time));
+
+    let mut locks_to_be_unlocked = locks_to_be_unlocked;
+
+    // sort by unlock time
+    locks_to_be_unlocked.sort_by(|a, b| a.unlock_time.cmp(&b.unlock_time));
+
+    let mut difference = vec![];
+
+    let mut i = 0;
+    let mut j = 0;
+
+    let mut valid_locks_to_be_unlocked = vec![];
+
+    while i < all_locks.len() && j < locks_to_be_unlocked.len() {
+        if all_locks[i] == locks_to_be_unlocked[j] {
+            valid_locks_to_be_unlocked.push(locks_to_be_unlocked[j].clone());
+            i += 1;
+            j += 1;
+        } else if all_locks[i].unlock_time < locks_to_be_unlocked[j].unlock_time {
+            difference.push(all_locks[i].clone());
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+
+    while i < all_locks.len() {
+        difference.push(all_locks[i].clone());
+        i += 1;
+    }
+
+    return (difference,  valid_locks_to_be_unlocked)
+}
+
 // Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
 /// which are in a locked state post normal unbonding.
 /// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
@@ -1150,53 +1196,30 @@ pub fn unlock(
 /// Penalty fee is same as instant unbonding.
 pub fn instant_unlock(
     deps: DepsMut,
-    env: &Env,
+    _env: &Env,
     info: &MessageInfo,
     lp_token: &Addr,
-    lock_ids: Vec<u64>,
+    token_locks: Vec<TokenLock>,
 ) -> ContractResult<Response> {
 
     let config = CONFIG.load(deps.storage)?;
     let user = info.sender.clone();
-    let mut locks = USER_LP_TOKEN_LOCKS
+    let locks = USER_LP_TOKEN_LOCKS
         .may_load(deps.storage, (&lp_token, &user))?
         .unwrap_or_default();
-
-    // lock ids is the indices of the locks to be unlocked
-
-    let locks_to_be_instantly_unlocked = locks
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| lock_ids.contains(&(*i as u64)))
-        .map(|(_, lock)| lock)
-        .collect::<Vec<&TokenLock>>();
-
-    let mut total_amount = Uint128::zero();
-    let mut total_fee = Uint128::zero();
     
-    // for each lock check if it is already past the unlock time, if yes, don't charge any fee and return full amount
-    // else charge penalty fee and return the remaining amount
-    for lock in locks_to_be_instantly_unlocked {
-        let (amount, fee) = if lock.unlock_time <= env.block.time.seconds() {
-            (lock.amount, Uint128::zero())
-        } else {
-            let fee = lock.amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
-            (lock.amount.checked_sub(fee)?, fee)
-        };
+    let (final_locks_after_unlocking, valid_locks_to_be_unlocked) = find_lock_difference(locks.clone(), token_locks.clone());
 
-        total_amount += amount;
-        total_fee += fee;
-    }
+    let total_amount = valid_locks_to_be_unlocked
+        .iter()
+        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
 
-    // remove locks from the list which are to be unlocked
-    locks = locks
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| !lock_ids.contains(&(*i as u64)))
-        .map(|(_, lock)| lock)
-        .collect::<Vec<TokenLock>>();
+    // fee is same as instant unbonding
+    let total_fee = total_amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
 
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &user), &locks)?;
+    let total_amount_to_be_unlocked = total_amount.checked_sub(total_fee)?;
+
+    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &user), &final_locks_after_unlocking)?;
 
     let fee_recipient = config.keeper.unwrap_or(config.owner);
     
@@ -1212,7 +1235,7 @@ pub fn instant_unlock(
     response = response.add_message(build_transfer_cw20_token_msg(
         user.clone(),
         lp_token.to_string(),
-        total_amount,
+        total_amount_to_be_unlocked,
     )?);
 
     // transfer fee to keeper if set else to the contract owner
@@ -1450,6 +1473,13 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             })
             .map_err(ContractError::from)
         }
+        QueryMsg::RawTokenLocks { lp_token, user } => {
+            let locks = USER_LP_TOKEN_LOCKS
+                .may_load(deps.storage, (&lp_token, &user))?
+                .unwrap_or_default();
+
+            to_binary(&locks).map_err(ContractError::from)
+        },
         QueryMsg::RewardState { lp_token, asset } => {
             let reward_state =
                 ASSET_LP_REWARD_STATE.may_load(deps.storage, (&asset.to_string(), &lp_token))?;

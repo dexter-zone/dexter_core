@@ -133,6 +133,7 @@ pub struct Config {
     pub instant_unbond_fee_bp: u64,
 }
 
+#[derive(Eq)]
 #[cw_serde]
 pub struct TokenLock {
     pub unlock_time: u64,
@@ -193,6 +194,14 @@ pub enum QueryMsg {
         lp_token: Addr,
         user: Addr,
         block_time: Option<u64>
+    },
+    /// Returns raw state of the token locks for a user for a given LP token
+    /// It might include the token locks which are already unlocked and won't give the current ideal view
+    /// of the token locks but the actual one as it is stored in the contract
+    #[returns(Vec<TokenLock>)]
+    RawTokenLocks {
+        lp_token: Addr,
+        user: Addr,
     },
     #[returns(Uint128)]
     /// Returns the total staked amount for a given LP token
@@ -325,7 +334,9 @@ pub enum ExecuteMsg {
     /// Penalty fee is same as instant unbonding.
     InstantUnlock {
         lp_token: Addr,
-        token_lock_ids: Vec<u64>,
+        /// Altought it is possible to index or something similar to calculate this, it would lead to problems with
+        /// order of transaction execution, thus it is better to pass the full lock explicitly.
+        token_locks: Vec<TokenLock>,
     },
     /// Allows to withdraw unbonded rewards for a specific LP token.
     /// The rewards are sent to the user's address.

@@ -1,6 +1,6 @@
 use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
 use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
-use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward}, asset::AssetInfo};
+use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward, TokenLock}, asset::AssetInfo};
 use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
 use dexter::multi_staking::ReviewProposedRewardSchedule;
 
@@ -390,11 +390,11 @@ pub fn instant_unlock_lp_tokens(
     multistaking_contract: &Addr,
     lp_token_addr: &Addr,
     sender: &Addr,
-    token_lock_ids: Vec<u64>
+    token_locks: Vec<TokenLock>
 ) -> anyhow::Result<AppResponse> {
     let msg = ExecuteMsg::InstantUnlock {
         lp_token: lp_token_addr.clone(), 
-        token_lock_ids
+        token_locks
     };
     app.execute_contract(
         sender.clone(), 
@@ -489,6 +489,24 @@ pub fn query_token_locks(
         .unwrap()
 }
 
+pub fn query_raw_token_locks(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    user_addr: &Addr
+) -> Vec<TokenLock> {
+    app
+    .wrap()
+    .query_wasm_smart(
+        multistaking_contract.clone(),
+        &QueryMsg::RawTokenLocks {
+                lp_token: lp_token_addr.clone(),
+                user: user_addr.clone(),
+        },
+    )
+    .unwrap()
+}
+
 pub fn withdraw_unclaimed_rewards(
     app: &mut App,
     multistaking_contract: &Addr,
@@ -536,6 +554,23 @@ pub fn assert_user_lp_token_balance(
     ).unwrap();
     let user_lp_token_balance = response.balance;
     assert_eq!(user_lp_token_balance, expected_balance);
+}
+
+pub fn assert_user_bonded_amount(
+    app: &mut App,
+    user_addr: &Addr,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    expected_balance: Uint128,
+) {
+    let bonded_amount: Uint128 = app.wrap().query_wasm_smart(
+        multistaking_contract.clone(),
+        &QueryMsg::BondedLpTokens {
+            user: user_addr.clone(),
+            lp_token: lp_token_addr.clone(),
+        },
+    ).unwrap();
+    assert_eq!(bonded_amount, expected_balance);
 }
 
 pub fn query_cw20_balance(

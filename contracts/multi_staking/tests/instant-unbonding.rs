@@ -4,7 +4,7 @@ use dexter::{
 };
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, create_reward_schedule,
+    assert_user_lp_token_balance, bond_lp_tokens, create_reward_schedule, query_raw_token_locks, assert_user_bonded_amount,
     mint_lp_tokens_to_addr, mock_app, query_token_locks, setup, unbond_lp_tokens, unlock_lp_tokens, instant_unbond_lp_tokens, instant_unlock_lp_tokens
 };
 pub mod utils;
@@ -165,13 +165,24 @@ fn test_instant_unbond_and_unlock() {
         Uint128::from(23_750_000 as u64),
     );
 
+    // fetch current token locks
+    let token_lock_info = query_raw_token_locks(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+    );
+
+    // Let's unlock first lock
+    let token_lock_to_unlock = token_lock_info[0].clone();
+
     // Step 4: Instantly unlocks the tokens that were locked in step 2 paying the penalty fee
     instant_unlock_lp_tokens(
         &mut app,
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        vec![0]
+        vec![token_lock_to_unlock]
     ).unwrap();
 
     // validate user balance is updated after instant unlock and fee is deducted
@@ -223,6 +234,100 @@ fn test_instant_unbond_and_unlock() {
         &user_addr,
         &lp_token_addr,
         Uint128::from(96_250_000 as u64),
+    );
+
+    // try multi-lock scenario. try creating multiple locks of same token amount to be unlocked at the same time
+    bond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        Uint128::from(90_000_000 as u64),
+    ).unwrap();
+
+    // unbond small amount
+    unbond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        Uint128::from(10_000_000 as u64),
+    ).unwrap();
+
+    // unbond same amount again
+    unbond_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        Uint128::from(10_000_000 as u64),
+    ).unwrap();
+
+    // validate that 2 locks are created
+    let token_lock_info = query_raw_token_locks(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+    );
+
+    assert_eq!(token_lock_info.len(), 2);
+    assert_eq!(token_lock_info[0].amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(token_lock_info[0].unlock_time, 1_000_303_500);
+
+    assert_eq!(token_lock_info[1].amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(token_lock_info[1].unlock_time, 1_000_303_500);
+
+    // unlock only one of the similar locks
+    instant_unlock_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        vec![token_lock_info[0].clone()]
+    ).unwrap();
+
+    // validate that only one lock is left
+    let token_lock_info = query_raw_token_locks(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+    );
+
+    assert_eq!(token_lock_info.len(), 1);
+    assert_eq!(token_lock_info[0].amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(token_lock_info[0].unlock_time, 1_000_303_500);
+
+    // skip time to 1_000_303_500
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_303_500);
+        b.height = b.height + 100;
+    });
+
+    // unlock the remaining lock
+    unlock_lp_tokens(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+    );
+
+    // validate user balance is updated after unlock
+    assert_user_lp_token_balance(
+        &mut app,
+        &user_addr,
+        &lp_token_addr,
+        Uint128::from(25_750_000 as u64),
+    );
+
+    // validate rest is bonded for the user in the staking contract
+    assert_user_bonded_amount(
+        &mut app,
+        &user_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        Uint128::from(70_000_000 as u64),
     );
 
 }
