@@ -8,11 +8,20 @@
     "description": "This struct describes the Msg used to instantiate in this contract.",
     "type": "object",
     "required": [
-      "owner"
+      "owner",
+      "vault_address"
     ],
     "properties": {
       "owner": {
         "description": "Owner address",
+        "allOf": [
+          {
+            "$ref": "#/definitions/Addr"
+          }
+        ]
+      },
+      "vault_address": {
+        "description": "Vault contract address",
         "allOf": [
           {
             "$ref": "#/definitions/Addr"
@@ -81,6 +90,72 @@
         "additionalProperties": false
       },
       {
+        "description": "Exit LP tokens that are received as part of instant LP unbonding fee to contain the base assets of the pool only",
+        "type": "object",
+        "required": [
+          "exit_l_p_tokens"
+        ],
+        "properties": {
+          "exit_l_p_tokens": {
+            "type": "object",
+            "required": [
+              "amount",
+              "lp_token_address"
+            ],
+            "properties": {
+              "amount": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "lp_token_address": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Swap an asset contained in the keeper for a different asset using Dexter pools",
+        "type": "object",
+        "required": [
+          "swap_asset"
+        ],
+        "properties": {
+          "swap_asset": {
+            "type": "object",
+            "required": [
+              "ask_asset_info",
+              "offer_asset",
+              "pool_id"
+            ],
+            "properties": {
+              "ask_asset_info": {
+                "$ref": "#/definitions/AssetInfo"
+              },
+              "min_ask_amount": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Uint128"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "offer_asset": {
+                "$ref": "#/definitions/Asset"
+              },
+              "pool_id": {
+                "$ref": "#/definitions/Uint128"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
         "description": "ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.",
         "type": "object",
         "required": [
@@ -141,6 +216,33 @@
       "Addr": {
         "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
         "type": "string"
+      },
+      "Asset": {
+        "title": "Description - This enum describes a asset (native or CW20).",
+        "type": "object",
+        "required": [
+          "amount",
+          "info"
+        ],
+        "properties": {
+          "amount": {
+            "description": "A token amount",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Uint128"
+              }
+            ]
+          },
+          "info": {
+            "description": "Information about an asset stored in a [`AssetInfo`] struct",
+            "allOf": [
+              {
+                "$ref": "#/definitions/AssetInfo"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "AssetInfo": {
         "description": "This enum describes available Token types.",
@@ -411,11 +513,20 @@
       "description": "This structure stores the main parameters for the Keeper contract.",
       "type": "object",
       "required": [
-        "owner"
+        "owner",
+        "vault_address"
       ],
       "properties": {
         "owner": {
           "description": "admin address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "vault_address": {
+          "description": "Vault contract address",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
