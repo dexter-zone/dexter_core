@@ -1,6 +1,6 @@
-use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
+use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary, from_binary};
 use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
-use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward, TokenLock}, asset::AssetInfo};
+use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward, TokenLock, UnlockFeeTier}, asset::AssetInfo};
 use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
 use dexter::multi_staking::ReviewProposedRewardSchedule;
 
@@ -25,11 +25,12 @@ pub fn instantiate_multi_staking_contract(
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
-        unlock_period: 1000,
+        unlock_period: 691200,
         keeper_addr: None,
         // 3 day delay
         minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
         instant_unbond_fee_bp: 500u64,
+        instant_unbond_min_fee_bp: 200u64,
     };
 
     let multi_staking_instance = app
@@ -43,6 +44,18 @@ pub fn instantiate_multi_staking_contract(
         )
         .unwrap();
 
+    // query instant lp unlock fee tiers
+    let query_msg = QueryMsg::InstantUnlockFeeTiers {};
+    let tiers: Vec<UnlockFeeTier> = app
+        .wrap()
+        .query_wasm_smart(&multi_staking_instance, &query_msg)
+        .unwrap();
+    
+    // pretty printing of tiers
+    println!("Instant Unlock Fee Tiers:");
+    for tier in tiers {
+        println!("{}-{} : {}%", tier.seconds_till_unlock_start, tier.seconds_till_unlock_end, tier.unlock_fee_bp as f64 / 100.0);
+    }
     return multi_staking_instance;
 }
 

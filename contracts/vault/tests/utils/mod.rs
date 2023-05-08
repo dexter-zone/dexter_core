@@ -139,6 +139,7 @@ pub fn initialize_multistaking_contract(
         keeper_addr: None,
         minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
         instant_unbond_fee_bp: 500u64,
+        instant_unbond_min_fee_bp: 200u64,
     };
 
     let multistaking_instance = app

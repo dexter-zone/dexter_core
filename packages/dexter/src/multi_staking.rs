@@ -21,6 +21,7 @@ pub struct InstantiateMsg {
     pub keeper_addr: Option<Addr>,
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
+    pub instant_unbond_min_fee_bp: u64,
 }
 
 #[cw_serde]
@@ -112,6 +113,15 @@ pub struct ReviewProposedRewardSchedule {
     /// true if approved, false if rejected
     pub approve: bool,
 }
+
+#[cw_serde]
+pub struct UnlockFeeTier {
+    pub seconds_till_unlock_start: u64,
+    pub seconds_till_unlock_end: u64,
+    pub unlock_fee_bp: u64
+}
+
+type UnlockFeeTiers = Vec<UnlockFeeTier>;
 
 #[cw_serde]
 pub struct Config {
@@ -227,6 +237,8 @@ pub enum QueryMsg {
         lp_token: Addr,
         token_lock: TokenLock
     },
+    #[returns(UnlockFeeTiers)]
+    InstantUnlockFeeTiers {},
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},

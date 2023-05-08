@@ -12,7 +12,7 @@ use dexter::{
     asset::AssetInfo,
     helper::{
         build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
-        propose_new_owner, build_transfer_cw20_token_msg,
+        propose_new_owner,
     },
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, Cw20HookMsg,
@@ -31,7 +31,7 @@ use dexter::multi_staking::{
     RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS,
 };
 
-use crate::state::next_reward_schedule_proposal_id;
+use crate::{state::next_reward_schedule_proposal_id, query::query_instant_unlock_fee_tiers, execute::{unbond::instant_unbond, unlock::instant_unlock}, utils::calculate_unlock_fee};
 use crate::{
     error::ContractError,
     state::{
@@ -43,11 +43,11 @@ use crate::{
 };
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-multi-staking";
+pub const CONTRACT_NAME: &str = "dexter-multi-staking";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-type ContractResult<T> = Result<T, ContractError>;
+pub type ContractResult<T> = Result<T, ContractError>;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -68,7 +68,7 @@ pub fn instantiate(
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
             instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp: msg.instant_unbond_fee_bp
+            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp
         },
     )?;
 
@@ -914,105 +914,6 @@ pub fn unbond(
     Ok(response)
 }
 
-/// Allows to instantly unbond LP tokens without waiting for the unlock period
-/// This is a special case and should only be used in emergencies like a black swan event or a hack.
-/// The user will pay a penalty fee in the form of a percentage of the unbonded amount which will be
-/// sent to the keeper as protocol treasury.
-pub fn instant_unbond(
-    mut deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: Addr,
-    amount: Uint128,
-) -> ContractResult<Response> {
-    let mut response = Response::new();
-
-    if amount.is_zero() {
-        return Err(ContractError::ZeroAmount);
-    }
-
-    let current_bond_amount = USER_BONDED_LP_TOKENS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
-    
-    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
-        ContractError::CantUnbondMoreThanBonded {
-            amount_to_unbond: amount,
-            current_bond_amount,
-        }
-    })?;
-
-    for asset in &lp_global_state.active_reward_assets {
-        update_staking_rewards(
-            asset,
-            &lp_token,
-            &info.sender,
-            lp_global_state.total_bond_amount,
-            current_bond_amount,
-            env.block.time.seconds(),
-            &mut deps,
-            &mut response,
-            None,
-        )?;
-    }
-
-    // Decrease bond amount
-    lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
-    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
-
-   
-    USER_BONDED_LP_TOKENS.save(
-        deps.storage,
-        (&lp_token, &info.sender),
-        &user_updated_bond_amount,
-    )?;
-
-    // Send the penalty fee to the keeper as protocol treasury
-    let config: Config = CONFIG.load(deps.storage)?;
-
-    // whole penalty fee is sent to the keeper as protocol treasury
-    let penalty_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
-    let keeper_fee = penalty_fee;
-
-    // Check if the keeper is available, if not, send the fee to the contract owner
-    let mut fee_receiver = config.owner;
-    if let Some(keeper_addr) = config.keeper {
-        fee_receiver = keeper_addr;
-    }
-
-    // Send the penalty fee to the keeper as protocol treasury
-    let fee_msg = build_transfer_token_to_user_msg(
-        AssetInfo::Token {
-            contract_addr: lp_token.clone(),
-        },
-        fee_receiver,
-        keeper_fee,
-    )?;
-    response = response.add_message(fee_msg);
-
-    // Send the unbonded amount to the user
-    let unbond_msg = build_transfer_token_to_user_msg(
-        AssetInfo::Token {
-            contract_addr: lp_token.clone(),
-        },
-        info.sender.clone(),
-        amount.checked_sub(penalty_fee)?,
-    )?;
-    response = response.add_message(unbond_msg);
-
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::instant_unbond"), &info)
-        .add_attribute("lp_token", lp_token)
-        .add_attribute("amount", amount)
-        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
-        .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
-        .add_attribute("withdraw_fee", penalty_fee)
-        .add_attribute("user_withdrawn_amount", amount.checked_sub(penalty_fee)?);
-
-    response = response.add_event(event);
-    Ok(response)
-}
 
 pub fn update_staking_rewards(
     asset: &AssetInfo,
@@ -1146,153 +1047,6 @@ pub fn unlock(
     Ok(response)
 }
 
-/// Find the difference between two lock vectors.
-/// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
-/// 100 tokens at block 100 boths.
-/// In this case, the difference calculation must only remove one occurances of the lock if one is present in the locks_to_be_unlocked vector.
-/// Locks are by default stored by unlock time in ascending order by design, but we can sort it once more to be sure.
-/// Return both locks to keep and valid locks to be unlocked since the lock actually contain invalid locks.
-fn find_lock_difference(all_locks: Vec<TokenLock>, locks_to_be_unlocked: Vec<TokenLock>) -> (Vec<TokenLock>, Vec<TokenLock>) {
-    let mut all_locks = all_locks;
-    // sort by unlock time
-    all_locks.sort_by(|a, b| a.unlock_time.cmp(&b.unlock_time));
-
-    let mut locks_to_be_unlocked = locks_to_be_unlocked;
-
-    // sort by unlock time
-    locks_to_be_unlocked.sort_by(|a, b| a.unlock_time.cmp(&b.unlock_time));
-
-    let mut difference = vec![];
-
-    let mut i = 0;
-    let mut j = 0;
-
-    let mut valid_locks_to_be_unlocked = vec![];
-
-    while i < all_locks.len() && j < locks_to_be_unlocked.len() {
-        if all_locks[i] == locks_to_be_unlocked[j] {
-            valid_locks_to_be_unlocked.push(locks_to_be_unlocked[j].clone());
-            i += 1;
-            j += 1;
-        } else if all_locks[i].unlock_time < locks_to_be_unlocked[j].unlock_time {
-            difference.push(all_locks[i].clone());
-            i += 1;
-        } else {
-            j += 1;
-        }
-    }
-
-    while i < all_locks.len() {
-        difference.push(all_locks[i].clone());
-        i += 1;
-    }
-
-    return (difference,  valid_locks_to_be_unlocked)
-}
-
-/// Calculate the instant unlock fee for a given token lock.
-/// The fee is calculated as a percentage of the locked amount.
-/// It is linearly interpolated between the start and end time of the lock at day granularity.
-fn calculate_unlock_fee(
-    token_lock: &TokenLock,
-    current_block_time: u64,
-    config: &Config,
-) ->(u64, Uint128) {
-    let lock_end_time = token_lock.unlock_time;
-    let lock_stipulated_start_time = lock_end_time - config.unlock_period;
-
-    if current_block_time >= lock_end_time {
-        return (0, Uint128::zero());
-    }
-
-    let unlock_fee: Uint128;
-
-    // This is the bounds of the fee calculation linear interpolation at day granularity.
-    let min_fee_bp = config.instant_unbond_min_fee_bp;
-    let max_fee_bp = config.instant_unbond_fee_bp;
-
-    // if unlock period is less than a day, then we just use the max fee
-    const SECONDS_IN_DAY: u64 = 86400;
-    if config.unlock_period < SECONDS_IN_DAY {
-        unlock_fee = token_lock.amount.multiply_ratio(max_fee_bp, Uint128::from(10000u128)); 
-        (max_fee_bp, unlock_fee)
-    } else {
-        // find the total number of days between the start and end of the lock
-        let total_days = config.unlock_period / SECONDS_IN_DAY;
-        let current_passed_days = (current_block_time - lock_stipulated_start_time) / SECONDS_IN_DAY;
-
-        // fee bp actually reduces linearly from max to min as time passes
-        let fee_bp_discount= (max_fee_bp - min_fee_bp) * current_passed_days / total_days;
-        let fee_bp_to_charge = max_fee_bp - fee_bp_discount;
-
-        unlock_fee = token_lock.amount.multiply_ratio(fee_bp_to_charge, Uint128::from(10000u128));
-        (fee_bp_to_charge, unlock_fee)
-    }
-}
-
-// Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
-/// which are in a locked state post normal unbonding.
-/// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
-/// occurs and the user has the LP tokens in a locked state after unbonding.
-/// Penalty fee is same as instant unbonding.
-pub fn instant_unlock(
-    deps: DepsMut,
-    env: &Env,
-    info: &MessageInfo,
-    lp_token: &Addr,
-    token_locks: Vec<TokenLock>,
-) -> ContractResult<Response> {
-
-    let config = CONFIG.load(deps.storage)?;
-    let user = info.sender.clone();
-    let locks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &user))?
-        .unwrap_or_default();
-    
-    let (final_locks_after_unlocking, valid_locks_to_be_unlocked) = find_lock_difference(locks.clone(), token_locks.clone());
-
-    let total_amount = valid_locks_to_be_unlocked
-        .iter()
-        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
-
-    let mut total_amount_to_be_unlocked = Uint128::zero();
-    let mut total_fee_charged = Uint128::zero();
-
-    let current_block_time = env.block.time.seconds();
-    for lock in valid_locks_to_be_unlocked.iter() {
-        let (_, unlock_fee) = calculate_unlock_fee(lock, current_block_time, &config);
-        total_amount_to_be_unlocked += lock.amount.checked_sub(unlock_fee)?;
-        total_fee_charged += unlock_fee;
-    }
-
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &user), &final_locks_after_unlocking)?;
-
-    let fee_recipient = config.keeper.unwrap_or(config.owner);
-    
-    let mut response = Response::new().add_event(
-        Event::from_sender(concatcp!(CONTRACT_NAME, "::instant_unlock"), user.clone())
-        .add_attribute("lp_token", lp_token.clone())
-        .add_attribute("amount", total_amount)
-        .add_attribute("fee", total_fee_charged)
-        .add_attribute("fee_recipient", fee_recipient.clone()),
-    );
-
-    // transfer amount to user
-    response = response.add_message(build_transfer_cw20_token_msg(
-        user.clone(),
-        lp_token.to_string(),
-        total_amount_to_be_unlocked,
-    )?);
-
-    // transfer fee to keeper if set else to the contract owner
-    response = response.add_message(build_transfer_cw20_token_msg(
-        fee_recipient,
-        lp_token.to_string(),
-        total_fee_charged,
-    )?);
-    
-    Ok(response)
-}
 
 fn withdraw_pending_reward(
     user: &Addr,
@@ -1400,6 +1154,20 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             to_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
         },
+        QueryMsg::InstantUnlockFeeTiers {} => {
+            let config = CONFIG.load(deps.storage)?;
+            let min_fee = config.instant_unbond_min_fee_bp;
+            let max_fee = config.instant_unbond_fee_bp;
+
+            let unlock_period = config.unlock_period;
+            let fee_tiers = query_instant_unlock_fee_tiers(
+                unlock_period,
+                min_fee,
+                max_fee,
+            );
+
+            to_binary(&fee_tiers).map_err(ContractError::from)
+        }
         QueryMsg::UnclaimedRewards {
             lp_token,
             user,
