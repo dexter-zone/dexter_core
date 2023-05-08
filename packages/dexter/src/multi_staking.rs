@@ -131,6 +131,9 @@ pub struct Config {
     /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
+    /// This is the minimum fee charged for instant LP unlock when the unlock is ~1 day or less in future.
+    /// Fee in between the unlock duration and 1 day will be linearly interpolated at day boundaries.
+    pub instant_unbond_min_fee_bp: u64,
 }
 
 #[derive(Eq)]
@@ -173,6 +176,14 @@ pub struct RewardScheduleResponse {
 }
 
 #[cw_serde]
+pub struct InstantLpUnlockFee {
+    pub unlock_amount: Uint128,
+    pub unlock_fee: Uint128,
+    pub unlock_fee_bp: u64
+}
+
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns current config of the contract
@@ -208,6 +219,13 @@ pub enum QueryMsg {
     BondedLpTokens {
         lp_token: Addr,
         user: Addr,
+    },
+    /// Returns the current unlocking fee percentage (bp) and actual fee for a given token lock
+    #[returns(InstantLpUnlockFee)]
+    InstantUnlockFee {
+        user: Addr,
+        lp_token: Addr,
+        token_lock: TokenLock
     },
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
