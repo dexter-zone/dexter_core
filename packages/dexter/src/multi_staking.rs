@@ -187,9 +187,10 @@ pub struct RewardScheduleResponse {
 
 #[cw_serde]
 pub struct InstantLpUnlockFee {
-    pub unlock_amount: Uint128,
+    pub time_until_lock_expiry: u64,
+    pub unlock_fee_bp: u64,
     pub unlock_fee: Uint128,
-    pub unlock_fee_bp: u64
+    pub unlock_amount: Uint128,
 }
 
 

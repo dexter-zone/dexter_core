@@ -21,11 +21,7 @@ pub fn query_instant_unlock_fee_tiers(
     } else {
         // num tiers is the ceiling of unlock period in days
         let num_tiers = (unlock_period as f64 / 86400.0).ceil() as u64;
-
-        println!("num tiers: {}", num_tiers);
-
         // fee increment per tier
-        // let fee_increment = (max_fee - min_fee) / (num_tiers - 1);
         let fee_increment: Decimal = Decimal::from_ratio(max_fee_bp - min_fee_bp, (num_tiers - 1) as u64);
 
         let mut tier_start_time = 0;
@@ -40,7 +36,12 @@ pub fn query_instant_unlock_fee_tiers(
             });
 
             tier_start_time = tier_end_time;
-            tier_end_time += SECOND_IN_DAY;
+            // if this is the last tier then set the end time to the unlock period
+            if tier == num_tiers - 2 {
+                tier_end_time = unlock_period;
+            } else {
+                tier_end_time += SECOND_IN_DAY;
+            }
         }
     }
 

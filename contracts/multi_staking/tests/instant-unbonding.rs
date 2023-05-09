@@ -5,7 +5,7 @@ use dexter::{
 
 use crate::utils::{
     assert_user_lp_token_balance, bond_lp_tokens, create_reward_schedule, query_raw_token_locks, assert_user_bonded_amount,
-    mint_lp_tokens_to_addr, mock_app, query_token_locks, setup, unbond_lp_tokens, unlock_lp_tokens, instant_unbond_lp_tokens, instant_unlock_lp_tokens
+    mint_lp_tokens_to_addr, mock_app, query_token_locks, unbond_lp_tokens, unlock_lp_tokens, instant_unbond_lp_tokens, instant_unlock_lp_tokens, setup_generic, query_instant_unlock_fee_tiers, query_instant_lp_unlock_fee
 };
 pub mod utils;
 
@@ -20,6 +20,7 @@ pub mod utils;
 #[test]
 fn test_instant_unbond_and_unlock() {
     let admin = String::from("admin");
+    let keeper = String::from("keeper");
     let user = String::from("user");
 
     let coins = vec![
@@ -29,10 +30,20 @@ fn test_instant_unbond_and_unlock() {
 
     let admin_addr = Addr::unchecked(admin.clone());
     let user_addr = Addr::unchecked(user.clone());
+    let keeper_addr = Addr::unchecked(keeper.clone());
 
     let mut app = mock_app(admin_addr.clone(), coins);
 
-    let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
+    let (multi_staking_instance, lp_token_addr) = setup_generic(
+        &mut app,
+        admin_addr.clone(),
+        Some(keeper_addr.clone()),
+        0,
+        // 80 minutes less than 7 days. We should still have 7 tiers
+        600_000,
+        300,
+        500
+    );
 
     create_reward_schedule(
         &mut app,
@@ -43,12 +54,12 @@ fn test_instant_unbond_and_unlock() {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
+        1000_100_000,
+        1000_704_800,
     ).unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_301_100);
+        b.time = Timestamp::from_seconds(1_000_000_000);
         b.height = b.height + 100;
     });
 
@@ -86,7 +97,7 @@ fn test_instant_unbond_and_unlock() {
     );
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_301_500);
+        b.time = Timestamp::from_seconds(1000_302_400);
         b.height = b.height + 100;
     });
 
@@ -128,7 +139,7 @@ fn test_instant_unbond_and_unlock() {
     // validate that the contract owner received the fee since keeper is not set
     assert_user_lp_token_balance(
         &mut app,
-        &admin_addr,
+        &keeper_addr,
         &lp_token_addr,
         Uint128::from(1_250_000 as u64),
     );
@@ -145,7 +156,7 @@ fn test_instant_unbond_and_unlock() {
     let token_locks = token_lock_info.locks;
     assert_eq!(token_locks.len(), 1);
     assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
-    assert_eq!(token_locks[0].unlock_time, 1_000_302_500);
+    assert_eq!(token_locks[0].unlock_time, 1_000_902_400);
 
 
     // Step 3: Unbond rest of the tokens normally creating a 2nd lock
@@ -193,10 +204,10 @@ fn test_instant_unbond_and_unlock() {
         Uint128::from(71_250_000 as u64),
     );
 
-    // validate the contract owner received the fee since keeper is not set
+    // validate that keeper received the fee
     assert_user_lp_token_balance(
         &mut app,
-        &admin_addr,
+        &keeper_addr,
         &lp_token_addr,
         Uint128::from(3_750_000 as u64),
     );
@@ -212,11 +223,11 @@ fn test_instant_unbond_and_unlock() {
     
     assert_eq!(token_lock_info.locks.len(), 1);
     assert_eq!(token_lock_info.locks[0].amount, Uint128::from(25_000_000 as u64));
-    assert_eq!(token_lock_info.locks[0].unlock_time, 1_000_302_500);
+    assert_eq!(token_lock_info.locks[0].unlock_time, 1_000_902_400);
 
-    // skip time to 1_000_302_500
+    // skip time to 1_000_902_400
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_302_500);
+        b.time = Timestamp::from_seconds(1_000_902_400);
         b.height = b.height + 100;
     });
 
@@ -273,10 +284,83 @@ fn test_instant_unbond_and_unlock() {
 
     assert_eq!(token_lock_info.len(), 2);
     assert_eq!(token_lock_info[0].amount, Uint128::from(10_000_000 as u64));
-    assert_eq!(token_lock_info[0].unlock_time, 1_000_303_500);
+    assert_eq!(token_lock_info[0].unlock_time, 1_001_502_400);
 
     assert_eq!(token_lock_info[1].amount, Uint128::from(10_000_000 as u64));
-    assert_eq!(token_lock_info[1].unlock_time, 1_000_303_500);
+    assert_eq!(token_lock_info[1].unlock_time, 1_001_502_400);
+
+    // fetch current fee tiers for unlock
+    let fee_tiers = query_instant_unlock_fee_tiers(
+        &mut app,
+        &multi_staking_instance,
+    );
+
+    // validate fee tiers
+    assert_eq!(fee_tiers.len(), 7);
+
+    // validate that all the fee tier times are at day boundaries
+    for i in 0..fee_tiers.len() {
+        let start = fee_tiers[i].seconds_till_unlock_start;
+        let end = fee_tiers[i].seconds_till_unlock_end;
+
+        assert!(start < end);
+
+        // validate that the start are at day boundaries
+        assert_eq!(start % 86400, 0);
+
+        // validate that end matches the start of the next tier
+        if i < fee_tiers.len() - 1 {
+            assert_eq!(end, fee_tiers[i + 1].seconds_till_unlock_start);
+        }
+
+        // validate that the last tier ends at the unlock period
+        if i == fee_tiers.len() - 1 {
+            assert_eq!(end, 600_000);
+        }
+    }
+
+    // validate exact fee tiers
+    assert_eq!(fee_tiers[0].unlock_fee_bp, 300u64);
+    assert_eq!(fee_tiers[1].unlock_fee_bp, 334u64);
+    assert_eq!(fee_tiers[2].unlock_fee_bp, 367u64);
+    assert_eq!(fee_tiers[3].unlock_fee_bp, 400u64);
+    assert_eq!(fee_tiers[4].unlock_fee_bp, 434u64);
+    assert_eq!(fee_tiers[5].unlock_fee_bp, 467u64);
+    assert_eq!(fee_tiers[6].unlock_fee_bp, 500u64);
+
+
+    // validate the fee being charged for instant unlock
+    let fee = query_instant_lp_unlock_fee(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        token_lock_info[0].clone()
+    );
+
+    assert_eq!(fee.unlock_fee_bp, 500u64);
+    assert_eq!(fee.time_until_lock_expiry, 600_000);
+    assert_eq!(fee.unlock_fee, Uint128::from(500_000 as u64));
+    
+
+    // increase time to middle of 2nd tier
+    app.update_block(|b| {
+        b.time = Timestamp::from_seconds(1_000_902_400 + 86400 * 2 + 43200);
+        b.height = b.height + 100;
+    });
+
+    // fetch the fee again
+    let fee = query_instant_lp_unlock_fee(
+        &mut app,
+        &multi_staking_instance,
+        &lp_token_addr,
+        &user_addr,
+        token_lock_info[0].clone()
+    );
+
+    assert_eq!(fee.time_until_lock_expiry, 600_000 - 86400 * 2 - 43200);
+    assert_eq!(fee.unlock_fee_bp, 434u64);
+    assert_eq!(fee.unlock_fee, Uint128::from(434_000 as u64));
 
     // unlock only one of the similar locks
     instant_unlock_lp_tokens(
@@ -286,6 +370,14 @@ fn test_instant_unbond_and_unlock() {
         &user_addr,
         vec![token_lock_info[0].clone()]
     ).unwrap();
+
+    // validate that fee is correctly transferred to the keeper
+    assert_user_lp_token_balance(
+        &mut app,
+        &keeper_addr,
+        &lp_token_addr,
+        Uint128::from(3_750_000 + 434_000 as u64),
+    );
 
     // validate that only one lock is left
     let token_lock_info = query_raw_token_locks(
@@ -297,11 +389,11 @@ fn test_instant_unbond_and_unlock() {
 
     assert_eq!(token_lock_info.len(), 1);
     assert_eq!(token_lock_info[0].amount, Uint128::from(10_000_000 as u64));
-    assert_eq!(token_lock_info[0].unlock_time, 1_000_303_500);
+    assert_eq!(token_lock_info[0].unlock_time, 1_001_502_400);
 
     // skip time to 1_000_303_500
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_303_500);
+        b.time = Timestamp::from_seconds(1_001_502_400);
         b.height = b.height + 100;
     });
 
@@ -318,7 +410,7 @@ fn test_instant_unbond_and_unlock() {
         &mut app,
         &user_addr,
         &lp_token_addr,
-        Uint128::from(25_750_000 as u64),
+        Uint128::from(25_816_000 as u64),
     );
 
     // validate rest is bonded for the user in the staking contract

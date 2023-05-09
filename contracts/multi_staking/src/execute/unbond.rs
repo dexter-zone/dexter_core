@@ -1,5 +1,5 @@
 
-use crate::{contract::{update_staking_rewards, CONTRACT_NAME, ContractResult}, state::USER_LP_TOKEN_LOCKS, utils::{calculate_unlock_fee, find_lock_difference}};
+use crate::{contract::{update_staking_rewards, CONTRACT_NAME, ContractResult}, state::USER_LP_TOKEN_LOCKS};
 use const_format::concatcp;
 use cosmwasm_std::{
     Addr, DepsMut, Env, Event,
@@ -11,7 +11,7 @@ use dexter::{
     helper::{
         build_transfer_token_to_user_msg,
     },
-    multi_staking::Config,
+    multi_staking::{Config, MAX_USER_LP_TOKEN_LOCKS, TokenLock},
 };
 
 
@@ -119,3 +119,87 @@ pub fn instant_unbond(
     Ok(response)
 }
 
+/// Unbond LP tokens
+pub fn unbond(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+    amount: Option<Uint128>,
+) -> ContractResult<Response> {
+    // We don't have to check for LP token allowed here, because there's a scenario that we allowed bonding
+    // for an asset earlier and then we remove the LP token from the list of allowed LP tokens. In this case
+    // we still want to allow unbonding.
+    let mut response = Response::new();
+
+    let current_bond_amount = USER_BONDED_LP_TOKENS
+        .may_load(deps.storage, (&lp_token, &info.sender))?
+        .unwrap_or_default();
+
+    // if user didn't explicitly mention any amount, unbond everything.
+    let amount = amount.unwrap_or(current_bond_amount);
+    if amount.is_zero() {
+        return Err(ContractError::ZeroAmount);
+    }
+
+    let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
+    for asset in &lp_global_state.active_reward_assets {
+        update_staking_rewards(
+            asset,
+            &lp_token,
+            &info.sender,
+            lp_global_state.total_bond_amount,
+            current_bond_amount,
+            env.block.time.seconds(),
+            &mut deps,
+            &mut response,
+            None,
+        )?;
+    }
+
+    // Decrease bond amount
+    lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
+    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
+
+    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
+        ContractError::CantUnbondMoreThanBonded {
+            amount_to_unbond: amount,
+            current_bond_amount,
+        }
+    })?;
+
+    USER_BONDED_LP_TOKENS.save(
+        deps.storage,
+        (&lp_token, &info.sender),
+        &user_updated_bond_amount,
+    )?;
+
+    // Start unlocking clock for the user's LP Tokens
+    let mut unlocks = USER_LP_TOKEN_LOCKS
+        .may_load(deps.storage, (&lp_token, &info.sender))?
+        .unwrap_or_default();
+
+    if unlocks.len() == MAX_USER_LP_TOKEN_LOCKS {
+        return Err(ContractError::CantAllowAnyMoreLpTokenUnbonds);
+    }
+
+    let config = CONFIG.load(deps.storage)?;
+
+    let unlock_time = env.block.time.seconds() + config.unlock_period;
+    unlocks.push(TokenLock {
+        unlock_time,
+        amount,
+    });
+
+    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &unlocks)?;
+
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::unbond"), &info)
+        .add_attribute("lp_token", lp_token)
+        .add_attribute("amount", amount)
+        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
+        .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
+        .add_attribute("unlock_time", unlock_time.to_string());
+
+    response = response.add_event(event);
+    Ok(response)
+}

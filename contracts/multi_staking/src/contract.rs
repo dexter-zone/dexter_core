@@ -16,7 +16,7 @@ use dexter::{
     },
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, Cw20HookMsg,
-        ExecuteMsg, InstantiateMsg, QueryMsg, RewardSchedule, TokenLock, TokenLockInfo,
+        ExecuteMsg, InstantiateMsg, QueryMsg, RewardSchedule, TokenLockInfo,
         UnclaimedReward, MigrateMsg, InstantLpUnlockFee,
     },
 };
@@ -28,10 +28,10 @@ use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS,
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS,
 };
 
-use crate::{state::next_reward_schedule_proposal_id, query::query_instant_unlock_fee_tiers, execute::{unbond::instant_unbond, unlock::instant_unlock}, utils::calculate_unlock_fee};
+use crate::{state::next_reward_schedule_proposal_id, query::query_instant_unlock_fee_tiers, execute::{unbond::{instant_unbond, unbond}, unlock::{instant_unlock, unlock}}, utils::calculate_unlock_fee};
 use crate::{
     error::ContractError,
     state::{
@@ -61,7 +61,7 @@ pub fn instantiate(
     CONFIG.save(
         deps.storage,
         &Config {
-            keeper: None,
+            keeper: msg.keeper_addr,
             unlock_period: msg.unlock_period,
             minimum_reward_schedule_proposal_start_delay: msg
                 .minimum_reward_schedule_proposal_start_delay,
@@ -829,92 +829,6 @@ pub fn bond(
     Ok(response)
 }
 
-/// Unbond LP tokens
-pub fn unbond(
-    mut deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: Addr,
-    amount: Option<Uint128>,
-) -> ContractResult<Response> {
-    // We don't have to check for LP token allowed here, because there's a scenario that we allowed bonding
-    // for an asset earlier and then we remove the LP token from the list of allowed LP tokens. In this case
-    // we still want to allow unbonding.
-    let mut response = Response::new();
-
-    let current_bond_amount = USER_BONDED_LP_TOKENS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    // if user didn't explicitly mention any amount, unbond everything.
-    let amount = amount.unwrap_or(current_bond_amount);
-    if amount.is_zero() {
-        return Err(ContractError::ZeroAmount);
-    }
-
-    let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
-    for asset in &lp_global_state.active_reward_assets {
-        update_staking_rewards(
-            asset,
-            &lp_token,
-            &info.sender,
-            lp_global_state.total_bond_amount,
-            current_bond_amount,
-            env.block.time.seconds(),
-            &mut deps,
-            &mut response,
-            None,
-        )?;
-    }
-
-    // Decrease bond amount
-    lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
-    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
-
-    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
-        ContractError::CantUnbondMoreThanBonded {
-            amount_to_unbond: amount,
-            current_bond_amount,
-        }
-    })?;
-
-    USER_BONDED_LP_TOKENS.save(
-        deps.storage,
-        (&lp_token, &info.sender),
-        &user_updated_bond_amount,
-    )?;
-
-    // Start unlocking clock for the user's LP Tokens
-    let mut unlocks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    if unlocks.len() == MAX_USER_LP_TOKEN_LOCKS {
-        return Err(ContractError::CantAllowAnyMoreLpTokenUnbonds);
-    }
-
-    let config = CONFIG.load(deps.storage)?;
-
-    let unlock_time = env.block.time.seconds() + config.unlock_period;
-    unlocks.push(TokenLock {
-        unlock_time,
-        amount,
-    });
-
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &unlocks)?;
-
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::unbond"), &info)
-        .add_attribute("lp_token", lp_token)
-        .add_attribute("amount", amount)
-        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
-        .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
-        .add_attribute("unlock_time", unlock_time.to_string());
-
-    response = response.add_event(event);
-    Ok(response)
-}
-
-
 pub fn update_staking_rewards(
     asset: &AssetInfo,
     lp_token: &Addr,
@@ -1003,50 +917,6 @@ pub fn update_staking_rewards(
 
     Ok(())
 }
-
-pub fn unlock(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: Addr,
-) -> ContractResult<Response> {
-    let locks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    let total_unlocked_amount = locks
-        .iter()
-        .filter(|lock| lock.unlock_time <= env.block.time.seconds())
-        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
-
-    let mut response = Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::unlock"), &info)
-            .add_attribute("lp_token", lp_token.clone())
-            .add_attribute("amount", total_unlocked_amount),
-    );
-    if total_unlocked_amount.is_zero() {
-        return Ok(response);
-    }
-
-    let updated_unlocks = locks
-        .into_iter()
-        .filter(|lock| lock.unlock_time > env.block.time.seconds())
-        .collect::<Vec<TokenLock>>();
-
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &updated_unlocks)?;
-
-    response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: lp_token.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: info.sender.to_string(),
-            amount: total_unlocked_amount,
-        })?,
-    }));
-
-    Ok(response)
-}
-
 
 fn withdraw_pending_reward(
     user: &Addr,
@@ -1147,7 +1017,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             );
 
             let instant_lp_unlock_fee = InstantLpUnlockFee {
-               unlock_amount: token_lock.amount,
+                time_until_lock_expiry: token_lock.unlock_time.checked_sub(env.block.time.seconds()).unwrap_or_default(),
+                unlock_amount: token_lock.amount,
                 unlock_fee_bp: fee_bp,
                 unlock_fee,
             };

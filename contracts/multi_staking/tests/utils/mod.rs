@@ -1,6 +1,6 @@
-use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary, from_binary};
+use cosmwasm_std::{Addr, testing::mock_env, Timestamp, Coin, Uint128, to_binary};
 use cw_multi_test::{App, Executor, ContractWrapper, AppResponse};
-use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward, TokenLock, UnlockFeeTier}, asset::AssetInfo};
+use dexter::{multi_staking::{InstantiateMsg, ExecuteMsg, QueryMsg, TokenLockInfo, Cw20HookMsg, UnclaimedReward, TokenLock, UnlockFeeTier, InstantLpUnlockFee}, asset::AssetInfo};
 use cw20::{MinterResponse, Cw20QueryMsg, Cw20ExecuteMsg, BalanceResponse};
 use dexter::multi_staking::ReviewProposedRewardSchedule;
 
@@ -21,16 +21,21 @@ pub fn mock_app(admin: Addr, coins: Vec<Coin>) -> App {
 pub fn instantiate_multi_staking_contract(
     app: &mut App, 
     code_id: u64,
-    admin: Addr
+    admin: Addr,
+    keeper_addr: Option<Addr>,
+    minimum_reward_schedule_proposal_start_delay: u64,
+    unlock_period: u64,
+    instant_unbond_min_fee_bp: u64,
+    instant_unbond_max_fee_bp: u64,
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
-        unlock_period: 691200,
-        keeper_addr: None,
+        unlock_period,
+        keeper_addr,
         // 3 day delay
-        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
-        instant_unbond_fee_bp: 500u64,
-        instant_unbond_min_fee_bp: 200u64,
+        minimum_reward_schedule_proposal_start_delay,
+        instant_unbond_fee_bp: instant_unbond_max_fee_bp,
+        instant_unbond_min_fee_bp,
     };
 
     let multi_staking_instance = app
@@ -44,18 +49,6 @@ pub fn instantiate_multi_staking_contract(
         )
         .unwrap();
 
-    // query instant lp unlock fee tiers
-    let query_msg = QueryMsg::InstantUnlockFeeTiers {};
-    let tiers: Vec<UnlockFeeTier> = app
-        .wrap()
-        .query_wasm_smart(&multi_staking_instance, &query_msg)
-        .unwrap();
-    
-    // pretty printing of tiers
-    println!("Instant Unlock Fee Tiers:");
-    for tier in tiers {
-        println!("{}-{} : {}%", tier.seconds_till_unlock_start, tier.seconds_till_unlock_end, tier.unlock_fee_bp as f64 / 100.0);
-    }
     return multi_staking_instance;
 }
 
@@ -165,12 +158,25 @@ pub fn create_lp_token(
     return lp_token_instance;
 }
 
-pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
+pub fn setup_generic(
+    app: &mut App,
+    admin_addr: Addr,
+    keeper_addr: Option<Addr>,
+    minimum_reward_schedule_proposal_start_delay: u64,
+    unlock_time: u64,
+    unbond_fee_min_bp: u64,
+    unbond_fee_max_bp: u64,
+) -> (Addr, Addr) {
     let multi_staking_code_id = store_multi_staking_contract(app);
     let multi_staking_instance = instantiate_multi_staking_contract(
         app,
         multi_staking_code_id,
-        admin_addr.clone()
+        admin_addr.clone(),
+        keeper_addr,
+        minimum_reward_schedule_proposal_start_delay,
+        unlock_time,
+        unbond_fee_min_bp,
+        unbond_fee_max_bp,
     );
 
     // let cw20_code_id = store_cw20_contract(app);
@@ -192,6 +198,21 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
         },
          &vec![]
     ).unwrap();
+
+    return (multi_staking_instance, lp_token_addr);
+}
+
+pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
+    let (multi_staking_instance, lp_token_addr) = setup_generic(
+        app,
+        admin_addr,
+        None,
+        3 * 24 * 60 * 60,
+        // 7 days
+        7 * 24 * 60 * 60,
+        200,
+        500
+    );
 
     return (multi_staking_instance, lp_token_addr);
 }
@@ -608,4 +629,38 @@ pub fn query_balance(
     user_addr: &Addr,
 ) -> Vec<Coin> {
     app.wrap().query_all_balances(user_addr).unwrap()
+}
+
+
+pub fn query_instant_unlock_fee_tiers(
+    app: &mut App,
+    multistaking_contract: &Addr
+) -> Vec<UnlockFeeTier> {
+
+    let fee_tiers: Vec<UnlockFeeTier> = app.wrap().query_wasm_smart(
+        multistaking_contract.clone(),
+        &QueryMsg::InstantUnlockFeeTiers {},
+    ).unwrap();
+
+    return fee_tiers;
+}
+
+pub fn query_instant_lp_unlock_fee(
+    app: &mut App,
+    multistaking_contract: &Addr,
+    lp_token_addr: &Addr,
+    user_addr: &Addr,
+    token_lock: TokenLock
+) -> InstantLpUnlockFee {
+
+    let fee: InstantLpUnlockFee = app.wrap().query_wasm_smart(
+        multistaking_contract.clone(),
+        &QueryMsg::InstantUnlockFee {
+            lp_token: lp_token_addr.clone(),
+            user: user_addr.clone(),
+            token_lock,
+        },
+    ).unwrap();
+
+    return fee
 }

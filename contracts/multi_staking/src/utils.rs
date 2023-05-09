@@ -57,13 +57,10 @@ pub fn calculate_unlock_fee(
     config: &Config,
 ) ->(u64, Uint128) {
     let lock_end_time = token_lock.unlock_time;
-    let lock_stipulated_start_time = lock_end_time - config.unlock_period;
 
     if current_block_time >= lock_end_time {
         return (0, Uint128::zero());
     }
-
-    let unlock_fee: Uint128;
 
     // This is the bounds of the fee calculation linear interpolation at day granularity.
     let min_fee_bp = config.instant_unbond_min_fee_bp;
