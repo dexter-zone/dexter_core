@@ -17,13 +17,13 @@ use dexter::{
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, Cw20HookMsg,
         ExecuteMsg, InstantiateMsg, QueryMsg, RewardSchedule, TokenLockInfo,
-        UnclaimedReward, MigrateMsg, InstantLpUnlockFee,
+        UnclaimedReward, MigrateMsg, InstantLpUnlockFee, ConfigV1,
     },
 };
 
-use cw2::set_contract_version;
+use cw2::{set_contract_version, get_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use cw_storage_plus::Bound;
+use cw_storage_plus::{Bound, Item};
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
@@ -44,6 +44,8 @@ use crate::{
 
 /// Contract name that is used for migration.
 pub const CONTRACT_NAME: &str = "dexter-multi-staking";
+
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -94,12 +96,16 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
         } => update_config(
             deps,
             env,
             info,
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp
         ),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
@@ -212,6 +218,8 @@ fn update_config(
     info: MessageInfo,
     minimum_reward_schedule_proposal_start_delay: Option<u64>,
     unlock_period: Option<u64>,
+    instant_unbond_fee_bp: Option<u64>,
+    instant_unbond_min_fee_bp: Option<u64>,
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -236,6 +244,16 @@ fn update_config(
     if let Some(unlock_period) = unlock_period {
         config.unlock_period = unlock_period;
         event = event.add_attribute("unlock_period", config.unlock_period.to_string());
+    }
+
+    if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
+        config.instant_unbond_fee_bp = instant_unbond_fee_bp;
+        event = event.add_attribute("instant_unbond_fee_bp", config.instant_unbond_fee_bp.to_string());
+    }
+
+    if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
+        config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
+        event = event.add_attribute("instant_unbond_min_fee_bp", config.instant_unbond_min_fee_bp.to_string());
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -1241,16 +1259,36 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
     match msg {
         MigrateMsg::V2 {
             keeper_addr,
-            instant_unbond_fee_percentage
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp
         } => {
-            let mut config = CONFIG.load(deps.storage)?;
 
-            config.keeper = match keeper_addr {
-                Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
-                None => None,
+             // verify if we are running on V1 right now
+             let contract_version = get_contract_version(deps.storage)?;
+             if contract_version.version != CONTRACT_VERSION_V1 {
+                 return Err(StdError::generic_err(format!(
+                     "V2 upgrade is only supported over contract version {}. Current version is {}",
+                     CONTRACT_VERSION_V1,
+                     contract_version.version
+                 )));
+             }
+
+            let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+
+            // copy fields from v1 to v2
+            let config = Config {
+                owner: config_v1.owner,
+                allowed_lp_tokens: config_v1.allowed_lp_tokens,
+                unlock_period: config_v1.unlock_period,
+                minimum_reward_schedule_proposal_start_delay: config_v1.minimum_reward_schedule_proposal_start_delay,
+                keeper: match keeper_addr {
+                    Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
+                    None => None,
+                },
+                instant_unbond_fee_bp,
+                instant_unbond_min_fee_bp,
             };
 
-            config.instant_unbond_fee_bp = instant_unbond_fee_percentage;
             CONFIG.save(deps.storage, &config)?;
         }
     }

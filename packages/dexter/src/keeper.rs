@@ -26,6 +26,11 @@ pub struct Config {
     pub vault_address: Addr,
 }
 
+#[cw_serde]
+pub struct ConfigV1 {
+    pub owner: Addr
+}
+
 /// This struct describes the functions that can be executed in this contract.
 #[cw_serde]
 pub enum ExecuteMsg {

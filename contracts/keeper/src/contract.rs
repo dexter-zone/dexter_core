@@ -6,8 +6,9 @@ use const_format::concatcp;
 use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128, CosmosMsg, WasmMsg, Coin, Decimal};
 use cw2::{set_contract_version, get_contract_version};
 use cw20::{Cw20ExecuteMsg};
+use cw_storage_plus::Item;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, ConfigV1};
 use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
 use dexter::querier::query_token_balance;
 use dexter::vault::{Cw20HookMsg, PoolInfo, ExitType, SingleSwapRequest};
@@ -414,19 +415,23 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             // validate vault address
             let vault_address = deps.api.addr_validate(&vault_address)?;
 
-            // if vault address is not provided, check if it is valid by querying the config and parsing the response
+            // if vault address is provided, check if it is valid by querying the config and parsing the response
             let _config: dexter::vault::ConfigResponse = deps.querier.query_wasm_smart(
                 &vault_address,
                 &dexter::vault::QueryMsg::Config {},
             )?;
         
-
             // update contract version
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-            // update config
-            let mut config = CONFIG.load(deps.storage)?;
-            config.vault_address = vault_address;
+            // Load older config
+            let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+            let config = Config {
+                owner: config_v1.owner,
+                vault_address: vault_address.clone(),
+            };
+
+            CONFIG.save(deps.storage, &config)?;
         }
     }
 

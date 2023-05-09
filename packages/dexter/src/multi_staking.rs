@@ -28,8 +28,8 @@ pub struct InstantiateMsg {
 pub enum MigrateMsg {
     V2 {
         keeper_addr: Option<Addr>,
-        /// value between 0 and 10 (0% to 10%) are allowed
-        instant_unbond_fee_percentage: u64,
+        instant_unbond_fee_bp: u64,
+        instant_unbond_min_fee_bp: u64,
     }
 }
 
@@ -121,8 +121,6 @@ pub struct UnlockFeeTier {
     pub unlock_fee_bp: u64
 }
 
-type UnlockFeeTiers = Vec<UnlockFeeTier>;
-
 #[cw_serde]
 pub struct Config {
     /// owner has privilege to add/remove allowed lp tokens for reward
@@ -144,6 +142,14 @@ pub struct Config {
     /// This is the minimum fee charged for instant LP unlock when the unlock is ~1 day or less in future.
     /// Fee in between the unlock duration and 1 day will be linearly interpolated at day boundaries.
     pub instant_unbond_min_fee_bp: u64,
+}
+
+#[cw_serde]
+pub struct ConfigV1 {
+     pub owner: Addr,
+     pub allowed_lp_tokens: Vec<Addr>,
+     pub unlock_period: u64,
+     pub minimum_reward_schedule_proposal_start_delay: u64,
 }
 
 #[derive(Eq)]
@@ -238,7 +244,7 @@ pub enum QueryMsg {
         lp_token: Addr,
         token_lock: TokenLock
     },
-    #[returns(UnlockFeeTiers)]
+    #[returns(Vec<UnlockFeeTier>)]
     InstantUnlockFeeTiers {},
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
@@ -294,6 +300,8 @@ pub enum ExecuteMsg {
     UpdateConfig {
         minimum_reward_schedule_proposal_start_delay: Option<u64>,
         unlock_period: Option<u64>,
+        instant_unbond_fee_bp: Option<u64>,
+        instant_unbond_min_fee_bp: Option<u64>,
     },
     /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.

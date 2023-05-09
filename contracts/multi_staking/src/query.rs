@@ -20,7 +20,7 @@ pub fn query_instant_unlock_fee_tiers(
         });
     } else {
         // num tiers is the ceiling of unlock period in days
-        let num_tiers = (unlock_period as f64 / 86400.0).ceil() as u64;
+        let num_tiers = (Decimal::from_ratio(unlock_period, SECOND_IN_DAY)).to_uint_ceil().u128();
         // fee increment per tier
         let fee_increment: Decimal = Decimal::from_ratio(max_fee_bp - min_fee_bp, (num_tiers - 1) as u64);
 
