@@ -373,7 +373,7 @@ pub enum ExecuteMsg {
     /// Penalty fee is same as instant unbonding.
     InstantUnlock {
         lp_token: Addr,
-        /// Altought it is possible to index or something similar to calculate this, it would lead to problems with
+        /// Altought it is use possible to index or something similar to calculate this, it would lead to problems with
         /// order of transaction execution, thus it is better to pass the full lock explicitly.
         token_locks: Vec<TokenLock>,
     },
