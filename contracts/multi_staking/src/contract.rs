@@ -70,7 +70,8 @@ pub fn instantiate(
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
             instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp
+            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp,
+            fee_tier_interval: msg.fee_tier_interval,
         },
     )?;
 
@@ -1050,6 +1051,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             let unlock_period = config.unlock_period;
             let fee_tiers = query_instant_unlock_fee_tiers(
+                config.fee_tier_interval,
                 unlock_period,
                 min_fee,
                 max_fee,
@@ -1260,7 +1262,8 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
         MigrateMsg::V2 {
             keeper_addr,
             instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp
+            instant_unbond_min_fee_bp,
+            fee_tier_interval
         } => {
 
              // verify if we are running on V1 right now
@@ -1287,6 +1290,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
                 },
                 instant_unbond_fee_bp,
                 instant_unbond_min_fee_bp,
+                fee_tier_interval
             };
 
             CONFIG.save(deps.storage, &config)?;

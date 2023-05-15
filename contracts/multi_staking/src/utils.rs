@@ -66,7 +66,7 @@ pub fn calculate_unlock_fee(
     let min_fee_bp = config.instant_unbond_min_fee_bp;
     let max_fee_bp = config.instant_unbond_fee_bp;
 
-    let tiers = query_instant_unlock_fee_tiers(config.unlock_period, min_fee_bp, max_fee_bp);
+    let tiers = query_instant_unlock_fee_tiers(config.fee_tier_interval, config.unlock_period, min_fee_bp, max_fee_bp);
 
     // find applicable tier based on second left to unlock
     let seconds_left_to_unlock = lock_end_time - current_block_time;

@@ -36,6 +36,7 @@ pub fn instantiate_multi_staking_contract(
         minimum_reward_schedule_proposal_start_delay,
         instant_unbond_fee_bp: instant_unbond_max_fee_bp,
         instant_unbond_min_fee_bp,
+        fee_tier_interval: 86400
     };
 
     let multi_staking_instance = app

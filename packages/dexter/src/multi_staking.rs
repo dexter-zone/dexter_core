@@ -22,6 +22,7 @@ pub struct InstantiateMsg {
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
     pub instant_unbond_min_fee_bp: u64,
+    pub fee_tier_interval: u64
 }
 
 #[cw_serde]
@@ -30,6 +31,7 @@ pub enum MigrateMsg {
         keeper_addr: Option<Addr>,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
+        fee_tier_interval: u64
     }
 }
 
@@ -139,8 +141,10 @@ pub struct Config {
     /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
-    /// This is the minimum fee charged for instant LP unlock when the unlock is ~1 day or less in future.
-    /// Fee in between the unlock duration and 1 day will be linearly interpolated at day boundaries.
+    /// This is the interval period in seconds on which we will have fee tier boundaries.
+    pub fee_tier_interval: u64,
+    /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
+    /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
     pub instant_unbond_min_fee_bp: u64,
 }
 

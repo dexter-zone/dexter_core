@@ -63,19 +63,8 @@ pub fn instant_unlock(
         .add_attribute("fee", total_fee_charged)
         .add_attribute("fee_recipient", fee_recipient.clone())
         .add_attribute("locks", serde_json_wasm::to_string(&token_locks).unwrap())
+        .add_attribute("updated_locks", serde_json_wasm::to_string(&final_locks_after_unlocking).unwrap())
     );
-
-
-    println!("total_amount_to_be_unlocked: {}", total_amount_to_be_unlocked);
-    println!("total_fee_charged: {}", total_fee_charged);
-
-    println!("fee recipient: {}", fee_recipient);
-
-    
-    println!("total_amount_to_be_unlocked: {}", total_amount_to_be_unlocked);
-    println!("total_fee_charged: {}", total_fee_charged);
-
-    println!("fee recipient: {}", fee_recipient);
 
     // transfer amount to user
     response = response.add_message(build_transfer_cw20_token_msg(
