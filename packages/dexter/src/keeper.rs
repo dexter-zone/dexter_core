@@ -46,8 +46,12 @@ pub enum ExecuteMsg {
     },
      /// Exit LP tokens that are received as part of instant LP unbonding fee to contain the base assets of the pool only
      ExitLPTokens {
+        /// Contract address of the LP token
         lp_token_address: String,
+        /// The amount of LP tokens to exit
         amount: Uint128,
+        /// Slippage protection
+        min_assets_received: Option<Vec<Asset>>,
     },
     /// Swap an asset contained in the keeper for a different asset using Dexter pools
     SwapAsset{

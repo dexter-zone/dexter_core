@@ -95,7 +95,8 @@ pub fn execute(
         ExecuteMsg::ExitLPTokens {
             lp_token_address,
             amount,
-        } => exit_lp_tokens(deps, env, info, lp_token_address, amount),
+            min_assets_received
+        } => exit_lp_tokens(deps, env, info, lp_token_address, amount, min_assets_received),
         ExecuteMsg::SwapAsset {
             offer_asset,
             ask_asset_info,
@@ -191,6 +192,7 @@ fn create_dexter_exit_pool_msg(
     vault_address: Addr,
     lp_token_address: Addr,
     amount: Uint128,
+    min_assets_out: Option<Vec<Asset>>,
 ) -> Result<CosmosMsg, ContractError> {
     let recipient = env.contract.address.clone();
 
@@ -210,7 +212,7 @@ fn create_dexter_exit_pool_msg(
             recipient: Some(recipient.to_string()),
             exit_type: ExitType::ExactLpBurn {
                 lp_to_burn: amount,
-                min_assets_out: None,
+                min_assets_out,
             },
         })?,
     };
@@ -230,6 +232,7 @@ fn exit_lp_tokens(
     info: MessageInfo,
     lp_token_address: String,
     amount: Uint128,
+    min_assets_received: Option<Vec<Asset>>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
@@ -258,6 +261,7 @@ fn exit_lp_tokens(
         config.vault_address,
         lp_token_address.clone(),
         amount,
+        min_assets_received,
     )?;
 
     Ok(Response::new().add_message(tranfer_msg).add_event(

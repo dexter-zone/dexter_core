@@ -137,6 +137,7 @@ fn test_exit_and_swap() {
     let exit_msg = dexter::keeper::ExecuteMsg::ExitLPTokens {
         lp_token_address: lp_token_addr.to_string(),
         amount: uint128_with_precision!(10u128, 18),
+        min_assets_received: None,
     };
 
     // send the message
