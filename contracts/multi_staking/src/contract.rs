@@ -99,6 +99,7 @@ pub fn execute(
             unlock_period,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
+            fee_tier_interval,
         } => update_config(
             deps,
             env,
@@ -106,7 +107,8 @@ pub fn execute(
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
             instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp
+            instant_unbond_min_fee_bp,
+            fee_tier_interval
         ),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
@@ -221,6 +223,7 @@ fn update_config(
     unlock_period: Option<u64>,
     instant_unbond_fee_bp: Option<u64>,
     instant_unbond_min_fee_bp: Option<u64>,
+    fee_tier_interval: Option<u64>,
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -255,6 +258,11 @@ fn update_config(
     if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
         config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
         event = event.add_attribute("instant_unbond_min_fee_bp", config.instant_unbond_min_fee_bp.to_string());
+    }
+
+    if let Some(fee_tier_interval) = fee_tier_interval {
+        config.fee_tier_interval = fee_tier_interval;
+        event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -1293,7 +1301,29 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
                 fee_tier_interval
             };
 
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
+        }
+
+        MigrateMsg::V2Fix {} => {
+            // Verify that the current config is V2. This can be done by deserializing the config for V2 and making sure that the fields exist.
+            // Also, since this upgrade is meant as a fix for contract version as v1.0.0 we should validate that.
+            // For mainnet, only V2 upgrade should do the job
+
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version == CONTRACT_VERSION_V1 {
+                // Validate that the current config is V2 by deserializing the config for V2 and making sure that the fields exist.
+                let _config_v2: Config = Item::new("config").load(deps.storage)?;
+                // deserialization successful, so we can upgrade to V2.1
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+            } else {
+                return Err(StdError::generic_err(format!(
+                    "V2Fix is a hotfix-upgrade is only supported over contract version {} only supported when the actual upgrade 
+                    to V2 has happened but version upgrade in the contract was missed on testnet. Current version is {}",
+                    CONTRACT_VERSION_V1,
+                    contract_version.version
+                )));
+            }
         }
     }
 

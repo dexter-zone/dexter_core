@@ -32,7 +32,10 @@ pub enum MigrateMsg {
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
-    }
+    },
+    /// V2 upgrade for testnet did not set the correct contract version. This fixes it
+    /// This upgrade also enable configuration modification support for fee_tier_interval
+    V2Fix {}
 }
 
 #[cw_serde]
@@ -306,6 +309,7 @@ pub enum ExecuteMsg {
         unlock_period: Option<u64>,
         instant_unbond_fee_bp: Option<u64>,
         instant_unbond_min_fee_bp: Option<u64>,
+        fee_tier_interval: Option<u64>,
     },
     /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
