@@ -5,7 +5,6 @@ use dexter::{
     vault::FeeInfo,
 };
 
-
 use crate::utils::assert_cw20_balance;
 
 mod utils;
@@ -35,7 +34,7 @@ fn test_exit_and_swap() {
             },
             Coin {
                 denom: "uatom".to_string(),
-                amount: uint128_with_precision!(100_000u128, 6)
+                amount: uint128_with_precision!(100_000u128, 6),
             },
         ],
     );
@@ -52,14 +51,15 @@ fn test_exit_and_swap() {
 
     let native_asset_precisions = vec![("uatom".to_string(), 6u8), ("uxprt".to_string(), 6u8)];
 
-    let (vault_addr, keeper_addr, pool_id, _pool_addr, lp_token_addr) = utils::instantiate_contracts(
-        &mut app,
-        &owner,
-        &keeper_owner,
-        fee_info,
-        asset_infos,
-        native_asset_precisions,
-    );
+    let (vault_addr, keeper_addr, pool_id, _pool_addr, lp_token_addr) =
+        utils::instantiate_contracts(
+            &mut app,
+            &owner,
+            &keeper_owner,
+            fee_info,
+            asset_infos,
+            native_asset_precisions,
+        );
 
     // send some funds to alice
     app.send_tokens(

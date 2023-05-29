@@ -15,13 +15,13 @@ use dexter::{
         propose_new_owner,
     },
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, Cw20HookMsg,
-        ExecuteMsg, InstantiateMsg, QueryMsg, RewardSchedule, TokenLockInfo,
-        UnclaimedReward, MigrateMsg, InstantLpUnlockFee, ConfigV1,
+        AssetRewardState, AssetStakerInfo, Config, ConfigV1, CreatorClaimableRewardState,
+        Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, MigrateMsg, QueryMsg,
+        RewardSchedule, TokenLockInfo, UnclaimedReward,
     },
 };
 
-use cw2::{set_contract_version, get_contract_version};
+use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 use cw_storage_plus::{Bound, Item};
 use dexter::asset::Asset;
@@ -31,7 +31,6 @@ use dexter::multi_staking::{
     RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS,
 };
 
-use crate::{state::next_reward_schedule_proposal_id, query::query_instant_unlock_fee_tiers, execute::{unbond::{instant_unbond, unbond}, unlock::{instant_unlock, unlock}}, utils::calculate_unlock_fee};
 use crate::{
     error::ContractError,
     state::{
@@ -40,6 +39,15 @@ use crate::{
         OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, REWARD_SCHEDULE_PROPOSALS, USER_BONDED_LP_TOKENS,
         USER_LP_TOKEN_LOCKS,
     },
+};
+use crate::{
+    execute::{
+        unbond::{instant_unbond, unbond},
+        unlock::{instant_unlock, unlock},
+    },
+    query::query_instant_unlock_fee_tiers,
+    state::next_reward_schedule_proposal_id,
+    utils::calculate_unlock_fee,
 };
 
 /// Contract name that is used for migration.
@@ -108,7 +116,7 @@ pub fn execute(
             unlock_period,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
-            fee_tier_interval
+            fee_tier_interval,
         ),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
@@ -171,7 +179,10 @@ pub fn execute(
             instant_unbond(deps, env, info, lp_token, amount)
         }
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info, lp_token),
-        ExecuteMsg::InstantUnlock { lp_token, token_locks } => instant_unlock(deps,  &env, &info, &lp_token, token_locks),
+        ExecuteMsg::InstantUnlock {
+            lp_token,
+            token_locks,
+        } => instant_unlock(deps, &env, &info, &lp_token, token_locks),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, info, lp_token),
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
@@ -252,12 +263,18 @@ fn update_config(
 
     if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
         config.instant_unbond_fee_bp = instant_unbond_fee_bp;
-        event = event.add_attribute("instant_unbond_fee_bp", config.instant_unbond_fee_bp.to_string());
+        event = event.add_attribute(
+            "instant_unbond_fee_bp",
+            config.instant_unbond_fee_bp.to_string(),
+        );
     }
 
     if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
         config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
-        event = event.add_attribute("instant_unbond_min_fee_bp", config.instant_unbond_min_fee_bp.to_string());
+        event = event.add_attribute(
+            "instant_unbond_min_fee_bp",
+            config.instant_unbond_min_fee_bp.to_string(),
+        );
     }
 
     if let Some(fee_tier_interval) = fee_tier_interval {
@@ -1025,7 +1042,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 .unwrap_or_default();
             to_binary(&bonded_amount).map_err(ContractError::from)
         }
-        QueryMsg::InstantUnlockFee { user, lp_token, token_lock } => {
+        QueryMsg::InstantUnlockFee {
+            user,
+            lp_token,
+            token_lock,
+        } => {
             let config = CONFIG.load(deps.storage)?;
             // validate if token lock actually exists
             let token_locks = USER_LP_TOKEN_LOCKS
@@ -1037,21 +1058,21 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 return Err(ContractError::TokenLockNotFound);
             }
 
-            let (fee_bp, unlock_fee) = calculate_unlock_fee(
-                &token_lock,
-                env.block.time.seconds(),
-                &config,
-            );
+            let (fee_bp, unlock_fee) =
+                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &config);
 
             let instant_lp_unlock_fee = InstantLpUnlockFee {
-                time_until_lock_expiry: token_lock.unlock_time.checked_sub(env.block.time.seconds()).unwrap_or_default(),
+                time_until_lock_expiry: token_lock
+                    .unlock_time
+                    .checked_sub(env.block.time.seconds())
+                    .unwrap_or_default(),
                 unlock_amount: token_lock.amount,
                 unlock_fee_bp: fee_bp,
                 unlock_fee,
             };
 
             to_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
-        },
+        }
         QueryMsg::InstantUnlockFeeTiers {} => {
             let config = CONFIG.load(deps.storage)?;
             let min_fee = config.instant_unbond_min_fee_bp;
@@ -1218,7 +1239,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 .unwrap_or_default();
 
             to_binary(&locks).map_err(ContractError::from)
-        },
+        }
         QueryMsg::RewardState { lp_token, asset } => {
             let reward_state =
                 ASSET_LP_REWARD_STATE.may_load(deps.storage, (&asset.to_string(), &lp_token))?;
@@ -1263,7 +1284,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
     }
 }
 
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
     match msg {
@@ -1271,18 +1291,16 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             keeper_addr,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
-            fee_tier_interval
+            fee_tier_interval,
         } => {
-
-             // verify if we are running on V1 right now
-             let contract_version = get_contract_version(deps.storage)?;
-             if contract_version.version != CONTRACT_VERSION_V1 {
-                 return Err(StdError::generic_err(format!(
-                     "V2 upgrade is only supported over contract version {}. Current version is {}",
-                     CONTRACT_VERSION_V1,
-                     contract_version.version
-                 )));
-             }
+            // verify if we are running on V1 right now
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(StdError::generic_err(format!(
+                    "V2 upgrade is only supported over contract version {}. Current version is {}",
+                    CONTRACT_VERSION_V1, contract_version.version
+                )));
+            }
 
             let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
 
@@ -1291,14 +1309,15 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
                 owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
                 unlock_period: config_v1.unlock_period,
-                minimum_reward_schedule_proposal_start_delay: config_v1.minimum_reward_schedule_proposal_start_delay,
+                minimum_reward_schedule_proposal_start_delay: config_v1
+                    .minimum_reward_schedule_proposal_start_delay,
                 keeper: match keeper_addr {
                     Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
                     None => None,
                 },
                 instant_unbond_fee_bp,
                 instant_unbond_min_fee_bp,
-                fee_tier_interval
+                fee_tier_interval,
             };
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -1326,7 +1345,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             }
         }
     }
-
 
     Ok(Response::default())
 }

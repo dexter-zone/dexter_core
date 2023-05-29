@@ -1,5 +1,5 @@
 use cosmwasm_std::Uint128;
-use dexter::multi_staking::{TokenLock, Config};
+use dexter::multi_staking::{Config, TokenLock};
 
 use crate::query::query_instant_unlock_fee_tiers;
 
@@ -9,7 +9,10 @@ use crate::query::query_instant_unlock_fee_tiers;
 /// In this case, the difference calculation must only remove one occurances of the lock if one is present in the locks_to_be_unlocked vector.
 /// Locks are by default stored by unlock time in ascending order by design, but we can sort it once more to be sure.
 /// Return both locks to keep and valid locks to be unlocked since the lock actually contain invalid locks.
-pub fn find_lock_difference(all_locks: Vec<TokenLock>, locks_to_be_unlocked: Vec<TokenLock>) -> (Vec<TokenLock>, Vec<TokenLock>) {
+pub fn find_lock_difference(
+    all_locks: Vec<TokenLock>,
+    locks_to_be_unlocked: Vec<TokenLock>,
+) -> (Vec<TokenLock>, Vec<TokenLock>) {
     let mut all_locks = all_locks;
     // sort by unlock time
     all_locks.sort_by(|a, b| a.unlock_time.cmp(&b.unlock_time));
@@ -44,9 +47,8 @@ pub fn find_lock_difference(all_locks: Vec<TokenLock>, locks_to_be_unlocked: Vec
         i += 1;
     }
 
-    return (difference,  valid_locks_to_be_unlocked)
+    return (difference, valid_locks_to_be_unlocked);
 }
-
 
 /// Calculate the instant unlock fee for a given token lock.
 /// The fee is calculated as a percentage of the locked amount.
@@ -55,7 +57,7 @@ pub fn calculate_unlock_fee(
     token_lock: &TokenLock,
     current_block_time: u64,
     config: &Config,
-) ->(u64, Uint128) {
+) -> (u64, Uint128) {
     let lock_end_time = token_lock.unlock_time;
 
     if current_block_time >= lock_end_time {
@@ -66,7 +68,12 @@ pub fn calculate_unlock_fee(
     let min_fee_bp = config.instant_unbond_min_fee_bp;
     let max_fee_bp = config.instant_unbond_fee_bp;
 
-    let tiers = query_instant_unlock_fee_tiers(config.fee_tier_interval, config.unlock_period, min_fee_bp, max_fee_bp);
+    let tiers = query_instant_unlock_fee_tiers(
+        config.fee_tier_interval,
+        config.unlock_period,
+        min_fee_bp,
+        max_fee_bp,
+    );
 
     // find applicable tier based on second left to unlock
     let seconds_left_to_unlock = lock_end_time - current_block_time;
@@ -74,7 +81,9 @@ pub fn calculate_unlock_fee(
     let mut fee_bp = max_fee_bp;
     for tier in tiers {
         // the tier is applicable if the seconds fall in tiers range, end non-inclusive
-        if seconds_left_to_unlock >= tier.seconds_till_unlock_start && seconds_left_to_unlock < tier.seconds_till_unlock_end {
+        if seconds_left_to_unlock >= tier.seconds_till_unlock_start
+            && seconds_left_to_unlock < tier.seconds_till_unlock_end
+        {
             fee_bp = tier.unlock_fee_bp;
             break;
         }

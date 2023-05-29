@@ -15,13 +15,16 @@ pub fn query_instant_unlock_fee_tiers(
         fee_tiers.push(UnlockFeeTier {
             seconds_till_unlock_end: 0,
             seconds_till_unlock_start: unlock_period,
-            unlock_fee_bp: max_fee_bp
+            unlock_fee_bp: max_fee_bp,
         });
     } else {
         // num tiers is the ceiling of unlock period in terms of tier interval
-        let num_tiers = (Decimal::from_ratio(unlock_period, tier_interval)).to_uint_ceil().u128();
+        let num_tiers = (Decimal::from_ratio(unlock_period, tier_interval))
+            .to_uint_ceil()
+            .u128();
         // fee increment per tier
-        let fee_increment: Decimal = Decimal::from_ratio(max_fee_bp - min_fee_bp, (num_tiers - 1) as u64);
+        let fee_increment: Decimal =
+            Decimal::from_ratio(max_fee_bp - min_fee_bp, (num_tiers - 1) as u64);
 
         let mut tier_start_time = 0;
         let mut tier_end_time = tier_interval;
@@ -31,7 +34,12 @@ pub fn query_instant_unlock_fee_tiers(
                 seconds_till_unlock_end: tier_end_time,
                 seconds_till_unlock_start: tier_start_time,
                 // unlock_fee_bp: min_fee + (fee_increment * tier)
-                unlock_fee_bp: min_fee_bp + fee_increment.checked_mul(Decimal::from_ratio(tier, 1u64)).unwrap().to_uint_ceil().u128() as u64
+                unlock_fee_bp: min_fee_bp
+                    + fee_increment
+                        .checked_mul(Decimal::from_ratio(tier, 1u64))
+                        .unwrap()
+                        .to_uint_ceil()
+                        .u128() as u64,
             });
 
             tier_start_time = tier_end_time;

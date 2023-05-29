@@ -1,11 +1,11 @@
 use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
-use dexter::{
-    asset::AssetInfo,
-};
+use dexter::asset::AssetInfo;
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, create_reward_schedule, query_raw_token_locks, assert_user_bonded_amount,
-    mint_lp_tokens_to_addr, mock_app, query_token_locks, unbond_lp_tokens, unlock_lp_tokens, instant_unbond_lp_tokens, instant_unlock_lp_tokens, setup_generic, query_instant_unlock_fee_tiers, query_instant_lp_unlock_fee
+    assert_user_bonded_amount, assert_user_lp_token_balance, bond_lp_tokens,
+    create_reward_schedule, instant_unbond_lp_tokens, instant_unlock_lp_tokens,
+    mint_lp_tokens_to_addr, mock_app, query_instant_lp_unlock_fee, query_instant_unlock_fee_tiers,
+    query_raw_token_locks, query_token_locks, setup_generic, unbond_lp_tokens, unlock_lp_tokens,
 };
 pub mod utils;
 
@@ -42,7 +42,7 @@ fn test_instant_unbond_and_unlock() {
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
         300,
-        500
+        500,
     );
 
     create_reward_schedule(
@@ -56,7 +56,8 @@ fn test_instant_unbond_and_unlock() {
         Uint128::from(100_000_000 as u64),
         1000_100_000,
         1000_704_800,
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_000_000);
@@ -86,7 +87,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(100_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Validate that user balance is reduced after bonding
     assert_user_lp_token_balance(
@@ -108,7 +110,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(50_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Validate that user balance is still zero after bonding till unlock happens
     assert_user_lp_token_balance(
@@ -125,7 +128,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(25_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // validatate that user balance has increased post instant unbonding.
     // however, fee is deducted from the amount
@@ -158,7 +162,6 @@ fn test_instant_unbond_and_unlock() {
     assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
     assert_eq!(token_locks[0].unlock_time, 1_000_902_400);
 
-
     // Step 3: Unbond rest of the tokens normally creating a 2nd lock
     unbond_lp_tokens(
         &mut app,
@@ -166,7 +169,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(25_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Validate that user balance hasn't updated after unbonding
     assert_user_lp_token_balance(
@@ -193,8 +197,9 @@ fn test_instant_unbond_and_unlock() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        vec![token_lock_to_unlock]
-    ).unwrap();
+        vec![token_lock_to_unlock],
+    )
+    .unwrap();
 
     // validate user balance is updated after instant unlock and fee is deducted
     assert_user_lp_token_balance(
@@ -220,9 +225,12 @@ fn test_instant_unbond_and_unlock() {
         &user_addr,
         None,
     );
-    
+
     assert_eq!(token_lock_info.locks.len(), 1);
-    assert_eq!(token_lock_info.locks[0].amount, Uint128::from(25_000_000 as u64));
+    assert_eq!(
+        token_lock_info.locks[0].amount,
+        Uint128::from(25_000_000 as u64)
+    );
     assert_eq!(token_lock_info.locks[0].unlock_time, 1_000_902_400);
 
     // skip time to 1_000_902_400
@@ -254,7 +262,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(90_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // unbond small amount
     unbond_lp_tokens(
@@ -263,7 +272,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(10_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // unbond same amount again
     unbond_lp_tokens(
@@ -272,7 +282,8 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(10_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // validate that 2 locks are created
     let token_lock_info = query_raw_token_locks(
@@ -290,10 +301,7 @@ fn test_instant_unbond_and_unlock() {
     assert_eq!(token_lock_info[1].unlock_time, 1_001_502_400);
 
     // fetch current fee tiers for unlock
-    let fee_tiers = query_instant_unlock_fee_tiers(
-        &mut app,
-        &multi_staking_instance,
-    );
+    let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
 
     // validate fee tiers
     assert_eq!(fee_tiers.len(), 7);
@@ -328,20 +336,18 @@ fn test_instant_unbond_and_unlock() {
     assert_eq!(fee_tiers[5].unlock_fee_bp, 467u64);
     assert_eq!(fee_tiers[6].unlock_fee_bp, 500u64);
 
-
     // validate the fee being charged for instant unlock
     let fee = query_instant_lp_unlock_fee(
         &mut app,
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        token_lock_info[0].clone()
+        token_lock_info[0].clone(),
     );
 
     assert_eq!(fee.unlock_fee_bp, 500u64);
     assert_eq!(fee.time_until_lock_expiry, 600_000);
     assert_eq!(fee.unlock_fee, Uint128::from(500_000 as u64));
-    
 
     // increase time to middle of 2nd tier
     app.update_block(|b| {
@@ -355,7 +361,7 @@ fn test_instant_unbond_and_unlock() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        token_lock_info[0].clone()
+        token_lock_info[0].clone(),
     );
 
     assert_eq!(fee.time_until_lock_expiry, 600_000 - 86400 * 2 - 43200);
@@ -368,8 +374,9 @@ fn test_instant_unbond_and_unlock() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        vec![token_lock_info[0].clone()]
-    ).unwrap();
+        vec![token_lock_info[0].clone()],
+    )
+    .unwrap();
 
     // validate that fee is correctly transferred to the keeper
     assert_user_lp_token_balance(
@@ -421,5 +428,4 @@ fn test_instant_unbond_and_unlock() {
         &lp_token_addr,
         Uint128::from(70_000_000 as u64),
     );
-
 }

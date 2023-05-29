@@ -1,16 +1,16 @@
 use cosmwasm_std::{coin, Addr, Coin, Timestamp, Uint128};
+use dexter::multi_staking::{RewardSchedule, RewardScheduleResponse};
 use dexter::{
     asset::AssetInfo,
-    multi_staking::{QueryMsg, UnclaimedReward, CreatorClaimableRewardState},
+    multi_staking::{CreatorClaimableRewardState, QueryMsg, UnclaimedReward},
 };
-use dexter::multi_staking::{RewardSchedule, RewardScheduleResponse};
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, create_dummy_cw20_token, create_reward_schedule,
-    mint_lp_tokens_to_addr, mock_app, query_bonded_lp_tokens, query_token_locks,
+    assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token,
+    create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
+    mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
     query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
-    withdraw_unclaimed_rewards, mint_cw20_tokens_to_addr, query_cw20_balance, disallow_lp_token,
-    query_balance, claim_creator_rewards
+    withdraw_unclaimed_rewards,
 };
 pub mod utils;
 
@@ -42,7 +42,8 @@ fn test_staking() {
         Uint128::from(100_000_000 as u64),
         1000_301_000,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_100);
@@ -71,7 +72,8 @@ fn test_staking() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(100_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Validate that user balance is reduced after bonding
     assert_user_lp_token_balance(
@@ -93,20 +95,24 @@ fn test_staking() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(50_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Query creator claimable reward
     let creator_claimable_reward: CreatorClaimableRewardState = app
         .wrap()
         .query_wasm_smart(
             multi_staking_instance.clone(),
-            &QueryMsg::CreatorClaimableReward { 
-                reward_schedule_id: 1
+            &QueryMsg::CreatorClaimableReward {
+                reward_schedule_id: 1,
             },
         )
         .unwrap();
 
-    assert_eq!(creator_claimable_reward.amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(
+        creator_claimable_reward.amount,
+        Uint128::from(10_000_000 as u64)
+    );
     assert_eq!(creator_claimable_reward.claimed, false);
 
     // Validate that user balance is still zero after bonding till unlock happens
@@ -158,7 +164,8 @@ fn test_staking() {
         &lp_token_addr,
         &user_addr,
         Uint128::from(50_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // validate new unlock that must have been issued after second unbonding
     let token_lock_info = query_token_locks(
@@ -278,28 +285,34 @@ fn test_staking() {
     // ensure the reward schedules query works
     let response: Vec<RewardScheduleResponse> = app
         .wrap()
-        .query_wasm_smart(multi_staking_instance.clone(), &QueryMsg::RewardSchedules {
-            lp_token: lp_token_addr.clone(),
-            asset: AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
+        .query_wasm_smart(
+            multi_staking_instance.clone(),
+            &QueryMsg::RewardSchedules {
+                lp_token: lp_token_addr.clone(),
+                asset: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
             },
-        })
+        )
         .unwrap();
     assert_eq!(response.len(), 1);
-    assert_eq!(response[0], RewardScheduleResponse {
-        id: 1,
-        reward_schedule: RewardSchedule {
-            title: lp_token_addr.as_str().to_owned()+"-"+admin_addr.as_str(),
-            creator: admin_addr.clone(),
-            asset: AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
+    assert_eq!(
+        response[0],
+        RewardScheduleResponse {
+            id: 1,
+            reward_schedule: RewardSchedule {
+                title: lp_token_addr.as_str().to_owned() + "-" + admin_addr.as_str(),
+                creator: admin_addr.clone(),
+                asset: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+                amount: Uint128::from(100_000_000 as u64),
+                staking_lp_token: lp_token_addr.clone(),
+                start_block_time: 1000_301_000,
+                end_block_time: 1000_302_000,
             },
-            amount: Uint128::from(100_000_000 as u64),
-            staking_lp_token: lp_token_addr.clone(),
-            start_block_time: 1000_301_000,
-            end_block_time: 1000_302_000,
-        },
-    });
+        }
+    );
 
     // Withdraw the rewards
     withdraw_unclaimed_rewards(
@@ -315,16 +328,11 @@ fn test_staking() {
     assert_eq!(balance_uxprt.amount, Uint128::from(90_000_000 as u64));
 
     // Claim creator rewards
-    claim_creator_rewards(
-        &mut app,
-        &multi_staking_instance,
-        1,
-        &admin_addr
-    ).unwrap();
+    claim_creator_rewards(&mut app, &multi_staking_instance, 1, &admin_addr).unwrap();
 
     // Query creator claimable rewards
-    let query_msg = QueryMsg::CreatorClaimableReward { 
-        reward_schedule_id: 1
+    let query_msg = QueryMsg::CreatorClaimableReward {
+        reward_schedule_id: 1,
     };
 
     let response: CreatorClaimableRewardState = app
@@ -342,14 +350,12 @@ fn test_staking() {
     assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
 
     // claiming creator rewards again should fail
-    let response = claim_creator_rewards(
-        &mut app,
-        &multi_staking_instance,
-        1,
-        &admin_addr,
-    );
+    let response = claim_creator_rewards(&mut app, &multi_staking_instance, 1, &admin_addr);
     assert_eq!(response.is_err(), true);
-    assert_eq!(response.unwrap_err().root_cause().to_string(), "Unallocated reward for this schedule has already been claimed by the creator");
+    assert_eq!(
+        response.unwrap_err().root_cause().to_string(),
+        "Unallocated reward for this schedule has already been claimed by the creator"
+    );
 
     // create another reward schedule which won't have any user bonding
     create_reward_schedule(
@@ -363,11 +369,12 @@ fn test_staking() {
         Uint128::from(100_000_000 as u64),
         1000_601_000,
         1000_602_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     // verify the amount before the beginning of the reward schedule
     let query_msg = QueryMsg::CreatorClaimableReward {
-        reward_schedule_id: 2
+        reward_schedule_id: 2,
     };
     let response: CreatorClaimableRewardState = app
         .wrap()
@@ -398,18 +405,12 @@ fn test_staking() {
     assert_eq!(response.claimed, false);
 
     // claim the unused rewards
-    claim_creator_rewards(
-        &mut app,
-        &multi_staking_instance,
-        2,
-        &admin_addr
-    ).unwrap();
+    claim_creator_rewards(&mut app, &multi_staking_instance, 2, &admin_addr).unwrap();
 
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
     assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
-
 }
 
 #[test]
@@ -440,7 +441,8 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(100_000_000 as u64),
         1000_301_000,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -453,7 +455,8 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(150_000_000 as u64),
         1000_301_500,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -466,7 +469,8 @@ fn test_multi_asset_multi_reward_schedules() {
         Uint128::from(200_000_000 as u64),
         1000_301_200,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_000);
@@ -488,7 +492,8 @@ fn test_multi_asset_multi_reward_schedules() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_500);
@@ -502,7 +507,8 @@ fn test_multi_asset_multi_reward_schedules() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(50_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(
         &mut app,
@@ -538,7 +544,8 @@ fn test_multi_asset_multi_reward_schedules() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(50_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(
         &mut app,
@@ -610,7 +617,8 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(100_000_000 as u64),
         1000_301_000,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -623,7 +631,8 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(100_000_000 as u64),
         1000_301_500,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     create_reward_schedule(
         &mut app,
@@ -636,7 +645,8 @@ fn test_multi_user_multi_reward_schedule() {
         Uint128::from(200_000_000 as u64),
         1000_301_200,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_000);
@@ -665,7 +675,8 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_200);
@@ -678,7 +689,8 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_2_addr,
         Uint128::from(1_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_500);
@@ -692,7 +704,8 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(50_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // check if bonded amount decreased
     let user_1_bonded = query_bonded_lp_tokens(
@@ -714,7 +727,8 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(50_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     unbond_lp_tokens(
         &mut app,
@@ -722,7 +736,8 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_2_addr,
         Uint128::from(1_000_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(
         &mut app,
@@ -833,7 +848,8 @@ fn test_reward_schedule_creation_after_bonding() {
         Uint128::from(100_000_000 as u64),
         1000_301_000,
         1000_602_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     // mint some LP tokens to user
     mint_lp_tokens_to_addr(
@@ -851,7 +867,8 @@ fn test_reward_schedule_creation_after_bonding() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // increase time
     app.update_block(|b| {
@@ -871,7 +888,8 @@ fn test_reward_schedule_creation_after_bonding() {
         Uint128::from(500_000_000 as u64),
         1000_601_500,
         1000_602_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_601_600);
@@ -894,7 +912,8 @@ fn test_reward_schedule_creation_after_bonding() {
         &lp_token_addr,
         &user_2_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // increase time
     app.update_block(|b| {
@@ -909,7 +928,8 @@ fn test_reward_schedule_creation_after_bonding() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     unbond_lp_tokens(
         &mut app,
@@ -917,7 +937,8 @@ fn test_reward_schedule_creation_after_bonding() {
         &lp_token_addr,
         &user_2_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // calculate rewards
     let unclaimed_rewards_user_1 = query_unclaimed_rewards(
@@ -993,7 +1014,7 @@ fn test_create_cw20_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         AssetInfo::Token {
-            contract_addr: cw20_token_addr.clone()
+            contract_addr: cw20_token_addr.clone(),
         },
         Uint128::from(100_000_000 as u64),
         1000_301_000,
@@ -1017,7 +1038,8 @@ fn test_create_cw20_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // update time
     app.update_block(|b| {
@@ -1032,7 +1054,8 @@ fn test_create_cw20_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // increase time
     app.update_block(|b| {
@@ -1062,7 +1085,7 @@ fn test_create_cw20_reward_schedule() {
         &mut app,
         &multi_staking_instance,
         &lp_token_addr,
-        &user_1_addr
+        &user_1_addr,
     );
 
     // query rewards
@@ -1080,12 +1103,10 @@ fn test_create_cw20_reward_schedule() {
     assert_eq!(user_1_cw20_balance, Uint128::from(50_000_000 as u64));
 }
 
-
 /// This test checks if the after disallowing an LP token, the operations of
 /// unbonding and withdrawing rewards are still possible
 #[test]
 fn test_lp_methods_after_lp_allowance_removal() {
-    
     // setup
     let admin = String::from("admin");
     let user_1 = String::from("user_1");
@@ -1115,7 +1136,8 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &lp_token_addr,
         &user_1_addr,
         Uint128::from(100_000 as u64),
-    ).unwrap();
+    )
+    .unwrap();
 
     // increase time
     app.update_block(|b| {
@@ -1130,12 +1152,13 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &multi_staking_instance,
         &lp_token_addr,
         AssetInfo::NativeToken {
-            denom: "uxprt".to_string()
+            denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
         1000_301_500,
         1000_302_000,
-    ).unwrap();
+    )
+    .unwrap();
 
     // disallow lp token
     disallow_lp_token(
@@ -1155,7 +1178,10 @@ fn test_lp_methods_after_lp_allowance_removal() {
     );
 
     assert!(res.is_err());
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "LP Token is not allowed for staking");
+    assert_eq!(
+        res.unwrap_err().root_cause().to_string(),
+        "LP Token is not allowed for staking"
+    );
 
     // increase time
     app.update_block(|b| {
@@ -1203,7 +1229,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &mut app,
         &multi_staking_instance,
         &lp_token_addr,
-        &user_1_addr
+        &user_1_addr,
     );
 
     // query balance

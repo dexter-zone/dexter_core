@@ -1,29 +1,22 @@
-
-use crate::{contract::{update_staking_rewards, CONTRACT_NAME, ContractResult}, state::USER_LP_TOKEN_LOCKS};
-use const_format::concatcp;
-use cosmwasm_std::{
-    Addr, DepsMut, Env, Event,
-    MessageInfo, Response, Uint128,
+use crate::{
+    contract::{update_staking_rewards, ContractResult, CONTRACT_NAME},
+    state::USER_LP_TOKEN_LOCKS,
 };
+use const_format::concatcp;
+use cosmwasm_std::{Addr, DepsMut, Env, Event, MessageInfo, Response, Uint128};
 
 use dexter::{
     asset::AssetInfo,
-    helper::{
-        build_transfer_token_to_user_msg,
-    },
-    multi_staking::{Config, MAX_USER_LP_TOKEN_LOCKS, TokenLock},
+    helper::build_transfer_token_to_user_msg,
+    multi_staking::{Config, TokenLock, MAX_USER_LP_TOKEN_LOCKS},
 };
-
 
 use dexter::helper::EventExt;
 
 use crate::{
     error::ContractError,
-    state::{
-        CONFIG, LP_GLOBAL_STATE, USER_BONDED_LP_TOKENS,
-    },
+    state::{CONFIG, LP_GLOBAL_STATE, USER_BONDED_LP_TOKENS},
 };
-
 
 /// Allows to instantly unbond LP tokens without waiting for the unlock period
 /// This is a special case and should only be used in emergencies like a black swan event or a hack.
@@ -37,18 +30,18 @@ pub fn instant_unbond(
     amount: Uint128,
 ) -> ContractResult<Response> {
     let mut response = Response::new();
-    
+
     if amount.is_zero() {
         return Err(ContractError::ZeroAmount);
     }
-    
+
     let current_bond_amount = USER_BONDED_LP_TOKENS
-    .may_load(deps.storage, (&lp_token, &info.sender))?
-    .unwrap_or_default();
+        .may_load(deps.storage, (&lp_token, &info.sender))?
+        .unwrap_or_default();
 
     let config: Config = CONFIG.load(deps.storage)?;
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
-    
+
     let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
         ContractError::CantUnbondMoreThanBonded {
             amount_to_unbond: amount,
@@ -74,13 +67,11 @@ pub fn instant_unbond(
     lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
     LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
 
-   
     USER_BONDED_LP_TOKENS.save(
         deps.storage,
         (&lp_token, &info.sender),
         &user_updated_bond_amount,
     )?;
-
 
     // whole penalty fee is sent to the keeper as protocol treasury
     let penalty_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));

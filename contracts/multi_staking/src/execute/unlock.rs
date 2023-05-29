@@ -1,21 +1,18 @@
-use crate::{contract::{CONTRACT_NAME, ContractResult}, state::USER_LP_TOKEN_LOCKS, utils::{calculate_unlock_fee, find_lock_difference}};
+use crate::{
+    contract::{ContractResult, CONTRACT_NAME},
+    state::USER_LP_TOKEN_LOCKS,
+    utils::{calculate_unlock_fee, find_lock_difference},
+};
 use const_format::concatcp;
 use cosmwasm_std::{
-    Addr, DepsMut, Env, Event,
-    MessageInfo, Response, Uint128, CosmosMsg, WasmMsg, to_binary,
+    to_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
 };
 
 use cw20::Cw20ExecuteMsg;
-use dexter::{
-    helper::build_transfer_cw20_token_msg,
-    multi_staking::{
-        TokenLock,
-    },
-};
+use dexter::{helper::build_transfer_cw20_token_msg, multi_staking::TokenLock};
 
-
-use dexter::helper::EventExt;
 use crate::state::CONFIG;
+use dexter::helper::EventExt;
 
 // Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
 /// which are in a locked state post normal unbonding.
@@ -29,14 +26,14 @@ pub fn instant_unlock(
     lp_token: &Addr,
     token_locks: Vec<TokenLock>,
 ) -> ContractResult<Response> {
-
     let config = CONFIG.load(deps.storage)?;
     let user = info.sender.clone();
     let locks = USER_LP_TOKEN_LOCKS
         .may_load(deps.storage, (&lp_token, &user))?
         .unwrap_or_default();
-    
-    let (final_locks_after_unlocking, valid_locks_to_be_unlocked) = find_lock_difference(locks.clone(), token_locks.clone());
+
+    let (final_locks_after_unlocking, valid_locks_to_be_unlocked) =
+        find_lock_difference(locks.clone(), token_locks.clone());
 
     let total_amount = valid_locks_to_be_unlocked
         .iter()
@@ -52,18 +49,25 @@ pub fn instant_unlock(
         total_fee_charged += unlock_fee;
     }
 
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &user), &final_locks_after_unlocking)?;
+    USER_LP_TOKEN_LOCKS.save(
+        deps.storage,
+        (&lp_token, &user),
+        &final_locks_after_unlocking,
+    )?;
 
     let fee_recipient = config.keeper.unwrap_or(config.owner);
-    
+
     let mut response = Response::new().add_event(
         Event::from_sender(concatcp!(CONTRACT_NAME, "::instant_unlock"), user.clone())
-        .add_attribute("lp_token", lp_token.clone())
-        .add_attribute("amount", total_amount)
-        .add_attribute("fee", total_fee_charged)
-        .add_attribute("fee_recipient", fee_recipient.clone())
-        .add_attribute("locks", serde_json_wasm::to_string(&token_locks).unwrap())
-        .add_attribute("updated_locks", serde_json_wasm::to_string(&final_locks_after_unlocking).unwrap())
+            .add_attribute("lp_token", lp_token.clone())
+            .add_attribute("amount", total_amount)
+            .add_attribute("fee", total_fee_charged)
+            .add_attribute("fee_recipient", fee_recipient.clone())
+            .add_attribute("locks", serde_json_wasm::to_string(&token_locks).unwrap())
+            .add_attribute(
+                "updated_locks",
+                serde_json_wasm::to_string(&final_locks_after_unlocking).unwrap(),
+            ),
     );
 
     // transfer amount to user
@@ -79,7 +83,7 @@ pub fn instant_unlock(
         lp_token.to_string(),
         total_fee_charged,
     )?);
-    
+
     Ok(response)
 }
 
@@ -108,19 +112,24 @@ pub fn unlock(
         .filter(|lock| lock.unlock_time > env.block.time.seconds())
         .collect::<Vec<TokenLock>>();
 
-    
     let mut response = Response::new().add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::unlock"), &info)
-        .add_attribute("lp_token", lp_token.clone())
-        .add_attribute("amount", total_unlocked_amount)
-        .add_attribute("unlocked_locks", serde_json_wasm::to_string(&unlocked_locks).unwrap())
-        .add_attribute("updated_locks", serde_json_wasm::to_string(&updated_locks).unwrap())
+            .add_attribute("lp_token", lp_token.clone())
+            .add_attribute("amount", total_unlocked_amount)
+            .add_attribute(
+                "unlocked_locks",
+                serde_json_wasm::to_string(&unlocked_locks).unwrap(),
+            )
+            .add_attribute(
+                "updated_locks",
+                serde_json_wasm::to_string(&updated_locks).unwrap(),
+            ),
     );
-    
+
     if total_unlocked_amount.is_zero() {
         return Ok(response);
     }
-    
+
     USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &updated_locks)?;
     response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token.to_string(),

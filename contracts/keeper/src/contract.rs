@@ -3,15 +3,21 @@ use crate::error::ContractError;
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use const_format::concatcp;
-use cosmwasm_std::{Addr, Binary, Deps, DepsMut, entry_point, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128, CosmosMsg, WasmMsg, Coin, Decimal};
-use cw2::{set_contract_version, get_contract_version};
-use cw20::{Cw20ExecuteMsg};
+use cosmwasm_std::{
+    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
+    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
+};
+use cw2::{get_contract_version, set_contract_version};
+use cw20::Cw20ExecuteMsg;
 use cw_storage_plus::Item;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::keeper::{BalancesResponse, Config, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, ConfigV1};
-use dexter::helper::{claim_ownership, drop_ownership_proposal, EventExt, propose_new_owner};
+use dexter::helper::{claim_ownership, drop_ownership_proposal, propose_new_owner, EventExt};
+use dexter::keeper::{
+    BalancesResponse, Config, ConfigResponse, ConfigV1, ExecuteMsg, InstantiateMsg, MigrateMsg,
+    QueryMsg,
+};
 use dexter::querier::query_token_balance;
-use dexter::vault::{Cw20HookMsg, PoolInfo, ExitType, SingleSwapRequest};
+use dexter::vault::{Cw20HookMsg, ExitType, PoolInfo, SingleSwapRequest};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-keeper";
@@ -51,7 +57,7 @@ pub fn instantiate(
     CONFIG.save(deps.storage, &cfg)?;
     Ok(Response::new().add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
-            .add_attribute("owner", msg.owner.to_string())
+            .add_attribute("owner", msg.owner.to_string()),
     ))
 }
 
@@ -86,12 +92,24 @@ pub fn execute(
             amount,
             recipient,
         } => withdraw(deps, env, info, asset, amount, recipient),
-        ExecuteMsg::ExitLPTokens { lp_token_address, amount } => {
-            exit_lp_tokens(deps, env, info, lp_token_address, amount)
-        }
-        ExecuteMsg::SwapAsset { offer_asset, ask_asset_info, min_ask_amount, pool_id } => {
-            swap_asset(deps, env, info, pool_id, offer_asset, ask_asset_info, min_ask_amount)
-        }
+        ExecuteMsg::ExitLPTokens {
+            lp_token_address,
+            amount,
+        } => exit_lp_tokens(deps, env, info, lp_token_address, amount),
+        ExecuteMsg::SwapAsset {
+            offer_asset,
+            ask_asset_info,
+            min_ask_amount,
+            pool_id,
+        } => swap_asset(
+            deps,
+            env,
+            info,
+            pool_id,
+            offer_asset,
+            ask_asset_info,
+            min_ask_amount,
+        ),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -112,17 +130,22 @@ pub fn execute(
             drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
-        ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+        ExecuteMsg::ClaimOwnership {} => claim_ownership(
+            deps,
+            info,
+            env,
+            OWNERSHIP_PROPOSAL,
+            |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut v| {
                     v.owner = new_owner;
                     Ok(v)
                 })?;
 
                 Ok(())
-            }, CONTRACT_NAME)
-            .map_err(|e| e.into())
-        }
+            },
+            CONTRACT_NAME,
+        )
+        .map_err(|e| e.into()),
     }
 }
 
@@ -155,15 +178,12 @@ fn withdraw(
     let recipient = deps.api.addr_validate(recipient.as_str())?;
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
-    Ok(Response::new()
-        .add_message(transfer_msg)
-        .add_event(
-            Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
-                .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
-                .add_attribute("amount", amount.to_string())
-                .add_attribute("recipient", recipient.to_string())
-        )
-    )
+    Ok(Response::new().add_message(transfer_msg).add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
+            .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+            .add_attribute("amount", amount.to_string())
+            .add_attribute("recipient", recipient.to_string()),
+    ))
 }
 
 fn create_dexter_exit_pool_msg(
@@ -173,19 +193,18 @@ fn create_dexter_exit_pool_msg(
     lp_token_address: Addr,
     amount: Uint128,
     sender: Addr,
-    recipient: Option<Addr>
+    recipient: Option<Addr>,
 ) -> Result<CosmosMsg, ContractError> {
-
     let recipient = recipient.unwrap_or(sender.clone());
     let recipient = recipient.to_string();
 
-    let config  = CONFIG.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
 
     let pool_info: PoolInfo = deps.querier.query_wasm_smart(
         config.vault_address.to_string(),
         &dexter::vault::QueryMsg::GetPoolByLpTokenAddress {
             lp_token_addr: lp_token_address.to_string(),
-        }
+        },
     )?;
 
     let msg = Cw20ExecuteMsg::Send {
@@ -194,10 +213,10 @@ fn create_dexter_exit_pool_msg(
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: pool_info.pool_id,
             recipient: Some(recipient),
-            exit_type: ExitType::ExactLpBurn { 
+            exit_type: ExitType::ExactLpBurn {
                 lp_to_burn: amount,
-                min_assets_out: None 
-            }
+                min_assets_out: None,
+            },
         })?,
     };
 
@@ -207,7 +226,6 @@ fn create_dexter_exit_pool_msg(
         msg: to_binary(&msg)?,
     }))
 }
-
 
 /// Exits the specified amount of LP tokens using the specific Pool in the Dexter.
 /// This is done so keeper mostly holds the base assets rather than LP tokens
@@ -249,14 +267,11 @@ fn exit_lp_tokens(
         Some(env.contract.address.clone()),
     )?;
 
-    Ok(Response::new()
-        .add_message(tranfer_msg)
-        .add_event(
-            Event::from_info(concatcp!(CONTRACT_NAME, "::exit_lp_tokens"), &info)
-                .add_attribute("lp_token_address", lp_token_address.to_string())
-                .add_attribute("amount", amount.to_string())
-        )
-    )
+    Ok(Response::new().add_message(tranfer_msg).add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::exit_lp_tokens"), &info)
+            .add_attribute("lp_token_address", lp_token_address.to_string())
+            .add_attribute("amount", amount.to_string()),
+    ))
 }
 
 /// Swaps the specified amount of the specified asset for another asset using the Dexter protocol.
@@ -268,7 +283,7 @@ fn swap_asset(
     pool_id: Uint128,
     offer_asset: Asset,
     ask_asset_info: AssetInfo,
-    min_receive: Option<Uint128>
+    min_receive: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
@@ -314,18 +329,14 @@ fn swap_asset(
         msg: to_binary(&swap_msg)?,
     });
 
-    Ok(Response::new()
-        .add_message(cosmos_msg)
-        .add_event(
-            Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
-                .add_attribute("pool_id", pool_id.to_string())
-                .add_attribute("offer_asset", offer_asset.to_string())
-                .add_attribute("ask_asset_info", ask_asset_info.to_string())
-                .add_attribute("min_receive", min_receive.unwrap_or_default().to_string())
-        )
-    )
+    Ok(Response::new().add_message(cosmos_msg).add_event(
+        Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
+            .add_attribute("pool_id", pool_id.to_string())
+            .add_attribute("offer_asset", offer_asset.to_string())
+            .add_attribute("ask_asset_info", ask_asset_info.to_string())
+            .add_attribute("min_receive", min_receive.unwrap_or_default().to_string()),
+    ))
 }
-
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
 // ----------------x----------------x  :::: Keeper::QUERIES Implementation   ::::  x----------------x----------------
@@ -399,16 +410,13 @@ fn query_get_balances(deps: Deps, env: Env, assets: Vec<AssetInfo>) -> StdResult
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
     match msg {
-        MigrateMsg::V2 {
-            vault_address,
-        } => {
+        MigrateMsg::V2 { vault_address } => {
             // verify if we are running on V1 right now
             let contract_version = get_contract_version(deps.storage)?;
             if contract_version.version != CONTRACT_VERSION_V1 {
                 return Err(StdError::generic_err(format!(
                     "V2 upgrade is only supported over contract version {}. Current version is {}",
-                    CONTRACT_VERSION_V1,
-                    contract_version.version
+                    CONTRACT_VERSION_V1, contract_version.version
                 )));
             }
 
@@ -416,11 +424,10 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             let vault_address = deps.api.addr_validate(&vault_address)?;
 
             // if vault address is provided, check if it is valid by querying the config and parsing the response
-            let _config: dexter::vault::ConfigResponse = deps.querier.query_wasm_smart(
-                &vault_address,
-                &dexter::vault::QueryMsg::Config {},
-            )?;
-        
+            let _config: dexter::vault::ConfigResponse = deps
+                .querier
+                .query_wasm_smart(&vault_address, &dexter::vault::QueryMsg::Config {})?;
+
             // update contract version
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 

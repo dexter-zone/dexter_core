@@ -40,10 +40,7 @@ pub fn assert_cw20_balance(app: &App, contract: &Addr, address: &Addr, expected_
     let query_msg = Cw20QueryMsg::Balance {
         address: address.to_string(),
     };
-    let balance: BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(contract, &query_msg)
-        .unwrap();
+    let balance: BalanceResponse = app.wrap().query_wasm_smart(contract, &query_msg).unwrap();
 
     assert_eq!(balance.balance, expected_balance);
 }

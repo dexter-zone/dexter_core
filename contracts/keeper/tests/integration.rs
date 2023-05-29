@@ -4,7 +4,7 @@ use std::vec;
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
-use dexter::vault::{FeeInfo, PauseInfo, PoolTypeConfig, PoolType, PoolCreationFee};
+use dexter::vault::{FeeInfo, PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
@@ -13,11 +13,7 @@ fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     })
 }
 
-fn instantiate_contracts(
-    router: &mut App,
-    owner: Addr,
-    keeper_admin: Addr
-) -> (Addr, Addr) {
+fn instantiate_contracts(router: &mut App, owner: Addr, keeper_admin: Addr) -> (Addr, Addr) {
     let vault_contract = Box::new(
         ContractWrapper::new_with_empty(
             dexter_vault::contract::execute,
@@ -108,7 +104,8 @@ fn update_config() {
         ],
     );
 
-    let (_, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
+    let (_, keeper_instance) =
+        instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
 
     // #########---- Check if Keeper contract is initialzied properly ----#########
 
@@ -174,7 +171,6 @@ fn update_config() {
     assert_eq!(res.balances, assets_res);
 }
 
-
 #[test]
 fn withdraw_funds() {
     let owner = Addr::unchecked("owner");
@@ -194,7 +190,8 @@ fn withdraw_funds() {
         ],
     );
 
-    let (_vault_instance, keeper_instance) = instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
+    let (_vault_instance, keeper_instance) =
+        instantiate_contracts(&mut router, owner.clone(), keeper_admin.clone());
 
     router
         .send_tokens(
@@ -208,7 +205,11 @@ fn withdraw_funds() {
         .unwrap();
 
     // Check balance query
-    let msg = QueryMsg::Balances { assets: vec![AssetInfo::NativeToken { denom: "ibc/axlusdc".to_string() }] };
+    let msg = QueryMsg::Balances {
+        assets: vec![AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        }],
+    };
     let res: BalancesResponse = router
         .wrap()
         .query_wasm_smart(&keeper_instance, &msg)
@@ -233,14 +234,8 @@ fn withdraw_funds() {
         recipient: None,
     };
 
-    let res = router
-        .execute_contract(
-            owner.clone(),
-            keeper_instance.clone(),
-            &msg,
-            &[],
-        );
-    
+    let res = router.execute_contract(owner.clone(), keeper_instance.clone(), &msg, &[]);
+
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
 
@@ -253,16 +248,13 @@ fn withdraw_funds() {
         recipient: None,
     };
 
-    let res = router
-        .execute_contract(
-            keeper_admin.clone(),
-            keeper_instance.clone(),
-            &msg,
-            &[],
-        );
+    let res = router.execute_contract(keeper_admin.clone(), keeper_instance.clone(), &msg, &[]);
 
     assert!(res.is_err());
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Insufficient funds to execute this transaction");
+    assert_eq!(
+        res.unwrap_err().root_cause().to_string(),
+        "Insufficient funds to execute this transaction"
+    );
 
     // try withdrawing correct amount
     let msg = ExecuteMsg::Withdraw {
@@ -274,16 +266,15 @@ fn withdraw_funds() {
     };
 
     router
-        .execute_contract(
-            keeper_admin.clone(),
-            keeper_instance.clone(),
-            &msg,
-            &[],
-        )
+        .execute_contract(keeper_admin.clone(), keeper_instance.clone(), &msg, &[])
         .unwrap();
 
     // Check balance query
-    let msg = QueryMsg::Balances { assets: vec![AssetInfo::NativeToken { denom: "ibc/axlusdc".to_string() }] };
+    let msg = QueryMsg::Balances {
+        assets: vec![AssetInfo::NativeToken {
+            denom: "ibc/axlusdc".to_string(),
+        }],
+    };
     let res: BalancesResponse = router
         .wrap()
         .query_wasm_smart(&keeper_instance, &msg)
@@ -315,18 +306,15 @@ fn withdraw_funds() {
     };
 
     router
-        .execute_contract(
-            keeper_admin.clone(),
-            keeper_instance.clone(),
-            &msg,
-            &[],
-        )
+        .execute_contract(keeper_admin.clone(), keeper_instance.clone(), &msg, &[])
         .unwrap();
 
     // Validate if the funds were sent to the recipient
-    let res = router.wrap().query_all_balances(Addr::unchecked("recipient")).unwrap();
+    let res = router
+        .wrap()
+        .query_all_balances(Addr::unchecked("recipient"))
+        .unwrap();
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].amount, Uint128::new(50_000_000u128));
     assert_eq!(res[0].denom, "ibc/axlusdc");
-
 }

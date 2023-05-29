@@ -1,5 +1,5 @@
 use cosmwasm_schema::write_api;
-use dexter::multi_staking::{InstantiateMsg, QueryMsg, ExecuteMsg, MigrateMsg};
+use dexter::multi_staking::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 
 fn main() {
     write_api! {
