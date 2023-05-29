@@ -7,6 +7,7 @@
     "title": "InstantiateMsg",
     "type": "object",
     "required": [
+      "fee_tier_interval",
       "instant_unbond_fee_bp",
       "instant_unbond_min_fee_bp",
       "minimum_reward_schedule_proposal_start_delay",
@@ -14,6 +15,11 @@
       "unlock_period"
     ],
     "properties": {
+      "fee_tier_interval": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
       "instant_unbond_fee_bp": {
         "description": "value between 0 and 1000 (0% to 10%) are allowed",
         "type": "integer",
@@ -71,6 +77,14 @@
           "update_config": {
             "type": "object",
             "properties": {
+              "fee_tier_interval": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0.0
+              },
               "instant_unbond_fee_bp": {
                 "type": [
                   "integer",
@@ -318,7 +332,7 @@
         "additionalProperties": false
       },
       {
-        "description": "Instantly unbonds LP tokens from the contract. No locking period is applied. The tokens are withdrawn from the contract and sent to the user. A penalty is applied to the amount being unbonded. The penalty is calculated as a percentage of the amount being unbonded and sent to the contract keeper as a fee.",
+        "description": "Instantly unbonds LP tokens from the contract. No locking period is applied. The tokens are withdrawn from the contract and sent to the user. An Instant Unbonding fee is applicable to the amount being unbonded. The fee is calculated as a percentage of the amount being unbonded and sent to the protocol treasury.",
         "type": "object",
         "required": [
           "instant_unbond"
@@ -366,7 +380,7 @@
         "additionalProperties": false
       },
       {
-        "description": "Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens which are in a locked state post normal unbonding. This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event occurs and the user has the LP tokens in a locked state after unbonding. Penalty fee is same as instant unbonding.",
+        "description": "Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens which are in a locked state post normal unbonding. This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event occurs and the user has the LP tokens in a locked state after unbonding.",
         "type": "object",
         "required": [
           "instant_unlock"
@@ -383,7 +397,7 @@
                 "$ref": "#/definitions/Addr"
               },
               "token_locks": {
-                "description": "Altought it is possible to index or something similar to calculate this, it would lead to problems with order of transaction execution, thus it is better to pass the full lock explicitly.",
+                "description": "Altought it is use possible to index or something similar to calculate this, it would lead to problems with order of transaction execution, thus it is better to pass the full lock explicitly.",
                 "type": "array",
                 "items": {
                   "$ref": "#/definitions/TokenLock"
@@ -1036,10 +1050,16 @@
           "v2": {
             "type": "object",
             "required": [
+              "fee_tier_interval",
               "instant_unbond_fee_bp",
               "instant_unbond_min_fee_bp"
             ],
             "properties": {
+              "fee_tier_interval": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
               "instant_unbond_fee_bp": {
                 "type": "integer",
                 "format": "uint64",
@@ -1061,6 +1081,20 @@
                 ]
               }
             },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "V2 upgrade for testnet did not set the correct contract version. This fixes it This upgrade also enable configuration modification support for fee_tier_interval",
+        "type": "object",
+        "required": [
+          "v2_fix"
+        ],
+        "properties": {
+          "v2_fix": {
+            "type": "object",
             "additionalProperties": false
           }
         },
@@ -1102,6 +1136,7 @@
       "type": "object",
       "required": [
         "allowed_lp_tokens",
+        "fee_tier_interval",
         "instant_unbond_fee_bp",
         "instant_unbond_min_fee_bp",
         "minimum_reward_schedule_proposal_start_delay",
@@ -1116,6 +1151,12 @@
             "$ref": "#/definitions/Addr"
           }
         },
+        "fee_tier_interval": {
+          "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "instant_unbond_fee_bp": {
           "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
           "type": "integer",
@@ -1123,7 +1164,7 @@
           "minimum": 0.0
         },
         "instant_unbond_min_fee_bp": {
-          "description": "This is the minimum fee charged for instant LP unlock when the unlock is ~1 day or less in future. Fee in between the unlock duration and 1 day will be linearly interpolated at day boundaries.",
+          "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0

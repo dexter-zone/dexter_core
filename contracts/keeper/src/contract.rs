@@ -174,8 +174,7 @@ fn withdraw(
     }
 
     // Send the funds to the recipient or to the owner if no recipient is specified
-    let recipient = recipient.unwrap_or(config.owner);
-    let recipient = deps.api.addr_validate(recipient.as_str())?;
+    let recipient = deps.api.addr_validate(recipient.unwrap_or(config.owner).as_str())?;
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
     Ok(Response::new().add_message(transfer_msg).add_event(
@@ -188,18 +187,14 @@ fn withdraw(
 
 fn create_dexter_exit_pool_msg(
     deps: DepsMut,
-    _env: &Env,
+    env: &Env,
     vault_address: Addr,
     lp_token_address: Addr,
     amount: Uint128,
-    sender: Addr,
-    recipient: Option<Addr>,
 ) -> Result<CosmosMsg, ContractError> {
-    let recipient = recipient.unwrap_or(sender.clone());
-    let recipient = recipient.to_string();
+    let recipient = env.contract.address.clone();
 
     let config = CONFIG.load(deps.storage)?;
-
     let pool_info: PoolInfo = deps.querier.query_wasm_smart(
         config.vault_address.to_string(),
         &dexter::vault::QueryMsg::GetPoolByLpTokenAddress {
@@ -212,7 +207,7 @@ fn create_dexter_exit_pool_msg(
         amount,
         msg: to_binary(&Cw20HookMsg::ExitPool {
             pool_id: pool_info.pool_id,
-            recipient: Some(recipient),
+            recipient: Some(recipient.to_string()),
             exit_type: ExitType::ExactLpBurn {
                 lp_to_burn: amount,
                 min_assets_out: None,
@@ -263,8 +258,6 @@ fn exit_lp_tokens(
         config.vault_address,
         lp_token_address.clone(),
         amount,
-        env.contract.address.clone(),
-        Some(env.contract.address.clone()),
     )?;
 
     Ok(Response::new().add_message(tranfer_msg).add_event(

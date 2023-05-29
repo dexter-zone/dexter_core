@@ -363,8 +363,8 @@ pub enum ExecuteMsg {
     },
     /// Instantly unbonds LP tokens from the contract.
     /// No locking period is applied. The tokens are withdrawn from the contract and sent to the user.
-    /// A penalty is applied to the amount being unbonded.
-    /// The penalty is calculated as a percentage of the amount being unbonded and sent to the contract keeper as a fee.
+    /// An Instant Unbonding fee is applicable to the amount being unbonded.
+    /// The fee is calculated as a percentage of the amount being unbonded and sent to the protocol treasury.
     InstantUnbond {
         lp_token: Addr,
         amount: Uint128,
@@ -378,7 +378,6 @@ pub enum ExecuteMsg {
     /// which are in a locked state post normal unbonding.
     /// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
     /// occurs and the user has the LP tokens in a locked state after unbonding.
-    /// Penalty fee is same as instant unbonding.
     InstantUnlock {
         lp_token: Addr,
         /// Altought it is use possible to index or something similar to calculate this, it would lead to problems with

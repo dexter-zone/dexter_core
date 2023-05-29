@@ -14,11 +14,10 @@ use dexter::{helper::build_transfer_cw20_token_msg, multi_staking::TokenLock};
 use crate::state::CONFIG;
 use dexter::helper::EventExt;
 
-// Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
+/// Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
 /// which are in a locked state post normal unbonding.
 /// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
 /// occurs and the user has the LP tokens in a locked state after unbonding.
-/// Penalty fee is same as instant unbonding.
 pub fn instant_unlock(
     deps: DepsMut,
     env: &Env,

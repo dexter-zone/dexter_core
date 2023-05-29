@@ -21,7 +21,7 @@ use crate::{
 /// Allows to instantly unbond LP tokens without waiting for the unlock period
 /// This is a special case and should only be used in emergencies like a black swan event or a hack.
 /// The user will pay a penalty fee in the form of a percentage of the unbonded amount which will be
-/// sent to the keeper as protocol treasury.
+/// sent to the keeper i.e. protocol treasury.
 pub fn instant_unbond(
     mut deps: DepsMut,
     env: Env,
@@ -73,8 +73,8 @@ pub fn instant_unbond(
         &user_updated_bond_amount,
     )?;
 
-    // whole penalty fee is sent to the keeper as protocol treasury
-    let penalty_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
+    // whole instant unbond fee is sent to the keeper as protocol treasury
+    let instant_unbond_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
 
     // Check if the keeper is available, if not, send the fee to the contract owner
     let mut fee_receiver = config.owner;
@@ -82,11 +82,11 @@ pub fn instant_unbond(
         fee_receiver = keeper_addr;
     }
 
-    // Send the penalty fee to the keeper as protocol treasury
+    // Send the instant unbond fee to the keeper as protocol treasury
     let fee_msg = build_transfer_token_to_user_msg(
         AssetInfo::token(lp_token.clone()),
         fee_receiver,
-        penalty_fee,
+        instant_unbond_fee,
     )?;
     response = response.add_message(fee_msg);
 
@@ -94,7 +94,7 @@ pub fn instant_unbond(
     let unbond_msg = build_transfer_token_to_user_msg(
         AssetInfo::token(lp_token.clone()),
         info.sender.clone(),
-        amount.checked_sub(penalty_fee)?,
+        amount.checked_sub(instant_unbond_fee)?,
     )?;
     response = response.add_message(unbond_msg);
 
@@ -103,8 +103,8 @@ pub fn instant_unbond(
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
         .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
-        .add_attribute("withdraw_fee", penalty_fee)
-        .add_attribute("user_withdrawn_amount", amount.checked_sub(penalty_fee)?);
+        .add_attribute("instant_unbond_fee", instant_unbond_fee)
+        .add_attribute("user_withdrawn_amount", amount.checked_sub(instant_unbond_fee)?);
 
     response = response.add_event(event);
     Ok(response)

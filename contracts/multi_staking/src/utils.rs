@@ -5,10 +5,10 @@ use crate::query::query_instant_unlock_fee_tiers;
 
 /// Find the difference between two lock vectors.
 /// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
-/// 100 tokens at block 100 boths.
+/// 100 tokens at block 100 both.
 /// In this case, the difference calculation must only remove one occurances of the lock if one is present in the locks_to_be_unlocked vector.
 /// Locks are by default stored by unlock time in ascending order by design, but we can sort it once more to be sure.
-/// Return both locks to keep and valid locks to be unlocked since the lock actually contain invalid locks.
+/// Return both locks to keep and valid locks to be unlocked since the locks_to_be_unlocked vector can actually contain invalid locks.
 pub fn find_lock_difference(
     all_locks: Vec<TokenLock>,
     locks_to_be_unlocked: Vec<TokenLock>,
@@ -52,7 +52,7 @@ pub fn find_lock_difference(
 
 /// Calculate the instant unlock fee for a given token lock.
 /// The fee is calculated as a percentage of the locked amount.
-/// It is linearly interpolated between the start and end time of the lock at day granularity.
+/// It is linearly interpolated between the start and end time of the lock at tier_interval granularity.
 pub fn calculate_unlock_fee(
     token_lock: &TokenLock,
     current_block_time: u64,
@@ -64,7 +64,7 @@ pub fn calculate_unlock_fee(
         return (0, Uint128::zero());
     }
 
-    // This is the bounds of the fee calculation linear interpolation at day granularity.
+    // This is the bounds of the fee calculation linear interpolation at tier_interval granularity.
     let min_fee_bp = config.instant_unbond_min_fee_bp;
     let max_fee_bp = config.instant_unbond_fee_bp;
 
