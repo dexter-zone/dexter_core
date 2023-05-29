@@ -10,7 +10,7 @@ use crate::utils::{
     create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
     mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
     query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
-    withdraw_unclaimed_rewards,
+    withdraw_unclaimed_rewards, setup_generic,
 };
 pub mod utils;
 
@@ -29,7 +29,15 @@ fn test_staking() {
 
     let mut app = mock_app(admin_addr.clone(), coins);
 
-    let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
+    let (multi_staking_instance, lp_token_addr) = setup_generic(
+        &mut app,
+        admin_addr.clone(),
+        None,
+        3 * 24 * 60 * 60,
+        1000,
+        200,
+        500,
+    );
 
     create_reward_schedule(
         &mut app,
