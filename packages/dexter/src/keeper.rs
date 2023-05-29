@@ -11,6 +11,8 @@ use cosmwasm_std::{Addr, Uint128};
 pub struct InstantiateMsg {
     /// Owner address
     pub owner: Addr,
+    /// Vault contract address
+    pub vault_address: Addr,
 }
 
 
@@ -20,6 +22,13 @@ pub struct InstantiateMsg {
 pub struct Config {
     /// admin address
     pub owner: Addr,
+    /// Vault contract address
+    pub vault_address: Addr,
+}
+
+#[cw_serde]
+pub struct ConfigV1 {
+    pub owner: Addr
 }
 
 /// This struct describes the functions that can be executed in this contract.
@@ -34,6 +43,22 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// The recipient address. If None, the owner address will be used
         recipient: Option<Addr>,
+    },
+     /// Exit LP tokens that are received as part of instant LP unbonding fee to contain the base assets of the pool only
+     ExitLPTokens {
+        /// Contract address of the LP token
+        lp_token_address: String,
+        /// The amount of LP tokens to exit
+        amount: Uint128,
+        /// Slippage protection
+        min_assets_received: Option<Vec<Asset>>,
+    },
+    /// Swap an asset contained in the keeper for a different asset using Dexter pools
+    SwapAsset{
+        offer_asset: Asset,
+        ask_asset_info: AssetInfo,
+        min_ask_amount: Option<Uint128>,
+        pool_id: Uint128
     },
     /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
     ProposeNewOwner {
@@ -61,7 +86,11 @@ pub enum QueryMsg {
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V2 {
+        vault_address: String,
+    }
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------

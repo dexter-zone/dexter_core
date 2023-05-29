@@ -17,11 +17,26 @@ pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 pub struct InstantiateMsg {
     pub owner: Addr,
     pub unlock_period: u64,
-    pub minimum_reward_schedule_proposal_start_delay: u64
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub keeper_addr: Option<Addr>,
+    /// value between 0 and 1000 (0% to 10%) are allowed
+    pub instant_unbond_fee_bp: u64,
+    pub instant_unbond_min_fee_bp: u64,
+    pub fee_tier_interval: u64
 }
 
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V2 {
+        keeper_addr: Option<Addr>,
+        instant_unbond_fee_bp: u64,
+        instant_unbond_min_fee_bp: u64,
+        fee_tier_interval: u64
+    },
+    /// V2 upgrade for testnet did not set the correct contract version. This fixes it
+    /// This upgrade also enable configuration modification support for fee_tier_interval
+    V2Fix {}
+}
 
 #[cw_serde]
 pub struct AssetRewardState {
@@ -105,9 +120,18 @@ pub struct ReviewProposedRewardSchedule {
 }
 
 #[cw_serde]
+pub struct UnlockFeeTier {
+    pub seconds_till_unlock_start: u64,
+    pub seconds_till_unlock_end: u64,
+    pub unlock_fee_bp: u64
+}
+
+#[cw_serde]
 pub struct Config {
     /// owner has privilege to add/remove allowed lp tokens for reward
     pub owner: Addr,
+    /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
+    pub keeper: Option<Addr>,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds
@@ -116,9 +140,26 @@ pub struct Config {
     pub unlock_period: u64,
     /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
     /// This is to give enough time to review the proposal.
-    pub minimum_reward_schedule_proposal_start_delay: u64
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
+    /// value between 0 and 1000 (0% to 10%) are allowed
+    pub instant_unbond_fee_bp: u64,
+    /// This is the interval period in seconds on which we will have fee tier boundaries.
+    pub fee_tier_interval: u64,
+    /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
+    /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
+    pub instant_unbond_min_fee_bp: u64,
 }
 
+#[cw_serde]
+pub struct ConfigV1 {
+     pub owner: Addr,
+     pub allowed_lp_tokens: Vec<Addr>,
+     pub unlock_period: u64,
+     pub minimum_reward_schedule_proposal_start_delay: u64,
+}
+
+#[derive(Eq)]
 #[cw_serde]
 pub struct TokenLock {
     pub unlock_time: u64,
@@ -158,6 +199,15 @@ pub struct RewardScheduleResponse {
 }
 
 #[cw_serde]
+pub struct InstantLpUnlockFee {
+    pub time_until_lock_expiry: u64,
+    pub unlock_fee_bp: u64,
+    pub unlock_fee: Uint128,
+    pub unlock_amount: Uint128,
+}
+
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns current config of the contract
@@ -180,12 +230,29 @@ pub enum QueryMsg {
         user: Addr,
         block_time: Option<u64>
     },
+    /// Returns raw state of the token locks for a user for a given LP token
+    /// It might include the token locks which are already unlocked and won't give the current ideal view
+    /// of the token locks but the actual one as it is stored in the contract
+    #[returns(Vec<TokenLock>)]
+    RawTokenLocks {
+        lp_token: Addr,
+        user: Addr,
+    },
     #[returns(Uint128)]
     /// Returns the total staked amount for a given LP token
     BondedLpTokens {
         lp_token: Addr,
         user: Addr,
     },
+    /// Returns the current unlocking fee percentage (bp) and actual fee for a given token lock
+    #[returns(InstantLpUnlockFee)]
+    InstantUnlockFee {
+        user: Addr,
+        lp_token: Addr,
+        token_lock: TokenLock
+    },
+    #[returns(Vec<UnlockFeeTier>)]
+    InstantUnlockFeeTiers {},
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
@@ -240,6 +307,9 @@ pub enum ExecuteMsg {
     UpdateConfig {
         minimum_reward_schedule_proposal_start_delay: Option<u64>,
         unlock_period: Option<u64>,
+        instant_unbond_fee_bp: Option<u64>,
+        instant_unbond_min_fee_bp: Option<u64>,
+        fee_tier_interval: Option<u64>,
     },
     /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
@@ -291,10 +361,28 @@ pub enum ExecuteMsg {
         lp_token: Addr,
         amount: Option<Uint128>,
     },
+    /// Instantly unbonds LP tokens from the contract.
+    /// No locking period is applied. The tokens are withdrawn from the contract and sent to the user.
+    /// An Instant Unbonding fee is applicable to the amount being unbonded.
+    /// The fee is calculated as a percentage of the amount being unbonded and sent to the protocol treasury.
+    InstantUnbond {
+        lp_token: Addr,
+        amount: Uint128,
+    },
     /// Unlocks the tokens which are locked for a locking period.
     /// After unlocking, the tokens are withdrawn from the contract and sent to the user.
     Unlock {
         lp_token: Addr,
+    },
+    /// Instant unlock is a extension of instant unbonding feature which allows to insantly unbond tokens
+    /// which are in a locked state post normal unbonding.
+    /// This is useful when a user mistakenly unbonded the tokens instead of instant unbonding or if a black swan event
+    /// occurs and the user has the LP tokens in a locked state after unbonding.
+    InstantUnlock {
+        lp_token: Addr,
+        /// Altought it is use possible to index or something similar to calculate this, it would lead to problems with
+        /// order of transaction execution, thus it is better to pass the full lock explicitly.
+        token_locks: Vec<TokenLock>,
     },
     /// Allows to withdraw unbonded rewards for a specific LP token.
     /// The rewards are sent to the user's address.

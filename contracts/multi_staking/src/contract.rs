@@ -15,23 +15,22 @@ use dexter::{
         propose_new_owner,
     },
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, Cw20HookMsg,
-        ExecuteMsg, InstantiateMsg, QueryMsg, RewardSchedule, TokenLock, TokenLockInfo,
-        UnclaimedReward,
+        AssetRewardState, AssetStakerInfo, Config, ConfigV1, CreatorClaimableRewardState,
+        Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, MigrateMsg, QueryMsg,
+        RewardSchedule, TokenLockInfo, UnclaimedReward,
     },
 };
 
+use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use cw2::set_contract_version;
-use cw_storage_plus::Bound;
+use cw_storage_plus::{Bound, Item};
 use dexter::asset::Asset;
-use dexter::helper::{EventExt};
+use dexter::helper::EventExt;
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_USER_LP_TOKEN_LOCKS,
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS,
 };
 
-use crate::state::next_reward_schedule_proposal_id;
 use crate::{
     error::ContractError,
     state::{
@@ -41,13 +40,24 @@ use crate::{
         USER_LP_TOKEN_LOCKS,
     },
 };
+use crate::{
+    execute::{
+        unbond::{instant_unbond, unbond},
+        unlock::{instant_unlock, unlock},
+    },
+    query::query_instant_unlock_fee_tiers,
+    state::next_reward_schedule_proposal_id,
+    utils::calculate_unlock_fee,
+};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-multi-staking";
+pub const CONTRACT_NAME: &str = "dexter-multi-staking";
+
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-type ContractResult<T> = Result<T, ContractError>;
+pub type ContractResult<T> = Result<T, ContractError>;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -61,10 +71,15 @@ pub fn instantiate(
     CONFIG.save(
         deps.storage,
         &Config {
+            keeper: msg.keeper_addr,
             unlock_period: msg.unlock_period,
-            minimum_reward_schedule_proposal_start_delay: msg.minimum_reward_schedule_proposal_start_delay,
+            minimum_reward_schedule_proposal_start_delay: msg
+                .minimum_reward_schedule_proposal_start_delay,
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
+            instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp,
+            fee_tier_interval: msg.fee_tier_interval,
         },
     )?;
 
@@ -74,8 +89,8 @@ pub fn instantiate(
             .add_attribute("unlock_period", msg.unlock_period.to_string())
             .add_attribute(
                 "minimum_reward_schedule_proposal_start_delay",
-                msg.minimum_reward_schedule_proposal_start_delay.to_string()
-            )
+                msg.minimum_reward_schedule_proposal_start_delay.to_string(),
+            ),
     ))
 }
 
@@ -90,12 +105,18 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
+            fee_tier_interval,
         } => update_config(
             deps,
             env,
             info,
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
+            fee_tier_interval,
         ),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
@@ -154,7 +175,14 @@ pub fn execute(
             Ok(response.add_message(transfer_msg))
         }
         ExecuteMsg::Unbond { lp_token, amount } => unbond(deps, env, info, lp_token, amount),
+        ExecuteMsg::InstantUnbond { lp_token, amount } => {
+            instant_unbond(deps, env, info, lp_token, amount)
+        }
         ExecuteMsg::Unlock { lp_token } => unlock(deps, env, info, lp_token),
+        ExecuteMsg::InstantUnlock {
+            lp_token,
+            token_locks,
+        } => instant_unlock(deps, &env, &info, &lp_token, token_locks),
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, info, lp_token),
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
@@ -179,17 +207,22 @@ pub fn execute(
             drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
         }
-        ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+        ExecuteMsg::ClaimOwnership {} => claim_ownership(
+            deps,
+            info,
+            env,
+            OWNERSHIP_PROPOSAL,
+            |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut v| {
                     v.owner = new_owner;
                     Ok(v)
                 })?;
 
                 Ok(())
-            }, CONTRACT_NAME)
-            .map_err(|e| e.into())
-        }
+            },
+            CONTRACT_NAME,
+        )
+        .map_err(|e| e.into()),
     }
 }
 
@@ -199,6 +232,9 @@ fn update_config(
     info: MessageInfo,
     minimum_reward_schedule_proposal_start_delay: Option<u64>,
     unlock_period: Option<u64>,
+    instant_unbond_fee_bp: Option<u64>,
+    instant_unbond_min_fee_bp: Option<u64>,
+    fee_tier_interval: Option<u64>,
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -209,17 +245,41 @@ fn update_config(
 
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
-    if let Some(reward_schedule_proposal_start_delay) = minimum_reward_schedule_proposal_start_delay {
+    if let Some(reward_schedule_proposal_start_delay) = minimum_reward_schedule_proposal_start_delay
+    {
         config.minimum_reward_schedule_proposal_start_delay = reward_schedule_proposal_start_delay;
         event = event.add_attribute(
             "minimum_reward_schedule_proposal_start_delay",
-            config.minimum_reward_schedule_proposal_start_delay.to_string(),
+            config
+                .minimum_reward_schedule_proposal_start_delay
+                .to_string(),
         );
     }
 
     if let Some(unlock_period) = unlock_period {
         config.unlock_period = unlock_period;
         event = event.add_attribute("unlock_period", config.unlock_period.to_string());
+    }
+
+    if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
+        config.instant_unbond_fee_bp = instant_unbond_fee_bp;
+        event = event.add_attribute(
+            "instant_unbond_fee_bp",
+            config.instant_unbond_fee_bp.to_string(),
+        );
+    }
+
+    if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
+        config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
+        event = event.add_attribute(
+            "instant_unbond_min_fee_bp",
+            config.instant_unbond_min_fee_bp.to_string(),
+        );
+    }
+
+    if let Some(fee_tier_interval) = fee_tier_interval {
+        config.fee_tier_interval = fee_tier_interval;
+        event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -285,10 +345,13 @@ fn claim_unallocated_reward(
         creator_claimable_reward_state.amount,
     )?;
 
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::claim_unallocated_reward"), &info)
-        .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
-        .add_attribute("asset", reward_schedule.asset.as_string())
-        .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
+    let event = Event::from_info(
+        concatcp!(CONTRACT_NAME, "::claim_unallocated_reward"),
+        &info,
+    )
+    .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
+    .add_attribute("asset", reward_schedule.asset.as_string())
+    .add_attribute("amount", creator_claimable_reward_state.amount.to_string());
 
     Ok(Response::new().add_event(event).add_message(msg))
 }
@@ -424,8 +487,13 @@ pub fn propose_reward_schedule(
             end_block_time,
         });
     }
-    if start_block_time <= env.block.time.seconds() + config.minimum_reward_schedule_proposal_start_delay {
-        return Err(ContractError::ProposedStartBlockTimeMustBeReviewable { min_reward_schedule_proposal_start_delay: config.minimum_reward_schedule_proposal_start_delay });
+    if start_block_time
+        <= env.block.time.seconds() + config.minimum_reward_schedule_proposal_start_delay
+    {
+        return Err(ContractError::ProposedStartBlockTimeMustBeReviewable {
+            min_reward_schedule_proposal_start_delay: config
+                .minimum_reward_schedule_proposal_start_delay,
+        });
     }
 
     let proposal_id: u64 = next_reward_schedule_proposal_id(deps.storage)?;
@@ -446,13 +514,16 @@ pub fn propose_reward_schedule(
     )?;
 
     Ok(Response::new().add_event(
-        Event::from_sender(concatcp!(CONTRACT_NAME, "::propose_reward_schedule"), proposer)
-            .add_attribute("lp_token", lp_token.to_string())
-            .add_attribute("title", title)
-            .add_attribute("start_block_time", start_block_time.to_string())
-            .add_attribute("end_block_time", end_block_time.to_string())
-            .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
-            .add_attribute("proposal_id", proposal_id.to_string())
+        Event::from_sender(
+            concatcp!(CONTRACT_NAME, "::propose_reward_schedule"),
+            proposer,
+        )
+        .add_attribute("lp_token", lp_token.to_string())
+        .add_attribute("title", title)
+        .add_attribute("start_block_time", start_block_time.to_string())
+        .add_attribute("end_block_time", end_block_time.to_string())
+        .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+        .add_attribute("proposal_id", proposal_id.to_string()),
     ))
 }
 
@@ -555,15 +626,18 @@ pub fn review_reward_schedule_proposals(
     }
 
     Ok(Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"), &info)
-            .add_attribute(
-                "accepted_proposals",
-                serde_json_wasm::to_string(&accepted_reward_proposals).unwrap(),
-            )
-            .add_attribute(
-                "rejected_proposals",
-                serde_json_wasm::to_string(&rejected_reward_proposals).unwrap(),
-            )
+        Event::from_info(
+            concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"),
+            &info,
+        )
+        .add_attribute(
+            "accepted_proposals",
+            serde_json_wasm::to_string(&accepted_reward_proposals).unwrap(),
+        )
+        .add_attribute(
+            "rejected_proposals",
+            serde_json_wasm::to_string(&rejected_reward_proposals).unwrap(),
+        ),
     ))
 }
 
@@ -588,10 +662,15 @@ pub fn drop_reward_schedule_proposal(
 
     REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
 
-    Ok(Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::drop_reward_schedule_proposal"), &info)
-            .add_attribute("proposal_id", proposal_id.to_string())
-    ).add_message(msg))
+    Ok(Response::new()
+        .add_event(
+            Event::from_info(
+                concatcp!(CONTRACT_NAME, "::drop_reward_schedule_proposal"),
+                &info,
+            )
+            .add_attribute("proposal_id", proposal_id.to_string()),
+        )
+        .add_message(msg))
 }
 
 pub fn receive_cw20(
@@ -604,14 +683,21 @@ pub fn receive_cw20(
         Cw20HookMsg::Bond { beneficiary_user } => {
             let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
-            
+
             let user = if let Some(beneficiary_user) = beneficiary_user {
                 deps.api.addr_validate(beneficiary_user.as_str())?
             } else {
                 cw20_sender.clone()
             };
 
-            bond(deps, env, cw20_sender.clone(), user, token_address, cw20_msg.amount)
+            bond(
+                deps,
+                env,
+                cw20_sender.clone(),
+                user,
+                token_address,
+                cw20_msg.amount,
+            )
         }
         Cw20HookMsg::ProposeRewardSchedule {
             lp_token,
@@ -721,7 +807,7 @@ fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult
 /// This function is called when a user wants to bond their LP tokens either directly or through the vault
 /// This function will update the user's bond amount and the total bond amount for the given LP token
 /// ### Params:
-/// **sender**: This is the address that sent the cw20 token. 
+/// **sender**: This is the address that sent the cw20 token.
 /// This is not necessarily the user address since vault can bond on behalf of the user
 /// **user**: This is the user address that owns the bonded tokens and will receive rewards
 /// This user is elligible to withdraw the tokens after unbonding and not the sender
@@ -782,91 +868,6 @@ pub fn bond(
         .add_attribute("amount", amount)
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
         .add_attribute("user_updated_bond_amount", user_updated_bond_amount);
-
-    response = response.add_event(event);
-    Ok(response)
-}
-
-/// Unbond LP tokens
-pub fn unbond(
-    mut deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: Addr,
-    amount: Option<Uint128>,
-) -> ContractResult<Response> {
-    // We don't have to check for LP token allowed here, because there's a scenario that we allowed bonding
-    // for an asset earlier and then we remove the LP token from the list of allowed LP tokens. In this case
-    // we still want to allow unbonding.
-    let mut response = Response::new();
-
-    let current_bond_amount = USER_BONDED_LP_TOKENS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    // if user didn't explicitly mention any amount, unbond everything.
-    let amount = amount.unwrap_or(current_bond_amount);
-    if amount.is_zero() {
-        return Err(ContractError::ZeroAmount);
-    }
-
-    let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
-    for asset in &lp_global_state.active_reward_assets {
-        update_staking_rewards(
-            asset,
-            &lp_token,
-            &info.sender,
-            lp_global_state.total_bond_amount,
-            current_bond_amount,
-            env.block.time.seconds(),
-            &mut deps,
-            &mut response,
-            None,
-        )?;
-    }
-
-    // Decrease bond amount
-    lp_global_state.total_bond_amount = lp_global_state.total_bond_amount.checked_sub(amount)?;
-    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
-
-    let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
-        ContractError::CantUnbondMoreThanBonded {
-            amount_to_unbond: amount,
-            current_bond_amount,
-        }
-    })?;
-
-    USER_BONDED_LP_TOKENS.save(
-        deps.storage,
-        (&lp_token, &info.sender),
-        &user_updated_bond_amount,
-    )?;
-
-    // Start unlocking clock for the user's LP Tokens
-    let mut unlocks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    if unlocks.len() == MAX_USER_LP_TOKEN_LOCKS {
-        return Err(ContractError::CantAllowAnyMoreLpTokenUnbonds);
-    }
-
-    let config = CONFIG.load(deps.storage)?;
-
-    let unlock_time = env.block.time.seconds() + config.unlock_period;
-    unlocks.push(TokenLock {
-        unlock_time,
-        amount,
-    });
-
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &unlocks)?;
-
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::unbond"), &info)
-        .add_attribute("lp_token", lp_token)
-        .add_attribute("amount", amount)
-        .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
-        .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
-        .add_attribute("unlock_time", unlock_time.to_string());
 
     response = response.add_event(event);
     Ok(response)
@@ -961,44 +962,6 @@ pub fn update_staking_rewards(
     Ok(())
 }
 
-pub fn unlock(deps: DepsMut, env: Env, info: MessageInfo, lp_token: Addr) -> ContractResult<Response> {
-    let locks = USER_LP_TOKEN_LOCKS
-        .may_load(deps.storage, (&lp_token, &info.sender))?
-        .unwrap_or_default();
-
-    let total_unlocked_amount = locks
-        .iter()
-        .filter(|lock| lock.unlock_time <= env.block.time.seconds())
-        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
-
-    let mut response = Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::unlock"), &info)
-            .add_attribute("lp_token", lp_token.clone())
-            .add_attribute("amount", total_unlocked_amount)
-    );
-    if total_unlocked_amount.is_zero() {
-        return Ok(response);
-    }
-
-    let updated_unlocks = locks
-        .into_iter()
-        .filter(|lock| lock.unlock_time > env.block.time.seconds())
-        .collect::<Vec<TokenLock>>();
-
-    USER_LP_TOKEN_LOCKS.save(deps.storage, (&lp_token, &info.sender), &updated_unlocks)?;
-
-    response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: lp_token.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: info.sender.to_string(),
-            amount: total_unlocked_amount,
-        })?,
-    }));
-
-    Ok(response)
-}
-
 fn withdraw_pending_reward(
     user: &Addr,
     lp_token: &Addr,
@@ -1061,7 +1024,7 @@ pub fn withdraw(
     // If we keep a track of the reward at the subgraph level, then that much data can really suffice.
     response = response.add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::withdraw"), &info)
-            .add_attribute("lp_token", lp_token.clone())
+            .add_attribute("lp_token", lp_token.clone()),
     );
     Ok(response)
 }
@@ -1078,6 +1041,52 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 .may_load(deps.storage, (&lp_token, &user))?
                 .unwrap_or_default();
             to_binary(&bonded_amount).map_err(ContractError::from)
+        }
+        QueryMsg::InstantUnlockFee {
+            user,
+            lp_token,
+            token_lock,
+        } => {
+            let config = CONFIG.load(deps.storage)?;
+            // validate if token lock actually exists
+            let token_locks = USER_LP_TOKEN_LOCKS
+                .may_load(deps.storage, (&lp_token, &user))?
+                .unwrap_or_default();
+
+            let exists = token_locks.iter().any(|lock| *lock == token_lock.clone());
+            if !exists {
+                return Err(ContractError::TokenLockNotFound);
+            }
+
+            let (fee_bp, unlock_fee) =
+                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &config);
+
+            let instant_lp_unlock_fee = InstantLpUnlockFee {
+                time_until_lock_expiry: token_lock
+                    .unlock_time
+                    .checked_sub(env.block.time.seconds())
+                    .unwrap_or_default(),
+                unlock_amount: token_lock.amount,
+                unlock_fee_bp: fee_bp,
+                unlock_fee,
+            };
+
+            to_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
+        }
+        QueryMsg::InstantUnlockFeeTiers {} => {
+            let config = CONFIG.load(deps.storage)?;
+            let min_fee = config.instant_unbond_min_fee_bp;
+            let max_fee = config.instant_unbond_fee_bp;
+
+            let unlock_period = config.unlock_period;
+            let fee_tiers = query_instant_unlock_fee_tiers(
+                config.fee_tier_interval,
+                unlock_period,
+                min_fee,
+                max_fee,
+            );
+
+            to_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::UnclaimedRewards {
             lp_token,
@@ -1224,6 +1233,13 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             })
             .map_err(ContractError::from)
         }
+        QueryMsg::RawTokenLocks { lp_token, user } => {
+            let locks = USER_LP_TOKEN_LOCKS
+                .may_load(deps.storage, (&lp_token, &user))?
+                .unwrap_or_default();
+
+            to_binary(&locks).map_err(ContractError::from)
+        }
         QueryMsg::RewardState { lp_token, asset } => {
             let reward_state =
                 ASSET_LP_REWARD_STATE.may_load(deps.storage, (&asset.to_string(), &lp_token))?;
@@ -1260,10 +1276,75 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             )?;
 
             to_binary(&creator_claimable_reward).map_err(ContractError::from)
-        },
+        }
         QueryMsg::Config {} => {
             let config = CONFIG.load(deps.storage)?;
             to_binary(&config).map_err(ContractError::from)
         }
     }
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    match msg {
+        MigrateMsg::V2 {
+            keeper_addr,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
+            fee_tier_interval,
+        } => {
+            // verify if we are running on V1 right now
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(StdError::generic_err(format!(
+                    "V2 upgrade is only supported over contract version {}. Current version is {}",
+                    CONTRACT_VERSION_V1, contract_version.version
+                )));
+            }
+
+            let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+
+            // copy fields from v1 to v2
+            let config = Config {
+                owner: config_v1.owner,
+                allowed_lp_tokens: config_v1.allowed_lp_tokens,
+                unlock_period: config_v1.unlock_period,
+                minimum_reward_schedule_proposal_start_delay: config_v1
+                    .minimum_reward_schedule_proposal_start_delay,
+                keeper: match keeper_addr {
+                    Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
+                    None => None,
+                },
+                instant_unbond_fee_bp,
+                instant_unbond_min_fee_bp,
+                fee_tier_interval,
+            };
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+            CONFIG.save(deps.storage, &config)?;
+        }
+
+        MigrateMsg::V2Fix {} => {
+            // Verify that the current config is V2. This can be done by deserializing the config for V2 and making sure that the fields exist.
+            // Also, since this upgrade is meant as a fix for contract version as v1.0.0 we should validate that.
+            // For mainnet, only V2 upgrade should do the job
+
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version == CONTRACT_VERSION_V1 {
+                // Validate that the current config is V2 by deserializing the config for V2 and making sure that the fields exist.
+                let _config_v2: Config = Item::new("config").load(deps.storage)?;
+                // deserialization successful, so we can upgrade to V2.1
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+            } else {
+                return Err(StdError::generic_err(format!(
+                    "V2Fix is a hotfix-upgrade is only supported over contract version {} only supported when the actual upgrade 
+                    to V2 has happened but version upgrade in the contract was missed on testnet. Current version is {}",
+                    CONTRACT_VERSION_V1,
+                    contract_version.version
+                )));
+            }
+        }
+    }
+
+    Ok(Response::default())
 }

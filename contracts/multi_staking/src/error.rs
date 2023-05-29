@@ -91,6 +91,9 @@ pub enum ContractError {
 
     #[error("This reward schedule has no unallocated reward to claim by the creator")]
     NoUnallocatedReward,
+
+    #[error("Token lock doesn't exist")]
+    TokenLockNotFound,
 }
 
 impl From<OverflowError> for ContractError {
