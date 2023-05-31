@@ -327,6 +327,26 @@ pub fn drop_reward_schedule(
     )
 }
 
+pub fn update_fee_tier_interval(
+    app: &mut App,
+    admin_addr: &Addr,
+    multistaking_contract: &Addr,
+    fee_tier_interval: u64,
+) {
+    app.execute_contract(
+        admin_addr.clone(),
+        multistaking_contract.clone(),
+        &ExecuteMsg::UpdateConfig {
+            minimum_reward_schedule_proposal_start_delay: None,
+            unlock_period: None,
+            instant_unbond_fee_bp: None,
+            instant_unbond_min_fee_bp: None,
+            fee_tier_interval: Some(fee_tier_interval),
+        },
+        &vec![],
+    ).unwrap();
+}
+
 pub fn mint_lp_tokens_to_addr(
     app: &mut App,
     admin_addr: &Addr,
