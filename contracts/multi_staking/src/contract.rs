@@ -6,7 +6,7 @@ use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{collections::{HashMap, HashSet}, cmp::max};
+use std::{collections::{HashMap, HashSet}, cmp::min};
 
 use dexter::{
     asset::AssetInfo,
@@ -65,8 +65,29 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> StdResult<Response> {
+) -> ContractResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+        return Err(ContractError::InvalidInstantUnbondFee {
+            max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+            received: msg.instant_unbond_fee_bp,
+        });
+    }
+
+    if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
+        return Err(ContractError::InvalidInstantUnbondMinFee {
+            max_allowed: msg.instant_unbond_fee_bp,
+            received: msg.instant_unbond_min_fee_bp,
+        });
+    }
+
+    if msg.fee_tier_interval > msg.unlock_period {
+        return Err(ContractError::InvalidFeeTierInterval {
+            max_allowed: msg.unlock_period,
+            received: msg.fee_tier_interval,
+        });
+    }
 
     CONFIG.save(
         deps.storage,
@@ -297,7 +318,7 @@ fn update_config(
         // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
         if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp {
             return Err(ContractError::InvalidInstantUnbondMinFee {
-                max_allowed: max(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
+                max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
                 received: instant_unbond_min_fee_bp,
             });
         }
@@ -1327,7 +1348,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V2 {
             keeper_addr,
@@ -1338,13 +1359,37 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             // verify if we are running on V1 right now
             let contract_version = get_contract_version(deps.storage)?;
             if contract_version.version != CONTRACT_VERSION_V1 {
-                return Err(StdError::generic_err(format!(
-                    "V2 upgrade is only supported over contract version {}. Current version is {}",
-                    CONTRACT_VERSION_V1, contract_version.version
-                )));
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+
+            // validate input for upgrade
+            if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+                return Err(ContractError::InvalidInstantUnbondFee {
+                    max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+                    received: instant_unbond_fee_bp,
+                });
+            }
+
+            if instant_unbond_min_fee_bp > instant_unbond_fee_bp {
+                return Err(ContractError::InvalidInstantUnbondMinFee {
+                    max_allowed: instant_unbond_fee_bp,
+                    received: instant_unbond_min_fee_bp,
+                });
             }
 
             let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+
+            // valiate fee tier interval
+            if fee_tier_interval > config_v1.unlock_period {
+                return Err(ContractError::InvalidFeeTierInterval {
+                    max_allowed: config_v1.unlock_period,
+                    received: fee_tier_interval,
+                });
+            }
 
             // copy fields from v1 to v2
             let config = Config {

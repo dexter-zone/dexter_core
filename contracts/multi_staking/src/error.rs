@@ -103,6 +103,9 @@ pub enum ContractError {
 
     #[error("Invalid instant unlock fee tier interval. Max allowed: {max_allowed} i.e. equal to unlock period, Received: {received}")]
     InvalidFeeTierInterval { max_allowed: u64, received: u64 },
+
+    #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
+    InvalidContractVersionForUpgrade { upgrade_version: String, expected: String, actual: String },
 }
 
 impl From<OverflowError> for ContractError {
