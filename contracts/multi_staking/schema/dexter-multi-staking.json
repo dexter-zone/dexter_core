@@ -1085,20 +1085,6 @@
           }
         },
         "additionalProperties": false
-      },
-      {
-        "description": "V2 upgrade for testnet did not set the correct contract version. This fixes it This upgrade also enable configuration modification support for fee_tier_interval",
-        "type": "object",
-        "required": [
-          "v2_fix"
-        ],
-        "properties": {
-          "v2_fix": {
-            "type": "object",
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
       }
     ],
     "definitions": {

@@ -12,6 +12,9 @@ pub const MAX_ALLOWED_LP_TOKENS: usize = 100_000;
 /// This limit exists to prevent out-of-gas issues during LP token unlock.
 pub const MAX_USER_LP_TOKEN_LOCKS: usize = 100_000;
 
+/// Max allowed fee for instant LP unbonding i.e. 10%
+pub const MAX_INSTANT_UNBOND_FEE_BP: u64 = 1000;
+
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -33,9 +36,6 @@ pub enum MigrateMsg {
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
     },
-    /// V2 upgrade for testnet did not set the correct contract version. This fixes it
-    /// This upgrade also enable configuration modification support for fee_tier_interval
-    V2Fix {}
 }
 
 #[cw_serde]
