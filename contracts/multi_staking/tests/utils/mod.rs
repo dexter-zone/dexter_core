@@ -33,6 +33,7 @@ pub fn instantiate_multi_staking_contract(
     unlock_period: u64,
     instant_unbond_min_fee_bp: u64,
     instant_unbond_max_fee_bp: u64,
+    fee_tier_interval: u64,
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
@@ -42,7 +43,7 @@ pub fn instantiate_multi_staking_contract(
         minimum_reward_schedule_proposal_start_delay,
         instant_unbond_fee_bp: instant_unbond_max_fee_bp,
         instant_unbond_min_fee_bp,
-        fee_tier_interval: 86400,
+        fee_tier_interval,
     };
 
     let multi_staking_instance = app
@@ -151,6 +152,7 @@ pub fn setup_generic(
     unlock_time: u64,
     unbond_fee_min_bp: u64,
     unbond_fee_max_bp: u64,
+    fee_tier_interval: u64,
 ) -> (Addr, Addr) {
     let multi_staking_code_id = store_multi_staking_contract(app);
     let multi_staking_instance = instantiate_multi_staking_contract(
@@ -162,6 +164,7 @@ pub fn setup_generic(
         unlock_time,
         unbond_fee_min_bp,
         unbond_fee_max_bp,
+        fee_tier_interval,
     );
 
     // let cw20_code_id = store_cw20_contract(app);
@@ -198,6 +201,7 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
         7 * 24 * 60 * 60,
         200,
         500,
+        7 * 24 * 60 * 60,
     );
 
     return (multi_staking_instance, lp_token_addr);
@@ -332,7 +336,7 @@ pub fn update_fee_tier_interval(
     admin_addr: &Addr,
     multistaking_contract: &Addr,
     fee_tier_interval: u64,
-) {
+) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         admin_addr.clone(),
         multistaking_contract.clone(),
@@ -344,7 +348,7 @@ pub fn update_fee_tier_interval(
             fee_tier_interval: Some(fee_tier_interval),
         },
         &vec![],
-    ).unwrap();
+    )
 }
 
 pub fn mint_lp_tokens_to_addr(

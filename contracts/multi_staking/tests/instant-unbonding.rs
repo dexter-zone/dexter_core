@@ -34,10 +34,11 @@ fn validate_fee_tier_logic() {
         600_000,
         300,
         500,
+        600_000,
     );
 
     // Update fee tier boundary to same time as unlock period
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_000);
+    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_000).unwrap();
 
     // query fee tiers
     let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
@@ -49,18 +50,16 @@ fn validate_fee_tier_logic() {
     assert_eq!(fee_tiers[0].unlock_fee_bp, 500u64);
 
     // update fee tier boundary higher than unlock period to make sure we have 1 tier still
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_001);
-
-    // query fee tiers
-    let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
-
-    // validate fee tiers. There should be 1 tier upto the unlock period boundary and max fee
-    assert_eq!(fee_tiers.len(), 1);
-    assert_eq!(fee_tiers[0].seconds_till_unlock_end, 600_000);
-    assert_eq!(fee_tiers[0].seconds_till_unlock_start, 0);
+    // Added checks to make sure following condition is invalid for update
+    let result = update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_001);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().root_cause().to_string(),
+        "Invalid instant unlock fee tier interval. Max allowed: 600000 i.e. equal to unlock period, Received: 600001"
+    );
 
     // update fee tier boundary to 100_000 seconds and validate that we have 6 tiers which are equalled spaced
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 100_000);
+    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 100_000).unwrap();
 
     // query fee tiers
     let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
@@ -127,6 +126,7 @@ fn test_instant_unbond_and_unlock() {
         600_000,
         300,
         500,
+        86_400,
     );
 
     create_reward_schedule(
