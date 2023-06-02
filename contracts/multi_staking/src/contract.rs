@@ -6,7 +6,7 @@ use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, cmp::min};
 
 use dexter::{
     asset::AssetInfo,
@@ -28,7 +28,7 @@ use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS,
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP
 };
 
 use crate::{
@@ -65,8 +65,29 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> StdResult<Response> {
+) -> ContractResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+        return Err(ContractError::InvalidInstantUnbondFee {
+            max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+            received: msg.instant_unbond_fee_bp,
+        });
+    }
+
+    if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
+        return Err(ContractError::InvalidInstantUnbondMinFee {
+            max_allowed: msg.instant_unbond_fee_bp,
+            received: msg.instant_unbond_min_fee_bp,
+        });
+    }
+
+    if msg.fee_tier_interval > msg.unlock_period {
+        return Err(ContractError::InvalidFeeTierInterval {
+            max_allowed: msg.unlock_period,
+            received: msg.fee_tier_interval,
+        });
+    }
 
     CONFIG.save(
         deps.storage,
@@ -257,11 +278,34 @@ fn update_config(
     }
 
     if let Some(unlock_period) = unlock_period {
+
+        // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
+        if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
+            return Err(ContractError::InvalidFeeTierInterval {
+                max_allowed: unlock_period,
+                received: fee_tier_interval.unwrap(),
+            });
+        }
+
+        // reset the current fee tier interval to unlock period if it is greater than unlock period
+        if config.fee_tier_interval > unlock_period {
+            config.fee_tier_interval = unlock_period;
+            event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
+        }
+
+
         config.unlock_period = unlock_period;
         event = event.add_attribute("unlock_period", config.unlock_period.to_string());
     }
 
     if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
+        // validate max allowed instant unbond fee which is 10%
+        if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+            return Err(ContractError::InvalidInstantUnbondFee {
+                max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+                received: instant_unbond_fee_bp,
+            });
+        }
         config.instant_unbond_fee_bp = instant_unbond_fee_bp;
         event = event.add_attribute(
             "instant_unbond_fee_bp",
@@ -270,6 +314,15 @@ fn update_config(
     }
 
     if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
+
+        // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
+        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp {
+            return Err(ContractError::InvalidInstantUnbondMinFee {
+                max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
+                received: instant_unbond_min_fee_bp,
+            });
+        }
+
         config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
         event = event.add_attribute(
             "instant_unbond_min_fee_bp",
@@ -278,6 +331,16 @@ fn update_config(
     }
 
     if let Some(fee_tier_interval) = fee_tier_interval {
+
+        // max allowed fee tier interval in equal to the unlock period.
+        if fee_tier_interval > config.unlock_period {
+            return Err(ContractError::InvalidFeeTierInterval {
+                max_allowed: config.unlock_period,
+                received: fee_tier_interval,
+            });
+        }
+
+
         config.fee_tier_interval = fee_tier_interval;
         event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
     }
@@ -1285,7 +1348,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V2 {
             keeper_addr,
@@ -1296,13 +1359,37 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             // verify if we are running on V1 right now
             let contract_version = get_contract_version(deps.storage)?;
             if contract_version.version != CONTRACT_VERSION_V1 {
-                return Err(StdError::generic_err(format!(
-                    "V2 upgrade is only supported over contract version {}. Current version is {}",
-                    CONTRACT_VERSION_V1, contract_version.version
-                )));
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+
+            // validate input for upgrade
+            if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+                return Err(ContractError::InvalidInstantUnbondFee {
+                    max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+                    received: instant_unbond_fee_bp,
+                });
+            }
+
+            if instant_unbond_min_fee_bp > instant_unbond_fee_bp {
+                return Err(ContractError::InvalidInstantUnbondMinFee {
+                    max_allowed: instant_unbond_fee_bp,
+                    received: instant_unbond_min_fee_bp,
+                });
             }
 
             let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+
+            // valiate fee tier interval
+            if fee_tier_interval > config_v1.unlock_period {
+                return Err(ContractError::InvalidFeeTierInterval {
+                    max_allowed: config_v1.unlock_period,
+                    received: fee_tier_interval,
+                });
+            }
 
             // copy fields from v1 to v2
             let config = Config {
@@ -1322,27 +1409,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
-        }
-
-        MigrateMsg::V2Fix {} => {
-            // Verify that the current config is V2. This can be done by deserializing the config for V2 and making sure that the fields exist.
-            // Also, since this upgrade is meant as a fix for contract version as v1.0.0 we should validate that.
-            // For mainnet, only V2 upgrade should do the job
-
-            let contract_version = get_contract_version(deps.storage)?;
-            if contract_version.version == CONTRACT_VERSION_V1 {
-                // Validate that the current config is V2 by deserializing the config for V2 and making sure that the fields exist.
-                let _config_v2: Config = Item::new("config").load(deps.storage)?;
-                // deserialization successful, so we can upgrade to V2.1
-                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-            } else {
-                return Err(StdError::generic_err(format!(
-                    "V2Fix is a hotfix-upgrade is only supported over contract version {} only supported when the actual upgrade 
-                    to V2 has happened but version upgrade in the contract was missed on testnet. Current version is {}",
-                    CONTRACT_VERSION_V1,
-                    contract_version.version
-                )));
-            }
         }
     }
 

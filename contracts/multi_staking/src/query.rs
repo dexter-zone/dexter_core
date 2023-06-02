@@ -11,10 +11,10 @@ pub fn query_instant_unlock_fee_tiers(
     let mut fee_tiers: Vec<UnlockFeeTier> = vec![];
 
     // if the unlock period is less than tier interval then there's only one tier equal to max fee
-    if unlock_period < tier_interval {
+    if unlock_period <= tier_interval {
         fee_tiers.push(UnlockFeeTier {
-            seconds_till_unlock_end: 0,
-            seconds_till_unlock_start: unlock_period,
+            seconds_till_unlock_end: unlock_period,
+            seconds_till_unlock_start: 0,
             unlock_fee_bp: max_fee_bp,
         });
     } else {
@@ -28,7 +28,7 @@ pub fn query_instant_unlock_fee_tiers(
 
         let mut tier_start_time = 0;
         let mut tier_end_time = tier_interval;
-
+            
         for tier in 0..num_tiers {
             fee_tiers.push(UnlockFeeTier {
                 seconds_till_unlock_end: tier_end_time,

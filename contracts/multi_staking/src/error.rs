@@ -94,6 +94,18 @@ pub enum ContractError {
 
     #[error("Token lock doesn't exist")]
     TokenLockNotFound,
+
+    #[error("Invalid instant unbond fee. Max allowed: {max_allowed}, Received: {received}")]
+    InvalidInstantUnbondFee { max_allowed: u64, received: u64 },
+
+    #[error("Invalid instant unbond min fee. Max allowed: {max_allowed}, Received: {received}")]
+    InvalidInstantUnbondMinFee { max_allowed: u64, received: u64 },
+
+    #[error("Invalid instant unlock fee tier interval. Max allowed: {max_allowed} i.e. equal to unlock period, Received: {received}")]
+    InvalidFeeTierInterval { max_allowed: u64, received: u64 },
+
+    #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
+    InvalidContractVersionForUpgrade { upgrade_version: String, expected: String, actual: String },
 }
 
 impl From<OverflowError> for ContractError {

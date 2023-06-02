@@ -37,6 +37,7 @@ fn test_staking() {
         1000,
         200,
         500,
+        1000
     );
 
     create_reward_schedule(
