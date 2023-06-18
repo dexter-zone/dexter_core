@@ -341,6 +341,7 @@ pub fn update_fee_tier_interval(
         admin_addr.clone(),
         multistaking_contract.clone(),
         &ExecuteMsg::UpdateConfig {
+            keeper_addr: None,
             minimum_reward_schedule_proposal_start_delay: None,
             unlock_period: None,
             instant_unbond_fee_bp: None,

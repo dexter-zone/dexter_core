@@ -36,6 +36,10 @@ pub enum MigrateMsg {
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
     },
+    /// Adds support for updating keeper address.
+    /// Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update.
+    /// We can otherwise use V2 message directly for upgrading from v1 to v2.1
+    V2_1 {}
 }
 
 #[cw_serde]
@@ -306,6 +310,7 @@ pub enum ExecuteMsg {
     /// Allows an admin to update config params
     UpdateConfig {
         minimum_reward_schedule_proposal_start_delay: Option<u64>,
+        keeper_addr: Option<Addr>,
         unlock_period: Option<u64>,
         instant_unbond_fee_bp: Option<u64>,
         instant_unbond_min_fee_bp: Option<u64>,

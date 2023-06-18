@@ -54,6 +54,7 @@ use crate::{
 pub const CONTRACT_NAME: &str = "dexter-multi-staking";
 
 const CONTRACT_VERSION_V1: &str = "1.0.0";
+const CONTRACT_VERSION_V2: &str = "2.0.0";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -124,6 +125,7 @@ pub fn execute(
 ) -> ContractResult<Response> {
     match msg {
         ExecuteMsg::UpdateConfig {
+            keeper_addr,
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
             instant_unbond_fee_bp,
@@ -133,6 +135,7 @@ pub fn execute(
             deps,
             env,
             info,
+            keeper_addr,
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
             instant_unbond_fee_bp,
@@ -251,6 +254,7 @@ fn update_config(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
+    keeper_addr: Option<Addr>,
     minimum_reward_schedule_proposal_start_delay: Option<u64>,
     unlock_period: Option<u64>,
     instant_unbond_fee_bp: Option<u64>,
@@ -265,6 +269,11 @@ fn update_config(
     }
 
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
+
+    if let Some(keeper_addr) = keeper_addr {
+        config.keeper = Some(keeper_addr.clone());
+        event = event.add_attribute("keeper_addr", keeper_addr.to_string());
+    }
 
     if let Some(reward_schedule_proposal_start_delay) = minimum_reward_schedule_proposal_start_delay
     {
@@ -1409,6 +1418,17 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
+        }
+        MigrateMsg::V2_1 {} => {
+            // validate that we are on v2 right now
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version != CONTRACT_VERSION_V2 {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION.to_string(),
+                    actual: contract_version.version,
+                });
+            }
         }
     }
 
