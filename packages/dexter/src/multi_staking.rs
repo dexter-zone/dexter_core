@@ -306,6 +306,37 @@ pub enum Cw20HookMsg {
 }
 
 #[cw_serde]
+pub enum SudoMsg {
+    /// Allows an admin to update config params
+    UpdateConfig {
+        minimum_reward_schedule_proposal_start_delay: Option<u64>,
+        keeper_addr: Option<Addr>,
+        unlock_period: Option<u64>,
+        instant_unbond_fee_bp: Option<u64>,
+        instant_unbond_min_fee_bp: Option<u64>,
+        fee_tier_interval: Option<u64>,
+    },
+    /// Create reward schedule
+    CreateRewardSchedule {
+        title: String,
+        creator: Addr,
+        lp_token: Addr,
+        reward_asset: AssetInfo,
+        amount: Uint128,
+        start_block_time: u64,
+        end_block_time: u64,
+    },
+    /// Allow LP token for rewards
+    AllowLPTokenForReward {
+        lp_token: Addr,
+    },
+    /// Remove LP token from rewards
+    RemoveLPTokenForReward {
+        lp_token: Addr,
+    },
+}
+
+#[cw_serde]
 pub enum ExecuteMsg {
     /// Allows an admin to update config params
     UpdateConfig {

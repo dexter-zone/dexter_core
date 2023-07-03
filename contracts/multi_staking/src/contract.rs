@@ -6,7 +6,10 @@ use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{collections::{HashMap, HashSet}, cmp::min};
+use std::{
+    cmp::min,
+    collections::{HashMap, HashSet},
+};
 
 use dexter::{
     asset::AssetInfo,
@@ -17,7 +20,7 @@ use dexter::{
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, ConfigV1, CreatorClaimableRewardState,
         Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, MigrateMsg, QueryMsg,
-        RewardSchedule, TokenLockInfo, UnclaimedReward,
+        RewardSchedule, SudoMsg, TokenLockInfo, UnclaimedReward,
     },
 };
 
@@ -28,7 +31,7 @@ use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
     ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP,
 };
 
 use crate::{
@@ -114,6 +117,43 @@ pub fn instantiate(
                 msg.minimum_reward_schedule_proposal_start_delay.to_string(),
             ),
     ))
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, env: Env, info: MessageInfo, msg: SudoMsg) -> ContractResult<Response> {
+    match msg {
+        SudoMsg::UpdateConfig {
+            minimum_reward_schedule_proposal_start_delay,
+            keeper_addr,
+            unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
+            fee_tier_interval,
+        } => update_config(
+            deps,
+            env,
+            info,
+            keeper_addr,
+            minimum_reward_schedule_proposal_start_delay,
+            unlock_period,
+            instant_unbond_fee_bp,
+            instant_unbond_min_fee_bp,
+            fee_tier_interval,
+        ),
+        SudoMsg::AllowLPTokenForReward { lp_token } => allow_lp_token(deps, env, info, lp_token),
+        SudoMsg::RemoveLPTokenForReward { lp_token } => remove_lp_token(deps, info, &lp_token),
+        SudoMsg::CreateRewardSchedule { 
+            lp_token, 
+            title, 
+            reward_asset, 
+            amount, 
+            start_block_time, 
+            end_block_time, 
+            creator 
+        } => {
+            create_reward_schedule(deps, env, info, lp_token, title,  start_block_time, end_block_time, creator, Asset::new(reward_asset, amount))
+        }
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -263,11 +303,6 @@ fn update_config(
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
-    // Verify that the message sender is the owner
-    if info.sender != config.owner {
-        return Err(ContractError::Unauthorized);
-    }
-
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     if let Some(keeper_addr) = keeper_addr {
@@ -287,7 +322,6 @@ fn update_config(
     }
 
     if let Some(unlock_period) = unlock_period {
-
         // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
         if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
             return Err(ContractError::InvalidFeeTierInterval {
@@ -301,7 +335,6 @@ fn update_config(
             config.fee_tier_interval = unlock_period;
             event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
         }
-
 
         config.unlock_period = unlock_period;
         event = event.add_attribute("unlock_period", config.unlock_period.to_string());
@@ -323,9 +356,10 @@ fn update_config(
     }
 
     if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
-
         // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
-        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp {
+        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP
+            || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp
+        {
             return Err(ContractError::InvalidInstantUnbondMinFee {
                 max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
                 received: instant_unbond_min_fee_bp,
@@ -340,7 +374,6 @@ fn update_config(
     }
 
     if let Some(fee_tier_interval) = fee_tier_interval {
-
         // max allowed fee tier interval in equal to the unlock period.
         if fee_tier_interval > config.unlock_period {
             return Err(ContractError::InvalidFeeTierInterval {
@@ -348,7 +381,6 @@ fn update_config(
                 received: fee_tier_interval,
             });
         }
-
 
         config.fee_tier_interval = fee_tier_interval;
         event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
@@ -711,6 +743,113 @@ pub fn review_reward_schedule_proposals(
             serde_json_wasm::to_string(&rejected_reward_proposals).unwrap(),
         ),
     ))
+}
+
+
+pub fn create_reward_schedule(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+    title: String,
+    start_block_time: u64,
+    end_block_time: u64,
+    creator: Addr,
+    asset: Asset,
+) -> ContractResult<Response> {
+
+    let config = CONFIG.load(deps.storage)?;
+    check_if_lp_token_allowed(&config, &lp_token)?;
+
+    // validate start and end block times
+    if start_block_time < env.block.time.seconds() {
+        return Err(ContractError::InvalidStartBlockTime {
+            start_block_time,
+            current_block_time: env.block.time.seconds(),
+        });
+    }
+
+    if end_block_time < start_block_time {
+        return Err(ContractError::InvalidEndBlockTime {
+            end_block_time,
+            start_block_time,
+        });
+    }
+
+    let mut res = Response::new().add_attribute("action", "create_reward_schedule");
+
+    match &asset.info {
+        AssetInfo::NativeToken { .. } => {
+            // validate if the amount is sent in the message
+            if info.funds.len() != 1 {
+                return Err(ContractError::InvalidNumberOfAssets {
+                    correct_number: 1,
+                    received_number: info.funds.len() as u8,
+                });
+            }
+
+            let amount = info.funds[0].amount;
+            if amount != asset.amount {
+                return Err(ContractError::InvalidRewardScheduleAmount {
+                    correct_amount: asset.amount,
+                    received_amount: amount,
+                });
+            }
+        }
+        AssetInfo::Token { contract_addr } => {
+            // transfer the token to contract before creating the reward schedule
+            deps.api.addr_validate(contract_addr.as_str())?;
+            let transfer_msg = build_transfer_token_to_user_msg(
+                asset.info.clone(),
+                env.contract.address.clone(),
+                asset.amount.clone(),
+            )?;
+
+            res = res.add_message(transfer_msg);
+        }
+    }
+
+
+
+    let mut lp_global_state = LP_GLOBAL_STATE
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
+
+    if !lp_global_state.active_reward_assets.contains(&asset.info) {
+        lp_global_state.active_reward_assets.push(asset.info.clone());
+    }
+
+    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
+
+
+    let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
+    let reward_schedule = RewardSchedule {
+        title,
+        creator: creator.clone(),
+        asset: asset.info.clone(),
+        amount: asset.amount,
+        staking_lp_token: lp_token.clone(),
+        start_block_time,
+        end_block_time,
+    };
+
+    REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
+
+    Ok(res
+        .add_event(
+            Event::from_info(
+                concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
+                &info,
+            )
+            .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
+            .add_attribute("lp_token", lp_token)
+            .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
+            .add_attribute("amount", asset.amount.to_string())
+            .add_attribute("start_block_time", start_block_time.to_string())
+            .add_attribute("end_block_time", end_block_time.to_string())
+            .add_attribute("creator", creator),
+        )
+    )
 }
 
 pub fn drop_reward_schedule_proposal(

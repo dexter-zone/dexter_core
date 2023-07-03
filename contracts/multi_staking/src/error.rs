@@ -21,6 +21,12 @@ pub enum ContractError {
         received_asset: String,
     },
 
+    #[error("Invalid amount received. Expected {correct_amount}, got {received_amount}")]
+    InvalidRewardScheduleAmount {
+        correct_amount: Uint128,
+        received_amount: Uint128,
+    },
+
     #[error("Less amount received for {asset}. Expected {correct_amount}, got {received_amount}")]
     LessAmountReceived {
         asset: String,
@@ -106,6 +112,12 @@ pub enum ContractError {
 
     #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
     InvalidContractVersionForUpgrade { upgrade_version: String, expected: String, actual: String },
+
+    #[error("Start block time must be greater than current block time. Current block time: {current_block_time}, Start block time: {start_block_time}")]
+    InvalidStartBlockTime { current_block_time: u64, start_block_time: u64 },
+
+    #[error("End block time must be greater than start block time. Start block time: {start_block_time}, End block time: {end_block_time}")]
+    InvalidEndBlockTime { start_block_time: u64, end_block_time: u64 },
 }
 
 impl From<OverflowError> for ContractError {
