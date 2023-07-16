@@ -32,7 +32,7 @@ fn test_staking() {
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        None,
+        admin_addr.clone(),
         3 * 24 * 60 * 60,
         1000,
         200,
@@ -45,6 +45,7 @@ fn test_staking() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -55,7 +56,7 @@ fn test_staking() {
     .unwrap();
 
     app.update_block(|b| {
-        b.time = Timestamp::from_seconds(1_000_301_100);
+        b.time = Timestamp::from_seconds(1000_301_100);
         b.height = b.height + 100;
     });
 
@@ -106,6 +107,22 @@ fn test_staking() {
         Uint128::from(50_000_000 as u64),
     )
     .unwrap();
+
+    // query current active reward schedules
+    let response: Vec<RewardScheduleResponse> = app
+        .wrap()
+        .query_wasm_smart(
+            multi_staking_instance.clone(),
+            &QueryMsg::RewardSchedules {
+                lp_token: lp_token_addr.clone(),
+                asset: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+            },
+        )
+        .unwrap();
+
+    println!("response: {:?}", response);
 
     // Query creator claimable reward
     let creator_claimable_reward: CreatorClaimableRewardState = app
@@ -310,7 +327,7 @@ fn test_staking() {
         RewardScheduleResponse {
             id: 1,
             reward_schedule: RewardSchedule {
-                title: lp_token_addr.as_str().to_owned() + "-" + admin_addr.as_str(),
+                title: "test".to_string(),
                 creator: admin_addr.clone(),
                 asset: AssetInfo::NativeToken {
                     denom: "uxprt".to_string(),
@@ -356,7 +373,7 @@ fn test_staking() {
     let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
 
-    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(1010_000_000 as u64));
 
     // claiming creator rewards again should fail
     let response = claim_creator_rewards(&mut app, &multi_staking_instance, 1, &admin_addr);
@@ -372,6 +389,7 @@ fn test_staking() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -396,7 +414,7 @@ fn test_staking() {
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(810_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(1_010_000_000 as u64));
 
     // skip the whole reward schedule duration
     app.update_block(|b| {
@@ -419,7 +437,7 @@ fn test_staking() {
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(1_110_000_000 as u64));
 }
 
 #[test]
@@ -444,6 +462,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -458,6 +477,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -472,6 +492,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -620,6 +641,7 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -634,6 +656,7 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -648,6 +671,7 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -851,6 +875,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -891,6 +916,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -1022,6 +1048,7 @@ fn test_create_cw20_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::Token {
             contract_addr: cw20_token_addr.clone(),
         },
@@ -1160,6 +1187,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -1172,7 +1200,6 @@ fn test_lp_methods_after_lp_allowance_removal() {
     // disallow lp token
     disallow_lp_token(
         &mut app,
-        &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
     );

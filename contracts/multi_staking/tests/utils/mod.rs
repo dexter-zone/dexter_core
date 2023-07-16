@@ -1,16 +1,17 @@
+use anyhow::Ok;
 use cosmwasm_std::{testing::mock_env, to_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
-use dexter::multi_staking::ReviewProposedRewardSchedule;
 use dexter::{
-    asset::AssetInfo,
+    asset::{AssetInfo, Asset},
     multi_staking::{
         Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, QueryMsg, TokenLock,
-        TokenLockInfo, UnclaimedReward, UnlockFeeTier,
+        TokenLockInfo, UnclaimedReward, UnlockFeeTier, SudoMsg
     },
 };
 
 const EPOCH_START: u64 = 1_000_000_000;
+const NO_PKEY_ADDR_KEY: &str = "persistence1pqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzw5qx7";
 
 pub fn mock_app(admin: Addr, coins: Vec<Coin>) -> App {
     let mut env = mock_env();
@@ -18,7 +19,8 @@ pub fn mock_app(admin: Addr, coins: Vec<Coin>) -> App {
 
     let mut app = App::new(|router, _, storage| {
         // initialization  moved to App construction
-        router.bank.init_balance(storage, &admin, coins).unwrap();
+        router.bank.init_balance(storage, &admin, coins.clone()).unwrap();
+        router.bank.init_balance(storage, &Addr::unchecked(NO_PKEY_ADDR_KEY), coins).unwrap();
     });
     app.set_block(env.block);
     app
@@ -28,7 +30,7 @@ pub fn instantiate_multi_staking_contract(
     app: &mut App,
     code_id: u64,
     admin: Addr,
-    keeper_addr: Option<Addr>,
+    keeper_addr: Addr,
     minimum_reward_schedule_proposal_start_delay: u64,
     unlock_period: u64,
     instant_unbond_min_fee_bp: u64,
@@ -65,7 +67,7 @@ pub fn store_multi_staking_contract(app: &mut App) -> u64 {
         dexter_multi_staking::contract::execute,
         dexter_multi_staking::contract::instantiate,
         dexter_multi_staking::contract::query,
-    ));
+    ).with_sudo(dexter_multi_staking::contract::sudo));
     let code_id = app.store_code(multi_staking_contract);
     return code_id;
 }
@@ -147,7 +149,7 @@ pub fn create_lp_token(app: &mut App, code_id: u64, sender: Addr, token_name: St
 pub fn setup_generic(
     app: &mut App,
     admin_addr: Addr,
-    keeper_addr: Option<Addr>,
+    keeper_addr: Addr,
     minimum_reward_schedule_proposal_start_delay: u64,
     unlock_time: u64,
     unbond_fee_min_bp: u64,
@@ -178,13 +180,11 @@ pub fn setup_generic(
     );
 
     // Allow LP token in the multi staking contract
-    app.execute_contract(
-        admin_addr.clone(),
+    app.wasm_sudo(
         multi_staking_instance.clone(),
-        &ExecuteMsg::AllowLpToken {
+        &SudoMsg::AllowLpTokenForReward {
             lp_token: lp_token_addr.clone(),
         },
-        &vec![],
     )
     .unwrap();
 
@@ -194,8 +194,8 @@ pub fn setup_generic(
 pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         app,
-        admin_addr,
-        None,
+        admin_addr.clone(),
+        admin_addr.clone(),
         3 * 24 * 60 * 60,
         // 7 days
         7 * 24 * 60 * 60,
@@ -209,138 +209,70 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
 
 pub fn create_reward_schedule(
     app: &mut App,
-    admin_addr: &Addr,
-    multistaking_contract: &Addr,
-    lp_token: &Addr,
-    reward_asset: AssetInfo,
-    amount: Uint128,
-    start_block_time: u64,
-    end_block_time: u64,
-) -> anyhow::Result<AppResponse> {
-    let proposal_id = propose_reward_schedule(
-        app,
-        admin_addr,
-        multistaking_contract,
-        lp_token,
-        lp_token.as_str().to_owned() + "-" + admin_addr.as_str(),
-        None,
-        reward_asset,
-        amount,
-        start_block_time,
-        end_block_time,
-    )
-    .unwrap();
-    review_reward_schedule(
-        app,
-        admin_addr,
-        multistaking_contract,
-        vec![ReviewProposedRewardSchedule {
-            proposal_id,
-            approve: true,
-        }],
-    )
-}
-
-pub fn propose_reward_schedule(
-    app: &mut App,
     proposer: &Addr,
     multistaking_contract: &Addr,
     lp_token: &Addr,
     title: String,
-    description: Option<String>,
+    // description: Option<String>,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
     end_block_time: u64,
-) -> anyhow::Result<u64> {
-    let res = match reward_asset {
-        AssetInfo::NativeToken { denom } => app.execute_contract(
-            proposer.clone(),
-            multistaking_contract.clone(),
-            &ExecuteMsg::ProposeRewardSchedule {
-                lp_token: lp_token.clone(),
-                title,
-                description,
-                start_block_time,
-                end_block_time,
-            },
-            &vec![Coin::new(amount.u128(), denom.as_str())],
-        ),
-        AssetInfo::Token { contract_addr } => app.execute_contract(
-            proposer.clone(),
-            contract_addr.clone(),
-            &Cw20ExecuteMsg::Send {
-                contract: multistaking_contract.to_string(),
-                amount,
-                msg: to_binary(&Cw20HookMsg::ProposeRewardSchedule {
+) -> anyhow::Result<()> {
+    match &reward_asset {
+        AssetInfo::NativeToken { denom } => {
+            app.execute_contract(
+                Addr::unchecked(NO_PKEY_ADDR_KEY),
+                multistaking_contract.clone(),
+                &ExecuteMsg::CreateRewardSchedule {
                     lp_token: lp_token.clone(),
-                    title,
-                    description,
+                    title: title.to_string(),
+                    creator: proposer.to_string(),
                     start_block_time,
                     end_block_time,
-                })
-                .unwrap(),
-            },
-            &vec![],
-        ),
-    };
+                    asset: Asset::new(reward_asset.clone(), amount)
+                },
+                &vec![Coin::new(amount.u128(), denom.as_str())],
+            )?;
 
-    let proposal_id: anyhow::Result<u64> = res.map(|r| {
-        r.events
-            .iter()
-            .filter(|&e| e.ty == "wasm-dexter-multi-staking::propose_reward_schedule")
-            .fold(Vec::new(), |acc, e| {
-                let mut res = e.attributes.clone();
-                res.append(&mut acc.clone());
-                res
-            })
-            .iter()
-            .find(|&a| a.key == "proposal_id")
-            .map(|a| a.value.parse::<u64>().unwrap())
-            .unwrap()
-    });
+            Ok(())
+        },
+        AssetInfo::Token { contract_addr } => {
+            // allow the contract to consume CW20 token
+            app.execute_contract(
+                proposer.clone(),
+                contract_addr.clone(),
+                &Cw20ExecuteMsg::IncreaseAllowance { spender: multistaking_contract.to_string(), amount, expires: None },
+                &vec![]
+            )?;
 
-    return proposal_id;
-}
+            app.execute_contract(
+                Addr::unchecked(NO_PKEY_ADDR_KEY),
+                multistaking_contract.clone(),
+                &ExecuteMsg::CreateRewardSchedule {
+                    lp_token: lp_token.clone(),
+                    title: title.to_string(),
+                    creator: proposer.to_string(),
+                    start_block_time,
+                    end_block_time,
+                    asset: Asset::new(reward_asset.clone(), amount)
+                },
+                &vec![],
+            )?;
 
-pub fn review_reward_schedule(
-    app: &mut App,
-    admin_addr: &Addr,
-    multistaking_contract: &Addr,
-    reviews: Vec<ReviewProposedRewardSchedule>,
-) -> anyhow::Result<AppResponse> {
-    app.execute_contract(
-        admin_addr.clone(),
-        multistaking_contract.clone(),
-        &ExecuteMsg::ReviewRewardScheduleProposals { reviews },
-        &vec![],
-    )
-}
-
-pub fn drop_reward_schedule(
-    app: &mut App,
-    proposer: &Addr,
-    multistaking_contract: &Addr,
-    proposal_id: u64,
-) -> anyhow::Result<AppResponse> {
-    app.execute_contract(
-        proposer.clone(),
-        multistaking_contract.clone(),
-        &ExecuteMsg::DropRewardScheduleProposal { proposal_id },
-        &vec![],
-    )
+            Ok(())
+        },
+    }
 }
 
 pub fn update_fee_tier_interval(
     app: &mut App,
-    admin_addr: &Addr,
     multistaking_contract: &Addr,
     fee_tier_interval: u64,
 ) -> anyhow::Result<AppResponse> {
-    app.execute_contract(
-        admin_addr.clone(),
+    app.wasm_sudo(
         multistaking_contract.clone(),
-        &ExecuteMsg::UpdateConfig {
+        &SudoMsg::UpdateConfig {
             keeper_addr: None,
             minimum_reward_schedule_proposal_start_delay: None,
             unlock_period: None,
@@ -348,7 +280,6 @@ pub fn update_fee_tier_interval(
             instant_unbond_min_fee_bp: None,
             fee_tier_interval: Some(fee_tier_interval),
         },
-        &vec![],
     )
 }
 
@@ -481,17 +412,14 @@ pub fn unlock_lp_tokens(
 
 pub fn disallow_lp_token(
     app: &mut App,
-    admin_addr: &Addr,
     multistaking_contract: &Addr,
     lp_token_addr: &Addr,
 ) {
-    app.execute_contract(
-        admin_addr.clone(),
+    app.wasm_sudo(
         multistaking_contract.clone(),
-        &ExecuteMsg::RemoveLpToken {
+        &SudoMsg::RemoveLpTokenForReward {
             lp_token: lp_token_addr.clone(),
-        },
-        &vec![],
+        }
     )
     .unwrap();
 }

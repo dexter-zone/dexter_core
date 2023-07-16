@@ -951,6 +951,7 @@ fn test_join_pool() {
 #[test]
 fn test_join_auto_stake() {
     let owner = Addr::unchecked("owner".to_string());
+    let keeper = Addr::unchecked("keeper".to_string());
     let denom0 = "token0".to_string();
     let denom1 = "token1".to_string();
 
@@ -1104,7 +1105,8 @@ fn test_join_auto_stake() {
     // setup multistaking contract
     let multistaking_contract_address = initialize_multistaking_contract(
         &mut app,
-        &Addr::unchecked(owner.clone())
+        &Addr::unchecked(owner.clone()),
+        &keeper.clone(),
     );
 
     // Update vault config to set multistaking
@@ -1128,15 +1130,13 @@ fn test_join_auto_stake() {
     ).unwrap();
 
     // Allow LP tokens to be staked in multistaking contract
-    let allow_lp_token_msg = dexter::multi_staking::ExecuteMsg::AllowLpToken {
+    let allow_lp_token_msg = dexter::multi_staking::SudoMsg::AllowLpTokenForReward {
         lp_token: weighted_lp_token_addr.clone(),
     };
 
-    app.execute_contract(
-        owner.clone(),
+    app.wasm_sudo(
         multistaking_contract_address.clone(),
-        &allow_lp_token_msg,
-        &[],
+        &allow_lp_token_msg
     ).unwrap();
 
     // Check if LP tokens are minted and staked to multistaking when auto-stake is enabled

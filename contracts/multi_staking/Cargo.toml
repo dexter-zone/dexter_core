@@ -13,22 +13,22 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-cw2 = "1.0.1"
-cw20 = "1.0.1"
-cosmwasm-std = "1.2.1"
-cw-storage-plus = "1.0.1"
-schemars = "0.8.11"
-serde = { version = "1.0.152", default-features = false, features = ["derive"] }
+cw2 = "1.1.0"
+cw20 = "1.1.0"
+cosmwasm-std = "1.2.7"
+cw-storage-plus = "1.1.0"
+schemars = "0.8.12"
+serde = { version = "1.0.171", default-features = false, features = ["derive"] }
 dexter = { path = "../../packages/dexter", default-features = false }
-thiserror = "1.0.38"
-cosmwasm-schema = "1.2.1"
-serde-json-wasm = "0.5.0"
-const_format = "0.2.30"
+thiserror = "1.0.43"
+cosmwasm-schema = "1.2.7"
+serde-json-wasm = "0.5.1"
+const_format = "0.2.31"
 sylvia = "0.6.1"
 
 [dev-dependencies]
-cosmwasm-schema = "1.2.1"
+cosmwasm-schema = "1.2.7"
 lp-token = {path = "../lp_token"}
-cw-multi-test = "0.16.2"
-cw20-base = "1.0.1"
-anyhow = "1.0.68"
+cw-multi-test = "0.16.5"
+cw20-base = "1.1.0"
+anyhow = "1.0.72"

@@ -19,9 +19,9 @@ library = []
 
 [dependencies]
 dexter = { path = "../../packages/dexter", default-features = false }
-cw2 = "1.0.1"
-cw20 = "1.0.1"
-cw20-base = { version = "1.0.1", features = ["library"] }
-cosmwasm-std = "1.2.1"
-snafu = "0.7.4"
-cosmwasm-schema = "1.2.1"
+cw2 = "1.1.0"
+cw20 = "1.1.0"
+cw20-base = { version = "1.1.0", features = ["library"] }
+cosmwasm-std = "1.2.7"
+snafu = "0.7.5"
+cosmwasm-schema = "1.2.7"

@@ -4,7 +4,7 @@ use cosmwasm_std::entry_point;
 use const_format::concatcp;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
-    MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
+    MessageInfo, Order, Response, StdResult, Storage, Uint128, WasmMsg,
 };
 use std::{
     cmp::min,
@@ -13,10 +13,7 @@ use std::{
 
 use dexter::{
     asset::AssetInfo,
-    helper::{
-        build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
-        propose_new_owner,
-    },
+    helper::build_transfer_token_to_user_msg,
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, ConfigV1, CreatorClaimableRewardState,
         Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, MigrateMsg, QueryMsg,
@@ -38,10 +35,9 @@ use crate::{
     error::ContractError,
     state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
-        CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
-        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, REWARD_SCHEDULE_PROPOSALS, USER_BONDED_LP_TOKENS,
+        CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE, REWARD_SCHEDULES, REWARD_SCHEDULE_PROPOSALS, USER_BONDED_LP_TOKENS,
         USER_LP_TOKEN_LOCKS,
-    },
+    }, execute::{check_if_lp_token_allowed, create_reward_schedule::create_reward_schedule},
 };
 use crate::{
     execute::{
@@ -100,7 +96,6 @@ pub fn instantiate(
             unlock_period: msg.unlock_period,
             minimum_reward_schedule_proposal_start_delay: msg
                 .minimum_reward_schedule_proposal_start_delay,
-            owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
             instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
             instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp,
@@ -120,7 +115,7 @@ pub fn instantiate(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn sudo(deps: DepsMut, env: Env, info: MessageInfo, msg: SudoMsg) -> ContractResult<Response> {
+pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> ContractResult<Response> {
     match msg {
         SudoMsg::UpdateConfig {
             minimum_reward_schedule_proposal_start_delay,
@@ -132,7 +127,6 @@ pub fn sudo(deps: DepsMut, env: Env, info: MessageInfo, msg: SudoMsg) -> Contrac
         } => update_config(
             deps,
             env,
-            info,
             keeper_addr,
             minimum_reward_schedule_proposal_start_delay,
             unlock_period,
@@ -140,18 +134,10 @@ pub fn sudo(deps: DepsMut, env: Env, info: MessageInfo, msg: SudoMsg) -> Contrac
             instant_unbond_min_fee_bp,
             fee_tier_interval,
         ),
-        SudoMsg::AllowLPTokenForReward { lp_token } => allow_lp_token(deps, env, info, lp_token),
-        SudoMsg::RemoveLPTokenForReward { lp_token } => remove_lp_token(deps, info, &lp_token),
-        SudoMsg::CreateRewardSchedule { 
-            lp_token, 
-            title, 
-            reward_asset, 
-            amount, 
-            start_block_time, 
-            end_block_time, 
-            creator 
-        } => {
-            create_reward_schedule(deps, env, info, lp_token, title,  start_block_time, end_block_time, creator, Asset::new(reward_asset, amount))
+        SudoMsg::AllowLpTokenForReward { lp_token } => allow_lp_token(deps, env, lp_token),
+        SudoMsg::RemoveLpTokenForReward { lp_token } => remove_lp_token(deps, &lp_token),
+        SudoMsg::ReviewRewardScheduleProposals { reviews } => {
+            review_reward_schedule_proposals(deps, env, reviews)
         }
     }
 }
@@ -164,63 +150,27 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> ContractResult<Response> {
     match msg {
-        ExecuteMsg::UpdateConfig {
-            keeper_addr,
-            minimum_reward_schedule_proposal_start_delay,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
-        } => update_config(
-            deps,
-            env,
-            info,
-            keeper_addr,
-            minimum_reward_schedule_proposal_start_delay,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
-        ),
-        ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
-        ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::ProposeRewardSchedule {
+        ExecuteMsg::CreateRewardSchedule {
             lp_token,
             title,
-            description,
+            creator,
             start_block_time,
             end_block_time,
+            asset
         } => {
-            // Verify that no more than one asset is sent with the message for reward distribution
-            if info.funds.len() != 1 {
-                return Err(ContractError::InvalidNumberOfAssets {
-                    correct_number: 1,
-                    received_number: info.funds.len() as u8,
-                });
-            }
-
-            let sent_asset = info.funds[0].clone();
-            let proposer = info.sender.clone();
-
-            propose_reward_schedule(
+            let creator_addr = deps.api.addr_validate(&creator)?;
+            create_reward_schedule(
                 deps,
                 env,
                 info,
                 lp_token,
                 title,
-                description,
                 start_block_time,
                 end_block_time,
-                proposer,
-                Asset::new_native(sent_asset.denom, sent_asset.amount),
+                creator_addr,
+                asset
             )
-        }
-        ExecuteMsg::ReviewRewardScheduleProposals { reviews } => {
-            review_reward_schedule_proposals(deps, env, info, reviews)
-        }
-        ExecuteMsg::DropRewardScheduleProposal { proposal_id } => {
-            drop_reward_schedule_proposal(deps, env, info, proposal_id)
         }
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
@@ -251,49 +201,12 @@ pub fn execute(
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
         }
-        ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
-            let config = CONFIG.load(deps.storage)?;
-            let response = propose_new_owner(
-                deps,
-                info,
-                env,
-                owner.to_string(),
-                expires_in,
-                config.owner,
-                OWNERSHIP_PROPOSAL,
-                CONTRACT_NAME,
-            )?;
-            Ok(response)
-        }
-        ExecuteMsg::DropOwnershipProposal {} => {
-            let config: Config = CONFIG.load(deps.storage)?;
-
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
-                .map_err(|e| e.into())
-        }
-        ExecuteMsg::ClaimOwnership {} => claim_ownership(
-            deps,
-            info,
-            env,
-            OWNERSHIP_PROPOSAL,
-            |deps, new_owner| {
-                CONFIG.update::<_, StdError>(deps.storage, |mut v| {
-                    v.owner = new_owner;
-                    Ok(v)
-                })?;
-
-                Ok(())
-            },
-            CONTRACT_NAME,
-        )
-        .map_err(|e| e.into()),
     }
 }
 
 fn update_config(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
     keeper_addr: Option<Addr>,
     minimum_reward_schedule_proposal_start_delay: Option<u64>,
     unlock_period: Option<u64>,
@@ -303,10 +216,10 @@ fn update_config(
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
-    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
+    let mut event = Event::from_sudo(concatcp!(CONTRACT_NAME, "::update_config"));
 
     if let Some(keeper_addr) = keeper_addr {
-        config.keeper = Some(keeper_addr.clone());
+        config.keeper = keeper_addr.clone();
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
     }
 
@@ -516,14 +429,10 @@ fn compute_creator_claimable_reward(
 fn allow_lp_token(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
     lp_token: Addr,
 ) -> Result<Response, ContractError> {
     // validate if owner sent the message
     let mut config = CONFIG.load(deps.storage)?;
-    if config.owner != info.sender {
-        return Err(ContractError::Unauthorized);
-    }
 
     // To prevent out-of-gas issues in long run
     if config.allowed_lp_tokens.len() == MAX_ALLOWED_LP_TOKENS {
@@ -541,7 +450,7 @@ fn allow_lp_token(
     CONFIG.save(deps.storage, &config)?;
 
     let response = Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::allow_lp_token"), &info)
+        Event::from_sudo(concatcp!(CONTRACT_NAME, "::allow_lp_token"))
             .add_attribute("lp_token", lp_token.to_string()),
     );
     Ok(response)
@@ -549,20 +458,15 @@ fn allow_lp_token(
 
 fn remove_lp_token(
     deps: DepsMut,
-    info: MessageInfo,
     lp_token: &Addr,
 ) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
-    // validate if owner sent the message
-    if config.owner != info.sender {
-        return Err(ContractError::Unauthorized);
-    }
 
     config.allowed_lp_tokens.retain(|x| x != lp_token);
     CONFIG.save(deps.storage, &config)?;
 
     let response = Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::remove_lp_token"), &info)
+        Event::from_sudo(concatcp!(CONTRACT_NAME, "::remove_lp_token"))
             .add_attribute("lp_token", lp_token.to_string()),
     );
 
@@ -634,13 +538,9 @@ pub fn propose_reward_schedule(
 pub fn review_reward_schedule_proposals(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
     reviews: Vec<ReviewProposedRewardSchedule>,
 ) -> ContractResult<Response> {
     let config = CONFIG.load(deps.storage)?;
-    if config.owner != info.sender {
-        return Err(ContractError::Unauthorized);
-    }
 
     // ensure that reviews are for unique proposal_ids, otherwise we might end up creating duplicate reward schedules
     let mut reviewed_ids: HashSet<u64> = HashSet::with_capacity(reviews.len());
@@ -730,10 +630,7 @@ pub fn review_reward_schedule_proposals(
     }
 
     Ok(Response::new().add_event(
-        Event::from_info(
-            concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"),
-            &info,
-        )
+        Event::from_sudo( concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"))
         .add_attribute(
             "accepted_proposals",
             serde_json_wasm::to_string(&accepted_reward_proposals).unwrap(),
@@ -743,113 +640,6 @@ pub fn review_reward_schedule_proposals(
             serde_json_wasm::to_string(&rejected_reward_proposals).unwrap(),
         ),
     ))
-}
-
-
-pub fn create_reward_schedule(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    lp_token: Addr,
-    title: String,
-    start_block_time: u64,
-    end_block_time: u64,
-    creator: Addr,
-    asset: Asset,
-) -> ContractResult<Response> {
-
-    let config = CONFIG.load(deps.storage)?;
-    check_if_lp_token_allowed(&config, &lp_token)?;
-
-    // validate start and end block times
-    if start_block_time < env.block.time.seconds() {
-        return Err(ContractError::InvalidStartBlockTime {
-            start_block_time,
-            current_block_time: env.block.time.seconds(),
-        });
-    }
-
-    if end_block_time < start_block_time {
-        return Err(ContractError::InvalidEndBlockTime {
-            end_block_time,
-            start_block_time,
-        });
-    }
-
-    let mut res = Response::new().add_attribute("action", "create_reward_schedule");
-
-    match &asset.info {
-        AssetInfo::NativeToken { .. } => {
-            // validate if the amount is sent in the message
-            if info.funds.len() != 1 {
-                return Err(ContractError::InvalidNumberOfAssets {
-                    correct_number: 1,
-                    received_number: info.funds.len() as u8,
-                });
-            }
-
-            let amount = info.funds[0].amount;
-            if amount != asset.amount {
-                return Err(ContractError::InvalidRewardScheduleAmount {
-                    correct_amount: asset.amount,
-                    received_amount: amount,
-                });
-            }
-        }
-        AssetInfo::Token { contract_addr } => {
-            // transfer the token to contract before creating the reward schedule
-            deps.api.addr_validate(contract_addr.as_str())?;
-            let transfer_msg = build_transfer_token_to_user_msg(
-                asset.info.clone(),
-                env.contract.address.clone(),
-                asset.amount.clone(),
-            )?;
-
-            res = res.add_message(transfer_msg);
-        }
-    }
-
-
-
-    let mut lp_global_state = LP_GLOBAL_STATE
-        .may_load(deps.storage, &lp_token)?
-        .unwrap_or_default();
-
-    if !lp_global_state.active_reward_assets.contains(&asset.info) {
-        lp_global_state.active_reward_assets.push(asset.info.clone());
-    }
-
-    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
-
-
-    let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
-    let reward_schedule = RewardSchedule {
-        title,
-        creator: creator.clone(),
-        asset: asset.info.clone(),
-        amount: asset.amount,
-        staking_lp_token: lp_token.clone(),
-        start_block_time,
-        end_block_time,
-    };
-
-    REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
-
-    Ok(res
-        .add_event(
-            Event::from_info(
-                concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
-                &info,
-            )
-            .add_attribute("reward_schedule_id", reward_schedule_id.to_string())
-            .add_attribute("lp_token", lp_token)
-            .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
-            .add_attribute("amount", asset.amount.to_string())
-            .add_attribute("start_block_time", start_block_time.to_string())
-            .add_attribute("end_block_time", end_block_time.to_string())
-            .add_attribute("creator", creator),
-        )
-    )
 }
 
 pub fn drop_reward_schedule_proposal(
@@ -1008,12 +798,6 @@ pub fn compute_staker_reward(
     Ok(())
 }
 
-fn check_if_lp_token_allowed(config: &Config, lp_token: &Addr) -> ContractResult<()> {
-    if !config.allowed_lp_tokens.contains(lp_token) {
-        return Err(ContractError::LpTokenNotAllowed);
-    }
-    Ok(())
-}
 
 /// This function is called when a user wants to bond their LP tokens either directly or through the vault
 /// This function will update the user's bond amount and the total bond amount for the given LP token
@@ -1378,10 +1162,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             let allowed_lp_tokens = config.allowed_lp_tokens;
             to_binary(&allowed_lp_tokens).map_err(ContractError::from)
         }
-        QueryMsg::Owner {} => {
-            let config = CONFIG.load(deps.storage)?;
-            to_binary(&config.owner).map_err(ContractError::from)
-        }
         QueryMsg::ProposedRewardSchedules { start_after, limit } => {
             let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
             let start = start_after.map(Bound::exclusive);
@@ -1400,6 +1180,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
         }
         QueryMsg::ProposedRewardSchedule { proposal_id } => {
             let reward_schedule = REWARD_SCHEDULE_PROPOSALS.load(deps.storage, proposal_id)?;
+            to_binary(&reward_schedule).map_err(ContractError::from)
+        }
+        QueryMsg::RewardSchedule { id } => {
+            let reward_schedule = REWARD_SCHEDULES.load(deps.storage, id)?;
             to_binary(&reward_schedule).map_err(ContractError::from)
         }
         QueryMsg::RewardSchedules { lp_token, asset } => {
@@ -1541,15 +1325,11 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
 
             // copy fields from v1 to v2
             let config = Config {
-                owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
                 unlock_period: config_v1.unlock_period,
                 minimum_reward_schedule_proposal_start_delay: config_v1
                     .minimum_reward_schedule_proposal_start_delay,
-                keeper: match keeper_addr {
-                    Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
-                    None => None,
-                },
+                keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                 instant_unbond_fee_bp,
                 instant_unbond_min_fee_bp,
                 fee_tier_interval,

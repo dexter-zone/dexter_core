@@ -24,6 +24,9 @@ pub trait EventExt {
     /// Picks up the `sender` attribute from the passed `info` param.
     fn from_info(name: impl Into<String>, info: &MessageInfo) -> Event;
 
+    /// Sets the sender as `sudo`.
+    fn from_sudo(name: impl Into<String>) -> Event;
+
     /// Picks up the `sender` attribute from the passed `sender` param.
     /// Useful in scenarios where the info param isn't available.
     fn from_sender(name: impl Into<String>, sender: impl Into<String>) -> Event;
@@ -33,6 +36,10 @@ impl EventExt for Event {
 
     fn from_info(name: impl Into<String>, info: &MessageInfo) -> Event {
         Event::new(name).add_attribute(ATTR_SENDER, info.sender.to_string())
+    }
+
+    fn from_sudo(name: impl Into<String>) -> Event {
+        Event::new(name).add_attribute(ATTR_SENDER, "sudo".to_string())
     }
 
     fn from_sender(name: impl Into<String>, sender: impl Into<String>) -> Event {

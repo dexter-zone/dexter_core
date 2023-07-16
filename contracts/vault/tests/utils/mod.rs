@@ -130,13 +130,14 @@ pub fn store_multistaking_code(app: &mut App) -> u64 {
 pub fn initialize_multistaking_contract(
     app: &mut App,
     owner: &Addr,
+    keeper_addr: &Addr,
 ) -> Addr {
     let multistaking_code_id = store_multistaking_code(app);
 
     let multistaking_init_msg = dexter::multi_staking::InstantiateMsg {
         owner: owner.clone(),
         unlock_period: 86400u64,
-        keeper_addr: None,
+        keeper_addr: keeper_addr.clone(),
         minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
         instant_unbond_fee_bp: 500u64,
         instant_unbond_min_fee_bp: 200u64,

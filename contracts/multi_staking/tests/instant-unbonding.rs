@@ -28,7 +28,7 @@ fn validate_fee_tier_logic() {
     let (multi_staking_instance, _) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        Some(keeper_addr.clone()),
+        keeper_addr.clone(),
         0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
@@ -38,7 +38,7 @@ fn validate_fee_tier_logic() {
     );
 
     // Update fee tier boundary to same time as unlock period
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_000).unwrap();
+    update_fee_tier_interval(&mut app,  &multi_staking_instance, 600_000).unwrap();
 
     // query fee tiers
     let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
@@ -51,7 +51,7 @@ fn validate_fee_tier_logic() {
 
     // update fee tier boundary higher than unlock period to make sure we have 1 tier still
     // Added checks to make sure following condition is invalid for update
-    let result = update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_001);
+    let result = update_fee_tier_interval(&mut app, &multi_staking_instance, 600_001);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().root_cause().to_string(),
@@ -59,7 +59,7 @@ fn validate_fee_tier_logic() {
     );
 
     // update fee tier boundary to 100_000 seconds and validate that we have 6 tiers which are equalled spaced
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 100_000).unwrap();
+    update_fee_tier_interval(&mut app, &multi_staking_instance, 100_000).unwrap();
 
     // query fee tiers
     let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
@@ -120,7 +120,7 @@ fn test_instant_unbond_and_unlock() {
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        Some(keeper_addr.clone()),
+        keeper_addr.clone(),
         0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
@@ -134,12 +134,13 @@ fn test_instant_unbond_and_unlock() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "test".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
         Uint128::from(100_000_000 as u64),
-        1000_100_000,
-        1000_704_800,
+        1_500_000_000,
+        1_500_604_800,
     )
     .unwrap();
 

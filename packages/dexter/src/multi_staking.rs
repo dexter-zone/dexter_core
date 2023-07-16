@@ -21,7 +21,7 @@ pub struct InstantiateMsg {
     pub owner: Addr,
     pub unlock_period: u64,
     pub minimum_reward_schedule_proposal_start_delay: u64,
-    pub keeper_addr: Option<Addr>,
+    pub keeper_addr: Addr,
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
     pub instant_unbond_min_fee_bp: u64,
@@ -31,7 +31,7 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum MigrateMsg {
     V2 {
-        keeper_addr: Option<Addr>,
+        keeper_addr: Addr,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
@@ -132,10 +132,8 @@ pub struct UnlockFeeTier {
 
 #[cw_serde]
 pub struct Config {
-    /// owner has privilege to add/remove allowed lp tokens for reward
-    pub owner: Addr,
     /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
-    pub keeper: Option<Addr>,
+    pub keeper: Addr,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds
@@ -260,9 +258,6 @@ pub enum QueryMsg {
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
-    /// Returns the current owner of the contract
-    #[returns(Addr)]
-    Owner {},
     /// Returns the proposed reward schedules matching the given pagination params.
     #[returns(Vec<ProposedRewardSchedulesResponse>)]
     ProposedRewardSchedules { start_after: Option<u64>, limit: Option<u32> },
@@ -272,6 +267,9 @@ pub enum QueryMsg {
     /// Returns the reward schedule for a given LP token and a reward asset
     #[returns(Vec<RewardScheduleResponse>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
+    /// Returns the reward schedule for a given LP token and a reward asset
+    #[returns(RewardScheduleResponse)]
+    RewardSchedule { id: u64 },
     /// Returns the current reward state for a given LP token and a reward asset
     #[returns(AssetRewardState)]
     RewardState { lp_token: Addr, asset: AssetInfo },
@@ -316,68 +314,32 @@ pub enum SudoMsg {
         instant_unbond_min_fee_bp: Option<u64>,
         fee_tier_interval: Option<u64>,
     },
-    /// Create reward schedule
-    CreateRewardSchedule {
-        title: String,
-        creator: Addr,
-        lp_token: Addr,
-        reward_asset: AssetInfo,
-        amount: Uint128,
-        start_block_time: u64,
-        end_block_time: u64,
-    },
     /// Allow LP token for rewards
-    AllowLPTokenForReward {
+    AllowLpTokenForReward {
         lp_token: Addr,
     },
     /// Remove LP token from rewards
-    RemoveLPTokenForReward {
+    RemoveLpTokenForReward {
         lp_token: Addr,
-    },
-}
-
-#[cw_serde]
-pub enum ExecuteMsg {
-    /// Allows an admin to update config params
-    UpdateConfig {
-        minimum_reward_schedule_proposal_start_delay: Option<u64>,
-        keeper_addr: Option<Addr>,
-        unlock_period: Option<u64>,
-        instant_unbond_fee_bp: Option<u64>,
-        instant_unbond_min_fee_bp: Option<u64>,
-        fee_tier_interval: Option<u64>,
-    },
-    /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
-    /// Asset is distributed linearly over the duration of the reward schedule.
-    /// This entry point is strictly meant for proposing reward schedules with native tokens.
-    /// For proposing reward schedules with CW20 tokens, CW20 transfer with ProposeRewardSchedule
-    /// HookMsg is used. Anyone can initiate a reward schedule proposal.
-    ProposeRewardSchedule {
-        lp_token: Addr,
-        title: String,
-        description: Option<String>,
-        start_block_time: u64,
-        end_block_time: u64,
     },
     /// Only the multi-staking admin can approve/reject proposed reward schedules.
     ReviewRewardScheduleProposals {
         reviews: Vec<ReviewProposedRewardSchedule>,
-    },
-    /// Only the proposer can drop the proposal.
-    /// A proposal can be dropped either if its not yet been reviewed or has been rejected by admin.
-    /// If approved, a proposal can't be dropped.
-    DropRewardScheduleProposal {
-        proposal_id: u64,
-    },
-    /// Allows an admin to allow a new LP token to be rewarded
-    /// This is needed to prevent spam related to adding new reward schedules for random LP tokens
-    AllowLpToken {
+    }
+}
+
+#[cw_serde]
+pub enum ExecuteMsg {
+    /// Create a new reward schedule for rewarding LP token holders a specific asset.
+    /// This is executable only via governance using run-as address of the contract itself.
+    /// Asset is distributed linearly over the duration of the reward schedule.
+    CreateRewardSchedule {
         lp_token: Addr,
-    },
-    ///. Allows an admin to remove an LP token from being rewarded.
-    /// Existing reward schedules for the LP token will still be valid.
-    RemoveLpToken {
-        lp_token: Addr,
+        title: String,
+        creator: String,
+        start_block_time: u64,
+        end_block_time: u64,
+        asset: Asset     
     },
     /// Allows the contract to receive CW20 tokens.
     /// The contract can receive CW20 tokens from LP tokens for staking and 
@@ -431,17 +393,4 @@ pub enum ExecuteMsg {
     ClaimUnallocatedReward {
         reward_schedule_id: u64,
     },
-    /// Allows the owner to transfer ownership to a new address.
-    /// Ownership transfer is done in two steps:
-    /// 1. The owner proposes a new owner.
-    /// 2. The new owner accepts the ownership.
-    /// The proposal expires after a certain period of time within which the new owner must accept the ownership.
-    ProposeNewOwner {
-        owner: Addr,
-        expires_in: u64,
-    },
-    /// Allows the new owner to accept ownership.
-    ClaimOwnership {},
-    /// Allows the owner to drop the ownership transfer proposal.
-    DropOwnershipProposal {}
 }
