@@ -306,7 +306,7 @@ fn test_pool_creation_whitelist() {
     // enable pool creation for only whitelisted addresses
     let msg = ExecuteMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
-        allow_instantiation: Some(AllowPoolInstantiation::OnlyWhitelistedAddresses),
+        allow_instantiation: Some(AllowPoolInstantiation::OnlyGovernance),
         new_fee_info: None,
         paused: None,
     };

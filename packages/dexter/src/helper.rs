@@ -15,6 +15,7 @@ use itertools::Itertools;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 const ATTR_SENDER: &str = "sender";
+pub const NO_PKEY_ALLOWED_ADDR: &str = "persistence1pqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzw5qx7";
 
 /// This trait helps implement certain conventions for events across all contracts. Such as:
 /// * Using `sender` as the name for the human sender of the message instead of using multiple

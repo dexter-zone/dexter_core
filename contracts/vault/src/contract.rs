@@ -3,8 +3,10 @@ use itertools::Itertools;
 use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
-    ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO,
+    ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, REGISTRY, TMP_POOL_INFO,
 };
+use crate::sudo::pool_config::{sudo_update_pool_type_config, sudo_update_pool_config, sudo_update_pool_params};
+use crate::sudo::vault_config::{sudo_update_config, sudo_update_pause_info, sudo_add_to_registry};
 use cosmwasm_std::{
     entry_point, from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut,
     Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
@@ -16,17 +18,17 @@ use std::collections::HashSet;
 use const_format::concatcp;
 
 use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
-use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, propose_new_owner};
+use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, NO_PKEY_ALLOWED_ADDR};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
-use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo};
+use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo, SudoMsg};
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 use dexter::pool;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-vault";
+pub const CONTRACT_NAME: &str = "dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// A `reply` call code ID of sub-message.
@@ -63,7 +65,6 @@ pub fn instantiate(
     }
     
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
-        .add_attribute("owner", msg.owner.clone())
         .add_attribute("pool_configs", serde_json_wasm::to_string(&msg.pool_configs).unwrap());
 
     // Check if code id is valid
@@ -92,8 +93,6 @@ pub fn instantiate(
     event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&msg.auto_stake_impl).unwrap());
 
     let config = Config {
-        owner: deps.api.addr_validate(&msg.owner)?,
-        whitelisted_addresses: vec![],
         lp_token_code_id: msg.lp_token_code_id,
         fee_collector: addr_opt_validate(deps.api, &msg.fee_collector)?,
         auto_stake_impl: msg.auto_stake_impl,
@@ -126,6 +125,62 @@ pub fn instantiate(
 // ----------------x----------------x----------------x------------------x----------------x----------------
 
 #[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(
+    deps: DepsMut,
+    env: Env,
+    msg: SudoMsg,
+) -> Result<Response, ContractError> {
+    match msg {
+        SudoMsg::UpdateConfig {
+            lp_token_code_id,
+            fee_collector,
+            pool_creation_fee,
+            auto_stake_impl,
+            paused,
+        } => sudo_update_config(
+            deps,
+            lp_token_code_id,
+            fee_collector,
+            pool_creation_fee,
+            auto_stake_impl,
+            paused,
+        ),
+        SudoMsg::UpdatePauseInfo {
+            update_type,
+            pause_info
+        } => sudo_update_pause_info(
+            deps,
+            update_type,
+            pause_info,
+        ),
+        SudoMsg::UpdatePoolTypeConfig {
+            pool_type,
+            allow_instantiation,
+            new_fee_info,
+            paused,
+        } => sudo_update_pool_type_config(
+            deps,
+            pool_type,
+            allow_instantiation,
+            new_fee_info,
+            paused,
+        ),
+        SudoMsg::AddToRegistry { new_pool_type_config } => {
+            sudo_add_to_registry(deps, new_pool_type_config)
+        },
+        SudoMsg::UpdatePoolConfig {
+            pool_id,
+            fee_info,
+            paused,
+        } => sudo_update_pool_config(deps, pool_id, fee_info, paused),
+        SudoMsg::UpdatePoolParams { pool_id, params } => {
+            sudo_update_pool_params(deps, pool_id, params)
+        },
+    }
+}
+
+
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
@@ -134,52 +189,6 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::UpdateConfig {
-            lp_token_code_id,
-            fee_collector,
-            pool_creation_fee,
-            auto_stake_impl,
-            paused,
-        } => execute_update_config(
-            deps,
-            info,
-            lp_token_code_id,
-            fee_collector,
-            pool_creation_fee,
-            auto_stake_impl,
-            paused,
-        ),
-        ExecuteMsg::UpdatePauseInfo {
-            update_type,
-            pause_info
-        } => execute_update_pause_info(
-            deps,
-            info,
-            update_type,
-            pause_info,
-        ),
-        ExecuteMsg::UpdatePoolTypeConfig {
-            pool_type,
-            allow_instantiation,
-            new_fee_info,
-            paused,
-        } => execute_update_pool_type_config(
-            deps,
-            info,
-            pool_type,
-            allow_instantiation,
-            new_fee_info,
-            paused,
-        ),
-        ExecuteMsg::AddAddressToWhitelist { address } => {
-            execute_add_address_to_whitelist(deps, info, address)
-        }
-        ExecuteMsg::RemoveAddressFromWhitelist { address } => {
-            execute_remove_address_from_whitelist(deps, info, address)
-        }
-        ExecuteMsg::AddToRegistry { new_pool_type_config } => {
-            execute_add_to_registry(deps, info, new_pool_type_config)
-        }
         ExecuteMsg::CreatePoolInstance {
             pool_type,
             asset_infos,
@@ -196,14 +205,6 @@ pub fn execute(
             fee_info,
             init_params,
         ),
-        ExecuteMsg::UpdatePoolConfig {
-            pool_id,
-            fee_info,
-            paused,
-        } => execute_update_pool_config(deps, info, pool_id, fee_info, paused),
-        ExecuteMsg::UpdatePoolParams { pool_id, params } => {
-            execute_update_pool_params(deps, info, pool_id, params)
-        },
         ExecuteMsg::JoinPool {
             pool_id,
             recipient,
@@ -233,38 +234,7 @@ pub fn execute(
             recipient,
             min_receive,
             max_spend,
-        ),
-        ExecuteMsg::ProposeNewOwner { new_owner, expires_in } => {
-            let config: Config = CONFIG.load(deps.storage)?;
-            propose_new_owner(
-                deps,
-                info,
-                env,
-                new_owner,
-                expires_in,
-                config.owner,
-                OWNERSHIP_PROPOSAL,
-                CONTRACT_NAME
-            )
-            .map_err(|e| e.into())
-        }
-        ExecuteMsg::DropOwnershipProposal {} => {
-            let config: Config = CONFIG.load(deps.storage)?;
-
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
-                .map_err(|e| e.into())
-        }
-        ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
-                CONFIG.update::<_, StdError>(deps.storage, |mut v| {
-                    v.owner = new_owner;
-                    Ok(v)
-                })?;
-
-                Ok(())
-            }, CONTRACT_NAME)
-            .map_err(|e| e.into())
-        }
+        )
     }
 }
 
@@ -310,396 +280,10 @@ pub fn receive_cw20(
 // ----------------x----------------x  Execute :: Functional implementation  x----------------x----------------
 // ----------------x----------------x----------------x-----------------------x----------------x----------------
 
-//--------x---------------x--------------x-----
-//--------x  Execute :: Config Updates   x-----
-//--------x---------------x--------------x-----
-
-/// ## Description - Updates general settings. Returns an [`ContractError`] on failure or the following [`Config`]
-/// data will be updated if successful.
-///
-/// ## Params
-/// * **lp_token_code_id** optional parameter. The new id of the LP token code to be used for instantiating new LP tokens along-with the Pools
-/// * **fee_collector** optional parameter. The new address of the fee collector to be used for collecting fees from LP tokens
-///
-/// ##Executor - Only owner can execute it
-pub fn execute_update_config(
-    deps: DepsMut,
-    info: MessageInfo,
-    lp_token_code_id: Option<u64>,
-    fee_collector: Option<String>,
-    pool_creation_fee: Option<PoolCreationFee>,
-    auto_stake_impl: Option<AutoStakeImpl>,
-    paused: Option<PauseInfo>,
-) -> Result<Response, ContractError> {
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
-
-    // permission check
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Update LP token code id
-    if let Some(lp_token_code_id) = lp_token_code_id {
-        // Check if code id is valid
-        if lp_token_code_id == 0 {
-            return Err(ContractError::InvalidCodeId {});
-        }
-        event = event.add_attribute("lp_token_code_id", lp_token_code_id.to_string());
-        config.lp_token_code_id = Some(lp_token_code_id);
-    }
-
-    // Update fee collector
-    if let Some(fee_collector) = fee_collector {
-        event = event.add_attribute("fee_collector", fee_collector.clone());
-        config.fee_collector = Some(deps.api.addr_validate(fee_collector.as_str())?);
-    }
-
-    // Validate the pool creation fee
-    if let Some(pool_creation_fee) = pool_creation_fee {
-        if let PoolCreationFee::Enabled { fee } = &pool_creation_fee {
-            if fee.amount == Uint128::zero() {
-                return Err(ContractError::InvalidPoolCreationFee);
-            }
-        }
-        config.pool_creation_fee = pool_creation_fee;
-        event = event.add_attribute("pool_creation_fee", serde_json_wasm::to_string(&config.pool_creation_fee).unwrap());
-    }
-
-    // set auto stake implementation
-    if let Some(auto_stake_impl) = auto_stake_impl {
-        if let AutoStakeImpl::Multistaking { contract_addr } = &auto_stake_impl {
-            deps.api.addr_validate(contract_addr.as_str())?;
-        }
-        config.auto_stake_impl = auto_stake_impl;
-        event = event.add_attribute("auto_stake_impl", serde_json_wasm::to_string(&config.auto_stake_impl).unwrap());
-    }
-
-    // update the pause status
-    if let Some(paused) = paused {
-        event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
-        config.paused = paused;
-    }
-
-    CONFIG.save(deps.storage, &config)?;
-    
-    let response = Response::default().add_event(event);
-    Ok(response)
-}
-
-pub fn execute_update_pause_info(
-    deps: DepsMut,
-    info: MessageInfo,
-    update_type: PauseInfoUpdateType,
-    pause_info: PauseInfo,
-) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    // either vault owner or whitelisted address can update the pause info
-    if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender) {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pause_info"), &info)
-        .add_attribute("update_type", serde_json_wasm::to_string(&update_type).unwrap())
-        .add_attribute("pause_info", serde_json_wasm::to_string(&pause_info).unwrap());
-
-    match update_type {
-        PauseInfoUpdateType::PoolId(pool_id) => {
-            let mut pool = ACTIVE_POOLS.
-                load(deps.storage, pool_id.to_string().as_bytes())
-                .map_err(|_| ContractError::InvalidPoolId {})?;
-            pool.paused = pause_info;
-            ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
-        }
-        PauseInfoUpdateType::PoolType(pool_type) => {
-            let mut pool_type_config = REGISTRY
-                .load(deps.storage, pool_type.to_string())
-                .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
-            pool_type_config.paused = pause_info;
-            REGISTRY.save(deps.storage, pool_type.to_string(), &pool_type_config)?;
-        }
-    }
-
-    Ok(Response::new().add_event(event))
-}
-
-/// ## Description - Updates pool configuration. Returns an [`ContractError`] on failure or
-/// the following [`PoolConfig`] data will be updated if successful.
-///
-/// ## Params
-/// * **is_disabled** Optional parameter. If set to `true`, the instantiation of new pool instances will be disabled. If set to `false`, they will be enabled.
-///
-/// ## Executor
-/// Only owner can execute it
-pub fn execute_update_pool_type_config(
-    deps: DepsMut,
-    info: MessageInfo,
-    pool_type: PoolType,
-    allow_instantiation: Option<AllowPoolInstantiation>,
-    new_fee_info: Option<FeeInfo>,
-    paused: Option<PauseInfo>,
-) -> Result<Response, ContractError> {
-    // permission check - only Owner can update any pool config.
-    let config = CONFIG.load(deps.storage)?;
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let mut pool_config = REGISTRY
-        .load(deps.storage, pool_type.to_string())
-        .map_err(|_| ContractError::PoolTypeConfigNotFound {})?;
-
-    // Emit Event
-    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_type_config"), &info)
-        .add_attribute("pool_type", pool_type.to_string());
-
-    // Update allow instantiation
-    if let Some(allow_instantiation) = allow_instantiation {
-        event = event.add_attribute("allow_instantiation", allow_instantiation.to_string());
-        pool_config.allow_instantiation = allow_instantiation;
-    }
-
-    // Update fee info
-    if let Some(new_fee_info) = new_fee_info {
-        if !new_fee_info.valid_fee_info() {
-            return Err(ContractError::InvalidFeeInfo {});
-        }
-
-        pool_config.default_fee_info = new_fee_info;
-        event = event.add_attribute(
-            "new_fee_info",
-            serde_json_wasm::to_string(&pool_config.default_fee_info).unwrap(),
-        );
-    }
-
-    if let Some(paused) = paused {
-        event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
-        pool_config.paused = paused;
-    }
-
-    // Save pool config
-    REGISTRY.save(
-        deps.storage,
-        pool_config.pool_type.to_string(),
-        &pool_config,
-    )?;
-
-    Ok(Response::new().add_event(event))
-}
-
-fn execute_update_pool_config(
-    deps: DepsMut,
-    info: MessageInfo,
-    pool_id: Uint128,
-    fee_info: Option<FeeInfo>,
-    paused: Option<PauseInfo>,
-) -> Result<Response, ContractError> {
-    // permission check - only Owner can update any pool config.
-    let config = CONFIG.load(deps.storage)?;
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let mut pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
-
-    // Emit Event
-    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_config"), &info)
-        .add_attribute("pool_id", pool_id);
-
-    let mut msgs: Vec<CosmosMsg> = vec![];
-
-    // Update fee info
-    if let Some(fee_info) = fee_info {
-        if !fee_info.valid_fee_info() {
-            return Err(ContractError::InvalidFeeInfo {});
-        }
-
-        pool.fee_info = fee_info;
-        event = event.add_attribute("fee_info", serde_json_wasm::to_string(&pool.fee_info).unwrap());
-
-        // update total fee in the actual pool contract by sending a wasm message
-        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: pool.pool_addr.to_string(),
-            funds: vec![],
-            msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
-                total_fee_bps: pool.fee_info.total_fee_bps.clone(),
-            })?,
-        }));
-    }
-
-    // update pause status
-    if let Some(paused) = paused {
-        pool.paused = paused.clone();
-        event = event.add_attribute(
-            "paused",
-            serde_json_wasm::to_string(&pool.paused).unwrap(),
-        );
-    }
-
-    // Save pool config
-    ACTIVE_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &pool)?;
-
-    let response = Response::new().add_event(event).add_messages(msgs);
-
-    Ok(response)
-}
-
-
-fn execute_update_pool_params(
-    deps: DepsMut,
-    info: MessageInfo,
-    pool_id: Uint128,
-    params: Binary,
-) -> Result<Response, ContractError> {
-    // permission check - only Owner can update any pool config.
-    let config = CONFIG.load(deps.storage)?;
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let pool = ACTIVE_POOLS.load(deps.storage, &pool_id.to_string().as_bytes())?;
-
-    // Emit Event
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_pool_params"), &info)
-        .add_attribute("pool_id", pool_id);
-
-    // create pool update config message and send it to the pool contract
-    let msg = WasmMsg::Execute {
-        contract_addr: pool.pool_addr.to_string(),
-        funds: vec![],
-        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateConfig {
-            params,
-        })?,
-    };
-
-    let response = Response::new()
-        .add_event(event)
-        .add_message(msg);
-
-    Ok(response)
-}
-
-
-fn execute_add_address_to_whitelist(
-    deps: DepsMut,
-    info: MessageInfo,
-    address: String,
-) -> Result<Response, ContractError> {
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    // permission check
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Validate address
-    let address = deps.api.addr_validate(address.as_str())?;
-
-    // check if address to be added is the owner
-    if address == config.owner {
-        return Err(ContractError::CannotAddOwnerToWhitelist);
-    }
-
-    // check if address is already whitelisted
-    if config.whitelisted_addresses.contains(&address) {
-        return Err(ContractError::AddressAlreadyWhitelisted);
-    }
-
-    // Add address to whitelist
-    config.whitelisted_addresses.push(address.clone());
-
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::add_address_to_whitelist"), &info)
-            .add_attribute("address", address.to_string())
-    ))
-}
-
-fn execute_remove_address_from_whitelist(
-    deps: DepsMut,
-    info: MessageInfo,
-    address: String,
-) -> Result<Response, ContractError> {
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    // permission check
-    if info.sender.clone() != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Validate address
-    let address = deps.api.addr_validate(address.as_str())?;
-
-    // check if address is already whitelisted
-    if !config.whitelisted_addresses.contains(&address) {
-        return Err(ContractError::AddressNotWhitelisted);
-    }
-
-    // Remove address from whitelist
-    config.whitelisted_addresses.retain(|x| x != &address);
-
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::remove_address_from_whitelist"), &info)
-            .add_attribute("address", address.to_string())
-    ))
-}
 
 //--------x---------------x--------------x-----
 //--------x  Execute :: Create Pool      x-----
 //--------x---------------x--------------x-----
-
-/// ## Description - Adds a new pool with a new [`PoolType`] Key. Returns an [`ContractError`] on failure or
-/// returns the poolType and the code ID for the pool contract which is used for instantiation.
-///
-/// ## Params
-/// * **new_pool_config** is the object of type [`PoolConfig`]. Contains configuration parameters for the new pool.
-///
-/// * Executor** Only owner can execute this function
-pub fn execute_add_to_registry(
-    deps: DepsMut,
-    info: MessageInfo,
-    pool_type_config: PoolTypeConfig,
-) -> Result<Response, ContractError> {
-    let config: Config = CONFIG.load(deps.storage)?;
-
-    // permission check : Only owner can execute it
-    if info.sender != config.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Check if code id is valid
-    if pool_type_config.code_id == 0 {
-        return Err(ContractError::InvalidCodeId {});
-    }
-
-    // Check :: If pool type is already registered
-    match REGISTRY.load(deps.storage, pool_type_config.pool_type.to_string()) {
-        Ok(_) => return Err(ContractError::PoolTypeAlreadyExists {}),
-        Err(_) => {}
-    }
-
-    // validate fee bps limits
-    if !pool_type_config.default_fee_info.valid_fee_info() {
-        return Err(ContractError::InvalidFeeInfo {});
-    }
-
-    // Save pool config
-    REGISTRY.save(
-        deps.storage,
-        pool_type_config.pool_type.to_string(),
-        &pool_type_config,
-    )?;
-
-    Ok(Response::new().add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::add_to_registry"), &info)
-            .add_attribute("pool_type_config", serde_json_wasm::to_string(&pool_type_config).unwrap())
-    ))
-}
 
 /// ## Description - Creates a new pool with the specified parameters in the `asset_infos` variable. Returns an [`ContractError`] on failure or
 /// returns the address of the contract if the creation was successful.
@@ -729,9 +313,9 @@ pub fn execute_create_pool_instance(
 
     // Check if creation is allowed
     match pool_type_config.allow_instantiation {
-        AllowPoolInstantiation::OnlyWhitelistedAddresses => {
+        AllowPoolInstantiation::OnlyGovernance => {
             // Check if sender is whitelisted
-            if info.sender != config.owner && !config.whitelisted_addresses.contains(&info.sender) {
+            if info.sender != NO_PKEY_ALLOWED_ADDR {
                 return Err(ContractError::Unauthorized {});
             }
         }
@@ -947,7 +531,8 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
             let init_pool_sub_msg: SubMsg = SubMsg {
                 id: INSTANTIATE_POOL_REPLY_ID,
                 msg: WasmMsg::Instantiate {
-                    admin: Some(CONFIG.load(deps.storage)?.owner.to_string()),
+                    // only vault can upgrade a pool or we upgrade via chain goverannce directly
+                    admin: Some(env.contract.address.to_string()),
                     code_id: tmp_pool_info.code_id,
                     msg: to_binary(&PoolInstantiateMsg {
                         pool_id: tmp_pool_info.pool_id,

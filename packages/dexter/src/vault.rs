@@ -111,10 +111,6 @@ pub struct NativeAssetPrecisionInfo {
 /// ## Description - This struct describes the main control config of Vault.
 #[cw_serde]
 pub struct Config {
-    /// The admin address that controls settings for factory, pools and tokenomics contracts
-    pub owner: Addr,
-    /// Additional allowed addresses to create/manage pools. If empty, only owner can create/manage pools
-    pub whitelisted_addresses: Vec<Addr>,
     /// The Contract ID that is used for instantiating LP tokens for new pools
     pub lp_token_code_id: Option<u64>,
     /// The contract address to which protocol fees are sent
@@ -135,7 +131,7 @@ pub struct Config {
 #[cw_serde]
 pub enum AllowPoolInstantiation {
     Everyone,
-    OnlyWhitelistedAddresses,
+    OnlyGovernance,
     Nobody,
 }
 
@@ -143,8 +139,8 @@ impl Display for AllowPoolInstantiation {
     fn fmt(&self, fmt: &mut Formatter) -> Result {
         match self {
             AllowPoolInstantiation::Everyone => fmt.write_str("everyone"),
-            AllowPoolInstantiation::OnlyWhitelistedAddresses => {
-                fmt.write_str("only-whitelisted-addresses")
+            AllowPoolInstantiation::OnlyGovernance => {
+                fmt.write_str("only-governance")
             }
             AllowPoolInstantiation::Nobody => fmt.write_str("nobody"),
         }
@@ -276,7 +272,6 @@ impl Display for AutoStakeImpl {
 /// This struct describes the Msg used to instantiate in this contract.
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub owner: String,
     /// IDs and configs of contracts that are allowed to instantiate pools
     pub pool_configs: Vec<PoolTypeConfig>,
     /// This ID is optional but mandatory to create any pool.
@@ -296,11 +291,8 @@ pub enum PauseInfoUpdateType {
     PoolType(PoolType)
 }
 
-/// This struct describes the functions that can be executed in this contract.
 #[cw_serde]
-pub enum ExecuteMsg {
-    // Receives LP Tokens when removing Liquidity
-    Receive(Cw20ReceiveMsg),
+pub enum SudoMsg {
     /// Executable only by `config.owner`. Facilitates updating parameters like `config.fee_collector`,
     /// `config.lp_token_code_id`, etc.
     UpdateConfig {
@@ -311,19 +303,7 @@ pub enum ExecuteMsg {
         auto_stake_impl: Option<AutoStakeImpl>,
         paused: Option<PauseInfo>,
     },
-    AddAddressToWhitelist { 
-        address: String 
-    },
-    RemoveAddressFromWhitelist { 
-        address: String 
-    },
-    /// Allows updating pause info of pools to whitelisted addresses.
-    /// Pools can be paused based on a know pool_id or pool_type.
-    UpdatePauseInfo {
-        update_type: PauseInfoUpdateType,
-        pause_info: PauseInfo,
-    },
-    ///  Executable only by `config.owner`.
+    /// Executable only by `config.owner`.
     /// Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) ,
     /// and updating Fee (` pool_config.fee_info`) for new pool instances
     UpdatePoolTypeConfig {
@@ -332,17 +312,15 @@ pub enum ExecuteMsg {
         new_fee_info: Option<FeeInfo>,
         paused: Option<PauseInfo>,
     },
+    /// Allows updating pause info of pools to whitelisted addresses.
+    /// Pools can be paused based on a know pool_id or pool_type.
+    UpdatePauseInfo {
+        update_type: PauseInfoUpdateType,
+        pause_info: PauseInfo,
+    },
     ///  Adds a new pool with a new [`PoolType`] Key.                                                                       
     AddToRegistry {
         new_pool_type_config: PoolTypeConfig,
-    },
-    /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
-    CreatePoolInstance {
-        pool_type: PoolType,
-        asset_infos: Vec<AssetInfo>,
-        native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
-        fee_info: Option<FeeInfo>,
-        init_params: Option<Binary>,
     },
     /// Updates the pool config for a pool with the specified `pool_id`.
     /// This can be used to update the fee, pause info, etc. for a pool.
@@ -356,7 +334,22 @@ pub enum ExecuteMsg {
         pool_id: Uint128,
         params: Binary,
     },
+}
 
+/// This struct describes the functions that can be executed in this contract.
+#[cw_serde]
+pub enum ExecuteMsg {
+    // Receives LP Tokens when removing Liquidity
+    Receive(Cw20ReceiveMsg),
+    
+    /// Creates a new pool with the specified parameters in the `asset_infos` variable.                               
+    CreatePoolInstance {
+        pool_type: PoolType,
+        asset_infos: Vec<AssetInfo>,
+        native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
+        fee_info: Option<FeeInfo>,
+        init_params: Option<Binary>,
+    },
     // Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and
     // either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
     JoinPool {
@@ -373,16 +366,7 @@ pub enum ExecuteMsg {
         recipient: Option<String>,
         min_receive: Option<Uint128>,
         max_spend: Option<Uint128>,
-    },
-    /// ProposeNewOwner creates an offer for a new owner. The validity period of the offer is set in the `expires_in` variable.
-    ProposeNewOwner {
-        new_owner: String,
-        expires_in: u64,
-    },
-    /// DropOwnershipProposal removes the existing offer for the new owner.
-    DropOwnershipProposal {},
-    /// Used to claim(approve) new owner proposal, thus changing contract's owner
-    ClaimOwnership {},
+    }
 }
 
 /// ## Description
