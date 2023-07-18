@@ -8,7 +8,7 @@ use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
-use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg, PoolCreationFee};
+use dexter::vault::{AllowPoolInstantiation, ExecuteMsg, PoolInfo, PoolType, QueryMsg, PoolCreationFee, SudoMsg};
 use stable_pool::state::StablePoolParams;
 
 use crate::utils::{dummy_pool_creation_msg, instantiate_contract, mock_app, store_token_code};
@@ -237,7 +237,7 @@ fn test_pool_creation_whitelist() {
     ];
 
     // Set a pool creation fee
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: Some("fee_collector".to_string()),
         pool_creation_fee: Some(PoolCreationFee::Enabled {
@@ -252,11 +252,9 @@ fn test_pool_creation_whitelist() {
         paused: None,
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
     .unwrap();
 
@@ -273,18 +271,16 @@ fn test_pool_creation_whitelist() {
     assert!(res.is_ok());
 
     // disable pool creation for everyone
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: Some(AllowPoolInstantiation::Nobody),
         new_fee_info: None,
         paused: None,
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
     .unwrap();
 
@@ -304,18 +300,16 @@ fn test_pool_creation_whitelist() {
     );
 
     // enable pool creation for only whitelisted addresses
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: Some(AllowPoolInstantiation::OnlyGovernance),
         new_fee_info: None,
         paused: None,
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
     .unwrap();
 
@@ -331,64 +325,6 @@ fn test_pool_creation_whitelist() {
     // Pool instantiation from admin should work regardless of empty whitelist
     assert!(res.is_ok());
 
-    // Pool instantiation from non-admin non-whitelisted address
-    let msg = dummy_pool_creation_msg(&asset_infos);
-    let res = app.execute_contract(
-        user_addr.clone(),
-        vault_instance.clone(),
-        &msg,
-        &[coin(100_000_000u128, "uxprt")],
-    );
-
-    assert!(res.is_err());
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
-
-    // Add user to whitelist
-    let msg = ExecuteMsg::AddAddressToWhitelist {
-        address: user_addr.to_string(),
-    };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        &msg,
-        &[],
-    )
-    .unwrap();
-
-    // Pool instantiation from non-admin whitelisted address
-    let msg = dummy_pool_creation_msg(&asset_infos);
-    let res = app.execute_contract(
-        user_addr.clone(),
-        vault_instance.clone(),
-        &msg,
-        &[coin(100_000_000u128, "uxprt")],
-    );
-
-    assert!(res.is_ok());
-
-    // Remove user from whitelist and test again
-    let msg = ExecuteMsg::RemoveAddressFromWhitelist {
-        address: user_addr.to_string(),
-    };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
-        vault_instance.clone(),
-        &msg,
-        &[],
-    )
-    .unwrap();
-
-    // Pool instantiation from non-admin non-whitelisted address
-    let msg = dummy_pool_creation_msg(&asset_infos);
-    let res = app.execute_contract(
-        user_addr.clone(),
-        vault_instance.clone(),
-        &msg,
-        &[coin(100_000_000u128, "uxprt")],
-    );
-
-    assert!(res.is_err());
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
 }
 
 #[test]
@@ -498,7 +434,7 @@ fn test_pool_creation_fee() {
     assert_eq!(res.events[1].attributes[2], attr("pool_type", "stable-swap"));
 
     // Add fee for pool creation
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         pool_creation_fee: Some(PoolCreationFee::Enabled {
@@ -513,11 +449,9 @@ fn test_pool_creation_fee() {
         paused: None,
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
     .unwrap();
 
@@ -553,7 +487,7 @@ fn test_pool_creation_fee() {
     );
 
     // set fee collector
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: Some("fee_collector".to_string()),
         pool_creation_fee: None,
@@ -561,11 +495,9 @@ fn test_pool_creation_fee() {
         paused: None,
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     ).unwrap();
 
     // try creating another pool with passing fee

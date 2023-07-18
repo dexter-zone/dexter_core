@@ -45,7 +45,6 @@ fn instantiate_contracts(router: &mut App, owner: Addr, keeper_admin: Addr) -> (
         }],
         lp_token_code_id: Some(1u64),
         fee_collector: None,
-        owner: owner.to_string(),
         pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };

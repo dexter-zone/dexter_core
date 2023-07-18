@@ -8,7 +8,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeResponse, QueryMsg as PoolQueryMsg};
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfoResponse,
-    PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
+    PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType, SudoMsg,
 };
 use stable_pool::state::StablePoolParams;
 
@@ -52,7 +52,6 @@ fn proper_initialization() {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::Disabled,
     };
@@ -71,7 +70,6 @@ fn proper_initialization() {
     let msg = QueryMsg::Config {};
     let config_res: ConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
-    assert_eq!(owner, config_res.owner);
     assert_eq!(token_code_id, config_res.lp_token_code_id.unwrap());
     assert_eq!(
         Some(Addr::unchecked("fee_collector".to_string())),
@@ -162,7 +160,6 @@ fn proper_initialization() {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         auto_stake_impl: AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::default(),
     };
@@ -196,7 +193,6 @@ fn proper_initialization() {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::Disabled,
     };
@@ -239,7 +235,6 @@ fn test_add_to_registery() {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         auto_stake_impl: AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::Disabled,
     };
@@ -277,42 +272,7 @@ fn test_add_to_registery() {
 
     //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
 
-    let msg = ExecuteMsg::AddToRegistry {
-        new_pool_type_config: PoolTypeConfig {
-            code_id: stable5_pool_code_id,
-            pool_type: PoolType::StableSwap {},
-            default_fee_info: FeeInfo {
-                total_fee_bps: 10_0u16,
-                protocol_fee_percent: 49u16,
-            },
-            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-            paused: PauseInfo::default(),
-        },
-    };
-
-    let err_res = app
-        .execute_contract(
-            Addr::unchecked("not_owner".to_string().clone()),
-            vault_instance.clone(),
-            &msg,
-            &[],
-        )
-        .unwrap_err();
-    assert_eq!(err_res.root_cause().to_string(), "Unauthorized");
-
-    let err_res = app
-        .execute_contract(
-            Addr::unchecked(owner.clone()),
-            vault_instance.clone(),
-            &msg,
-            &[],
-        )
-        .unwrap_err();
-    assert_eq!(err_res.root_cause().to_string(), "Pool Type already exists");
-
-    //// -----x----- Error :: Only Owner can add new PoolType to registery || Pool Type already exists -----x----- ////
-
-    let msg = ExecuteMsg::AddToRegistry {
+    let msg = SudoMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
             code_id: stable5_pool_code_id,
             pool_type: PoolType::Weighted {},
@@ -326,18 +286,16 @@ fn test_add_to_registery() {
     };
 
     let err_res = app
-        .execute_contract(
-            Addr::unchecked(owner.clone()),
+        .wasm_sudo(
             vault_instance.clone(),
             &msg,
-            &[],
         )
         .unwrap_err();
     assert_eq!(err_res.root_cause().to_string(), "Invalid FeeInfo params");
 
     //// -----x----- Success :: Add new PoolType to registery  -----x----- ////
     let weighted_pool_code_id = 2u64;
-    let msg = ExecuteMsg::AddToRegistry {
+    let msg = SudoMsg::AddToRegistry {
         new_pool_type_config: PoolTypeConfig {
             code_id: weighted_pool_code_id,
             pool_type: PoolType::Weighted {},
@@ -350,11 +308,9 @@ fn test_add_to_registery() {
         },
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
     .unwrap();
 
@@ -391,7 +347,6 @@ fn update_config() {
     let after_init_config_res: ConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
-    assert_eq!(owner, after_init_config_res.owner);
     assert_eq!(
         None,
         after_init_config_res.fee_collector
@@ -407,7 +362,7 @@ fn update_config() {
         imbalanced_withdraw: false
     };
 
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: Some("fee_address".to_string()),
         auto_stake_impl: Some(AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked("multistaking_address") }),
@@ -415,18 +370,15 @@ fn update_config() {
         paused: Some(pause_info.clone()),
     };
 
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
-        &msg,
-        &[],
+        &msg
     )
     .unwrap();
 
     let msg = QueryMsg::Config {};
     let config_res: ConfigResponse = app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
-    assert_eq!(owner, config_res.owner);
     assert_eq!(
         Some(Addr::unchecked("fee_address".to_string())),
         config_res.fee_collector
@@ -566,7 +518,7 @@ fn test_pool_config_update() {
     };
 
     // update config for this pool now
-    let msg = ExecuteMsg::UpdatePoolConfig {
+    let msg = SudoMsg::UpdatePoolConfig {
         pool_id: Uint128::from(pool_id),
         fee_info: Some(FeeInfo {
             total_fee_bps: 400u16,
@@ -575,11 +527,9 @@ fn test_pool_config_update() {
         paused: Some(pause_info.clone()),
     };
 
-    let res = app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    let res = app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     );
 
     assert!(res.is_ok());
@@ -640,17 +590,6 @@ fn test_update_pause_info() {
         denom0.clone(),
     );
 
-    // Add user to whitelist
-    app.execute_contract(
-        owner_addr.clone(),
-        vault_instance.clone(),
-        &ExecuteMsg::AddAddressToWhitelist {
-            address: user_addr.to_string(),
-        },
-        &[],
-    )
-        .unwrap();
-
     // --------------- begin actual testing -----------------
 
     // assert the pause status via queries before updating
@@ -673,14 +612,12 @@ fn test_update_pause_info() {
 
     // update the pause info for type
     let expected_pause_info = PauseInfo { deposit: true, swap: false, imbalanced_withdraw: false };
-    app.execute_contract(
-        user_addr.clone(),
+    app.wasm_sudo(
         vault_instance.clone(),
-        &ExecuteMsg::UpdatePauseInfo {
+        &SudoMsg::UpdatePauseInfo {
             update_type: PauseInfoUpdateType::PoolType(PoolType::StableSwap {}),
             pause_info: expected_pause_info.clone(),
         },
-        &[],
     ).unwrap();
 
     // assert the pause status via queries after updating only for pool type
@@ -702,14 +639,12 @@ fn test_update_pause_info() {
     assert_eq!(res.paused, PauseInfo::default());
 
     // update the pause info for id
-    app.execute_contract(
-        user_addr.clone(),
+    app.wasm_sudo(
         vault_instance.clone(),
-        &ExecuteMsg::UpdatePauseInfo {
+        &SudoMsg::UpdatePauseInfo {
             update_type: PauseInfoUpdateType::PoolId(stable5_pool_id),
             pause_info: expected_pause_info.clone(),
         },
-        &[],
     ).unwrap();
 
     // assert the pause status for pool id as well
@@ -719,17 +654,4 @@ fn test_update_pause_info() {
             &QueryMsg::GetPoolById {pool_id: stable5_pool_id }
         ).unwrap();
     assert_eq!(res.paused, expected_pause_info);
-
-    // trying to update the pause info from a non-whitelisted address should fail
-    let res = app.execute_contract(
-        Addr::unchecked("non-whitelisted-addr"),
-        vault_instance.clone(),
-        &ExecuteMsg::UpdatePauseInfo {
-            update_type: PauseInfoUpdateType::PoolId(stable5_pool_id),
-            pause_info: expected_pause_info.clone(),
-        },
-        &[],
-    );
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
 }

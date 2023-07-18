@@ -112,7 +112,6 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
@@ -447,7 +446,6 @@ fn proper_initialization() {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: Some("fee_collector".to_string()),
-        owner: owner.to_string(),
         pool_creation_fee: PoolCreationFee::default(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
@@ -467,7 +465,6 @@ fn proper_initialization() {
     let config_res: VaultConfigResponse =
         app.wrap().query_wasm_smart(&vault_instance, &msg).unwrap();
 
-    assert_eq!(owner, config_res.owner);
     assert_eq!(token_code_id, config_res.lp_token_code_id.unwrap());
     assert_eq!(
         Some(Addr::unchecked("fee_collector".to_string())),

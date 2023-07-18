@@ -7,7 +7,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
-    PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo, NativeAssetPrecisionInfo,
+    PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo, NativeAssetPrecisionInfo, SudoMsg,
 };
 use stable_pool::state::StablePoolParams;
 
@@ -32,6 +32,7 @@ pub fn store_vault_code(app: &mut App) -> u64 {
             dexter_vault::contract::instantiate,
             dexter_vault::contract::query,
         )
+        .with_sudo(dexter_vault::contract::sudo)
         .with_reply_empty(dexter_vault::contract::reply),
     );
     app.store_code(factory_contract)
@@ -99,7 +100,6 @@ pub fn instantiate_contract(app: &mut App, owner: &Addr) -> Addr {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
         fee_collector: None,
-        owner: owner.to_string(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::default(),
     };
@@ -519,7 +519,7 @@ pub fn initialize_weighted_pool(
 }
 
 pub fn set_keeper_contract_in_config(app: &mut App, owner: Addr, vault_addr: Addr) {
-    let msg = ExecuteMsg::UpdateConfig { 
+    let msg = SudoMsg::UpdateConfig { 
         lp_token_code_id: None,
         fee_collector: Some("fee_collector".to_string()),
         pool_creation_fee: None,
@@ -527,10 +527,8 @@ pub fn set_keeper_contract_in_config(app: &mut App, owner: Addr, vault_addr: Add
         paused: None 
     };
 
-    app.execute_contract(
-        owner,
+    app.wasm_sudo(
         vault_addr,
-        &msg,
-        &[],
+        &msg
     ).unwrap();
 }

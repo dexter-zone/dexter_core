@@ -8,7 +8,7 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::pool::{
     AfterJoinResponse, ConfigResponse as Pool_ConfigResponse, QueryMsg as PoolQueryMsg,
 };
-use dexter::vault::{ExecuteMsg, PauseInfo, PoolType};
+use dexter::vault::{ExecuteMsg, PauseInfo, PoolType, SudoMsg};
 
 use crate::utils::{
     increase_token_allowance, initialize_3_tokens,
@@ -182,18 +182,16 @@ fn test_join_pool() {
         .unwrap();
 
     // pause deposits for all pools
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         auto_stake_impl: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -223,23 +221,21 @@ fn test_join_pool() {
     ).unwrap_err().root_cause().to_string());
 
     // resume deposits for all pools
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         auto_stake_impl: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
     // pause deposits specifically for stable 5 pool type
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
@@ -271,31 +267,27 @@ fn test_join_pool() {
     ).unwrap_err().root_cause().to_string());
 
     // resume deposits specifically for stable 5 pool type
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
     // pause deposits specifically for stable 5 pool id
-    let msg = ExecuteMsg::UpdatePoolConfig {
+    let msg = SudoMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
         paused: Some(PauseInfo{deposit: true, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -317,16 +309,14 @@ fn test_join_pool() {
     ).unwrap_err().root_cause().to_string());
 
     // resume deposits specifically for stable 5 pool id
-    let msg = ExecuteMsg::UpdatePoolConfig {
+    let msg = SudoMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -1110,7 +1100,7 @@ fn test_join_auto_stake() {
     );
 
     // Update vault config to set multistaking
-    let config_update_msg = ExecuteMsg::UpdateConfig {
+    let config_update_msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         pool_creation_fee: None,
@@ -1122,11 +1112,9 @@ fn test_join_auto_stake() {
         paused: None,
     };
 
-    app.execute_contract(
-        owner.clone(),
+    app.wasm_sudo(
         vault_instance.clone(),
         &config_update_msg,
-        &[],
     ).unwrap();
 
     // Allow LP tokens to be staked in multistaking contract

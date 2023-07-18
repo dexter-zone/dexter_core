@@ -5,7 +5,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::vault::{ExecuteMsg, PauseInfo, PoolType, SingleSwapRequest, SwapType};
+use dexter::vault::{ExecuteMsg, PauseInfo, PoolType, SingleSwapRequest, SwapType, SudoMsg};
 
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool,
@@ -120,18 +120,16 @@ fn test_swap() {
     );
 
     // pause swaps for all pools
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         auto_stake_impl: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: true, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -303,7 +301,7 @@ fn test_swap() {
     .unwrap_err().root_cause().to_string());
 
     // resume swaps for all pools
-    let msg = ExecuteMsg::UpdateConfig {
+    let msg = SudoMsg::UpdateConfig {
         lp_token_code_id: None,
         fee_collector: None,
         auto_stake_impl: None,
@@ -319,17 +317,15 @@ fn test_swap() {
         .unwrap();
 
     // pause swaps specifically for stable 5 pool type
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: true, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -346,31 +342,27 @@ fn test_swap() {
         .unwrap_err().root_cause().to_string());
 
     // resume swaps specifically for stable 5 pool type
-    let msg = ExecuteMsg::UpdatePoolTypeConfig {
+    let msg = SudoMsg::UpdatePoolTypeConfig {
         pool_type: PoolType::StableSwap {},
         allow_instantiation: None,
         new_fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
     // pause swaps specifically for stable 5 pool id
-    let msg = ExecuteMsg::UpdatePoolConfig {
+    let msg = SudoMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: true, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
         &msg,
-        &[],
     )
         .unwrap();
 
@@ -387,16 +379,14 @@ fn test_swap() {
         .unwrap_err().root_cause().to_string());
 
     // resume swaps specifically for stable 5 pool id
-    let msg = ExecuteMsg::UpdatePoolConfig {
+    let msg = SudoMsg::UpdatePoolConfig {
         pool_id: stable5_pool_id,
         fee_info: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
     };
-    app.execute_contract(
-        Addr::unchecked(owner.clone()),
+    app.wasm_sudo(
         vault_instance.clone(),
-        &msg,
-        &[],
+        &msg
     )
         .unwrap();
 

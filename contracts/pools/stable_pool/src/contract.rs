@@ -329,8 +329,8 @@ fn update_scaling_factor_manager(
     // validate scaling factor manager address
     deps.api.addr_validate(scaling_factor_manager.as_str())?;
 
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+    // Access Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -366,8 +366,8 @@ fn update_max_allowed_spread(
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
     let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
 
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+    // Access Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -1211,8 +1211,8 @@ fn start_changing_amp(
     let config: Config = CONFIG.load(deps.storage)?;
     let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
 
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+    // Access Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -1271,10 +1271,9 @@ fn stop_changing_amp(
     // Load the math config from the storage
     let mut math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
     let config: Config = CONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
 
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
+    // Access Check :: Only Vault can execute this function
+    if info.sender != config.vault_addr {
         return Err(ContractError::Unauthorized {});
     }
 

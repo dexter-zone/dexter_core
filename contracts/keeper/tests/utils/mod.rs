@@ -70,7 +70,6 @@ pub fn instantiate_contracts(
         pool_configs,
         lp_token_code_id: Some(lp_token_code_id),
         fee_collector: None,
-        owner: vault_owner.to_string(),
         pool_creation_fee: PoolCreationFee::Disabled,
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
     };
@@ -105,7 +104,7 @@ pub fn instantiate_contracts(
         .unwrap();
 
     // register keeper in the vault
-    let register_msg = dexter::vault::ExecuteMsg::UpdateConfig {
+    let register_msg = dexter::vault::SudoMsg::UpdateConfig {
         fee_collector: Some(keeper_instance.to_string()),
         lp_token_code_id: None,
         pool_creation_fee: None,
@@ -114,11 +113,9 @@ pub fn instantiate_contracts(
     };
 
     // send the message
-    app.execute_contract(
-        vault_owner.to_owned(),
+    app.wasm_sudo(
         vault_instance.clone(),
         &register_msg,
-        &[],
     )
     .unwrap();
 
@@ -196,6 +193,7 @@ fn store_vault_code(app: &mut App) -> u64 {
             dexter_vault::contract::instantiate,
             dexter_vault::contract::query,
         )
+        .with_sudo(dexter_vault::contract::sudo)
         .with_reply_empty(dexter_vault::contract::reply),
     );
     app.store_code(vault_contract)

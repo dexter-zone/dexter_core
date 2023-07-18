@@ -10,7 +10,7 @@ use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::pool::ConfigResponse;
-use dexter::vault::{ExecuteMsg, PoolInfo, PoolType, QueryMsg};
+use dexter::vault::{ExecuteMsg, PoolInfo, PoolType, QueryMsg, SudoMsg};
 use stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
 
 use crate::utils::{instantiate_contract, mock_app, store_token_code};
@@ -160,7 +160,7 @@ fn update_pool_params() {
     let pool_addr = Addr::unchecked("contract4".to_string());
 
     // Let's update the pool params: max_allowed_spread
-    let msg = ExecuteMsg::UpdatePoolParams {
+    let msg = SudoMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
         params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
             max_allowed_spread: Decimal::from_ratio(10u64, 100u64)
@@ -168,11 +168,9 @@ fn update_pool_params() {
     };
 
     app
-        .execute_contract(
-            Addr::unchecked(owner.clone()),
+        .wasm_sudo(
             vault_instance.clone(),
             &msg,
-            &[],
         )
         .unwrap();
 
@@ -190,7 +188,7 @@ fn update_pool_params() {
     assert_eq!(Decimal::from_ratio(10u64, 100u64), pool_params.max_allowed_spread);
 
     // Try to update the pool params with a non owner
-    let msg = ExecuteMsg::UpdatePoolParams {
+    let msg = SudoMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
         params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
             max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
@@ -198,11 +196,9 @@ fn update_pool_params() {
     };
 
     let res = app
-        .execute_contract(
-            Addr::unchecked("user".to_string()),
+        .wasm_sudo(
             vault_instance.clone(),
             &msg,
-            &[],
         )
         .unwrap_err();
 

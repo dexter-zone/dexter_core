@@ -5,7 +5,7 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
 
-use dexter::vault::{Cw20HookMsg, ExecuteMsg, ExitType, PauseInfoUpdateType, PauseInfo, QueryMsg, PoolTypeConfigResponse};
+use dexter::vault::{Cw20HookMsg, ExecuteMsg, ExitType, PauseInfoUpdateType, PauseInfo, QueryMsg, PoolTypeConfigResponse, SudoMsg};
 
 use crate::utils::{
     initialize_3_tokens, initialize_stable_5_pool,
@@ -478,7 +478,7 @@ fn test_exit_pool() {
     );
 
     // Let's pause the imbalanced exit from the pool and re-execute the same exit
-    let pause_msg = ExecuteMsg::UpdatePauseInfo { 
+    let pause_msg = SudoMsg::UpdatePauseInfo { 
         update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::StableSwap {  }),
         pause_info: PauseInfo {
             swap: false,
@@ -487,11 +487,9 @@ fn test_exit_pool() {
         },
     };
 
-    app.execute_contract(
-        owner.clone(),
+    app.wasm_sudo(
         vault_instance.clone(),
         &pause_msg,
-        &[],
     ).unwrap();
 
     // validate if config is updated on the pool type level
@@ -623,7 +621,7 @@ fn test_exit_pool() {
 
     // Allow imbalanced exit to test below
     // Let's pause the imbalanced exit from the pool and re-execute the same exit
-    let pause_msg = ExecuteMsg::UpdatePauseInfo { 
+    let pause_msg = SudoMsg::UpdatePauseInfo { 
         update_type: PauseInfoUpdateType::PoolType(dexter::vault::PoolType::StableSwap {  }),
         pause_info: PauseInfo {
             swap: false,
@@ -632,11 +630,9 @@ fn test_exit_pool() {
         },
     };
 
-    app.execute_contract(
-        owner.clone(),
+    app.wasm_sudo(
         vault_instance.clone(),
         &pause_msg,
-        &[],
     ).unwrap();
 
     // -------x---------- Slippage Control Test -::- ExactAssetOut -------x---------
