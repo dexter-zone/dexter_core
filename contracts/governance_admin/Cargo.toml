@@ -1,0 +1,43 @@
+[package]
+name = "dexter-governance-admin"
+version = "2.0.0"
+authors = ["PersistenceLabs"]
+edition = "2021"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+
+[dependencies]
+cosmwasm-std = "1.2.1"
+cw2 = "1.0.1"
+cw20 = "1.0.1"
+cw-storage-plus = { version = "1.0.1", features = ["iterator"] }
+schemars = "0.8.11"
+dexter = { path = "../../packages/dexter", default-features = false }
+serde = { version = "1.0.152", default-features = false, features = ["derive"] }
+thiserror = "1.0.38"
+cosmwasm-schema = "1.2.1"
+serde-json-wasm = "0.5.0"
+const_format = "0.2.30"
+
+[dev-dependencies]
+cosmwasm-schema = "1.2.1"
+dexter-vault = {path = "../vault"}
+dexter-keeper = {path = "../keeper"}
+stable-pool = {path = "../pools/stable_pool" }
+weighted-pool = {path = "../pools/weighted_pool" }
+lp-token = {path = "../lp_token"}
+cw-multi-test = "0.16.2"

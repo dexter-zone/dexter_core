@@ -6,6 +6,7 @@ members = [
     "contracts/pools/*",
     "contracts/multi_staking",
     "contracts/router",
+    "contracts/governance_admin",
     "packages/*"
 ]
 

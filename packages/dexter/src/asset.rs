@@ -3,7 +3,7 @@ use cosmwasm_std::{
     to_binary, Addr, Api, BankMsg, Coin, ConversionOverflowError, CosmosMsg, Decimal256, Fraction,
     MessageInfo, QuerierWrapper, StdError, StdResult, Uint128, Uint256, WasmMsg,
 };
-use cw20::Cw20ExecuteMsg;
+use cw20::{Cw20ExecuteMsg, AllowanceResponse};
 use std::fmt;
 
 use crate::{querier::{query_balance, query_token_balance}, vault::NativeAssetPrecisionInfo};
@@ -167,6 +167,20 @@ impl AssetInfo {
         } else {
             return Uint128::zero();
         }
+    }
+
+    pub fn query_spend_limits(
+        token_addr: &Addr,
+        owner_addr: &Addr,
+        spender_addr: &Addr,
+        querier: &QuerierWrapper
+    ) -> StdResult<Uint128> {
+        let res: AllowanceResponse  = querier.query_wasm_smart(token_addr, &cw20_base::msg::QueryMsg::Allowance {
+            owner: owner_addr.to_string(),
+            spender: spender_addr.to_string()
+        })?;
+
+        Ok(res.allowance)
     }
 
     /// Returns the number of decimals that a token has.
