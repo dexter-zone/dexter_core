@@ -8,6 +8,7 @@ pub mod querier;
 pub mod router;
 pub mod vault;
 pub mod multi_staking;
+pub mod governance_admin;
 
 #[allow(clippy::all)]
 mod uints {
