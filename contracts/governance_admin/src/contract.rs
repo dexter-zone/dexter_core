@@ -49,7 +49,13 @@ pub fn execute(
         ExecuteMsg::ExecuteMsgs { msgs } => {
             // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
             let mut res = Response::new();
-            res = res.add_messages(msgs);
+            let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::execute_msgs"), &info);
+            // log if this part of a transaction or not
+            event = match env.transaction {
+                None => event.add_attribute("tx", "none"),
+                Some(tx) => event.add_attribute("tx", tx.index.to_string()),
+            };
+            res = res.add_messages(msgs).add_event(event);
             Ok(res)
         }
 
@@ -190,6 +196,7 @@ pub fn execute(
             }));
 
             res = res.add_messages(messages);
+            res = res.add_event(event);
             Ok(res)
         }
 
