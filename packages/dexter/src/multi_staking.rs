@@ -21,7 +21,7 @@ pub struct InstantiateMsg {
     pub owner: Addr,
     pub unlock_period: u64,
     pub minimum_reward_schedule_proposal_start_delay: u64,
-    pub keeper_addr: Option<Addr>,
+    pub keeper_addr: Addr,
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
     pub instant_unbond_min_fee_bp: u64,
@@ -31,7 +31,7 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum MigrateMsg {
     V2 {
-        keeper_addr: Option<Addr>,
+        keeper_addr: Addr,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
@@ -135,7 +135,7 @@ pub struct Config {
     /// owner has privilege to add/remove allowed lp tokens for reward
     pub owner: Addr,
     /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
-    pub keeper: Option<Addr>,
+    pub keeper: Addr,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds

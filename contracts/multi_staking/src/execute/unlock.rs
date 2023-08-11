@@ -54,7 +54,7 @@ pub fn instant_unlock(
         &final_locks_after_unlocking,
     )?;
 
-    let fee_recipient = config.keeper.unwrap_or(config.owner);
+    let fee_recipient = config.keeper;
 
     let mut response = Response::new().add_event(
         Event::from_sender(concatcp!(CONTRACT_NAME, "::instant_unlock"), user.clone())
