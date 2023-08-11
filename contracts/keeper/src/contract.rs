@@ -95,8 +95,15 @@ pub fn execute(
         ExecuteMsg::ExitLPTokens {
             lp_token_address,
             amount,
-            min_assets_received
-        } => exit_lp_tokens(deps, env, info, lp_token_address, amount, min_assets_received),
+            min_assets_received,
+        } => exit_lp_tokens(
+            deps,
+            env,
+            info,
+            lp_token_address,
+            amount,
+            min_assets_received,
+        ),
         ExecuteMsg::SwapAsset {
             offer_asset,
             ask_asset_info,
@@ -175,7 +182,9 @@ fn withdraw(
     }
 
     // Send the funds to the recipient or to the owner if no recipient is specified
-    let recipient = deps.api.addr_validate(recipient.unwrap_or(config.owner).as_str())?;
+    let recipient = deps
+        .api
+        .addr_validate(recipient.unwrap_or(config.owner).as_str())?;
     let transfer_msg = asset.create_transfer_msg(recipient.clone(), amount)?;
 
     Ok(Response::new().add_message(transfer_msg).add_event(
@@ -196,9 +205,8 @@ fn create_dexter_exit_pool_msg(
 ) -> Result<CosmosMsg, ContractError> {
     let recipient = env.contract.address.clone();
 
-    let config = CONFIG.load(deps.storage)?;
     let pool_info: PoolInfo = deps.querier.query_wasm_smart(
-        config.vault_address.to_string(),
+        vault_address.to_string(),
         &dexter::vault::QueryMsg::GetPoolByLpTokenAddress {
             lp_token_addr: lp_token_address.to_string(),
         },
@@ -283,6 +291,7 @@ fn swap_asset(
     min_receive: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let mut msgs: Vec<CosmosMsg> = vec![];
 
     // Permission check
     if info.sender != config.owner {
@@ -293,6 +302,29 @@ fn swap_asset(
     let balance = offer_asset.query_for_balance(&deps.querier, &env.contract.address)?;
     if balance < offer_asset.amount {
         return Err(ContractError::InsufficientBalance);
+    }
+
+    let mut funds_to_send = vec![];
+    // if we are swapping for a CW20 token, we need to approve the vault to spend the funds
+    match &offer_asset.info {
+        AssetInfo::Token { contract_addr } => {
+            let msg: CosmosMsg = CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: contract_addr.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+                    spender: config.vault_address.to_string(),
+                    amount: offer_asset.amount,
+                    // since they are happening in the same transaction, we only approve for 1 extra height
+                    expires: Some(cw20::Expiration::AtHeight(env.block.height + 1)),
+                })?,
+                funds: vec![],
+            });
+
+            msgs.push(msg);
+        }
+        AssetInfo::NativeToken { denom } => {
+            let coin = Coin::new(offer_asset.amount.u128(), denom.clone());
+            funds_to_send.push(coin);
+        }
     }
 
     // Create a dexter swap message and return the swapped funds to the keeper itself
@@ -311,22 +343,15 @@ fn swap_asset(
         max_spend: None,
     };
 
-    let swap_send_funds = if let AssetInfo::NativeToken { denom } = &offer_asset.info {
-        vec![Coin {
-            denom: denom.clone(),
-            amount: offer_asset.amount,
-        }]
-    } else {
-        vec![]
-    };
-
     let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.vault_address.to_string(),
-        funds: swap_send_funds,
+        funds: funds_to_send,
         msg: to_binary(&swap_msg)?,
     });
 
-    Ok(Response::new().add_message(cosmos_msg).add_event(
+    msgs.push(cosmos_msg);
+
+    Ok(Response::new().add_messages(msgs).add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
             .add_attribute("pool_id", pool_id.to_string())
             .add_attribute("offer_asset", offer_asset.to_string())
