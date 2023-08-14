@@ -1,6 +1,6 @@
 {
   "contract_name": "dexter-multi-staking",
-  "contract_version": "2.0.0",
+  "contract_version": "2.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -10,6 +10,7 @@
       "fee_tier_interval",
       "instant_unbond_fee_bp",
       "instant_unbond_min_fee_bp",
+      "keeper_addr",
       "minimum_reward_schedule_proposal_start_delay",
       "owner",
       "unlock_period"
@@ -32,14 +33,7 @@
         "minimum": 0.0
       },
       "keeper_addr": {
-        "anyOf": [
-          {
-            "$ref": "#/definitions/Addr"
-          },
-          {
-            "type": "null"
-          }
-        ]
+        "$ref": "#/definitions/Addr"
       },
       "minimum_reward_schedule_proposal_start_delay": {
         "type": "integer",
@@ -100,6 +94,16 @@
                 ],
                 "format": "uint64",
                 "minimum": 0.0
+              },
+              "keeper_addr": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Addr"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "minimum_reward_schedule_proposal_start_delay": {
                 "type": [
@@ -1052,7 +1056,8 @@
             "required": [
               "fee_tier_interval",
               "instant_unbond_fee_bp",
-              "instant_unbond_min_fee_bp"
+              "instant_unbond_min_fee_bp",
+              "keeper_addr"
             ],
             "properties": {
               "fee_tier_interval": {
@@ -1071,16 +1076,23 @@
                 "minimum": 0.0
               },
               "keeper_addr": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Addr"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/definitions/Addr"
               }
             },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Adds support for updating keeper address. Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update. We can otherwise use V2 message directly for upgrading from v1 to v2.1",
+        "type": "object",
+        "required": [
+          "v2_1"
+        ],
+        "properties": {
+          "v2_1": {
+            "type": "object",
             "additionalProperties": false
           }
         },
@@ -1125,6 +1137,7 @@
         "fee_tier_interval",
         "instant_unbond_fee_bp",
         "instant_unbond_min_fee_bp",
+        "keeper",
         "minimum_reward_schedule_proposal_start_delay",
         "owner",
         "unlock_period"
@@ -1157,12 +1170,9 @@
         },
         "keeper": {
           "description": "Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.",
-          "anyOf": [
+          "allOf": [
             {
               "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
             }
           ]
         },

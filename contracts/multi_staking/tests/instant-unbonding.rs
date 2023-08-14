@@ -28,7 +28,7 @@ fn validate_fee_tier_logic() {
     let (multi_staking_instance, _) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        Some(keeper_addr.clone()),
+        keeper_addr.clone(),
         0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
@@ -120,7 +120,7 @@ fn test_instant_unbond_and_unlock() {
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        Some(keeper_addr.clone()),
+        keeper_addr.clone(),
         0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,

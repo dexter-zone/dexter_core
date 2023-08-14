@@ -1,6 +1,6 @@
 use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{to_binary, Addr, Coin, Timestamp, Uint128};
-use cw20::{BalanceResponse, Cw20QueryMsg};
+use cw20::{BalanceResponse, Cw20QueryMsg, Cw20Coin, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::Asset;
 use dexter::{asset::AssetInfo, vault::FeeInfo};
@@ -47,6 +47,7 @@ pub fn assert_cw20_balance(app: &App, contract: &Addr, address: &Addr, expected_
 
 pub fn instantiate_contracts(
     app: &mut App,
+    lp_token_code_id: u64,
     vault_owner: &Addr,
     keeper_owner: &Addr,
     fee_info: FeeInfo,
@@ -56,7 +57,7 @@ pub fn instantiate_contracts(
     let weighted_pool_code_id: u64 = store_weighted_pool_code(app);
     let vault_code_id: u64 = store_vault_code(app);
     let keeper_code_id: u64 = store_keeper_code(app);
-    let lp_token_code_id: u64 = store_token_code(app);
+    
 
     let pool_configs = vec![PoolTypeConfig {
         pool_type: PoolType::Weighted {},
@@ -122,7 +123,7 @@ pub fn instantiate_contracts(
     )
     .unwrap();
 
-    // Create a weighted pool of uxprt and uatom
+    // Create a weighted pool of given assets
     let pool_init_msg = dexter::vault::ExecuteMsg::CreatePoolInstance {
         pool_type: PoolType::Weighted {},
         asset_infos: asset_infos.clone(),
@@ -211,11 +212,45 @@ fn store_keeper_code(app: &mut App) -> u64 {
     app.store_code(keeper_contract)
 }
 
-fn store_token_code(app: &mut App) -> u64 {
+pub fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
         lp_token::contract::execute,
         lp_token::contract::instantiate,
         lp_token::contract::query,
     ));
     app.store_code(token_contract)
+}
+
+pub(crate) fn instantiate_cw20_token(
+    app: &mut App, 
+    owner: &Addr,
+    cw20_code_id: u64, 
+    token_symbol: String, 
+    amount: Uint128
+) -> Addr {
+    let init_msg = dexter::lp_token::InstantiateMsg {
+        name: token_symbol.clone(),
+        symbol: token_symbol.clone(),
+        decimals: 6,
+        initial_balances: vec![Cw20Coin {
+            amount, 
+            address: owner.to_string() 
+        }],
+        mint: Some(MinterResponse {
+            minter: owner.to_string(),
+            cap: None,
+        }),
+        marketing: None,
+    };
+
+    let token_address = app.instantiate_contract(
+        cw20_code_id,
+        owner.to_owned(),
+        &init_msg,
+        &[],
+        token_symbol,
+        None,
+    ).unwrap();
+
+    token_address
 }

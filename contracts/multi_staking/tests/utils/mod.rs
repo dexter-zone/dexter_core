@@ -28,7 +28,7 @@ pub fn instantiate_multi_staking_contract(
     app: &mut App,
     code_id: u64,
     admin: Addr,
-    keeper_addr: Option<Addr>,
+    keeper_addr: Addr,
     minimum_reward_schedule_proposal_start_delay: u64,
     unlock_period: u64,
     instant_unbond_min_fee_bp: u64,
@@ -147,7 +147,7 @@ pub fn create_lp_token(app: &mut App, code_id: u64, sender: Addr, token_name: St
 pub fn setup_generic(
     app: &mut App,
     admin_addr: Addr,
-    keeper_addr: Option<Addr>,
+    keeper_addr: Addr,
     minimum_reward_schedule_proposal_start_delay: u64,
     unlock_time: u64,
     unbond_fee_min_bp: u64,
@@ -192,10 +192,11 @@ pub fn setup_generic(
 }
 
 pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
+    let keeper_addr = Addr::unchecked("keeper");
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         app,
         admin_addr,
-        None,
+        keeper_addr,
         3 * 24 * 60 * 60,
         // 7 days
         7 * 24 * 60 * 60,

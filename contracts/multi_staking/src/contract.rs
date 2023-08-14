@@ -90,6 +90,9 @@ pub fn instantiate(
         });
     }
 
+    // validate keeper address
+    deps.api.addr_validate(&msg.keeper_addr.to_string())?;
+
     CONFIG.save(
         deps.storage,
         &Config {
@@ -271,7 +274,7 @@ fn update_config(
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     if let Some(keeper_addr) = keeper_addr {
-        config.keeper = Some(keeper_addr.clone());
+        config.keeper = keeper_addr.clone();
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
     }
 
@@ -1407,10 +1410,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 unlock_period: config_v1.unlock_period,
                 minimum_reward_schedule_proposal_start_delay: config_v1
                     .minimum_reward_schedule_proposal_start_delay,
-                keeper: match keeper_addr {
-                    Some(address) => Some(deps.api.addr_validate(&address.to_string())?),
-                    None => None,
-                },
+                keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                 instant_unbond_fee_bp,
                 instant_unbond_min_fee_bp,
                 fee_tier_interval,

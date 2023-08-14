@@ -1,7 +1,7 @@
 use crate::{
     contract::{ContractResult, CONTRACT_NAME},
     state::USER_LP_TOKEN_LOCKS,
-    utils::{calculate_unlock_fee, find_lock_difference},
+    utils::{calculate_unlock_fee, find_lock_difference}, error::ContractError,
 };
 use const_format::concatcp;
 use cosmwasm_std::{
@@ -31,12 +31,25 @@ pub fn instant_unlock(
         .may_load(deps.storage, (&lp_token, &user))?
         .unwrap_or_default();
 
+    if locks.is_empty() {
+        return Err(ContractError::NoLocks);
+    }
+
     let (final_locks_after_unlocking, valid_locks_to_be_unlocked) =
         find_lock_difference(locks.clone(), token_locks.clone());
+
+    if valid_locks_to_be_unlocked.is_empty() {
+        return Err(ContractError::NoValidLocks);
+    }
 
     let total_amount = valid_locks_to_be_unlocked
         .iter()
         .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
+
+    // ideally at this point total amount should be non-zero but we still check for it to be safe
+    if total_amount.is_zero() {
+        return Err(ContractError::ZeroAmount);
+    }
 
     let mut total_amount_to_be_unlocked = Uint128::zero();
     let mut total_fee_charged = Uint128::zero();
@@ -54,7 +67,7 @@ pub fn instant_unlock(
         &final_locks_after_unlocking,
     )?;
 
-    let fee_recipient = config.keeper.unwrap_or(config.owner);
+    let fee_recipient = config.keeper;
 
     let mut response = Response::new().add_event(
         Event::from_sender(concatcp!(CONTRACT_NAME, "::instant_unlock"), user.clone())

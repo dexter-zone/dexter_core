@@ -5,7 +5,7 @@ use dexter::{
     vault::FeeInfo,
 };
 
-use crate::utils::assert_cw20_balance;
+use crate::utils::{assert_cw20_balance, store_token_code};
 
 mod utils;
 
@@ -51,9 +51,11 @@ fn test_exit_and_swap() {
 
     let native_asset_precisions = vec![("uatom".to_string(), 6u8), ("uxprt".to_string(), 6u8)];
 
+    let lp_token_code_id: u64 = store_token_code(&mut app);
     let (vault_addr, keeper_addr, pool_id, _pool_addr, lp_token_addr) =
         utils::instantiate_contracts(
             &mut app,
+            lp_token_code_id,
             &owner,
             &keeper_owner,
             fee_info,
@@ -199,4 +201,151 @@ fn test_exit_and_swap() {
 
     assert_eq!(uatom_balance.amount, Uint128::from(3000u64));
     assert_eq!(uxprt_balance.amount, Uint128::from(9487846u64));
+}
+
+
+// Test the swap message for CW20 asset pools
+#[test]
+fn test_cw20_asset_swap() {
+    let owner: Addr = Addr::unchecked("owner".to_string());
+    let keeper_owner: Addr = Addr::unchecked("keeper_owner".to_string());
+    let alice_address: Addr = Addr::unchecked("alice".to_string());
+
+    let mut app = utils::mock_app(
+        owner.clone(),
+        vec![
+            Coin {
+                denom: "uatom".to_string(),
+                amount: uint128_with_precision!(100_000u128, 6),
+            },
+        ],
+    );
+
+    // send uatom to alice
+    app.send_tokens(
+        owner.clone(),
+        alice_address.clone(),
+        &vec![
+            Coin {
+                denom: "uatom".to_string(),
+                amount: uint128_with_precision!(100u128, 6),
+            },
+        ],
+    ).unwrap();
+
+    let lp_token_code_id: u64 = store_token_code(&mut app);
+    // create a cw20 asset and pair it with uxprt
+    let cw20_asset = utils::instantiate_cw20_token(&mut app, &owner, lp_token_code_id, "TEST".to_string(), uint128_with_precision!(100_000u128, 6));
+
+    let fee_info = FeeInfo {
+        total_fee_bps: 30,
+        protocol_fee_percent: 20,
+    };
+
+    let asset_infos = vec![
+        AssetInfo::native_token("uatom".to_string()),
+        AssetInfo::token(cw20_asset.clone())
+    ];
+
+    let native_asset_precisions = vec![("uatom".to_string(), 6u8)];
+
+    let (vault_addr, keeper_addr, pool_id, _pool_addr, _lp_token_addr) =
+        utils::instantiate_contracts(
+            &mut app,
+            lp_token_code_id,
+            &owner,
+            &keeper_owner,
+            fee_info,
+            asset_infos,
+            native_asset_precisions,
+        );
+
+    // mint some tokens for alice
+    let mint_msg = cw20::Cw20ExecuteMsg::Mint {
+        recipient: alice_address.clone().into(),
+        amount: uint128_with_precision!(1_000u128, 6),
+    };
+
+    app.execute_contract(owner.clone(), cw20_asset.clone(), &mint_msg, &[]).unwrap();
+
+
+    // join pool from alice
+    let join_msg = dexter::vault::ExecuteMsg::JoinPool {
+        pool_id,
+        recipient: None,
+        assets: Some(vec![
+            Asset::new_native("uatom".to_string(), uint128_with_precision!(50u128, 6)),
+            Asset::new_token(cw20_asset.clone(), uint128_with_precision!(50u128, 6)),
+        ]),
+        min_lp_to_receive: None,
+        auto_stake: None,
+    };
+
+    // allow vault to spend Alice's CW20 tokens
+    let approve_msg = cw20::Cw20ExecuteMsg::IncreaseAllowance { 
+        spender: vault_addr.clone().into(),
+        amount: uint128_with_precision!(50u128, 6),
+        expires: None,
+    };
+
+    app.execute_contract(alice_address.clone(), cw20_asset.clone(), &approve_msg, &[])
+        .unwrap();
+
+    // send the message
+    app.execute_contract(
+        alice_address.clone(),
+        vault_addr.clone(),
+        &join_msg,
+        &[
+            Coin {
+                denom: "uatom".to_string(),
+                amount: uint128_with_precision!(50u128, 6),
+            },
+        ],
+    )
+        .unwrap();
+
+    // send some CW20 tokens from Alice to keeper contract
+    let send_msg = cw20::Cw20ExecuteMsg::Transfer {
+        recipient: keeper_addr.clone().into(),
+        amount: uint128_with_precision!(20u128, 6),
+    };
+
+    app.execute_contract(alice_address.clone(), cw20_asset.clone(), &send_msg, &[])
+        .unwrap();
+
+    // validate keeper CW20 balance
+    assert_cw20_balance(
+        &app,
+        &cw20_asset,
+        &keeper_addr,
+        uint128_with_precision!(20u128, 6),
+    );
+
+    // swap CW20 tokens for uatom in keeper 
+    let swap_msg =  dexter::keeper::ExecuteMsg::SwapAsset { 
+        offer_asset: Asset::new_token(cw20_asset.clone(), uint128_with_precision!(5u128, 6)),
+        ask_asset_info: AssetInfo::native_token("uatom".to_string()),
+        min_ask_amount: None,
+        pool_id,
+    };
+
+    app.execute_contract(keeper_owner.clone(), keeper_addr.clone(), &swap_msg, &[]).unwrap();
+
+    // validate keeper CW20 balance is decreased
+    assert_cw20_balance(
+        &app,
+        &cw20_asset,
+        &keeper_addr,
+        Uint128::from(15003000u128),
+    );
+
+    // validate keeper uatom balance is increased
+    let uatom_balance = app
+        .wrap()
+        .query_balance(keeper_addr.clone(), "uatom".to_string())
+        .unwrap();
+
+    assert_eq!(uatom_balance.amount, Uint128::from(4533054u128));
+    
 }

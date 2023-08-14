@@ -18,6 +18,7 @@ pub mod utils;
 fn test_staking() {
     let admin = String::from("admin");
     let user = String::from("user");
+    let keeper = String::from("keeper");
 
     let coins = vec![
         Coin::new(1000_000_000, "uxprt"),
@@ -26,13 +27,14 @@ fn test_staking() {
 
     let admin_addr = Addr::unchecked(admin.clone());
     let user_addr = Addr::unchecked(user.clone());
+    let keeper_addr = Addr::unchecked(keeper.clone());
 
     let mut app = mock_app(admin_addr.clone(), coins);
 
     let (multi_staking_instance, lp_token_addr) = setup_generic(
         &mut app,
         admin_addr.clone(),
-        None,
+        keeper_addr,
         3 * 24 * 60 * 60,
         1000,
         200,

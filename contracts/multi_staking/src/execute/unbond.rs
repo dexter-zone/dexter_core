@@ -77,10 +77,7 @@ pub fn instant_unbond(
     let instant_unbond_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
 
     // Check if the keeper is available, if not, send the fee to the contract owner
-    let mut fee_receiver = config.owner;
-    if let Some(keeper_addr) = config.keeper {
-        fee_receiver = keeper_addr;
-    }
+    let fee_receiver = config.keeper;
 
     // Send the instant unbond fee to the keeper as protocol treasury
     let fee_msg = build_transfer_token_to_user_msg(
