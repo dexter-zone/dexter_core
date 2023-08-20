@@ -66,21 +66,21 @@ pub fn find_total_funds_needed(
 
     for coin in proposal_deposit {
         let asset_info = AssetInfo::native_token(coin.denom);
-        let amount: Uint128 = total_funds_map.get(&asset_info).unwrap_or_default();
+        let amount: Uint128 = total_funds_map.get(&asset_info).cloned().unwrap_or_default();
         let c_amount = Uint128::from_str(&coin.amount).unwrap();
         total_funds_map.insert(asset_info, amount.checked_add(c_amount)?);
     }
 
     // add the pool creation fee to the total funds
     if let PoolCreationFee::Enabled { fee } = pool_creation_fee {
-        let amount = total_funds_map.get(&fee.info).unwrap_or(&Uint128::zero());
+        let amount = total_funds_map.get(&fee.info).cloned().unwrap_or_default();
         total_funds_map.insert(fee.info, amount.checked_add(fee.amount)?);
     }
 
     // add the bootstrapping amount to the total funds
     if let Some(bootstrapping_amount) = &pool_creation_request_proposal.bootstrapping_amount {
         for asset in bootstrapping_amount {
-            let amount = total_funds_map.get(&asset.info).unwrap_or(&Uint128::zero());
+            let amount = total_funds_map.get(&asset.info).cloned().unwrap_or_default();
             total_funds_map.insert(asset.info.clone(), amount.checked_add(asset.amount)?);
         }
     }
@@ -88,7 +88,7 @@ pub fn find_total_funds_needed(
     // add the reward schedule amounts to the total funds
     if let Some(reward_schedules) = &pool_creation_request_proposal.reward_schedules {
         for reward_schedule in reward_schedules {
-            let amount = total_funds_map.get(&reward_schedule.asset).unwrap_or(&Uint128::zero());
+            let amount = total_funds_map.get(&reward_schedule.asset).cloned().unwrap_or_default();
             total_funds_map.insert(reward_schedule.asset.clone(), amount.checked_add(reward_schedule.amount)?);
         }
     }
@@ -116,9 +116,9 @@ pub fn validate_or_transfer_assets(
     for asset in total_funds_needed {
         match asset.info {
             AssetInfo::NativeToken { denom } => {
-                let amount = funds_map.get(&denom).unwrap_or(&Uint128::zero());
+                let amount = funds_map.get(&denom).cloned().unwrap_or_default();
                 // TODO: return the extra funds back to the user
-                if amount < &asset.amount {
+                if amount < asset.amount {
                     panic!("Insufficient funds sent for native asset {}", denom);
                 }
             },
