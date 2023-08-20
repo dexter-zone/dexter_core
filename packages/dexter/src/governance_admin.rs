@@ -35,26 +35,15 @@ pub enum ExecuteMsg {
    },
 
    PostGovernanceProposalCreationCallback {
-      proposal_creation_request_id: Uint128,
+      pool_creation_request_id: u64,
    },
 
    ResumeCreatePool {
-      pool_creation_request_id: Uint128,
+      pool_creation_request_id: u64,
    },
 
    ResumeJoinPool {
-      pool_creation_request_id: Uint128,
-   },
-
-   // Create new pool with funds
-   CreateNewPool {
-      vault_addr: String,
-      bootstrapping_amount_payer: String,
-      pool_type: PoolType,
-      fee_info: Option<FeeInfo>,
-      native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
-      assets: Vec<Asset>,
-      init_params: Option<Binary>
+      pool_creation_request_id: u64,
    },
 
 }
