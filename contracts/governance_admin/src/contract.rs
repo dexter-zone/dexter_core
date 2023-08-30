@@ -1,14 +1,13 @@
+use std::ops::Sub;
 use std::str::FromStr;
 
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::state::{POOL_CREATION_REQUESTS, next_pool_creation_request_id, POOL_CREATION_REQUEST_PROPOSAL_ID};
-use crate::utils::{query_gov_deposit_params, query_latest_governance_proposal};
+use crate::utils::{query_gov_params, query_latest_governance_proposal};
 
 use const_format::concatcp;
-use cosmos_sdk_proto::cosmos::gov::v1beta1::MsgSubmitProposal;
-use cosmos_sdk_proto::cosmwasm::wasm::v1::ExecuteContractProposal;
-use cosmos_sdk_proto::traits::{MessageExt, Message};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     entry_point, to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response,
     StdError, StdResult, WasmMsg, Uint128, Coin, Addr,
@@ -19,6 +18,8 @@ use dexter::governance_admin::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt, NO_PRIV_KEY_ADDR};
 use dexter::querier::query_vault_config;
 use dexter::vault::{ExecuteMsg as VaultExecuteMsg, PoolCreationFee};
+use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
+use persistence_std::types::cosmwasm::wasm::v1::{ExecuteContractProposal, MsgExecuteContract};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-governance-admin";
@@ -59,7 +60,7 @@ pub fn find_total_funds_needed(
 
     // add the proposal deposit to the total funds.
     // We need to query the gov module to figure this out   
-    let deposit_params = query_gov_deposit_params(&deps.querier)?;
+    let deposit_params = query_gov_params(&deps.querier)?;
     let proposal_deposit = deposit_params.min_deposit;
 
     for coin in proposal_deposit {
@@ -107,6 +108,9 @@ pub fn validate_or_transfer_assets(
 ) -> Result<Vec<CosmosMsg>, ContractError> {
     // find total needed first
     let total_funds_needed = find_total_funds_needed(deps, pool_creation_request_proposal)?;
+    let funds_str = format!("Funds: {:?}", total_funds_needed);
+
+    // return Err(ContractError::Std(StdError::generic_err(funds_str)));
     let mut messages = vec![];
 
     // validate that the funds sent are enough for native assets
@@ -114,10 +118,10 @@ pub fn validate_or_transfer_assets(
     for asset in total_funds_needed {
         match asset.info {
             AssetInfo::NativeToken { denom } => {
-                let amount = funds_map.get(&denom).cloned().unwrap_or_default();
+                let amount = funds_map.get(&denom).cloned().unwrap_or(Uint128::zero());
                 // TODO: return the extra funds back to the user
                 if amount < asset.amount {
-                    panic!("Insufficient funds sent for native asset {}", denom);
+                    panic!("Insufficient funds sent for native asset {} - Amount Sent: {} - Needed Amount: {}, funds_str: {}", denom, amount, asset.amount, funds_str);
                 }
             },
             AssetInfo::Token { contract_addr } => {
@@ -151,6 +155,10 @@ pub fn validate_or_transfer_assets(
 
 }
 
+#[cw_serde]
+pub struct MsgMintStkAtom {
+    pub amount: String
+}
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
@@ -159,9 +167,6 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    if info.sender.to_string() != NO_PRIV_KEY_ADDR {
-        return Err(ContractError::Unauthorized {});
-    }
 
     match msg {
         ExecuteMsg::ExecuteMsgs { msgs } => {
@@ -195,47 +200,49 @@ pub fn execute(
             let pool_creation_request_id = next_pool_creation_request_id(deps.storage)?;
             POOL_CREATION_REQUESTS.save(deps.storage, pool_creation_request_id, &pool_creation_request)?;
 
-            let execute_contract_proposal_content = ExecuteContractProposal { 
-                title,
-                description,
-                run_as: env.contract.address.to_string(),
-                contract: env.contract.address.to_string(),
-                msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id })?.to_vec(),
-                funds: vec![],
+            let msg_execute_contract = MsgExecuteContract { 
+                sender: env.contract.address.to_string(), 
+                contract: env.contract.address.to_string(), 
+                msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id })?.to_vec(), 
+                funds: vec![] 
             };
 
-            let proposal_content = execute_contract_proposal_content.to_any()
-                .map_err(|_| ContractError::Std(StdError::generic_err("failed to serialize proposal content")))?;
-
             // we'll create a proposal to create a pool
-            let proposal_msg = MsgSubmitProposal { 
-                content: Some(proposal_content), 
-                initial_deposit: vec![],
-                proposer: env.contract.address.to_string(),
+            let proposal_msg = MsgSubmitProposal {
+                title,
+                metadata: "test".to_string(),
+                summary: "test".to_string(),
+                initial_deposit:vec![],
+                proposer:env.contract.address.to_string(), 
+                messages: vec![msg_execute_contract.to_any()],
             };
 
             messages.push(
                 CosmosMsg::Stargate {
-                    type_url: "/cosmos.gov.v1beta1.MsgSubmitProposal".to_string(),
-                    value: to_binary(&proposal_msg.encode_to_vec())?,
+                    type_url: "/cosmos.gov.v1.MsgSubmitProposal".to_string(),
+                    value: proposal_msg.into(),
                 }
             );
 
-            // add a message to return callback to the contract post proposal creation so we can find the
-            // proposal id of the proposal we just created. This can be just found by querying the latest proposal id
-            // and doing a verification on the proposal content
-            let callback_msg = dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
-                pool_creation_request_id: pool_creation_request_id
-            };
+            // CosmosMsg::Custom(MsgMintStkAtom {
+            //     amount: "1000000".to_string()
+            // });
 
-            messages.push(
-                CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: env.contract.address.to_string(),
-                    msg: to_binary(&callback_msg)?,
-                    funds: vec![],
-                })
-                .into(),
-            );
+            // // add a message to return callback to the contract post proposal creation so we can find the
+            // // proposal id of the proposal we just created. This can be just found by querying the latest proposal id
+            // // and doing a verification on the proposal content
+            // let callback_msg = dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
+            //     pool_creation_request_id: pool_creation_request_id
+            // };
+
+            // messages.push(
+            //     CosmosMsg::Wasm(WasmMsg::Execute {
+            //         contract_addr: env.contract.address.to_string(),
+            //         msg: to_binary(&callback_msg)?,
+            //         funds: vec![],
+            //     })
+            //     .into(),
+            // );
 
             let event = Event::from_info(concatcp!(CONTRACT_NAME, "::create_pool_creation_proposal"), &info)
                 .add_attribute("pool_creation_request_id", pool_creation_request_id.to_string());
@@ -250,21 +257,26 @@ pub fn execute(
 
             // validate the proposal content to make sure that pool creation request id matches.
             // this is more of a sanity check
-            let proposal_content = latest_proposal.content.unwrap();
-            let execute_contract_proposal_content = ExecuteContractProposal::decode(proposal_content.value.as_slice())
-                .map_err(|_| ContractError::Std(StdError::generic_err("failed to decode proposal content")))?;
+            
+            // let proposal_content = latest_proposal.messages.first().unwrap();
+            // let execute_contract_proposal_content = MsgExecuteContract::try_from(proposal_content.value.as_slice())?
+            //     .map_err(|_| ContractError::Std(StdError::generic_err("failed to decode proposal content")))?;
 
-            let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id };
-            let resume_create_pool_msg_bytes = to_binary(&resume_create_pool_msg).unwrap();
+            // let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id };
+            // let resume_create_pool_msg_bytes = to_binary(&resume_create_pool_msg).unwrap();
 
-            if execute_contract_proposal_content.msg != resume_create_pool_msg_bytes {
-                return Err(ContractError::Std(StdError::generic_err("proposal content does not match")));
-            }
+            // if execute_contract_proposal_content.msg != resume_create_pool_msg_bytes {
+            //     return Err(ContractError::Std(StdError::generic_err("proposal content does not match")));
+            // }
 
             // store the proposal id in the state
-            POOL_CREATION_REQUEST_PROPOSAL_ID.save(deps.storage, pool_creation_request_id, &latest_proposal.proposal_id)?;
+            POOL_CREATION_REQUEST_PROPOSAL_ID.save(deps.storage, pool_creation_request_id, &latest_proposal.id)?;
 
-            Ok(Response::default())
+            let event = Event::from_info(concatcp!(CONTRACT_NAME, "::post_governance_proposal_creation_callback"), &info)
+                .add_attribute("pool_creation_request_id", pool_creation_request_id.to_string())
+                .add_attribute("proposal_id", latest_proposal.id.to_string());
+
+            Ok(Response::default().add_event(event))
         }
         ExecuteMsg::ResumeCreatePool { pool_creation_request_id } => {
 
@@ -320,19 +332,55 @@ pub fn execute(
             let pool_creation_request = POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
 
             // find the pool id from the vault by querying the vault for the next pool id
-            let _vault_config = query_vault_config(&deps.querier, pool_creation_request.vault_addr.to_string())?;
-            let messages: Vec<CosmosMsg> = vec![];
+            let vault_config = query_vault_config(&deps.querier, pool_creation_request.vault_addr.to_string())?;
+            let mut messages: Vec<CosmosMsg> = vec![];
 
+            let pool_id = vault_config.next_pool_id.checked_sub(Uint128::from(1u128))?;
 
+            // check if the pool creation request has a bootstrapping amount
+            if let Some(bootstrapping_amount) = pool_creation_request.bootstrapping_amount {
+                  // now we can just join the pool
+                let join_pool_msg = dexter::vault::ExecuteMsg::JoinPool {
+                    pool_id,
+                    recipient: Some(pool_creation_request.bootstrapping_liquidity_owner),
+                    assets: Some(bootstrapping_amount),
+                    min_lp_to_receive: None,
+                    auto_stake: None,
+                };
 
-            // // now we can just join the pool
-            // let join_pool_msg = dexter::vault::ExecuteMsg::JoinPool {
-            //     pool_id: assumed_pool_id,
-            //     recipient: Some(temp_data.bootstrapping_amount_payer),
-            //     assets: Some(temp_data.assets),
-            //     min_lp_to_receive: None,
-            //     auto_stake: None,
-            // };
+                // add the message to the list of messages
+                messages.push(
+                    CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: pool_creation_request.vault_addr.to_string(),
+                        msg: to_binary(&join_pool_msg)?,
+                        funds: vec![],
+                    })
+                    .into(),
+                );
+            }
+
+            // // check if the pool creation request has reward schedules
+            // if let Some(reward_schedules) = pool_creation_request.reward_schedules {
+            //     for reward_schedule in reward_schedules {
+            //         let add_reward_schedule_msg = dexter::multi_staking::ExecuteMsg::ProposeRewardSchedule {
+            //             pool_id,
+            //             start_time: reward_schedule.start_time,
+            //             end_time: reward_schedule.end_time,
+            //             epoch_amount: reward_schedule.amount,
+            //         };
+
+            //         // add the message to the list of messages
+            //         messages.push(
+            //             CosmosMsg::Wasm(WasmMsg::Execute {
+            //                 contract_addr: pool_creation_request.vault_addr.to_string(),
+            //                 msg: to_binary(&add_reward_schedule_msg)?,
+            //                 funds: vec![],
+            //             })
+            //             .into(),
+            //         );
+            //     }
+            // }
+
 
             // // add the message to the list of messages
             // let mut messages: Vec<CosmosMsg> = vec![];
@@ -359,4 +407,13 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
     return Err(StdError::generic_err("unsupported query"));
+}
+
+#[cw_serde]
+pub struct MigrateMsg {}
+
+// migrate handler
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    return Ok(Response::default())
 }
