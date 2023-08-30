@@ -201,7 +201,9 @@ pub fn execute(
             POOL_CREATION_REQUESTS.save(deps.storage, pool_creation_request_id, &pool_creation_request)?;
 
             let msg_execute_contract = MsgExecuteContract { 
-                sender: env.contract.address.to_string(), 
+                // this is the governance module address to basically instruct 
+                // that the governance is able to send a message which only it can execute
+                sender: "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch".to_string(), 
                 contract: env.contract.address.to_string(), 
                 msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id })?.to_vec(), 
                 funds: vec![] 
@@ -212,7 +214,7 @@ pub fn execute(
                 title,
                 metadata: "test".to_string(),
                 summary: "test".to_string(),
-                initial_deposit:vec![],
+                initial_deposit: vec![],
                 proposer:env.contract.address.to_string(), 
                 messages: vec![msg_execute_contract.to_any()],
             };
