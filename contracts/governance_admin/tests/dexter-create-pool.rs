@@ -1,8 +1,20 @@
-use cosmwasm_std::{Addr, Coin, to_binary, Uint128, Decimal};
+use cosmwasm_std::{Addr, Coin, to_binary, Uint128, Decimal, QueryRequest};
 use dexter::{governance_admin, vault::{FeeInfo, NativeAssetPrecisionInfo}, asset::Asset};
+use persistence_std::types::cosmos::gov::v1::QueryParamsRequest;
 use weighted_pool::state::WeightedParams;
 
 mod utils;
+
+#[test]
+fn test_basic_functions() {
+
+    let governance_params_query = QueryParamsRequest {
+        params_type: String::from("deposit"),
+    };
+
+    println!("{:?}", governance_params_query);
+
+}
 
 #[test]
 fn test_create_pool() {
@@ -45,33 +57,33 @@ fn test_create_pool() {
     // Currently, we'd use an account that doesn't have a private key in tests directly.
     // Ideally, during the actual run, the users trigger the Execute contract governance flow which triggers it from that address
     // but on pool creator's behalf
-    let msg = dexter::governance_admin::ExecuteMsg::CreateNewPool { 
-        vault_addr: vault_addr.to_string(), 
-        bootstrapping_amount_payer: vault_creator.to_string(), 
-        pool_type: dexter::vault::PoolType::Weighted {}, 
-        fee_info: None, 
-        native_asset_precisions: vec![
-            NativeAssetPrecisionInfo {
-                denom: "uxprt".to_string(),
-                precision: 6,
-            },
-            NativeAssetPrecisionInfo {
-                denom: "uatom".to_string(),
-                precision: 6,
-            },
-        ],
-        assets: vec![
-            Asset::new_native("uxprt".to_string(), uint128_with_precision!(10000u128, 6)),
-            Asset::new_native("uatom".to_string(), uint128_with_precision!(1000u128, 6))
-        ],
-        init_params: Some(
-            to_binary(&WeightedParams {
-                weights: asset_infos_with_weights,
-                exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
-            })
-            .unwrap(),
-        ),
-    };
+    // let msg = dexter::governance_admin::ExecuteMsg::CreateNewPool { 
+    //     vault_addr: vault_addr.to_string(), 
+    //     bootstrapping_amount_payer: vault_creator.to_string(), 
+    //     pool_type: dexter::vault::PoolType::Weighted {}, 
+    //     fee_info: None, 
+    //     native_asset_precisions: vec![
+    //         NativeAssetPrecisionInfo {
+    //             denom: "uxprt".to_string(),
+    //             precision: 6,
+    //         },
+    //         NativeAssetPrecisionInfo {
+    //             denom: "uatom".to_string(),
+    //             precision: 6,
+    //         },
+    //     ],
+    //     assets: vec![
+    //         Asset::new_native("uxprt".to_string(), uint128_with_precision!(10000u128, 6)),
+    //         Asset::new_native("uatom".to_string(), uint128_with_precision!(1000u128, 6))
+    //     ],
+    //     init_params: Some(
+    //         to_binary(&WeightedParams {
+    //             weights: asset_infos_with_weights,
+    //             exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
+    //         })
+    //         .unwrap(),
+    //     ),
+    // };
 
     // send the message along with funds. for now, they'd be directly from the non private key account
     // but ideally, funds will be sent with the governance execute contract message

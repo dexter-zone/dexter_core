@@ -15,6 +15,8 @@ pub struct PoolCreationRequest {
    pub native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
    pub asset_info: Vec<AssetInfo>,
    pub init_params: Option<Binary>,
+   // this address will be the owner of the bootsrapping liquidity
+   pub bootstrapping_liquidity_owner: String,
    // Optional fields depending on the fact if user wants to bootstrap liquidty to the pool
    pub bootstrapping_amount: Option<Vec<Asset>>,
    // Optional field to specify if the user wants to create reward schedule(s) for this pool
