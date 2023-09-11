@@ -1,0 +1,13 @@
+
+{
+    "title": "Change voting period",
+    "description": "This proposal changes the voting period to 5 minutes",
+    "type": "cosmos-sdk/ParameterChangeProposal",
+    "changes": [
+        {
+            "subspace": "gov",
+            "key": "voting_period",
+            "value": "300"
+        }
+    ]
+}
