@@ -1,25 +1,27 @@
-use std::ops::Sub;
 use std::str::FromStr;
 
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
-use crate::state::{POOL_CREATION_REQUESTS, next_pool_creation_request_id, POOL_CREATION_REQUEST_PROPOSAL_ID};
+use crate::state::{
+    next_pool_creation_request_id, POOL_CREATION_REQUESTS, POOL_CREATION_REQUEST_PROPOSAL_ID,
+};
 use crate::utils::{query_gov_params, query_latest_governance_proposal};
 
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response,
-    StdError, StdResult, WasmMsg, Uint128, Coin, Addr,
+    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo,
+    Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::governance_admin::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt, NO_PRIV_KEY_ADDR};
+use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::{ExecuteMsg as VaultExecuteMsg, PoolCreationFee};
+use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
-use persistence_std::types::cosmwasm::wasm::v1::{ExecuteContractProposal, MsgExecuteContract};
+use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "dexter-governance-admin";
@@ -41,32 +43,54 @@ pub fn instantiate(
     )))
 }
 
+pub fn query_proposal_min_deposit_amount(
+    deps: Deps,
+) -> Result<Vec<Coin>, ContractError> {
+    let deposit_params = query_gov_params(&deps.querier)?;
+
+    let proposal_deposit = deposit_params.min_deposit;
+
+    let mut coins = vec![];
+
+    for coin in proposal_deposit {
+        coins.push(Coin {
+            denom: coin.denom,
+            amount: Uint128::from_str(&coin.amount).unwrap(),
+        })
+    }
+
+    Ok(coins)
+}
+
 // Sums up the requirements in terms of pool creation fee, pool bootstrapping amount and reward schedule
 // amounts and returns it
 // This can later be used to validate if the user has sent enough funds to create the pool and
 // transfer Cw20 token to this contract for further processing
 pub fn find_total_funds_needed(
     deps: Deps,
+    gov_proposal_min_deposit_amount: &Vec<Coin>,
     pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
 ) -> Result<Vec<Asset>, ContractError> {
-
     // let mut total_funds = vec![];
     let mut total_funds_map = std::collections::HashMap::new();
-    let vault_addr = deps.api.addr_validate(&pool_creation_request_proposal.vault_addr).unwrap();
-    
+    let vault_addr = deps
+        .api
+        .addr_validate(&pool_creation_request_proposal.vault_addr)
+        .unwrap();
+
     // find the pool creation fee by querying the vault contract currently
     let vault_config = query_vault_config(&deps.querier, vault_addr.to_string())?;
     let pool_creation_fee = vault_config.pool_creation_fee;
 
     // add the proposal deposit to the total funds.
-    // We need to query the gov module to figure this out   
-    let deposit_params = query_gov_params(&deps.querier)?;
-    let proposal_deposit = deposit_params.min_deposit;
-
-    for coin in proposal_deposit {
-        let asset_info = AssetInfo::native_token(coin.denom);
-        let amount: Uint128 = total_funds_map.get(&asset_info).cloned().unwrap_or_default();
-        let c_amount = Uint128::from_str(&coin.amount).unwrap();
+    // We need to query the gov module to figure this out
+    for coin in gov_proposal_min_deposit_amount {
+        let asset_info = AssetInfo::native_token(coin.denom.clone());
+        let amount: Uint128 = total_funds_map
+            .get(&asset_info)
+            .cloned()
+            .unwrap_or_default();
+        let c_amount = coin.amount;
         total_funds_map.insert(asset_info, amount.checked_add(c_amount)?);
     }
 
@@ -79,7 +103,10 @@ pub fn find_total_funds_needed(
     // add the bootstrapping amount to the total funds
     if let Some(bootstrapping_amount) = &pool_creation_request_proposal.bootstrapping_amount {
         for asset in bootstrapping_amount {
-            let amount = total_funds_map.get(&asset.info).cloned().unwrap_or_default();
+            let amount = total_funds_map
+                .get(&asset.info)
+                .cloned()
+                .unwrap_or_default();
             total_funds_map.insert(asset.info.clone(), amount.checked_add(asset.amount)?);
         }
     }
@@ -87,12 +114,21 @@ pub fn find_total_funds_needed(
     // add the reward schedule amounts to the total funds
     if let Some(reward_schedules) = &pool_creation_request_proposal.reward_schedules {
         for reward_schedule in reward_schedules {
-            let amount = total_funds_map.get(&reward_schedule.asset).cloned().unwrap_or_default();
-            total_funds_map.insert(reward_schedule.asset.clone(), amount.checked_add(reward_schedule.amount)?);
+            let amount = total_funds_map
+                .get(&reward_schedule.asset)
+                .cloned()
+                .unwrap_or_default();
+            total_funds_map.insert(
+                reward_schedule.asset.clone(),
+                amount.checked_add(reward_schedule.amount)?,
+            );
         }
     }
 
-    let total_funds = total_funds_map.into_iter().map(|(k, v)| Asset { info: k, amount: v }).collect();
+    let total_funds = total_funds_map
+        .into_iter()
+        .map(|(k, v)| Asset { info: k, amount: v })
+        .collect();
     Ok(total_funds)
 }
 
@@ -103,18 +139,22 @@ pub fn validate_or_transfer_assets(
     deps: Deps,
     env: Env,
     sender: &Addr,
+    gov_proposal_min_deposit_amount: &Vec<Coin>,
     pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
-    funds: Vec<Coin>
+    funds: Vec<Coin>,
 ) -> Result<Vec<CosmosMsg>, ContractError> {
     // find total needed first
-    let total_funds_needed = find_total_funds_needed(deps, pool_creation_request_proposal)?;
+    let total_funds_needed = find_total_funds_needed(deps, gov_proposal_min_deposit_amount, pool_creation_request_proposal)?;
     let funds_str = format!("Funds: {:?}", total_funds_needed);
 
     // return Err(ContractError::Std(StdError::generic_err(funds_str)));
     let mut messages = vec![];
 
     // validate that the funds sent are enough for native assets
-    let funds_map = funds.into_iter().map(|c| (c.denom, c.amount)).collect::<std::collections::HashMap<String, Uint128>>();
+    let funds_map = funds
+        .into_iter()
+        .map(|c| (c.denom, c.amount))
+        .collect::<std::collections::HashMap<String, Uint128>>();
     for asset in total_funds_needed {
         match asset.info {
             AssetInfo::NativeToken { denom } => {
@@ -123,15 +163,19 @@ pub fn validate_or_transfer_assets(
                 if amount < asset.amount {
                     panic!("Insufficient funds sent for native asset {} - Amount Sent: {} - Needed Amount: {}, funds_str: {}", denom, amount, asset.amount, funds_str);
                 }
-            },
+            }
             AssetInfo::Token { contract_addr } => {
                 // check if the contract has enough allowance to spend the funds
                 let spend_limit = AssetInfo::query_spend_limits(
                     &contract_addr,
                     sender,
-                    &deps.api.addr_validate(&env.contract.address.to_string()).unwrap(),
+                    &deps
+                        .api
+                        .addr_validate(&env.contract.address.to_string())
+                        .unwrap(),
                     &deps.querier,
-                ).unwrap();
+                )
+                .unwrap();
 
                 if asset.amount > spend_limit {
                     panic!("Insufficient spend limit cw20 asset {}", contract_addr);
@@ -143,7 +187,8 @@ pub fn validate_or_transfer_assets(
                     sender.to_string(),
                     env.contract.address.to_string(),
                     asset.amount,
-                ).unwrap();
+                )
+                .unwrap();
 
                 // add the message to the list of messages
                 messages.push(transfer_msg);
@@ -152,12 +197,11 @@ pub fn validate_or_transfer_assets(
     }
 
     Ok(messages)
-
 }
 
 #[cw_serde]
 pub struct MsgMintStkAtom {
-    pub amount: String
+    pub amount: String,
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -167,7 +211,6 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-
     match msg {
         ExecuteMsg::ExecuteMsgs { msgs } => {
             // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
@@ -180,33 +223,41 @@ pub fn execute(
             };
             res = res.add_messages(msgs).add_event(event);
             Ok(res)
-        },
+        }
 
         ExecuteMsg::CreatePoolCreationProposal {
             title,
             description,
-            pool_creation_request
+            pool_creation_request,
         } => {
-
             // first order of business, ensure the money is sent along with the message
+            let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
             let mut messages = validate_or_transfer_assets(
                 deps.as_ref(),
                 env.clone(),
                 &info.sender,
+                &gov_proposal_min_deposit_amount,
                 &pool_creation_request,
-                info.funds.clone()
+                info.funds.clone(),
             )?;
 
             let pool_creation_request_id = next_pool_creation_request_id(deps.storage)?;
-            POOL_CREATION_REQUESTS.save(deps.storage, pool_creation_request_id, &pool_creation_request)?;
+            POOL_CREATION_REQUESTS.save(
+                deps.storage,
+                pool_creation_request_id,
+                &pool_creation_request,
+            )?;
 
-            let msg_execute_contract = MsgExecuteContract { 
-                // this is the governance module address to basically instruct 
+            let msg_execute_contract = MsgExecuteContract {
+                // this is the governance module address to basically instruct
                 // that the governance is able to send a message which only it can execute
-                sender: "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch".to_string(), 
-                contract: env.contract.address.to_string(), 
-                msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id })?.to_vec(), 
-                funds: vec![] 
+                sender: "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch".to_string(),
+                contract: env.contract.address.to_string(),
+                msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
+                    pool_creation_request_id,
+                })?
+                .to_vec(),
+                funds: vec![],
             };
 
             // we'll create a proposal to create a pool
@@ -214,77 +265,107 @@ pub fn execute(
                 title,
                 metadata: "test".to_string(),
                 summary: "test".to_string(),
-                initial_deposit: vec![],
-                proposer:env.contract.address.to_string(), 
+                initial_deposit: gov_proposal_min_deposit_amount.iter().map(|c| 
+                    StdCoin {
+                        denom: c.denom.clone(),
+                        amount: c.amount.to_string(),
+                    }
+                ).collect(),
+                proposer: env.contract.address.to_string(),
                 messages: vec![msg_execute_contract.to_any()],
             };
 
-            messages.push(
-                CosmosMsg::Stargate {
-                    type_url: "/cosmos.gov.v1.MsgSubmitProposal".to_string(),
-                    value: proposal_msg.into(),
-                }
-            );
-
-            // CosmosMsg::Custom(MsgMintStkAtom {
-            //     amount: "1000000".to_string()
-            // });
+            messages.push(CosmosMsg::Stargate {
+                type_url: "/cosmos.gov.v1.MsgSubmitProposal".to_string(),
+                value: proposal_msg.into(),
+            });
 
             // // add a message to return callback to the contract post proposal creation so we can find the
             // // proposal id of the proposal we just created. This can be just found by querying the latest proposal id
             // // and doing a verification on the proposal content
-            // let callback_msg = dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
-            //     pool_creation_request_id: pool_creation_request_id
-            // };
+            let callback_msg =
+                dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
+                    pool_creation_request_id,
+                };
 
-            // messages.push(
-            //     CosmosMsg::Wasm(WasmMsg::Execute {
-            //         contract_addr: env.contract.address.to_string(),
-            //         msg: to_binary(&callback_msg)?,
-            //         funds: vec![],
-            //     })
-            //     .into(),
-            // );
+            messages.push(
+                CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: env.contract.address.to_string(),
+                    msg: to_binary(&callback_msg)?,
+                    funds: vec![],
+                })
+                .into(),
+            );
 
-            let event = Event::from_info(concatcp!(CONTRACT_NAME, "::create_pool_creation_proposal"), &info)
-                .add_attribute("pool_creation_request_id", pool_creation_request_id.to_string());
+            let event = Event::from_info(
+                concatcp!(CONTRACT_NAME, "::create_pool_creation_proposal"),
+                &info,
+            )
+            .add_attribute(
+                "pool_creation_request_id",
+                pool_creation_request_id.to_string(),
+            );
 
             Ok(Response::new().add_messages(messages).add_event(event))
-        },
-        ExecuteMsg::PostGovernanceProposalCreationCallback { pool_creation_request_id } => {
-
+        }
+        ExecuteMsg::PostGovernanceProposalCreationCallback {
+            pool_creation_request_id,
+        } => {
             // proposal has been successfully created at this point, we can query the governance module and find the proposal id
             // and store it in the state
-            let latest_proposal = query_latest_governance_proposal(env.contract.address, &deps.querier)?;
+            let latest_proposal =
+                query_latest_governance_proposal(env.contract.address, &deps.querier)?;
 
             // validate the proposal content to make sure that pool creation request id matches.
             // this is more of a sanity check
-            
-            // let proposal_content = latest_proposal.messages.first().unwrap();
-            // let execute_contract_proposal_content = MsgExecuteContract::try_from(proposal_content.value.as_slice())?
-            //     .map_err(|_| ContractError::Std(StdError::generic_err("failed to decode proposal content")))?;
 
-            // let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool { pool_creation_request_id };
-            // let resume_create_pool_msg_bytes = to_binary(&resume_create_pool_msg).unwrap();
+            let proposal_content = latest_proposal.messages.first().unwrap();
 
-            // if execute_contract_proposal_content.msg != resume_create_pool_msg_bytes {
-            //     return Err(ContractError::Std(StdError::generic_err("proposal content does not match")));
-            // }
+            let execute_contract_proposal_content =
+                MsgExecuteContract::try_from(Binary::from(proposal_content.value.as_slice()))?;
+
+            let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
+                pool_creation_request_id,
+            };
+            let resume_create_pool_msg_bytes = to_binary(&resume_create_pool_msg).unwrap();
+
+            if execute_contract_proposal_content.msg != resume_create_pool_msg_bytes {
+                return Err(ContractError::Std(StdError::generic_err(format!(
+                    "proposal content does not match. B1: {} B2: {}",
+                    String::from_utf8_lossy(&execute_contract_proposal_content.msg),
+                    String::from_utf8_lossy(&resume_create_pool_msg_bytes)
+                ))));
+            }
 
             // store the proposal id in the state
-            POOL_CREATION_REQUEST_PROPOSAL_ID.save(deps.storage, pool_creation_request_id, &latest_proposal.id)?;
+            POOL_CREATION_REQUEST_PROPOSAL_ID.save(
+                deps.storage,
+                pool_creation_request_id,
+                &latest_proposal.id,
+            )?;
 
-            let event = Event::from_info(concatcp!(CONTRACT_NAME, "::post_governance_proposal_creation_callback"), &info)
-                .add_attribute("pool_creation_request_id", pool_creation_request_id.to_string())
-                .add_attribute("proposal_id", latest_proposal.id.to_string());
+            let event = Event::from_info(
+                concatcp!(
+                    CONTRACT_NAME,
+                    "::post_governance_proposal_creation_callback"
+                ),
+                &info,
+            )
+            .add_attribute(
+                "pool_creation_request_id",
+                pool_creation_request_id.to_string(),
+            )
+            .add_attribute("proposal_id", latest_proposal.id.to_string());
 
             Ok(Response::default().add_event(event))
         }
-        ExecuteMsg::ResumeCreatePool { pool_creation_request_id } => {
-
+        ExecuteMsg::ResumeCreatePool {
+            pool_creation_request_id,
+        } => {
             // the proposal has passed, we can now resume the pool creation in the vault directly
             // get the pool creation request
-            let pool_creation_request = POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
+            let pool_creation_request =
+                POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
             let mut messages: Vec<CosmosMsg> = vec![];
 
             // create a message for vault
@@ -294,7 +375,7 @@ pub fn execute(
                 fee_info: pool_creation_request.fee_info.clone(),
                 native_asset_precisions: pool_creation_request.native_asset_precisions.clone(),
                 init_params: pool_creation_request.init_params.clone(),
-                asset_infos: pool_creation_request.asset_info.clone()
+                asset_infos: pool_creation_request.asset_info.clone(),
             };
 
             // add the message to the list of messages
@@ -311,7 +392,7 @@ pub fn execute(
             // pool id of the pool we just created. This can be just found by querying the latest pool id from the vault
             // We also need to join the pool with the bootstrapping amount
             let callback_msg = dexter::governance_admin::ExecuteMsg::ResumeJoinPool {
-                pool_creation_request_id
+                pool_creation_request_id,
             };
 
             messages.push(
@@ -324,24 +405,31 @@ pub fn execute(
             );
 
             let event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_create_pool"), &info)
-                .add_attribute("pool_creation_request_id", pool_creation_request_id.to_string());
+                .add_attribute(
+                    "pool_creation_request_id",
+                    pool_creation_request_id.to_string(),
+                );
 
             Ok(Response::new().add_messages(messages).add_event(event))
-        },
-        ExecuteMsg::ResumeJoinPool { pool_creation_request_id } => {
-
-            
-            let pool_creation_request = POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
+        }
+        ExecuteMsg::ResumeJoinPool {
+            pool_creation_request_id,
+        } => {
+            let pool_creation_request =
+                POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
 
             // find the pool id from the vault by querying the vault for the next pool id
-            let vault_config = query_vault_config(&deps.querier, pool_creation_request.vault_addr.to_string())?;
+            let vault_config =
+                query_vault_config(&deps.querier, pool_creation_request.vault_addr.to_string())?;
             let mut messages: Vec<CosmosMsg> = vec![];
 
-            let pool_id = vault_config.next_pool_id.checked_sub(Uint128::from(1u128))?;
+            let pool_id = vault_config
+                .next_pool_id
+                .checked_sub(Uint128::from(1u128))?;
 
             // check if the pool creation request has a bootstrapping amount
             if let Some(bootstrapping_amount) = pool_creation_request.bootstrapping_amount {
-                  // now we can just join the pool
+                // now we can just join the pool
                 let join_pool_msg = dexter::vault::ExecuteMsg::JoinPool {
                     pool_id,
                     recipient: Some(pool_creation_request.bootstrapping_liquidity_owner),
@@ -383,7 +471,6 @@ pub fn execute(
             //     }
             // }
 
-
             // // add the message to the list of messages
             // let mut messages: Vec<CosmosMsg> = vec![];
             // messages.push(
@@ -397,9 +484,7 @@ pub fn execute(
 
             let event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_join_pool"), &info);
 
-            let res = Response::new()
-                .add_messages(messages)
-                .add_event(event);
+            let res = Response::new().add_messages(messages).add_event(event);
 
             Ok(res)
         }
@@ -417,5 +502,5 @@ pub struct MigrateMsg {}
 // migrate handler
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    return Ok(Response::default())
+    return Ok(Response::default());
 }

@@ -1,9 +1,10 @@
 // use cosmos_sdk_proto::{cosmos::gov::v1beta1::{QueryParamsRequest, QueryParamsResponse, DepositParams, QueryProposalsRequest, ProposalStatus, QueryProposalsResponse, Proposal}, traits::Message};
 use cosmwasm_std::{Addr, QuerierWrapper, QueryRequest};
-use persistence_std::types::cosmos::gov::v1::{
+use persistence_std::types::{cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
     QueryProposalsRequest, QueryProposalsResponse,
-};
+}, cosmwasm::wasm::v1::MsgExecuteContract};
+use serde::{Deserialize, Deserializer};
 
 use crate::error::ContractError;
 
@@ -30,7 +31,7 @@ pub fn query_latest_governance_proposal(
     querier: &QuerierWrapper,
 ) -> Result<Proposal, ContractError> {
     let q = QueryProposalsRequest {
-        proposal_status: ProposalStatus::VotingPeriod.into(),
+        proposal_status: ProposalStatus::Unspecified.into(),
         pagination: None,
         voter: "".to_string(),
         depositor: depositor_addr.to_string(),
@@ -38,10 +39,9 @@ pub fn query_latest_governance_proposal(
 
     let proposal_response: QueryProposalsResponse = querier
         .query(&QueryRequest::Stargate {
-            path: String::from("/cosmos.gov.v1beta1.Query/Proposals"),
+            path: String::from("/cosmos.gov.v1.Query/Proposals"),
             data: q.into(),
-        })
-        .unwrap();
+        })?;
 
     // find the proposal with the highest id which ideally should be the latest proposal
     let latest_proposal = proposal_response
@@ -51,4 +51,18 @@ pub fn query_latest_governance_proposal(
         .unwrap();
 
     Ok(latest_proposal.clone())
+}
+
+
+
+pub fn test() {
+
+    // let value = match serde_cw_value::Value::deserialize(deserializer) {
+    //     Ok(value) => value,
+    //     Err(err) => {
+    //         return Err(err);
+    //     }
+    // };
+
+    
 }
