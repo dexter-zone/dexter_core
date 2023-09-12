@@ -1,9 +1,7 @@
-use cosmwasm_std::{Addr, Coin, Uint128};
+use cosmwasm_std::{Addr, Coin};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use std::vec;
 
-use dexter::asset::{Asset, AssetInfo};
-use dexter::keeper::{BalancesResponse, ConfigResponse, ExecuteMsg, QueryMsg};
 use dexter::vault::{FeeInfo, PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {

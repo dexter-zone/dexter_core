@@ -1,18 +1,16 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Timestamp, Uint128};
+use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg};
 use cw_multi_test::{App, ContractWrapper, Executor};
-use dexter::asset::Asset;
+
 use dexter::governance_admin::InstantiateMsg as GovernanceAdminInstantiateMsg;
-use dexter::{asset::AssetInfo, vault::FeeInfo};
+use dexter::vault::FeeInfo;
 
 use dexter::vault::{
-    InstantiateMsg as VaultInstantiateMsg, NativeAssetPrecisionInfo, PauseInfo, PoolCreationFee,
-    PoolInfoResponse, PoolType, PoolTypeConfig,
+    InstantiateMsg as VaultInstantiateMsg, PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig,
 };
 
 use dexter::keeper::InstantiateMsg as KeeperInstantiateMsg;
-use weighted_pool::state::WeightedParams;
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -185,11 +183,7 @@ pub fn instantiate_contracts(
     // assert_eq!(pool_info_res.pool_type, PoolType::Weighted {});
 
     // return vault_address, keeper_address, pool_id, pool_address, lp_token_address
-    (
-        vault_instance,
-        keeper_instance,
-        admin_instance
-    )
+    (vault_instance, keeper_instance, admin_instance)
 }
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {

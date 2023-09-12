@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Uint128, Binary, Storage, StdResult};
+use cosmwasm_std::{Binary, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::Asset;
 use dexter::governance_admin::PoolCreationRequest;
@@ -22,15 +22,16 @@ pub struct CreatePoolTempData {
     pub fee_info: Option<FeeInfo>,
     pub native_asset_precisions: Vec<NativeAssetPrecisionInfo>,
     pub assets: Vec<Asset>,
-    pub init_params: Option<Binary>
+    pub init_params: Option<Binary>,
 }
 
-
 /// map of pool creation request id to pool creation request
-pub const POOL_CREATION_REQUESTS: Map<u64, PoolCreationRequest> = Map::new("pool_creation_requests");
+pub const POOL_CREATION_REQUESTS: Map<u64, PoolCreationRequest> =
+    Map::new("pool_creation_requests");
 
 /// map of pool creation request id to proposal id
-pub const POOL_CREATION_REQUEST_PROPOSAL_ID: Map<u64, u64> = Map::new("pool_creation_request_proposal_id");
+pub const POOL_CREATION_REQUEST_PROPOSAL_ID: Map<u64, u64> =
+    Map::new("pool_creation_request_proposal_id");
 
 /// count of pool creation requests to generate unique ids
 pub const POOL_CREATION_REQUESTS_COUNT: Item<u64> = Item::new("pool_creation_requests_count");
