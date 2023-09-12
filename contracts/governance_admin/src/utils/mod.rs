@@ -1,12 +1,29 @@
-// use cosmos_sdk_proto::{cosmos::gov::v1beta1::{QueryParamsRequest, QueryParamsResponse, DepositParams, QueryProposalsRequest, ProposalStatus, QueryProposalsResponse, Proposal}, traits::Message};
-use cosmwasm_std::{Addr, QuerierWrapper, QueryRequest};
-use persistence_std::types::{cosmos::gov::v1::{
+use std::str::FromStr;
+
+use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128};
+use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
     QueryProposalsRequest, QueryProposalsResponse,
-}, cosmwasm::wasm::v1::MsgExecuteContract};
-use serde::{Deserialize, Deserializer};
+};
 
 use crate::error::ContractError;
+
+pub fn query_proposal_min_deposit_amount(deps: Deps) -> Result<Vec<Coin>, ContractError> {
+    let deposit_params = query_gov_params(&deps.querier)?;
+
+    let proposal_deposit = deposit_params.min_deposit;
+
+    let mut coins = vec![];
+
+    for coin in proposal_deposit {
+        coins.push(Coin {
+            denom: coin.denom,
+            amount: Uint128::from_str(&coin.amount).unwrap(),
+        })
+    }
+
+    Ok(coins)
+}
 
 pub fn query_gov_params(querier: &QuerierWrapper) -> Result<GovParams, ContractError> {
     let governance_params_query = QueryParamsRequest {
@@ -37,11 +54,10 @@ pub fn query_latest_governance_proposal(
         depositor: depositor_addr.to_string(),
     };
 
-    let proposal_response: QueryProposalsResponse = querier
-        .query(&QueryRequest::Stargate {
-            path: String::from("/cosmos.gov.v1.Query/Proposals"),
-            data: q.into(),
-        })?;
+    let proposal_response: QueryProposalsResponse = querier.query(&QueryRequest::Stargate {
+        path: String::from("/cosmos.gov.v1.Query/Proposals"),
+        data: q.into(),
+    })?;
 
     // find the proposal with the highest id which ideally should be the latest proposal
     let latest_proposal = proposal_response
@@ -51,18 +67,4 @@ pub fn query_latest_governance_proposal(
         .unwrap();
 
     Ok(latest_proposal.clone())
-}
-
-
-
-pub fn test() {
-
-    // let value = match serde_cw_value::Value::deserialize(deserializer) {
-    //     Ok(value) => value,
-    //     Err(err) => {
-    //         return Err(err);
-    //     }
-    // };
-
-    
 }

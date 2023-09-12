@@ -21,7 +21,7 @@ pub enum ContractError {
     InsufficientBalance,
 
     #[error("Insufficient funds sent for pool creation")]
-    InsuffiencentFundsSent
+    InsuffiencentFundsSent,
 }
 
 impl From<OverflowError> for ContractError {
