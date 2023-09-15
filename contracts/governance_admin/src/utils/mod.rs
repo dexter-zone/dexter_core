@@ -1,3 +1,5 @@
+pub mod cosmos_msgs;
+
 use std::str::FromStr;
 
 use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128};

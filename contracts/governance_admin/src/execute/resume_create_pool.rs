@@ -9,6 +9,7 @@ use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Respo
 use dexter::helper::EventExt;
 
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
+use crate::add_wasm_execute_msg;
 
 pub fn execute_resume_create_pool(
     deps: DepsMut,
@@ -33,14 +34,7 @@ pub fn execute_resume_create_pool(
     };
 
     // add the message to the list of messages
-    messages.push(
-        CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: vault_addr.to_string(),
-            msg: to_binary(&create_pool_msg)?,
-            funds: vec![],
-        })
-        .into(),
-    );
+    add_wasm_execute_msg!(messages, vault_addr, create_pool_msg, vec![]);
 
     // add a message to return callback to the contract post proposal creation so we can find the
     // pool id of the pool we just created. This can be just found by querying the latest pool id from the vault
@@ -49,14 +43,7 @@ pub fn execute_resume_create_pool(
         pool_creation_request_id,
     };
 
-    messages.push(
-        CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&callback_msg)?,
-            funds: vec![],
-        })
-        .into(),
-    );
+    add_wasm_execute_msg!(messages, env.contract.address, callback_msg, vec![]);
 
     let event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_create_pool"), &info)
         .add_attribute(
