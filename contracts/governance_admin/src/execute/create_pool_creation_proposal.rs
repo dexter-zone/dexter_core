@@ -1,3 +1,4 @@
+use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
@@ -226,14 +227,7 @@ pub fn execute_create_pool_creation_proposal(
             pool_creation_request_id,
         };
 
-    messages.push(
-        CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&callback_msg)?,
-            funds: vec![],
-        })
-        .into(),
-    );
+    add_wasm_execute_msg!(messages, env.contract.address, callback_msg, vec![]);    
 
     let event = Event::from_info(
         concatcp!(CONTRACT_NAME, "::create_pool_creation_proposal"),

@@ -46,6 +46,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::ExecuteMsgs { msgs } => {
+
             // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
             let mut res = Response::new();
             let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::execute_msgs"), &info);
