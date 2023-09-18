@@ -48,6 +48,20 @@ pub enum ExecuteMsg {
       pool_creation_request_id: u64,
    },
 
+   CreateRewardSchedulesProposal {
+      title: String,
+      description: String,
+      reward_schedules: Vec<RewardSchedule>,
+   },
+
+   PostRewardSchedulesProposalCreationCallback {
+      reward_schedules_creation_request_id: u64,
+   },
+
+   ResumeCreateRewardSchedules {
+      reward_schedules_creation_request_id: u64,
+   },
+
 }
 
 #[cw_serde]
