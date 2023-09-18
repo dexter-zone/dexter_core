@@ -1,5 +1,5 @@
 {
-  "contract_name": "dexter-keeper",
+  "contract_name": "dexter-governance-admin",
   "contract_version": "2.0.0",
   "idl_version": "1.0.0",
   "instantiate": {
@@ -104,10 +104,26 @@
             ],
             "properties": {
               "amount": {
-                "$ref": "#/definitions/Uint128"
+                "description": "The amount of LP tokens to exit",
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/Uint128"
+                  }
+                ]
               },
               "lp_token_address": {
+                "description": "Contract address of the LP token",
                 "type": "string"
+              },
+              "min_assets_received": {
+                "description": "Slippage protection",
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "$ref": "#/definitions/Asset"
+                }
               }
             },
             "additionalProperties": false
