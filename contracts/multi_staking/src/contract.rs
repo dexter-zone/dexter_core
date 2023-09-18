@@ -4,9 +4,9 @@ use cosmwasm_std::entry_point;
 use const_format::concatcp;
 use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
-    MessageInfo, Order, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
+    MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{collections::{HashMap, HashSet}, cmp::min};
+use std::{collections::HashMap, cmp::min};
 
 use dexter::{
     asset::AssetInfo,
@@ -23,11 +23,10 @@ use dexter::{
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use cw_storage_plus::{Bound, Item};
+use cw_storage_plus::Item;
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
-    ProposedRewardSchedule, ProposedRewardSchedulesResponse, ReviewProposedRewardSchedule,
     RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP
 };
 
@@ -36,7 +35,7 @@ use crate::{
     state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
         CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
-        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, REWARD_SCHEDULE_PROPOSALS, USER_BONDED_LP_TOKENS,
+        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS,
         USER_LP_TOKEN_LOCKS,
     },
 };
@@ -46,7 +45,6 @@ use crate::{
         unlock::{instant_unlock, unlock},
     },
     query::query_instant_unlock_fee_tiers,
-    state::next_reward_schedule_proposal_id,
     utils::calculate_unlock_fee,
 };
 
@@ -145,13 +143,19 @@ pub fn execute(
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::ProposeRewardSchedule {
+        ExecuteMsg::CreateRewardSchedule {
             lp_token,
             title,
             description,
             start_block_time,
             end_block_time,
         } => {
+            // only owner can create reward schedule
+            let config = CONFIG.load(deps.storage)?;
+            if info.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
+
             // Verify that no more than one asset is sent with the message for reward distribution
             if info.funds.len() != 1 {
                 return Err(ContractError::InvalidNumberOfAssets {
@@ -163,7 +167,7 @@ pub fn execute(
             let sent_asset = info.funds[0].clone();
             let proposer = info.sender.clone();
 
-            propose_reward_schedule(
+            create_reward_schedule(
                 deps,
                 env,
                 info,
@@ -175,12 +179,6 @@ pub fn execute(
                 proposer,
                 Asset::new_native(sent_asset.denom, sent_asset.amount),
             )
-        }
-        ExecuteMsg::ReviewRewardScheduleProposals { reviews } => {
-            review_reward_schedule_proposals(deps, env, info, reviews)
-        }
-        ExecuteMsg::DropRewardScheduleProposal { proposal_id } => {
-            drop_reward_schedule_proposal(deps, env, info, proposal_id)
         }
         ExecuteMsg::Bond { lp_token, amount } => {
             let sender = info.sender;
@@ -537,7 +535,7 @@ fn remove_lp_token(
     Ok(response)
 }
 
-pub fn propose_reward_schedule(
+pub fn create_reward_schedule(
     deps: DepsMut,
     env: Env,
     _info: MessageInfo,
@@ -568,26 +566,55 @@ pub fn propose_reward_schedule(
         });
     }
 
-    let proposal_id: u64 = next_reward_schedule_proposal_id(deps.storage)?;
+    // still need to check as an LP token might have been removed after the reward schedule was proposed
+    check_if_lp_token_allowed(&config, &lp_token)?;
 
-    REWARD_SCHEDULE_PROPOSALS.save(
+    let mut lp_global_state = LP_GLOBAL_STATE
+        .may_load(deps.storage, &lp_token)?
+        .unwrap_or_default();
+
+    if !lp_global_state
+        .active_reward_assets
+        .contains(&asset.info)
+    {
+        lp_global_state
+            .active_reward_assets
+            .push(asset.info.clone());
+    }
+
+    LP_GLOBAL_STATE.save(deps.storage, &lp_token, &lp_global_state)?;
+
+    let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
+
+    let reward_schedule = RewardSchedule {
+        title: title.clone(),
+        creator: proposer.clone(),
+        asset: asset.info.clone(),
+        amount: asset.amount,
+        staking_lp_token: lp_token.clone(),
+        start_block_time,
+        end_block_time,
+    };
+
+    REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
+
+    let mut reward_schedules_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
+        .may_load(
+            deps.storage,
+            (&lp_token, &asset.info.to_string()),
+        )?
+        .unwrap_or_default();
+
+    reward_schedules_ids.push(reward_schedule_id);
+    LP_TOKEN_ASSET_REWARD_SCHEDULE.save(
         deps.storage,
-        proposal_id.clone(),
-        &ProposedRewardSchedule {
-            lp_token: lp_token.clone(),
-            proposer: proposer.clone(),
-            title: title.clone(),
-            description,
-            asset: asset.clone(),
-            start_block_time,
-            end_block_time,
-            rejected: false, // => not yet reviewed
-        },
+        (&lp_token, &asset.info.to_string()),
+        &reward_schedules_ids,
     )?;
 
     Ok(Response::new().add_event(
         Event::from_sender(
-            concatcp!(CONTRACT_NAME, "::propose_reward_schedule"),
+            concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
             proposer,
         )
         .add_attribute("lp_token", lp_token.to_string())
@@ -595,154 +622,8 @@ pub fn propose_reward_schedule(
         .add_attribute("start_block_time", start_block_time.to_string())
         .add_attribute("end_block_time", end_block_time.to_string())
         .add_attribute("asset", serde_json_wasm::to_string(&asset).unwrap())
-        .add_attribute("proposal_id", proposal_id.to_string()),
+        .add_attribute("reward_schedule_id", reward_schedule_id.to_string()),
     ))
-}
-
-pub fn review_reward_schedule_proposals(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    reviews: Vec<ReviewProposedRewardSchedule>,
-) -> ContractResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    if config.owner != info.sender {
-        return Err(ContractError::Unauthorized);
-    }
-
-    // ensure that reviews are for unique proposal_ids, otherwise we might end up creating duplicate reward schedules
-    let mut reviewed_ids: HashSet<u64> = HashSet::with_capacity(reviews.len());
-    for review in reviews.iter() {
-        if !reviewed_ids.insert(review.proposal_id.clone()) {
-            return Err(ContractError::DuplicateReview {
-                proposal_id: review.proposal_id.clone(),
-            });
-        }
-    }
-
-    let mut accepted_reward_proposals: Vec<(u64, u64)> = vec![];
-    let mut rejected_reward_proposals: Vec<u64> = vec![];
-
-    // act on all the reviews
-    for review in reviews.into_iter() {
-        let mut proposal: ProposedRewardSchedule = REWARD_SCHEDULE_PROPOSALS
-            .load(deps.storage, review.proposal_id)
-            .map_err(|_| ContractError::ProposalNotFound {
-                proposal_id: review.proposal_id.clone(),
-            })?;
-
-        // skip the proposal if rejected already. No need to error, just ignore it.
-        if proposal.rejected {
-            rejected_reward_proposals.push(review.proposal_id);
-            continue;
-        }
-
-        // if approved and proposal is still valid, then need to save the reward schedule
-        if review.approve && proposal.start_block_time > env.block.time.seconds() {
-            // still need to check as an LP token might have been removed after the reward schedule was proposed
-            check_if_lp_token_allowed(&config, &proposal.lp_token)?;
-
-            let mut lp_global_state = LP_GLOBAL_STATE
-                .may_load(deps.storage, &proposal.lp_token)?
-                .unwrap_or_default();
-
-            if !lp_global_state
-                .active_reward_assets
-                .contains(&proposal.asset.info)
-            {
-                lp_global_state
-                    .active_reward_assets
-                    .push(proposal.asset.info.clone());
-            }
-
-            LP_GLOBAL_STATE.save(deps.storage, &proposal.lp_token, &lp_global_state)?;
-
-            let reward_schedule_id = next_reward_schedule_id(deps.storage)?;
-
-            accepted_reward_proposals.push((review.proposal_id, reward_schedule_id));
-            let reward_schedule = RewardSchedule {
-                title: proposal.title,
-                creator: proposal.proposer,
-                asset: proposal.asset.info.clone(),
-                amount: proposal.asset.amount,
-                staking_lp_token: proposal.lp_token.clone(),
-                start_block_time: proposal.start_block_time,
-                end_block_time: proposal.end_block_time,
-            };
-
-            REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
-
-            let mut reward_schedules_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
-                .may_load(
-                    deps.storage,
-                    (&proposal.lp_token, &proposal.asset.info.to_string()),
-                )?
-                .unwrap_or_default();
-
-            reward_schedules_ids.push(reward_schedule_id);
-            LP_TOKEN_ASSET_REWARD_SCHEDULE.save(
-                deps.storage,
-                (&proposal.lp_token, &proposal.asset.info.to_string()),
-                &reward_schedules_ids,
-            )?;
-
-            // remove the approved proposal from the state
-            REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, review.proposal_id);
-        }
-        // otherwise, mark the proposal rejected
-        else {
-            proposal.rejected = true;
-            rejected_reward_proposals.push(review.proposal_id);
-            REWARD_SCHEDULE_PROPOSALS.save(deps.storage, review.proposal_id, &proposal)?;
-        }
-    }
-
-    Ok(Response::new().add_event(
-        Event::from_info(
-            concatcp!(CONTRACT_NAME, "::review_reward_schedule_proposals"),
-            &info,
-        )
-        .add_attribute(
-            "accepted_proposals",
-            serde_json_wasm::to_string(&accepted_reward_proposals).unwrap(),
-        )
-        .add_attribute(
-            "rejected_proposals",
-            serde_json_wasm::to_string(&rejected_reward_proposals).unwrap(),
-        ),
-    ))
-}
-
-pub fn drop_reward_schedule_proposal(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    proposal_id: u64,
-) -> ContractResult<Response> {
-    let proposal = REWARD_SCHEDULE_PROPOSALS.load(deps.storage, proposal_id)?;
-
-    // only the proposer can drop the proposal
-    if proposal.proposer != info.sender {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let msg = build_transfer_token_to_user_msg(
-        proposal.asset.info.clone(),
-        proposal.proposer,
-        proposal.asset.amount,
-    )?;
-
-    REWARD_SCHEDULE_PROPOSALS.remove(deps.storage, proposal_id);
-
-    Ok(Response::new()
-        .add_event(
-            Event::from_info(
-                concatcp!(CONTRACT_NAME, "::drop_reward_schedule_proposal"),
-                &info,
-            )
-            .add_attribute("proposal_id", proposal_id.to_string()),
-        )
-        .add_message(msg))
 }
 
 pub fn receive_cw20(
@@ -771,17 +652,23 @@ pub fn receive_cw20(
                 cw20_msg.amount,
             )
         }
-        Cw20HookMsg::ProposeRewardSchedule {
+        Cw20HookMsg::CreateRewardSchedule {
             lp_token,
             title,
             description,
             start_block_time,
             end_block_time,
         } => {
+            // only owner can create reward schedule
+            let config = CONFIG.load(deps.storage)?;
+            if cw20_msg.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
+
             let token_addr = info.sender.clone();
             let proposer = deps.api.addr_validate(&cw20_msg.sender)?;
 
-            propose_reward_schedule(
+            create_reward_schedule(
                 deps,
                 env,
                 info,
@@ -1242,26 +1129,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
         QueryMsg::Owner {} => {
             let config = CONFIG.load(deps.storage)?;
             to_binary(&config.owner).map_err(ContractError::from)
-        }
-        QueryMsg::ProposedRewardSchedules { start_after, limit } => {
-            let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
-            let start = start_after.map(Bound::exclusive);
-            let proposals: Vec<ProposedRewardSchedulesResponse> = REWARD_SCHEDULE_PROPOSALS
-                .range(deps.storage, start, None, Order::Ascending)
-                .take(limit)
-                .map(|p| {
-                    p.map(|(proposal_id, proposal)| ProposedRewardSchedulesResponse {
-                        proposal_id,
-                        proposal,
-                    })
-                })
-                .collect::<StdResult<_>>()?;
-
-            to_binary(&proposals).map_err(ContractError::from)
-        }
-        QueryMsg::ProposedRewardSchedule { proposal_id } => {
-            let reward_schedule = REWARD_SCHEDULE_PROPOSALS.load(deps.storage, proposal_id)?;
-            to_binary(&reward_schedule).map_err(ContractError::from)
         }
         QueryMsg::RewardSchedules { lp_token, asset } => {
             let reward_schedule_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
