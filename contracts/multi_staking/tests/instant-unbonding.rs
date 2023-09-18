@@ -134,6 +134,8 @@ fn test_instant_unbond_and_unlock() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT Reward Schedule".to_string(),
+        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },

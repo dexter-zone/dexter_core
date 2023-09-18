@@ -3,6 +3,7 @@ use cosmwasm_std::{Binary, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::Asset;
 use dexter::governance_admin::PoolCreationRequest;
+use dexter::multi_staking::RewardSchedule;
 // use dexter::governance_admin::PoolCreationRequest;
 use dexter::vault::{FeeInfo, NativeAssetPrecisionInfo};
 
@@ -29,12 +30,22 @@ pub struct CreatePoolTempData {
 pub const POOL_CREATION_REQUESTS: Map<u64, PoolCreationRequest> =
     Map::new("pool_creation_requests");
 
+pub const REWARD_SCHEDULE_REQUESTS: Map<u64, Vec<RewardSchedule>> =
+    Map::new("reward_schedule_requests");
+
 /// map of pool creation request id to proposal id
 pub const POOL_CREATION_REQUEST_PROPOSAL_ID: Map<u64, u64> =
     Map::new("pool_creation_request_proposal_id");
 
+/// map of reward schedule request id to proposal id
+pub const REWARD_SCHEDULE_REQUEST_PROPOSAL_ID: Map<u64, u64> =
+    Map::new("reward_schedule_request_proposal_id");
+
 /// count of pool creation requests to generate unique ids
 pub const POOL_CREATION_REQUESTS_COUNT: Item<u64> = Item::new("pool_creation_requests_count");
+
+/// count of reward schedule requests to generate unique ids
+pub const REWARD_SCHEDULE_REQUESTS_COUNT: Item<u64> = Item::new("reward_schedule_requests_count");
 
 pub fn next_pool_creation_request_id(store: &mut dyn Storage) -> StdResult<u64> {
     let id: u64 = POOL_CREATION_REQUESTS_COUNT
@@ -42,5 +53,14 @@ pub fn next_pool_creation_request_id(store: &mut dyn Storage) -> StdResult<u64> 
         .unwrap_or_default()
         + 1;
     POOL_CREATION_REQUESTS_COUNT.save(store, &id)?;
+    Ok(id)
+}
+
+pub fn next_reward_schedule_request_id(store: &mut dyn Storage) -> StdResult<u64> {
+    let id: u64 = REWARD_SCHEDULE_REQUESTS_COUNT
+        .may_load(store)?
+        .unwrap_or_default()
+        + 1;
+    REWARD_SCHEDULE_REQUESTS_COUNT.save(store, &id)?;
     Ok(id)
 }

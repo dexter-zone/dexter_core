@@ -86,6 +86,16 @@ pub fn execute(
         ExecuteMsg::ResumeJoinPool {
             pool_creation_request_id,
         } => execute_resume_join_pool(deps, env, info, pool_creation_request_id),
+
+        ExecuteMsg::CreateRewardSchedulesProposal { title, description, reward_schedules } => {
+            todo!()
+        },
+        ExecuteMsg::PostRewardSchedulesProposalCreationCallback { reward_schedules_creation_request_id } => {
+            todo!()
+        },
+        ExecuteMsg::ResumeCreateRewardSchedules { reward_schedules_creation_request_id } => {
+            todo!()
+        },
     }
 }
 

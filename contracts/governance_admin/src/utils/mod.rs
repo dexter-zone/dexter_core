@@ -3,12 +3,13 @@ pub mod cosmos_msgs;
 use std::str::FromStr;
 
 use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128};
+use dexter::multi_staking::QueryMsg as MultiStakingQueryMsg;
 use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
     QueryProposalsRequest, QueryProposalsResponse,
 };
 
-use crate::error::ContractError;
+use crate::{contract::ContractResult, error::ContractError};
 
 pub fn query_proposal_min_deposit_amount(deps: Deps) -> Result<Vec<Coin>, ContractError> {
     let deposit_params = query_gov_params(&deps.querier)?;
@@ -69,4 +70,15 @@ pub fn query_latest_governance_proposal(
         .unwrap();
 
     Ok(latest_proposal.clone())
+}
+
+pub fn query_allowed_lp_tokens(
+    multistaking_contract_addr: &Addr,
+    querier: &QuerierWrapper,
+) -> ContractResult<Vec<Addr>> {
+    let response: Vec<Addr> = querier.query_wasm_smart(
+        multistaking_contract_addr,
+        &MultiStakingQueryMsg::AllowedLPTokensForReward {},
+    )?;
+    Ok(response)
 }
