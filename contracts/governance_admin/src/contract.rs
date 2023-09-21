@@ -4,11 +4,12 @@ use crate::execute::create_pool_creation_proposal::execute_create_pool_creation_
 use crate::execute::post_pool_creation_callback::execute_post_governance_proposal_creation_callback;
 use crate::execute::resume_create_pool::execute_resume_create_pool;
 use crate::execute::resume_join_pool::execute_resume_join_pool;
+use crate::state::{POOL_CREATION_REQUESTS, POOL_CREATION_REQUEST_PROPOSAL_ID, REWARD_SCHEDULE_REQUESTS, REWARD_SCHEDULE_REQUEST_PROPOSAL_ID};
 
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult,
+    entry_point, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128,
 };
 use cw2::set_contract_version;
 
@@ -21,7 +22,7 @@ pub const CONTRACT_NAME: &str = "dexter-governance-admin";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// this address is derived using: https://gist.github.com/xlab/490d0e7937a8ccdbf805acb00f5dd9a1
-const GOV_MODULE_ADDRESS: &str = "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch";
+pub const GOV_MODULE_ADDRESS: &str = "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch";
 
 pub type ContractResult<T> = Result<T, ContractError>;
 
@@ -75,14 +76,16 @@ pub fn execute(
 
         ExecuteMsg::CreatePoolCreationProposal {
             title,
-            description,
+            metadata,
+            summary,
             pool_creation_request,
         } => execute_create_pool_creation_proposal(
             deps,
             env,
             info,
             title,
-            description,
+            summary,
+            metadata,
             pool_creation_request,
         ),
         ExecuteMsg::PostGovernanceProposalCreationCallback {
@@ -114,8 +117,25 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-    return Err(StdError::generic_err("unsupported query"));
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::PoolCreationRequest { pool_creation_request_id } => {
+            to_binary(&POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?)
+        }
+        QueryMsg::PoolCreationRequestProposalId { pool_creation_request_id } => {
+            to_binary(&POOL_CREATION_REQUEST_PROPOSAL_ID.load(deps.storage, pool_creation_request_id)?)
+        }
+        QueryMsg::RewardScheduleRequest { reward_schedule_request_id } => {
+            to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?)
+        }
+        QueryMsg::RewardScheduleRequestProposalId { reward_schedule_request_id } => {
+            to_binary(&REWARD_SCHEDULE_REQUEST_PROPOSAL_ID.load(deps.storage, reward_schedule_request_id)?)
+        }
+
+        QueryMsg::RefundableFunds { pool_creation_request_id } => {
+            todo!()
+        }
+    }
 }
 
 #[cw_serde]

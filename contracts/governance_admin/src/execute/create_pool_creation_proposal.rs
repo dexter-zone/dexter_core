@@ -1,5 +1,5 @@
 use crate::add_wasm_execute_msg;
-use crate::contract::{ContractResult, CONTRACT_NAME};
+use crate::contract::{ContractResult, CONTRACT_NAME, GOV_MODULE_ADDRESS};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUESTS};
@@ -164,7 +164,8 @@ pub fn execute_create_pool_creation_proposal(
     env: Env,
     info: MessageInfo,
     title: String,
-    _description: String,
+    summary: String,
+    metadata: String,
     pool_creation_request: PoolCreationRequest,
 ) -> ContractResult<Response> {
     // first order of business, ensure the money is sent along with the message
@@ -188,7 +189,7 @@ pub fn execute_create_pool_creation_proposal(
     let msg_execute_contract = MsgExecuteContract {
         // this is the governance module address to basically instruct
         // that the governance is able to send a message which only it can execute
-        sender: "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch".to_string(),
+        sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
         msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
@@ -200,8 +201,8 @@ pub fn execute_create_pool_creation_proposal(
     // we'll create a proposal to create a pool
     let proposal_msg = MsgSubmitProposal {
         title,
-        metadata: "test".to_string(),
-        summary: "test".to_string(),
+        metadata,
+        summary,
         initial_deposit: gov_proposal_min_deposit_amount
             .iter()
             .map(|c| StdCoin {
