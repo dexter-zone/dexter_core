@@ -6,7 +6,7 @@ use crate::state::POOL_CREATION_REQUESTS;
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
+    to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;

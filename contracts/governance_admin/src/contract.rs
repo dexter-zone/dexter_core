@@ -20,6 +20,9 @@ pub const CONTRACT_NAME: &str = "dexter-governance-admin";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// this address is derived using: https://gist.github.com/xlab/490d0e7937a8ccdbf805acb00f5dd9a1
+const GOV_MODULE_ADDRESS: &str = "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch";
+
 pub type ContractResult<T> = Result<T, ContractError>;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -37,6 +40,15 @@ pub fn instantiate(
     )))
 }
 
+pub fn validatate_goverance_module_sender(info: &MessageInfo) -> StdResult<()> {
+    if info.sender != GOV_MODULE_ADDRESS {
+        return Err(StdError::generic_err("unauthorized"));
+    } else {
+        return Ok(());
+    }
+}
+
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -46,6 +58,8 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::ExecuteMsgs { msgs } => {
+            // validatate that the governance module is sending the message
+            validatate_goverance_module_sender(&info)?;
 
             // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
             let mut res = Response::new();

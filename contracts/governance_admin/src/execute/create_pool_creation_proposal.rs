@@ -7,8 +7,7 @@ use crate::utils::query_proposal_min_deposit_amount;
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
-    WasmMsg,
+    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::governance_admin::PoolCreationRequest;
