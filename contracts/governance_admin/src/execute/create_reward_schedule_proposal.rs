@@ -2,7 +2,7 @@ use cosmwasm_std::{Addr, QuerierWrapper, StdError, DepsMut, Response, CosmosMsg,
 use dexter::{multi_staking::RewardSchedule, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg};
 use persistence_std::types::{cosmos::gov::v1::MsgSubmitProposal, cosmwasm::wasm::v1::MsgExecuteContract};
 
-use crate::{utils::query_allowed_lp_tokens, contract::ContractResult, error::ContractError, state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS}, add_wasm_execute_msg};
+use crate::{utils::query_allowed_lp_tokens, contract::{ContractResult, GOV_MODULE_ADDRESS}, error::ContractError, state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS}, add_wasm_execute_msg};
 
 pub fn validate_lp_token_allowed(
     multistaking_contract: &Addr,
@@ -139,7 +139,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     };
 
     let msg = MsgExecuteContract {
-        sender: "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch".to_string(),
+        sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
         msg: to_binary(&create_reward_schedule_proposal_msg)?.to_vec(),
         funds: vec![],

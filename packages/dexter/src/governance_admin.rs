@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Binary, CosmosMsg, Uint128, Addr};
+use cosmwasm_std::{Binary, CosmosMsg, Uint128};
 
 use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}, multi_staking::RewardSchedule};
 
@@ -32,7 +32,8 @@ pub enum ExecuteMsg {
 
    CreatePoolCreationProposal {
       title: String,
-      description: String,
+      metadata: String,
+      summary: String,
       pool_creation_request: PoolCreationRequest,
    },
 
@@ -67,5 +68,20 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+
+   #[returns(PoolCreationRequest)]
+   PoolCreationRequest { pool_creation_request_id: u64 },
+   
+   #[returns(Vec<RewardSchedule>)]
+   RewardScheduleRequest { reward_schedule_request_id: u64 },
+
+   #[returns(Uint128)]
+   PoolCreationRequestProposalId { pool_creation_request_id: u64 },
+   
+   #[returns(Uint128)]
+   RewardScheduleRequestProposalId { reward_schedule_request_id: u64 },
+
+   #[returns(Uint128)]
+   RefundableFunds { pool_creation_request_id: u64 },
 
 }
