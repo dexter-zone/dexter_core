@@ -16,7 +16,6 @@ use cw2::set_contract_version;
 
 use dexter::governance_admin::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use dexter::helper::EventExt;
-use dexter::multi_staking;
 
 /// Contract name that is used for migration.
 pub const CONTRACT_NAME: &str = "dexter-governance-admin";

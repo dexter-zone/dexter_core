@@ -43,13 +43,21 @@ pub enum GovAdminProposalType {
 #[cw_serde]
 pub enum ExecuteMsg {
 
-   ExecuteMsgs {
-        msgs: Vec<CosmosMsg>
-   },
-
+   // User executable
    CreatePoolCreationProposal {
       proposal_description: GovernanceProposalDescription,
       pool_creation_request: PoolCreationRequest,
+   },
+
+   CreateRewardSchedulesProposal {
+      proposal_description: GovernanceProposalDescription,
+      multistaking_contract_addr: String,
+      reward_schedules: Vec<RewardSchedule>,
+   },
+
+   // Gov executable
+   ExecuteMsgs {
+      msgs: Vec<CosmosMsg>
    },
 
    PostGovernanceProposalCreationCallback {
@@ -62,12 +70,6 @@ pub enum ExecuteMsg {
 
    ResumeJoinPool {
       pool_creation_request_id: u64,
-   },
-
-   CreateRewardSchedulesProposal {
-      proposal_description: GovernanceProposalDescription,
-      multistaking_contract_addr: String,
-      reward_schedules: Vec<RewardSchedule>,
    },
 
    ResumeCreateRewardSchedules {
