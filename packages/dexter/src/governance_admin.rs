@@ -24,6 +24,23 @@ pub struct PoolCreationRequest {
 }
 
 #[cw_serde]
+pub struct GovernanceProposalDescription {
+   pub title: String,
+   pub metadata: String,
+   pub summary: String,
+}
+
+#[cw_serde]
+pub enum GovAdminProposalType {
+   PoolCreationRequest {
+      request_id: u64,
+   },
+   RewardSchedulesCreationRequest {
+      request_id: u64,
+   },
+}
+
+#[cw_serde]
 pub enum ExecuteMsg {
 
    ExecuteMsgs {
@@ -31,14 +48,12 @@ pub enum ExecuteMsg {
    },
 
    CreatePoolCreationProposal {
-      title: String,
-      metadata: String,
-      summary: String,
+      proposal_description: GovernanceProposalDescription,
       pool_creation_request: PoolCreationRequest,
    },
 
    PostGovernanceProposalCreationCallback {
-      pool_creation_request_id: u64,
+      gov_proposal_type: GovAdminProposalType,
    },
 
    ResumeCreatePool {
@@ -50,13 +65,9 @@ pub enum ExecuteMsg {
    },
 
    CreateRewardSchedulesProposal {
-      title: String,
-      description: String,
+      proposal_description: GovernanceProposalDescription,
+      multistaking_contract_addr: String,
       reward_schedules: Vec<RewardSchedule>,
-   },
-
-   PostRewardSchedulesProposalCreationCallback {
-      reward_schedules_creation_request_id: u64,
    },
 
    ResumeCreateRewardSchedules {
