@@ -1,5 +1,5 @@
 use cosmwasm_std::{Addr, QuerierWrapper, StdError, DepsMut, Response, CosmosMsg, Uint128, Coin, Env, MessageInfo, to_binary};
-use dexter::{multi_staking::RewardSchedule, querier, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg, router::CallbackMsg};
+use dexter::{multi_staking::RewardSchedule, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg};
 use persistence_std::types::{cosmos::gov::v1::MsgSubmitProposal, cosmwasm::wasm::v1::MsgExecuteContract};
 
 use crate::{utils::query_allowed_lp_tokens, contract::ContractResult, error::ContractError, state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS}, add_wasm_execute_msg};

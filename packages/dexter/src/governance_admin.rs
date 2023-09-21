@@ -1,5 +1,5 @@
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, Binary, CosmosMsg, Uint128};
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::{Coin, Binary, CosmosMsg, Uint128, Addr};
 
 use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}, multi_staking::RewardSchedule};
 
@@ -65,4 +65,7 @@ pub enum ExecuteMsg {
 }
 
 #[cw_serde]
-pub enum QueryMsg {}
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+
+}

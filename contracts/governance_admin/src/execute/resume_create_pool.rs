@@ -4,7 +4,7 @@ use crate::state::POOL_CREATION_REQUESTS;
 
 use const_format::concatcp;
 
-use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, WasmMsg};
+use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
 
 use dexter::helper::EventExt;
 
