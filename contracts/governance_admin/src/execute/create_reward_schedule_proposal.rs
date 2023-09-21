@@ -1,5 +1,5 @@
-use cosmwasm_std::{Addr, QuerierWrapper, StdError, DepsMut, Response, CosmosMsg, Uint128, Coin, Env, MessageInfo, to_binary};
-use dexter::{multi_staking::RewardSchedule, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg};
+use cosmwasm_std::{Addr, QuerierWrapper, StdError, DepsMut, Response, CosmosMsg, Uint128, Env, MessageInfo, to_binary};
+use dexter::{multi_staking::RewardSchedule, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg, governance_admin::GovernanceProposalDescription};
 use persistence_std::types::{cosmos::gov::v1::MsgSubmitProposal, cosmwasm::wasm::v1::MsgExecuteContract};
 
 use crate::{utils::query_allowed_lp_tokens, contract::{ContractResult, GOV_MODULE_ADDRESS}, error::ContractError, state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS}, add_wasm_execute_msg};
@@ -30,8 +30,7 @@ pub fn validate_or_transfer_assets(
     deps: &DepsMut,
     env: &Env,
     info: MessageInfo,
-    reward_schedules: &Vec<RewardSchedule>,
-    funds: Vec<Coin>
+    reward_schedules: &Vec<RewardSchedule>
 ) -> ContractResult<Vec<CosmosMsg>> {
 
     let sender = info.sender;
@@ -52,7 +51,7 @@ pub fn validate_or_transfer_assets(
     }
 
      // validate that the funds sent are enough for native assets
-     let funds_map = funds
+     let funds_map = info.funds
         .into_iter()
         .map(|c| (c.denom, c.amount))
         .collect::<std::collections::HashMap<String, Uint128>>();
@@ -107,9 +106,9 @@ pub fn execute_create_reward_schedule_creation_proposal(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    proposal_description: GovernanceProposalDescription,
     multistaking_contract: Addr,
     reward_schedules: Vec<RewardSchedule>,
-    funds: Vec<Coin>
 ) -> ContractResult<Response> {
 
     let mut msgs: Vec<CosmosMsg> = vec![];
@@ -122,7 +121,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?; 
 
     // validatate all the funds are being sent or approved for transfer and transfer them to the contract
-    let mut transfer_msgs = validate_or_transfer_assets(&deps, &env, info, &reward_schedules, funds)?;
+    let mut transfer_msgs = validate_or_transfer_assets(&deps, &env, info, &reward_schedules)?;
     msgs.append(&mut transfer_msgs);
 
     // store the reward schedule creation request
@@ -146,9 +145,9 @@ pub fn execute_create_reward_schedule_creation_proposal(
     };
 
     let proposal_msg = MsgSubmitProposal {
-        title: "Reward Schedule Creation".to_string(),
-        metadata: "".to_string(),
-        summary: "Reward Schedule Creation".to_string(),
+        title: proposal_description.title,
+        metadata: proposal_description.metadata,
+        summary: proposal_description.summary,
         initial_deposit: vec![],
         proposer: env.contract.address.to_string(),
         messages: vec![msg.to_any()],
@@ -159,8 +158,10 @@ pub fn execute_create_reward_schedule_creation_proposal(
         value: proposal_msg.into(),
     });
 
-    let callback_msg =  dexter::governance_admin::ExecuteMsg::PostRewardSchedulesProposalCreationCallback { 
-        reward_schedules_creation_request_id: next_reward_schedules_creation_request_id 
+    let callback_msg =  dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback { 
+        gov_proposal_type: dexter::governance_admin::GovAdminProposalType::RewardSchedulesCreationRequest { 
+            request_id: next_reward_schedules_creation_request_id 
+        }
     };
 
     add_wasm_execute_msg!(msgs, env.contract.address, callback_msg, vec![]);

@@ -10,7 +10,7 @@ use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128
 };
 use dexter::asset::{Asset, AssetInfo};
-use dexter::governance_admin::PoolCreationRequest;
+use dexter::governance_admin::{PoolCreationRequest, GovernanceProposalDescription};
 use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::PoolCreationFee;
@@ -163,9 +163,7 @@ pub fn execute_create_pool_creation_proposal(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    title: String,
-    summary: String,
-    metadata: String,
+    proposal_description: GovernanceProposalDescription,
     pool_creation_request: PoolCreationRequest,
 ) -> ContractResult<Response> {
     // first order of business, ensure the money is sent along with the message
@@ -200,9 +198,9 @@ pub fn execute_create_pool_creation_proposal(
 
     // we'll create a proposal to create a pool
     let proposal_msg = MsgSubmitProposal {
-        title,
-        metadata,
-        summary,
+        title: proposal_description.title,
+        metadata: proposal_description.metadata,
+        summary: proposal_description.summary,
         initial_deposit: gov_proposal_min_deposit_amount
             .iter()
             .map(|c| StdCoin {
@@ -224,7 +222,9 @@ pub fn execute_create_pool_creation_proposal(
     // // and doing a verification on the proposal content
     let callback_msg =
         dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
-            pool_creation_request_id,
+            gov_proposal_type: dexter::governance_admin::GovAdminProposalType::PoolCreationRequest {
+                request_id: pool_creation_request_id,
+            },
         };
 
     add_wasm_execute_msg!(messages, env.contract.address, callback_msg, vec![]);    

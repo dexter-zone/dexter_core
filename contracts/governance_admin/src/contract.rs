@@ -1,6 +1,7 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::execute::create_pool_creation_proposal::execute_create_pool_creation_proposal;
+use crate::execute::create_reward_schedule_proposal::execute_create_reward_schedule_creation_proposal;
 use crate::execute::post_pool_creation_callback::execute_post_governance_proposal_creation_callback;
 use crate::execute::resume_create_pool::execute_resume_create_pool;
 use crate::execute::resume_join_pool::execute_resume_join_pool;
@@ -15,6 +16,7 @@ use cw2::set_contract_version;
 
 use dexter::governance_admin::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use dexter::helper::EventExt;
+use dexter::multi_staking;
 
 /// Contract name that is used for migration.
 pub const CONTRACT_NAME: &str = "dexter-governance-admin";
@@ -75,26 +77,22 @@ pub fn execute(
         }
 
         ExecuteMsg::CreatePoolCreationProposal {
-            title,
-            metadata,
-            summary,
+            proposal_description,
             pool_creation_request,
         } => execute_create_pool_creation_proposal(
             deps,
             env,
             info,
-            title,
-            summary,
-            metadata,
+            proposal_description,
             pool_creation_request,
         ),
         ExecuteMsg::PostGovernanceProposalCreationCallback {
-            pool_creation_request_id,
+            gov_proposal_type,
         } => execute_post_governance_proposal_creation_callback(
             deps,
             env,
             info,
-            pool_creation_request_id,
+            gov_proposal_type,
         ),
         ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
@@ -104,11 +102,9 @@ pub fn execute(
             pool_creation_request_id,
         } => execute_resume_join_pool(deps, env, info, pool_creation_request_id),
 
-        ExecuteMsg::CreateRewardSchedulesProposal { title, description, reward_schedules } => {
-            todo!()
-        },
-        ExecuteMsg::PostRewardSchedulesProposalCreationCallback { reward_schedules_creation_request_id } => {
-            todo!()
+        ExecuteMsg::CreateRewardSchedulesProposal { proposal_description, multistaking_contract_addr, reward_schedules } => {
+            let multi_staking_addr = deps.api.addr_validate(&multistaking_contract_addr)?;
+            execute_create_reward_schedule_creation_proposal(deps, env, info, proposal_description, multi_staking_addr, reward_schedules)
         },
         ExecuteMsg::ResumeCreateRewardSchedules { reward_schedules_creation_request_id } => {
             todo!()
