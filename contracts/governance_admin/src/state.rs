@@ -2,7 +2,7 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Binary, StdResult, Storage, Uint128};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::Asset;
-use dexter::governance_admin::PoolCreationRequest;
+use dexter::governance_admin::{PoolCreationRequest, RewardScheduleCreationRequestsState};
 use dexter::multi_staking::RewardSchedule;
 // use dexter::governance_admin::PoolCreationRequest;
 use dexter::vault::{FeeInfo, NativeAssetPrecisionInfo};
@@ -30,7 +30,7 @@ pub struct CreatePoolTempData {
 pub const POOL_CREATION_REQUESTS: Map<u64, PoolCreationRequest> =
     Map::new("pool_creation_requests");
 
-pub const REWARD_SCHEDULE_REQUESTS: Map<u64, Vec<RewardSchedule>> =
+pub const REWARD_SCHEDULE_REQUESTS: Map<u64, RewardScheduleCreationRequestsState> =
     Map::new("reward_schedule_requests");
 
 /// map of pool creation request id to proposal id

@@ -149,7 +149,6 @@ pub fn execute(
         ExecuteMsg::CreateRewardSchedule {
             lp_token,
             title,
-            description,
             start_block_time,
             end_block_time,
         } => {
@@ -176,7 +175,6 @@ pub fn execute(
                 info,
                 lp_token,
                 title,
-                description,
                 start_block_time,
                 end_block_time,
                 proposer,
@@ -544,7 +542,6 @@ pub fn create_reward_schedule(
     _info: MessageInfo,
     lp_token: Addr,
     title: String,
-    description: Option<String>,
     start_block_time: u64,
     end_block_time: u64,
     proposer: Addr,
@@ -658,7 +655,6 @@ pub fn receive_cw20(
         Cw20HookMsg::CreateRewardSchedule {
             lp_token,
             title,
-            description,
             start_block_time,
             end_block_time,
         } => {
@@ -677,7 +673,6 @@ pub fn receive_cw20(
                 info,
                 lp_token,
                 title,
-                description,
                 start_block_time,
                 end_block_time,
                 proposer,

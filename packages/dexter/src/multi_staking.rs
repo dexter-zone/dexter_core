@@ -252,7 +252,6 @@ pub enum Cw20HookMsg {
     CreateRewardSchedule {
         lp_token: Addr,
         title: String,
-        description: Option<String>,
         start_block_time: u64,
         end_block_time: u64,
     },
@@ -277,7 +276,6 @@ pub enum ExecuteMsg {
     CreateRewardSchedule {
         lp_token: Addr,
         title: String,
-        description: Option<String>,
         start_block_time: u64,
         end_block_time: u64,
     },

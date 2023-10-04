@@ -48,7 +48,6 @@ fn test_staking() {
         &multi_staking_instance,
         &lp_token_addr,
         "Reward Schedule for XPRT".to_string(),
-        Some("XPRT reward schedule for 2000 seconds".to_string()),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -377,7 +376,6 @@ fn test_staking() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -451,7 +449,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -467,7 +464,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         "ATOM reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -483,7 +479,6 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -633,7 +628,6 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -649,7 +643,6 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -665,7 +658,6 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         "ATOM reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
@@ -870,7 +862,6 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -912,7 +903,6 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -1045,7 +1035,6 @@ fn test_create_cw20_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         "CW20 reward schedule".to_string(),
-        None,
         AssetInfo::Token {
             contract_addr: cw20_token_addr.clone(),
         },
@@ -1185,7 +1174,6 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &multi_staking_instance,
         &lp_token_addr,
         "XPRT reward schedule".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
