@@ -1,5 +1,5 @@
 use cosmwasm_std::{Addr, QuerierWrapper, StdError, DepsMut, Response, CosmosMsg, Uint128, Env, MessageInfo, to_binary};
-use dexter::{multi_staking::RewardSchedule, asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg, governance_admin::GovernanceProposalDescription};
+use dexter::{asset::{Asset, AssetInfo}, helper::build_transfer_cw20_from_user_msg, governance_admin::{GovernanceProposalDescription, RewardScheduleCreationRequest, RewardScheduleCreationRequestsState}};
 use persistence_std::types::{cosmos::gov::v1::MsgSubmitProposal, cosmwasm::wasm::v1::MsgExecuteContract};
 
 use crate::{utils::query_allowed_lp_tokens, contract::{ContractResult, GOV_MODULE_ADDRESS}, error::ContractError, state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS}, add_wasm_execute_msg};
@@ -30,7 +30,7 @@ pub fn validate_or_transfer_assets(
     deps: &DepsMut,
     env: &Env,
     info: MessageInfo,
-    reward_schedules: &Vec<RewardSchedule>
+    reward_schedules: &Vec<RewardScheduleCreationRequest>
 ) -> ContractResult<Vec<CosmosMsg>> {
 
     let sender = info.sender;
@@ -108,15 +108,27 @@ pub fn execute_create_reward_schedule_creation_proposal(
     info: MessageInfo,
     proposal_description: GovernanceProposalDescription,
     multistaking_contract: Addr,
-    reward_schedules: Vec<RewardSchedule>,
+    reward_schedules: Vec<RewardScheduleCreationRequest>,
 ) -> ContractResult<Response> {
 
     let mut msgs: Vec<CosmosMsg> = vec![];
 
-    let lp_tokens = reward_schedules
-        .iter()
-        .map(|rs| rs.staking_lp_token.clone())
-        .collect::<Vec<Addr>>();
+    // validate that LP tokens are all not none
+    let mut lp_tokens = vec![];
+    
+    for reward_schedule in &reward_schedules {
+        match &reward_schedule.lp_token_addr {
+            None => {
+                return Err(ContractError::Std(StdError::generic_err(format!(
+                    "LP token address is required for reward schedule creation request"
+                ))));
+            }
+            Some(lp_token) => {
+                lp_tokens.push(lp_token.clone());
+            },
+        }
+    }
+
     // validate that all the requested LP tokens are already whitelisted for reward distribution
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?; 
 
@@ -126,10 +138,14 @@ pub fn execute_create_reward_schedule_creation_proposal(
 
     // store the reward schedule creation request
     let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
+
     REWARD_SCHEDULE_REQUESTS.save(
         deps.storage,
         next_reward_schedules_creation_request_id,
-        &reward_schedules,
+        &RewardScheduleCreationRequestsState { 
+                multistaking_contract_addr:  multistaking_contract,
+                reward_schedule_creation_requests: reward_schedules.clone() 
+            },
     )?;
 
     // create a proposal for approving the reward schedule creation

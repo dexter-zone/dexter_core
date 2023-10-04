@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Binary, CosmosMsg, Uint128};
+use cosmwasm_std::{Binary, CosmosMsg, Uint128, Addr};
 
 use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}, multi_staking::RewardSchedule};
 
@@ -20,7 +20,25 @@ pub struct PoolCreationRequest {
    // Optional fields depending on the fact if user wants to bootstrap liquidty to the pool
    pub bootstrapping_amount: Option<Vec<Asset>>,
    // Optional field to specify if the user wants to create reward schedule(s) for this pool
-   pub reward_schedules: Option<Vec<RewardSchedule>>
+   pub reward_schedules: Option<Vec<RewardScheduleCreationRequest>>
+}
+
+#[cw_serde]
+pub struct RewardScheduleCreationRequest {
+   /// This is null when it is being used within a new pool creation request
+   /// This is not null when it is being used as a reward schedule creation request
+   pub lp_token_addr: Option<Addr>,
+   pub title: String,
+   pub asset: AssetInfo,
+   pub amount: Uint128,
+   pub start_block_time: u64,
+   pub end_block_time: u64,
+}
+
+#[cw_serde]
+pub struct RewardScheduleCreationRequestsState {
+   pub multistaking_contract_addr: Addr,
+   pub reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>
 }
 
 #[cw_serde]
@@ -52,7 +70,7 @@ pub enum ExecuteMsg {
    CreateRewardSchedulesProposal {
       proposal_description: GovernanceProposalDescription,
       multistaking_contract_addr: String,
-      reward_schedules: Vec<RewardSchedule>,
+      reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>,
    },
 
    // Gov executable

@@ -213,7 +213,6 @@ pub fn create_reward_schedule(
     multistaking_contract: &Addr,
     lp_token: &Addr,
     title: String,
-    description: Option<String>,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
@@ -226,7 +225,6 @@ pub fn create_reward_schedule(
             &ExecuteMsg::CreateRewardSchedule {
                 lp_token: lp_token.clone(),
                 title,
-                description,
                 start_block_time,
                 end_block_time,
             },
@@ -241,7 +239,6 @@ pub fn create_reward_schedule(
                 msg: to_binary(&Cw20HookMsg::CreateRewardSchedule {
                     lp_token: lp_token.clone(),
                     title,
-                    description,
                     start_block_time,
                     end_block_time,
                 })

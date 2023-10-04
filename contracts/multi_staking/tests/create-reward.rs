@@ -111,7 +111,6 @@ fn test_reward_schedule_creation() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -132,7 +131,6 @@ fn test_reward_schedule_creation() {
         &multi_staking_instance,
         &Addr::unchecked("unknown_token"),
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -153,7 +151,6 @@ fn test_reward_schedule_creation() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -171,7 +168,6 @@ fn test_reward_schedule_creation() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -189,7 +185,6 @@ fn test_reward_schedule_creation() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -252,7 +247,6 @@ fn test_reward_schedule_queries() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        Some("This is proposal 1".to_string()),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -267,7 +261,6 @@ fn test_reward_schedule_queries() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-2".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -282,7 +275,6 @@ fn test_reward_schedule_queries() {
         &multi_staking_instance,
         &lp_token1_addr,
         "prop-3".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
@@ -297,7 +289,6 @@ fn test_reward_schedule_queries() {
         &multi_staking_instance,
         &lp_token_addr,
         "prop-4".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },

@@ -101,9 +101,9 @@ pub fn execute(
             pool_creation_request_id,
         } => execute_resume_join_pool(deps, env, info, pool_creation_request_id),
 
-        ExecuteMsg::CreateRewardSchedulesProposal { proposal_description, multistaking_contract_addr, reward_schedules } => {
+        ExecuteMsg::CreateRewardSchedulesProposal { proposal_description, multistaking_contract_addr, reward_schedule_creation_requests } => {
             let multi_staking_addr = deps.api.addr_validate(&multistaking_contract_addr)?;
-            execute_create_reward_schedule_creation_proposal(deps, env, info, proposal_description, multi_staking_addr, reward_schedules)
+            execute_create_reward_schedule_creation_proposal(deps, env, info, proposal_description, multi_staking_addr, reward_schedule_creation_requests)
         },
         ExecuteMsg::ResumeCreateRewardSchedules { reward_schedules_creation_request_id } => {
             todo!()
