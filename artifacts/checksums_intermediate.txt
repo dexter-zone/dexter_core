@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 06358078df042cae3f0709ed6e4ba0ac1dd4519b006474778ba710389f2fd652  target/wasm32-unknown-unknown/release/dexter_keeper.wasm
 6c2001da0d68530716f88273688e0df43bebe9394a4f2e3f1fd2b85a55cba207  target/wasm32-unknown-unknown/release/dexter_multi_staking.wasm
 d1ec972791b3d9fe5bbadf960e287ae13caffc78d821b5e0f4a1ffacf0cc9d8b  target/wasm32-unknown-unknown/release/dexter_router.wasm
@@ -16,3 +17,13 @@ a2215d984084e77e72fa5029a535db41fe03ac73deea96dbcfc548981dd89a31  target/wasm32-
 912d0bf8173c86479262dc01c641310220c1fd318dcb88c767e29489f71540ca  target/wasm32-unknown-unknown/release/stable_pool.wasm
 a61acead01fb5a6bc126436a1bac4e70f5e11f2858a85fd1143cbd4a9ddee12a  target/wasm32-unknown-unknown/release/weighted_pool.wasm
 >>>>>>> 1ff8a8d (added gov module access checks)
+=======
+718446b5574f70cf0a4881667e4abe21669c2b3f5ea60f786ceb76ff3955d260  target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm
+f588763bda2ed96c6d872abcf97af126f092e08a5357584353591d71258e7bfa  target/wasm32-unknown-unknown/release/dexter_keeper.wasm
+5396ffa3a61776641431993a524452f2d2968fae937e292f6ab5fea0889a3162  target/wasm32-unknown-unknown/release/dexter_multi_staking.wasm
+2106d872f148b056290f076925bdb0a6f4971c1c0866361c95d1590c3ed9341f  target/wasm32-unknown-unknown/release/dexter_router.wasm
+6f3e7c3f8cf4fd661cb9c1d21cd072b7aaac0a42ba4df368028d43df001bb50b  target/wasm32-unknown-unknown/release/dexter_vault.wasm
+6aa10da43e08b69fd488f3a8fbc11cf016c7ac96a51a5721cd4e05c0dd06ce63  target/wasm32-unknown-unknown/release/lp_token.wasm
+ec6a710b5c473b6768e565be2784c319be9b5df7d6ade161b2b8b27f8ac0fc00  target/wasm32-unknown-unknown/release/stable_pool.wasm
+7c3e28144ab23b2a8f4aa55217bb9e8309d39168f43d5a647485f7e701dabdf2  target/wasm32-unknown-unknown/release/weighted_pool.wasm
+>>>>>>> c249af6 (reward schedule creation functionality)

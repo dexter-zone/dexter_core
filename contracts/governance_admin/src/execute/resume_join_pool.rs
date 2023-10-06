@@ -1,18 +1,21 @@
 use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
 
-use crate::state::POOL_CREATION_REQUESTS;
+use crate::error::ContractError;
+use crate::state::{POOL_CREATION_REQUESTS, REWARD_SCHEDULE_REQUESTS, next_reward_schedule_request_id};
 
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128,
+    to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128, Coin, StdError,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
 
+use dexter::governance_admin::{RewardScheduleCreationRequest, RewardScheduleCreationRequestsState};
 use dexter::helper::EventExt;
 use dexter::querier::query_vault_config;
+use dexter::vault::AutoStakeImpl;
 
 pub fn execute_resume_join_pool(
     deps: DepsMut,
@@ -32,18 +35,45 @@ pub fn execute_resume_join_pool(
         .next_pool_id
         .checked_sub(Uint128::from(1u128))?;
 
+    let get_pool_details = dexter::vault::QueryMsg::GetPoolById {
+        pool_id,
+    };
+
+    let pool_info_response: dexter::vault::PoolInfoResponse =
+        deps.querier.query_wasm_smart(pool_creation_request.vault_addr.to_string(), &to_binary(&get_pool_details)?)?;
+
+    let multistaking_address = if let AutoStakeImpl::Multistaking { contract_addr } = vault_config.auto_stake_impl {
+        contract_addr
+    } else {
+        return Err(ContractError::Std(StdError::generic_err(format!(
+            "Auto stake implementation is not multistaking"
+        ))));
+    };
+ 
+    let lp_token = pool_info_response.lp_token_addr;
+
     // check if the pool creation request has a bootstrapping amount
     if let Some(bootstrapping_amount) = pool_creation_request.bootstrapping_amount {
 
+        let mut native_coins = vec![];
+
         // allow the vault to spend the CW20 token funds if there are any in the bootstrapping amount
         for asset in &bootstrapping_amount {
-            if let AssetInfo::Token { contract_addr} = &asset.info {
-                let msg = cw20::Cw20ExecuteMsg::IncreaseAllowance {
-                    spender: pool_creation_request.vault_addr.to_string(),
-                    amount: asset.amount,
-                    expires: Some(Expiration::AtHeight(env.block.height + 1)),
-                };
-                add_wasm_execute_msg!(messages, contract_addr.to_string(), msg, vec![]);
+            match &asset.info {
+                AssetInfo::Token { contract_addr} => {
+                    let msg = cw20::Cw20ExecuteMsg::IncreaseAllowance {
+                        spender: pool_creation_request.vault_addr.to_string(),
+                        amount: asset.amount,
+                        expires: Some(Expiration::AtHeight(env.block.height + 1)),
+                    };
+                    add_wasm_execute_msg!(messages, contract_addr.to_string(), msg, vec![]);
+                }
+                AssetInfo::NativeToken { .. } => {
+                    native_coins.push(Coin {
+                        denom: asset.info.to_string(),
+                        amount: asset.amount,
+                    });
+                }
             }
         }
 
@@ -57,41 +87,53 @@ pub fn execute_resume_join_pool(
         };
 
         // add the message to the list of messages
-        add_wasm_execute_msg!(messages, pool_creation_request.vault_addr.to_string(), join_pool_msg, vec![]);
+        add_wasm_execute_msg!(messages, pool_creation_request.vault_addr.to_string(), join_pool_msg, native_coins);
     }
 
-    // // check if the pool creation request has reward schedules
-    // if let Some(reward_schedules) = pool_creation_request.reward_schedules {
-    //     for reward_schedule in reward_schedules {
-    //         let add_reward_schedule_msg = dexter::multi_staking::ExecuteMsg::ProposeRewardSchedule {
-    //             pool_id,
-    //             start_time: reward_schedule.start_time,
-    //             end_time: reward_schedule.end_time,
-    //             epoch_amount: reward_schedule.amount,
-    //         };
 
-    //         // add the message to the list of messages
-    //         messages.push(
-    //             CosmosMsg::Wasm(WasmMsg::Execute {
-    //                 contract_addr: pool_creation_request.vault_addr.to_string(),
-    //                 msg: to_binary(&add_reward_schedule_msg)?,
-    //                 funds: vec![],
-    //             })
-    //             .into(),
-    //         );
-    //     }
-    // }
+    // register the LP token in the multistaking contract 
+    let register_lp_token_msg = dexter::multi_staking::ExecuteMsg::AllowLpToken {
+        lp_token: lp_token.clone(),
+    };
 
-    // // add the message to the list of messages
-    // let mut messages: Vec<CosmosMsg> = vec![];̵
-    // messages.push(
-    //     CosmosMsg::Wasm(WasmMsg::Execute {
-    //         contract_addr: vault_addr.to_string(),
-    //         msg: to_binary(&join_pool_msg)?,
-    //         funds: vec![],
-    //     })
-    //     .into(),
-    // );
+    // add the message to the list of messages
+    add_wasm_execute_msg!(messages, multistaking_address.to_string(), register_lp_token_msg, vec![]);
+
+    // create a reward schedule creation request if there are any reward schedules
+    // store the reward schedule creation request
+    let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
+
+    if let Some(reward_schedules) = pool_creation_request.reward_schedules {
+        let mut updated_reward_schedules =  vec![];
+
+        for reward_schedule in &reward_schedules {
+            let updated_reward_schedule = RewardScheduleCreationRequest {
+                lp_token_addr: Some(lp_token.clone()),
+                ..reward_schedule.clone()
+            };
+
+            updated_reward_schedules.push(updated_reward_schedule);
+        }
+
+
+        REWARD_SCHEDULE_REQUESTS.save(
+            deps.storage,
+            next_reward_schedules_creation_request_id,
+            &RewardScheduleCreationRequestsState { 
+                    multistaking_contract_addr:  multistaking_address,
+                    reward_schedule_creation_requests: updated_reward_schedules.clone()
+                },
+        )?;
+
+        // add a message to resume the reward schedule creation
+        let resume_create_reward_schedules_msg = dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
+            reward_schedules_creation_request_id: next_reward_schedules_creation_request_id,
+        };
+
+        // add the message to the list of messages
+        add_wasm_execute_msg!(messages, env.contract.address.to_string(), resume_create_reward_schedules_msg, vec![]);
+    }
+
 
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_join_pool"), &info);
     event = event

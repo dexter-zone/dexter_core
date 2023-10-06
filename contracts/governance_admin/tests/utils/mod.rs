@@ -1,9 +1,15 @@
+use std::fs::File;
+use std::io::Read;
+use std::ops::Add;
+use std::process::Command;
+
 use cosmwasm_std::testing::mock_env;
 use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
-use cw20::{BalanceResponse, Cw20QueryMsg};
+use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::governance_admin::InstantiateMsg as GovernanceAdminInstantiateMsg;
+use dexter::multi_staking;
 use dexter::vault::FeeInfo;
 
 use dexter::vault::{
@@ -11,6 +17,7 @@ use dexter::vault::{
 };
 
 use dexter::keeper::InstantiateMsg as KeeperInstantiateMsg;
+use persistence_test_tube::{Wasm, Module, Account, PersistenceTestApp, SigningAccount};
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -23,215 +30,270 @@ macro_rules! uint128_with_precision {
     };
 }
 
-pub fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
-    let mut env = mock_env();
-    env.block.time = Timestamp::from_seconds(EPOCH_START);
 
-    let mut app = App::new(|router, _, storage| {
-        // initialization  moved to App construction
-        router.bank.init_balance(storage, &owner, coins).unwrap();
-    });
-    app.set_block(env.block);
-    app
+fn compile_current_contract_without_symbols() {
+    let output = Command::new("cargo")
+        .env("RUSTFLAGS", "-C link-arg=-s")
+        .args(&["wasm"])
+        .output()
+        .unwrap();
+
+    // println!("output: {:?}", output);
 }
 
-pub fn assert_cw20_balance(app: &App, contract: &Addr, address: &Addr, expected_balance: Uint128) {
-    let query_msg = Cw20QueryMsg::Balance {
-        address: address.to_string(),
-    };
-    let balance: BalanceResponse = app.wrap().query_wasm_smart(contract, &query_msg).unwrap();
+fn move_compiled_contract_to_artifacts() {
 
-    assert_eq!(balance.balance, expected_balance);
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let output = Command::new("cp")
+        .args(&[
+            format!("{}/../../target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm", manifest_dir),
+            format!("{}/../../artifacts/dexter_governance_admin.wasm", manifest_dir),
+            // "target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm",
+            // "artifacts/dexter_governance_admin.wasm",
+        ])
+        .output()
+        .unwrap();
+
+    // println!("output: {:?}", output);
 }
 
-pub fn instantiate_contracts(
-    app: &mut App,
-    vault_creater: &Addr,
-    keeper_owner: &Addr,
-    fee_info: FeeInfo,
-) -> (Addr, Addr, Addr) {
-    let weighted_pool_code_id: u64 = store_weighted_pool_code(app);
-    let vault_code_id: u64 = store_vault_code(app);
-    let keeper_code_id: u64 = store_keeper_code(app);
-    let lp_token_code_id: u64 = store_token_code(app);
-    let governance_admin_code_id: u64 = store_governance_admin_code(app);
+fn read_wasm_byte_code_at_path(path: &str) -> Vec<u8> {
 
-    let pool_configs = vec![PoolTypeConfig {
-        pool_type: PoolType::Weighted {},
-        code_id: weighted_pool_code_id,
-        default_fee_info: fee_info.clone(),
-        allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
-        paused: PauseInfo::default(),
-    }];
+    let test_base_path = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let path = format!("{}/../../{}", test_base_path, path);
 
-    // create the governance admin and get address
+    let mut wasm_byte_code = Vec::new();
+    let mut file = File::open(path).unwrap();
+    file.read_to_end(&mut wasm_byte_code).unwrap();
+    wasm_byte_code
+}
 
-    let governance_admin_init_msg = GovernanceAdminInstantiateMsg {};
-    let admin_instance = app
-        .instantiate_contract(
-            governance_admin_code_id,
-            keeper_owner.to_owned(),
-            &governance_admin_init_msg,
-            &[],
-            "governance_admin",
-            None,
+pub struct GovAdminTestSetup {
+    pub accs: Vec<SigningAccount>,
+    
+    pub persistence_test_app: PersistenceTestApp,
+
+    pub gov_admin_instance: Addr,
+    pub vault_instance: Addr,
+    pub keeper_instance: Addr,
+    pub multi_staking_instance: Addr,
+
+    pub cw20_token_1: Addr,
+    pub cw20_token_2: Addr,
+}
+
+pub fn setup_test_contracts() -> GovAdminTestSetup {
+    // compile_current_contract_without_symbols();
+    // move_compiled_contract_to_artifacts();
+
+    let persistence_test_app = PersistenceTestApp::new();
+    let accs = persistence_test_app
+        .init_accounts(
+            &[
+                Coin::new(1_000_000_000_000, "uxprt"),
+                // Coin::new(1_000_000_000_000, "uosmo"),
+            ],
+            1,
         )
         .unwrap();
 
-    let vault_init_msg = VaultInstantiateMsg {
-        pool_configs,
+    let admin = &accs[0];
+    let address = admin.address();
+    println!("admin address: {}", address);
+
+    let wasm = Wasm::new(&persistence_test_app);
+    
+    let gov_admin_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_governance_admin.wasm");
+    let vault_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_vault.wasm");
+    let keeper_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_keeper.wasm");
+    let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/stable_pool.wasm");
+    let weighted_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/weighted_pool.wasm");
+    let multi_staking_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_multi_staking.wasm");
+    let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/lp_token.wasm");
+
+    let gov_admin_code_id = wasm.store_code(&gov_admin_wasm_code, None, &admin).unwrap().data.code_id;
+    let vault_code_id = wasm.store_code(&vault_wasm_code, None, &admin).unwrap().data.code_id;
+    let keeper_code_id = wasm.store_code(&keeper_wasm_code, None, &admin).unwrap().data.code_id;
+    let stable_pool_code_id = wasm.store_code(&stable_pool_wasm_code, None, &admin).unwrap().data.code_id;
+    let weighted_pool_code_id = wasm.store_code(&weighted_pool_wasm_code, None, &admin).unwrap().data.code_id;
+    let lp_token_code_id = wasm.store_code(&lp_token_wasm_code, None, &admin).unwrap().data.code_id;
+    let multi_staking_code_id = wasm.store_code(&multi_staking_wasm_code, None, &admin).unwrap().data.code_id;
+
+    // instantiate gov admin first
+    let gov_admin_instantiate_msg = dexter::governance_admin::InstantiateMsg {};
+    let gov_admin_instance = wasm
+        .instantiate(
+            gov_admin_code_id,
+            &gov_admin_instantiate_msg,
+            None,
+            Some("Dexter Gov Admin"),
+            &[],
+            &admin,
+        )
+        .unwrap()
+        .data
+        .address;
+
+    // instante the multistaking contract
+    let multi_staking_instantiate = dexter::multi_staking::InstantiateMsg {
+        owner: Addr::unchecked(gov_admin_instance.clone()),
+        unlock_period: 86400u64,
+        keeper_addr: None,
+        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
+        instant_unbond_fee_bp: 500u64,
+        instant_unbond_min_fee_bp: 200u64,
+        fee_tier_interval: 86400u64,
+    };
+
+    let multi_staking_instance = wasm
+        .instantiate(
+            multi_staking_code_id,
+            &multi_staking_instantiate,
+            None,
+            Some("Dexter Multi Staking"),
+            &[],
+            &admin,
+        )
+        .unwrap()
+        .data
+        .address;    
+
+    let pool_configs = vec![
+        PoolTypeConfig {
+            code_id: stable_pool_code_id,
+            pool_type: PoolType::StableSwap {},
+            default_fee_info: FeeInfo {
+                total_fee_bps: 300u16,
+                protocol_fee_percent: 49u16,
+            },
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
+            paused: PauseInfo::default(),
+        },
+        PoolTypeConfig {
+            code_id: weighted_pool_code_id,
+            pool_type: PoolType::Weighted {},
+            default_fee_info: FeeInfo {
+                total_fee_bps: 300u16,
+                protocol_fee_percent: 49u16,
+            },
+            allow_instantiation: dexter::vault::AllowPoolInstantiation::Everyone,
+            paused: PauseInfo::default(),
+        },
+    ];
+
+
+    // instantiate the vault with gov admin
+    let vault_instantiate_msg = dexter::vault::InstantiateMsg {
+        owner: gov_admin_instance.clone(),
+        pool_configs: pool_configs,
         lp_token_code_id: Some(lp_token_code_id),
         fee_collector: None,
-        owner: admin_instance.to_string(),
-        pool_creation_fee: PoolCreationFee::Disabled,
-        auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+        pool_creation_fee: PoolCreationFee::default(),
+        auto_stake_impl: dexter::vault::AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked(multi_staking_instance.clone()) },
     };
 
-    // Initialize Vault contract instance
-    let vault_instance = app
-        .instantiate_contract(
+    let vault_instance = wasm
+        .instantiate(
             vault_code_id,
-            vault_creater.to_owned(),
-            &vault_init_msg,
-            &[],
-            "vault",
+            &vault_instantiate_msg,
             None,
+            Some("Dexter Vault"),
+            &[],
+            &admin,
         )
-        .unwrap();
+        .unwrap()
+        .data
+        .address;
 
-    // initialize the keeper
-    let keeper_init_msg = KeeperInstantiateMsg {
-        owner: keeper_owner.clone(),
-        vault_address: vault_instance.clone(),
+
+    // instantiate keeper contract
+    let keeper_instantiate_msg = dexter::keeper::InstantiateMsg {
+        owner: Addr::unchecked(admin.address()),
+        vault_address: Addr::unchecked(vault_instance.clone()),
     };
 
-    let keeper_instance = app
-        .instantiate_contract(
+    let keeper_instance = wasm
+        .instantiate(
             keeper_code_id,
-            keeper_owner.to_owned(),
-            &keeper_init_msg,
-            &[],
-            "keeper",
+            &keeper_instantiate_msg,
             None,
+            Some("Dexter Keeper"),
+            &[],
+            &admin,
         )
-        .unwrap();
+        .unwrap()
+        .data
+        .address;
 
-    // register keeper in the vault
-    let register_msg = dexter::vault::ExecuteMsg::UpdateConfig {
-        fee_collector: Some(keeper_instance.to_string()),
+    // update keeper contract address in vault
+    let vault_update_keeper_msg = dexter::vault::ExecuteMsg::UpdateConfig {
         lp_token_code_id: None,
+        fee_collector: Some(keeper_instance.clone()),
         pool_creation_fee: None,
         auto_stake_impl: None,
-        paused: None,
+        paused: None, 
     };
 
-    // send the message
-    app.execute_contract(
-        vault_creater.to_owned(),
-        vault_instance.clone(),
-        &register_msg,
-        &[],
-    )
-    .unwrap();
-
-    // // Create a weighted pool of uxprt and uatom
-    // let pool_init_msg = dexter::vault::ExecuteMsg::CreatePoolInstance {
-    //     pool_type: PoolType::Weighted {},
-    //     asset_infos: asset_infos.clone(),
-    //     native_asset_precisions: native_asset_precisions
-    //         .iter()
-    //         .map(|(denom, precision)| NativeAssetPrecisionInfo {
-    //             denom: denom.clone(),
-    //             precision: *precision,
-    //         })
-    //         .collect(),
-    //     fee_info: Some(fee_info.clone()),
-    //     init_params: Some(
-    //         to_binary(&WeightedParams {
-    //             weights: asset_infos
-    //                 .iter()
-    //                 .map(|info| Asset {
-    //                     amount: Uint128::from(1u64),
-    //                     info: info.clone(),
-    //                 })
-    //                 .collect(),
-    //             exit_fee: None,
-    //         })
-    //         .unwrap(),
-    //     ),
-    // };
-
-    // // send the message
-    // app.execute_contract(
-    //     vault_creater.to_owned(),
-    //     vault_instance.clone(),
-    //     &pool_init_msg,
+    // wasm.execute(
+    //     &vault_instance.clone(),
+    //     &vault_update_keeper_msg,
     //     &[],
-    // )
-    // .unwrap();
+    //     &admin,
+    // ).unwrap();
 
-    // // validate that pool with id 1 was created
-    // let pool_id = Uint128::from(1u64);
+    // create 2 CW20 tokens
+    let cw20_test_token_1_address = wasm.instantiate(
+        lp_token_code_id,
+        &cw20_base::msg::InstantiateMsg {
+            name: "Test Token".to_string(),
+            symbol: "TTT".to_string(),
+            decimals: 6,
+            initial_balances: vec![],
+            mint: Some(
+                MinterResponse {
+                    minter: admin.address().to_string(),
+                    cap: None,
+                }
+            ),
+            marketing: None,
+        },
+        None,
+        Some("Test Token"),
+        &[],
+        &admin,
+    ).unwrap().data.address;
 
-    // let pool_info = dexter::vault::QueryMsg::GetPoolById { pool_id };
-    // let pool_info_res: PoolInfoResponse = app
-    //     .wrap()
-    //     .query_wasm_smart(vault_instance.clone(), &pool_info)
-    //     .unwrap();
+    let cw20_test_token_2_address = wasm.instantiate(
+        lp_token_code_id,
+        &cw20_base::msg::InstantiateMsg {
+            name: "Test Token 2".to_string(),
+            symbol: "TTTT".to_string(),
+            decimals: 6,
+            initial_balances: vec![],
+            mint: Some(
+                MinterResponse {
+                    minter: admin.address().to_string(),
+                    cap: None,
+                }
+            ),
+            marketing: None,
+        },
+        None,
+        Some("Test Token 2"),
+        &[],
+        &admin,
+    ).unwrap().data.address;
 
-    // assert_eq!(pool_info_res.pool_id, pool_id);
-    // assert_eq!(pool_info_res.pool_type, PoolType::Weighted {});
+    GovAdminTestSetup {
+        persistence_test_app,
+        accs,
+        gov_admin_instance: Addr::unchecked(gov_admin_instance),
+        vault_instance: Addr::unchecked(vault_instance),
+        keeper_instance: Addr::unchecked(keeper_instance),
 
-    // return vault_address, keeper_address, pool_id, pool_address, lp_token_address
-    (vault_instance, keeper_instance, admin_instance)
-}
-
-fn store_weighted_pool_code(app: &mut App) -> u64 {
-    let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
-    ));
-    app.store_code(pool_contract)
-}
-
-fn store_vault_code(app: &mut App) -> u64 {
-    let vault_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            dexter_vault::contract::execute,
-            dexter_vault::contract::instantiate,
-            dexter_vault::contract::query,
-        )
-        .with_reply_empty(dexter_vault::contract::reply),
-    );
-    app.store_code(vault_contract)
-}
-
-fn store_keeper_code(app: &mut App) -> u64 {
-    let keeper_contract: Box<ContractWrapper<_, _, _, _, _, _>> =
-        Box::new(ContractWrapper::new_with_empty(
-            dexter_keeper::contract::execute,
-            dexter_keeper::contract::instantiate,
-            dexter_keeper::contract::query,
-        ));
-    app.store_code(keeper_contract)
-}
-
-fn store_token_code(app: &mut App) -> u64 {
-    let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
-    ));
-    app.store_code(token_contract)
-}
-
-fn store_governance_admin_code(app: &mut App) -> u64 {
-    let governance_admin_contract = Box::new(ContractWrapper::new_with_empty(
-        dexter_governance_admin::contract::execute,
-        dexter_governance_admin::contract::instantiate,
-        dexter_governance_admin::contract::query,
-    ));
-
-    app.store_code(governance_admin_contract)
+        cw20_token_1: Addr::unchecked(cw20_test_token_1_address),
+        cw20_token_2: Addr::unchecked(cw20_test_token_2_address),
+        multi_staking_instance: Addr::unchecked(multi_staking_instance),
+    }
+    // persistence_test_app.sed
 }

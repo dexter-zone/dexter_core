@@ -32,7 +32,7 @@ thiserror = "1.0.38"
 cosmwasm-schema = "1.2.1"
 serde-json-wasm = "0.5.0"
 const_format = "0.2.30"
-persistence-std = { version = "0.1.6" }
+persistence-std = { version = "0.1.8" }
 serde-cw-value = "0.7.0"
 
 [dev-dependencies]
@@ -43,3 +43,5 @@ stable-pool = {path = "../pools/stable_pool" }
 weighted-pool = {path = "../pools/weighted_pool" }
 lp-token = {path = "../lp_token"}
 cw-multi-test = "0.16.2"
+persistence-test-tube = "0.2.0"
+cw20-base = { version = "1.0.1", features = ["library"] }

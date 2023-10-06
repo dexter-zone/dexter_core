@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 dba4b05f5c44ae0018e600af25e7d846ab9951cec465677f435731f691f87ee8  dexter_keeper.wasm
 1e893c47829d608b57e39c08441b4f3166f0526761e89f38130be0df1815df08  dexter_multi_staking.wasm
 a0c4aef5aea5fd744e56881af4bed74701176172c02b07d5bc4b877be680ec73  dexter_router.wasm
@@ -16,3 +17,13 @@ a0c4aef5aea5fd744e56881af4bed74701176172c02b07d5bc4b877be680ec73  dexter_router.
 eb9a08a7ade52319aa91541900f5bd72f5103338a8c360bca5f6cdd9f49e8d4d  stable_pool.wasm
 bcedaca9235c11655c50099ad4c5594623aefa5b902528ce9a13fbdcf56b3875  weighted_pool.wasm
 >>>>>>> 1ff8a8d (added gov module access checks)
+=======
+9865a3d71a2797f3764913d324367eb1a9c48a546e79399b97fce2dc39ee508c  dexter_governance_admin.wasm
+3ce893102f1924a2aa929a5be3ce14ef890e3db6cfd03362917371bb84205720  dexter_keeper.wasm
+17779f64bf2ebc8c79e8fed58f9f7b15a37dc4401c556b83c9a33a267d22d0d0  dexter_multi_staking.wasm
+a2e7e06ed502022e535839e7e57557778ec2a576b58a4ee8cb148329c97e001e  dexter_router.wasm
+4f0692fea5d1b177714871853e03798de07b70d9adbe89f35b23ebb0c85a15eb  dexter_vault.wasm
+ebfd8c201468f282260b9887c19f2c9d32b10fbf315845c53ed89a24223d1529  lp_token.wasm
+6007e5df09b6e044fca537d277e97eeaca51a0212b401442de2ae543038e2a77  stable_pool.wasm
+7d27e31ca80cc5c9a55fcfd3f9d8f99ef0e5fe097418ab7d8bdf97ac8bc94ba0  weighted_pool.wasm
+>>>>>>> c249af6 (reward schedule creation functionality)
