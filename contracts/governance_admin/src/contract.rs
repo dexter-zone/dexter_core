@@ -5,6 +5,7 @@ use crate::execute::create_reward_schedule_proposal::execute_create_reward_sched
 use crate::execute::post_pool_creation_callback::execute_post_governance_proposal_creation_callback;
 use crate::execute::resume_create_pool::execute_resume_create_pool;
 use crate::execute::resume_join_pool::execute_resume_join_pool;
+use crate::execute::resume_reward_schedule_creation::execute_resume_reward_schedule_creation;
 use crate::state::{POOL_CREATION_REQUESTS, POOL_CREATION_REQUEST_PROPOSAL_ID, REWARD_SCHEDULE_REQUESTS, REWARD_SCHEDULE_REQUEST_PROPOSAL_ID};
 
 use const_format::concatcp;
@@ -42,8 +43,24 @@ pub fn instantiate(
     )))
 }
 
-pub fn validatate_goverance_module_sender(info: &MessageInfo) -> StdResult<()> {
+pub fn validate_goverance_module_sender(info: &MessageInfo) -> StdResult<()> {
     if info.sender != GOV_MODULE_ADDRESS {
+        return Err(StdError::generic_err("unauthorized"));
+    } else {
+        return Ok(());
+    }
+}
+
+pub fn validatate_goverance_module_or_self_sender(info: &MessageInfo, env: Env) -> StdResult<()> {
+    if info.sender != GOV_MODULE_ADDRESS && info.sender != env.contract.address {
+        return Err(StdError::generic_err("unauthorized"));
+    } else {
+        return Ok(());
+    }
+}
+
+pub fn validate_self_sender(info: &MessageInfo, env: Env) -> StdResult<()> {
+    if info.sender != env.contract.address {
         return Err(StdError::generic_err("unauthorized"));
     } else {
         return Ok(());
@@ -61,7 +78,7 @@ pub fn execute(
     match msg {
         ExecuteMsg::ExecuteMsgs { msgs } => {
             // validatate that the governance module is sending the message
-            validatate_goverance_module_sender(&info)?;
+            validate_goverance_module_sender(&info)?;
 
             // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
             let mut res = Response::new();
@@ -87,26 +104,35 @@ pub fn execute(
         ),
         ExecuteMsg::PostGovernanceProposalCreationCallback {
             gov_proposal_type,
-        } => execute_post_governance_proposal_creation_callback(
-            deps,
-            env,
-            info,
-            gov_proposal_type,
-        ),
+        } => {
+            validate_self_sender(&info, env.clone())?;
+            execute_post_governance_proposal_creation_callback(
+                deps,
+                env,
+                info,
+                gov_proposal_type,
+            )
+        },
         ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
-        } => execute_resume_create_pool(deps, env, info, pool_creation_request_id),
-
+        } => { 
+            validate_goverance_module_sender(&info)?;
+            execute_resume_create_pool(deps, env, info, pool_creation_request_id)
+        },
         ExecuteMsg::ResumeJoinPool {
             pool_creation_request_id,
-        } => execute_resume_join_pool(deps, env, info, pool_creation_request_id),
+        } => {
+            validate_self_sender(&info, env.clone())?;
+            execute_resume_join_pool(deps, env, info, pool_creation_request_id)
+        },
 
         ExecuteMsg::CreateRewardSchedulesProposal { proposal_description, multistaking_contract_addr, reward_schedule_creation_requests } => {
             let multi_staking_addr = deps.api.addr_validate(&multistaking_contract_addr)?;
             execute_create_reward_schedule_creation_proposal(deps, env, info, proposal_description, multi_staking_addr, reward_schedule_creation_requests)
         },
         ExecuteMsg::ResumeCreateRewardSchedules { reward_schedules_creation_request_id } => {
-            todo!()
+            validatate_goverance_module_or_self_sender(&info, env)?;
+            execute_resume_reward_schedule_creation(deps, reward_schedules_creation_request_id)
         },
     }
 }
@@ -126,7 +152,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RewardScheduleRequestProposalId { reward_schedule_request_id } => {
             to_binary(&REWARD_SCHEDULE_REQUEST_PROPOSAL_ID.load(deps.storage, reward_schedule_request_id)?)
         }
-
         QueryMsg::RefundableFunds { pool_creation_request_id } => {
             todo!()
         }
