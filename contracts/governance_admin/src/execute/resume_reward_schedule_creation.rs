@@ -64,5 +64,9 @@ pub fn execute_resume_reward_schedule_creation(
         
     }
 
-    Ok(Response::default())
+
+    let mut response = Response::new();
+    response = response.add_messages(msgs);
+
+    Ok(response)
 }

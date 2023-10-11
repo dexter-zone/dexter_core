@@ -64,7 +64,11 @@ pub fn validate_or_transfer_assets(
                 let amount = funds_map.get(&denom).cloned().unwrap_or(Uint128::zero());
                 // TODO: return the extra funds back to the user
                 if amount < asset.amount {
-                    panic!("Insufficient funds sent for native asset {} - Amount Sent: {} - Needed Amount: {}", denom, amount, asset.amount);
+                    return Err(ContractError::InsufficientFundsSent {
+                        denom: denom.to_string(),
+                        amount_sent: amount,
+                        needed_amount: asset.amount,
+                    });
                 }
             }
             AssetInfo::Token { contract_addr } => {
@@ -81,7 +85,13 @@ pub fn validate_or_transfer_assets(
                 .unwrap();
 
                 if asset.amount > spend_limit {
-                    panic!("Insufficient spend limit cw20 asset {}", contract_addr);
+                    return Err(
+                        ContractError::InsufficientSpendLimit { 
+                            token_addr: contract_addr.to_string(),
+                            current_approval: spend_limit,
+                            needed_approval_for_spend: asset.amount,
+                        }
+                    )
                 }
 
                 // transfer the funds from the user to this contract

@@ -103,13 +103,13 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
 
     let wasm = Wasm::new(&persistence_test_app);
     
-    let gov_admin_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_governance_admin.wasm");
-    let vault_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_vault.wasm");
-    let keeper_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_keeper.wasm");
-    let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/stable_pool.wasm");
-    let weighted_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/weighted_pool.wasm");
-    let multi_staking_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_multi_staking.wasm");
-    let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/lp_token.wasm");
+    let gov_admin_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_governance_admin-aarch64.wasm");
+    let vault_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_vault-aarch64.wasm");
+    let keeper_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_keeper-aarch64.wasm");
+    let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/stable_pool-aarch64.wasm");
+    let weighted_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/weighted_pool-aarch64.wasm");
+    let multi_staking_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_multi_staking-aarch64.wasm");
+    let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/lp_token-aarch64.wasm");
 
     let gov_admin_code_id = wasm.store_code(&gov_admin_wasm_code, None, &admin).unwrap().data.code_id;
     let vault_code_id = wasm.store_code(&vault_wasm_code, None, &admin).unwrap().data.code_id;
@@ -138,8 +138,8 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     let multi_staking_instantiate = dexter::multi_staking::InstantiateMsg {
         owner: Addr::unchecked(gov_admin_instance.clone()),
         unlock_period: 86400u64,
-        keeper_addr: None,
-        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
+        keeper_addr: Addr::unchecked(gov_admin_instance.clone()),
+        minimum_reward_schedule_proposal_start_delay: 0,
         instant_unbond_fee_bp: 500u64,
         instant_unbond_min_fee_bp: 200u64,
         fee_tier_interval: 86400u64,

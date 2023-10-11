@@ -116,7 +116,7 @@ pub fn execute(
         ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
         } => { 
-            validate_goverance_module_sender(&info)?;
+            // validate_goverance_module_sender(&info)?;
             execute_resume_create_pool(deps, env, info, pool_creation_request_id)
         },
         ExecuteMsg::ResumeJoinPool {
@@ -134,6 +134,14 @@ pub fn execute(
             validatate_goverance_module_or_self_sender(&info, env)?;
             execute_resume_reward_schedule_creation(deps, reward_schedules_creation_request_id)
         },
+
+        ExecuteMsg::ClaimFailedCreatePoolProposalFunds { pool_creation_request_id } => {
+            todo!()
+        },
+
+        ExecuteMsg::ClaimFailedRewardScheduleProposalFunds { reward_schedule_creation_request_id } => {
+            todo!()
+        }
     }
 }
 

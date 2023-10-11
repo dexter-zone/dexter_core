@@ -40,7 +40,7 @@ pub fn execute_resume_join_pool(
     };
 
     let pool_info_response: dexter::vault::PoolInfoResponse =
-        deps.querier.query_wasm_smart(pool_creation_request.vault_addr.to_string(), &to_binary(&get_pool_details)?)?;
+        deps.querier.query_wasm_smart(pool_creation_request.vault_addr.to_string(), &get_pool_details)?;
 
     let multistaking_address = if let AutoStakeImpl::Multistaking { contract_addr } = vault_config.auto_stake_impl {
         contract_addr

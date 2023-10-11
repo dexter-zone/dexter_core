@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Binary, CosmosMsg, Uint128, Addr};
+use cosmwasm_std::{Binary, CosmosMsg, Uint128, Addr, StdError};
 
 use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}, multi_staking::RewardSchedule};
 
@@ -22,6 +24,7 @@ pub struct PoolCreationRequest {
    // Optional field to specify if the user wants to create reward schedule(s) for this pool
    pub reward_schedules: Option<Vec<RewardScheduleCreationRequest>>
 }
+
 
 #[cw_serde]
 pub struct RewardScheduleCreationRequest {
@@ -93,6 +96,14 @@ pub enum ExecuteMsg {
    ResumeCreateRewardSchedules {
       reward_schedules_creation_request_id: u64,
    },
+
+   ClaimFailedCreatePoolProposalFunds {
+      pool_creation_request_id: u64,
+   },
+
+   ClaimFailedRewardScheduleProposalFunds {
+      reward_schedule_creation_request_id: u64,
+   }
 
 }
 

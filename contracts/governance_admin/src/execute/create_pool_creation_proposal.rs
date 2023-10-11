@@ -1,20 +1,23 @@
+use std::collections::HashSet;
+
 use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME, GOV_MODULE_ADDRESS};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUESTS};
-use crate::utils::query_proposal_min_deposit_amount;
+use crate::utils::{query_proposal_min_deposit_amount, query_gov_params};
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128
+    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128, StdError,
 };
 use dexter::asset::{Asset, AssetInfo};
-use dexter::governance_admin::{PoolCreationRequest, GovernanceProposalDescription};
+use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest};
 use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::PoolCreationFee;
 use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
+use persistence_std::types::cosmos::gov;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 
@@ -88,10 +91,68 @@ fn find_total_funds_needed(
     Ok(total_funds)
 }
 
+fn validate_create_pool_request(
+    env: &Env,
+    deps: &DepsMut,
+    gov_voting_period: u64,
+    pool_creation_request: &PoolCreationRequest, 
+) -> Result<(), StdError> {
+
+    // Bootstrapping liquidity owner must be a valid address
+    deps.api.addr_validate(&pool_creation_request.bootstrapping_liquidity_owner)?;
+
+    // native asset precision must be specified for all the native assets in the pool
+    for asset in pool_creation_request.asset_info.clone() {
+        match asset {
+           AssetInfo::NativeToken { denom } => {
+              let native_asset_precision = pool_creation_request.native_asset_precisions.iter().find(|native_asset_precision| native_asset_precision.denom == denom);
+              if native_asset_precision.is_none() {
+                 return Err(StdError::generic_err("Native asset precision must be specified for all the native assets in the pool"));
+              }
+           },
+           _ => {}
+        }
+     }
+
+    // bootstrapping amount if set, must include all the assets in the pool
+    if let Some(bootstrapping_amount) = &pool_creation_request.bootstrapping_amount {
+        
+        // bootstrapping amount must be greater than 0 for all the assets if it is specified
+        for asset in bootstrapping_amount {
+            if asset.amount.is_zero() {
+               return Err(StdError::generic_err("Bootstrapping amount must be greater than 0 for all the assets if it is specified"));
+            }
+         }
+
+        let asset_info = pool_creation_request.asset_info.iter().cloned().collect::<HashSet<AssetInfo>>();
+    
+        let bootstapping_amount_asset_info = bootstrapping_amount
+           .iter()
+           .map(|asset| asset.info.clone())
+           .collect::<HashSet<AssetInfo>>();
+    
+        if asset_info != bootstapping_amount_asset_info {
+           return Err(StdError::generic_err("Bootstrapping amount must include all the assets in the pool"));
+        }
+    }
+
+    // reward schedules start block time should be a govermance proposal voting period later than the current block time
+    if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
+        for reward_schedule in reward_schedules {
+            if reward_schedule.start_block_time < env.block.time.plus_seconds(gov_voting_period).seconds() {
+                return Err(StdError::generic_err("Reward schedules start block time should be a govermance proposal voting period later than the current block time"));
+            }
+        }
+    }
+
+    Ok(())
+ }
+
+
 /// Validates if the funds sent by the user are enough to create the pool and other operations
 /// and if yes, then transfers the funds to this contract in case of CW20 tokens since they are not sent along with the message
 /// In case of native tokens, the extra funds are returned back to the user
-fn validate_or_transfer_assets(
+fn validate_sent_amount_and_transfer_needed_assets(
     deps: Deps,
     env: Env,
     sender: &Addr,
@@ -105,7 +166,6 @@ fn validate_or_transfer_assets(
         gov_proposal_min_deposit_amount,
         pool_creation_request_proposal,
     )?;
-    let funds_str = format!("Funds: {:?}", total_funds_needed);
 
     // return Err(ContractError::Std(StdError::generic_err(funds_str)));
     let mut messages = vec![];
@@ -115,13 +175,18 @@ fn validate_or_transfer_assets(
         .into_iter()
         .map(|c| (c.denom, c.amount))
         .collect::<std::collections::HashMap<String, Uint128>>();
+
     for asset in total_funds_needed {
-        match asset.info {
+        match &asset.info {
             AssetInfo::NativeToken { denom } => {
-                let amount = funds_map.get(&denom).cloned().unwrap_or(Uint128::zero());
+                let amount = funds_map.get(denom).cloned().unwrap_or(Uint128::zero());
                 // TODO: return the extra funds back to the user
                 if amount < asset.amount {
-                    panic!("Insufficient funds sent for native asset {} - Amount Sent: {} - Needed Amount: {}, funds_str: {}", denom, amount, asset.amount, funds_str);
+                    return Err(ContractError::InsufficientFundsSent {
+                        denom: denom.to_string(),
+                        amount_sent: amount,
+                        needed_amount: asset.amount,
+                    });
                 }
             }
             AssetInfo::Token { contract_addr } => {
@@ -138,7 +203,13 @@ fn validate_or_transfer_assets(
                 .unwrap();
 
                 if asset.amount > spend_limit {
-                    panic!("Insufficient spend limit cw20 asset {}", contract_addr);
+                    return Err(
+                        ContractError::InsufficientSpendLimit { 
+                            token_addr: contract_addr.to_string(),
+                            current_approval: spend_limit,
+                            needed_approval_for_spend: asset.amount,
+                        }
+                    )
                 }
 
                 // transfer the funds from the user to this contract
@@ -166,9 +237,13 @@ pub fn execute_create_pool_creation_proposal(
     proposal_description: GovernanceProposalDescription,
     pool_creation_request: PoolCreationRequest,
 ) -> ContractResult<Response> {
+    let gov_params = query_gov_params(&deps.querier)?;
     // first order of business, ensure the money is sent along with the message
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
-    let mut messages = validate_or_transfer_assets(
+
+    validate_create_pool_request(&env, &deps, gov_params.voting_period.unwrap().seconds as u64, &pool_creation_request)?;
+
+    let mut messages = validate_sent_amount_and_transfer_needed_assets(
         deps.as_ref(),
         env.clone(),
         &info.sender,
@@ -222,12 +297,13 @@ pub fn execute_create_pool_creation_proposal(
     // // and doing a verification on the proposal content
     let callback_msg =
         dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
-            gov_proposal_type: dexter::governance_admin::GovAdminProposalType::PoolCreationRequest {
-                request_id: pool_creation_request_id,
-            },
+            gov_proposal_type:
+                dexter::governance_admin::GovAdminProposalType::PoolCreationRequest {
+                    request_id: pool_creation_request_id,
+                },
         };
 
-    add_wasm_execute_msg!(messages, env.contract.address, callback_msg, vec![]);    
+    add_wasm_execute_msg!(messages, env.contract.address, callback_msg, vec![]);
 
     let event = Event::from_info(
         concatcp!(CONTRACT_NAME, "::create_pool_creation_proposal"),
