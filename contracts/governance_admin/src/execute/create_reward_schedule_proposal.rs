@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response, StdError,
-    Uint128,
+    Uint128, Coin,
 };
 use dexter::{
     asset::{Asset, AssetInfo},
@@ -8,7 +8,6 @@ use dexter::{
         GovernanceProposalDescription, RewardScheduleCreationRequest,
         RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
     },
-    helper::build_transfer_cw20_from_user_msg,
 };
 use persistence_std::types::{
     cosmos::gov::v1::MsgSubmitProposal, cosmwasm::wasm::v1::MsgExecuteContract,
@@ -19,7 +18,7 @@ use crate::{
     contract::{ContractResult, GOV_MODULE_ADDRESS},
     error::ContractError,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::query_allowed_lp_tokens,
+    utils::{query_allowed_lp_tokens, query_proposal_min_deposit_amount}, execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
 };
 
 pub fn validate_lp_token_allowed(
@@ -46,18 +45,24 @@ pub fn validate_lp_token_allowed(
     Ok(())
 }
 
-pub fn validate_or_transfer_assets(
-    deps: &DepsMut,
-    env: &Env,
-    info: MessageInfo,
-    reward_schedules: &Vec<RewardScheduleCreationRequest>,
-) -> ContractResult<Vec<CosmosMsg>> {
-    let sender = info.sender;
-    let mut msgs = vec![];
+pub fn total_needed_funds(
+    requests: &Vec<RewardScheduleCreationRequest>,
+    gov_proposal_min_deposit_amount: &Vec<Coin>,
+) -> ContractResult<Vec<Asset>> {
 
     let mut total_funds_map = std::collections::HashMap::new();
 
-    for reward_schedule in reward_schedules {
+    for coin in gov_proposal_min_deposit_amount {
+        let asset_info = AssetInfo::native_token(coin.denom.clone());
+        let amount: Uint128 = total_funds_map
+            .get(&asset_info)
+            .cloned()
+            .unwrap_or_default();
+        let c_amount = coin.amount;
+        total_funds_map.insert(asset_info, amount.checked_add(c_amount)?);
+    }
+
+    for reward_schedule in requests {
         let amount: Uint128 = total_funds_map
             .get(&reward_schedule.asset)
             .cloned()
@@ -69,69 +74,14 @@ pub fn validate_or_transfer_assets(
         );
     }
 
-    // validate that the funds sent are enough for native assets
-    let funds_map = info
-        .funds
-        .into_iter()
-        .map(|c| (c.denom, c.amount))
-        .collect::<std::collections::HashMap<String, Uint128>>();
-
     let total_funds: Vec<Asset> = total_funds_map
         .into_iter()
         .map(|(k, v)| Asset { info: k, amount: v })
         .collect();
 
-    for asset in total_funds {
-        match asset.info {
-            AssetInfo::NativeToken { denom } => {
-                let amount = funds_map.get(&denom).cloned().unwrap_or(Uint128::zero());
-                // TODO: return the extra funds back to the user
-                if amount < asset.amount {
-                    return Err(ContractError::InsufficientFundsSent {
-                        denom: denom.to_string(),
-                        amount_sent: amount,
-                        needed_amount: asset.amount,
-                    });
-                }
-            }
-            AssetInfo::Token { contract_addr } => {
-                // check if the contract has enough allowance to spend the funds
-                let spend_limit = AssetInfo::query_spend_limits(
-                    &contract_addr,
-                    &sender,
-                    &deps
-                        .api
-                        .addr_validate(&env.contract.address.to_string())
-                        .unwrap(),
-                    &deps.querier,
-                )
-                .unwrap();
-
-                if asset.amount > spend_limit {
-                    return Err(ContractError::InsufficientSpendLimit {
-                        token_addr: contract_addr.to_string(),
-                        current_approval: spend_limit,
-                        needed_approval_for_spend: asset.amount,
-                    });
-                }
-
-                // transfer the funds from the user to this contract
-                let transfer_msg = build_transfer_cw20_from_user_msg(
-                    contract_addr.to_string(),
-                    sender.to_string(),
-                    env.contract.address.to_string(),
-                    asset.amount,
-                )
-                .unwrap();
-
-                // add the message to the list of messages
-                msgs.push(transfer_msg);
-            }
-        }
-    }
-
-    Ok(msgs)
+    Ok(total_funds)
 }
+
 
 pub fn execute_create_reward_schedule_creation_proposal(
     deps: DepsMut,
@@ -162,8 +112,12 @@ pub fn execute_create_reward_schedule_creation_proposal(
     // validate that all the requested LP tokens are already whitelisted for reward distribution
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?;
 
+    let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
+    let total_needed_funds = total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
+
+
     // validatate all the funds are being sent or approved for transfer and transfer them to the contract
-    let mut transfer_msgs = validate_or_transfer_assets(&deps, &env, info, &reward_schedules)?;
+    let mut transfer_msgs = validate_sent_amount_and_transfer_needed_assets(&deps.as_ref(), &env, &info.sender, &total_needed_funds, info.funds)?;
     msgs.append(&mut transfer_msgs);
 
     // store the reward schedule creation request
@@ -176,6 +130,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
             status: RewardSchedulesCreationRequestStatus::PendingProposalCreation,
             multistaking_contract_addr: multistaking_contract,
             reward_schedule_creation_requests: reward_schedules.clone(),
+            total_funds_acquired_from_user: total_needed_funds,
         },
     )?;
 

@@ -27,6 +27,8 @@ fn test_create_pool() {
     let _alice_address: Addr = Addr::unchecked("alice".to_string());
 
     let gov_admin_test_setup = utils::setup_test_contracts();
+
+    panic!("Can't proceed");
     let persistence_test_app = &gov_admin_test_setup.persistence_test_app;
     let wasm = Wasm::new(&gov_admin_test_setup.persistence_test_app);
 
@@ -253,51 +255,51 @@ fn test_create_pool() {
 
     // println!("proposal: {:?}", proposal);
 
-    // // assert that the proposal has passed
-    // // assert_eq!(proposal.status, ProposalStatus::Passed as i32);
+    // assert that the proposal has passed
+    // assert_eq!(proposal.status, ProposalStatus::Passed as i32);
 
-    // // HACK: send execute resume create pool manually to find issue
-    // // let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
-    // //     pool_creation_request_id: 1,
-    // // };
-
-    // // let result = wasm.execute(
-    // //     &gov_admin_test_setup.gov_admin_instance.to_string(),
-    // //     &resume_create_pool_msg,
-    // //     &vec![],
-    // //     &gov_admin_test_setup.accs[0],
-    // // ).unwrap();
-
-    // // println!("result: {:?}", result);
-
-
-    // // validate that the pool has been created successfully
-    // // query the vault contract to find the pool id
-
-    // let get_pool_by_id_query = dexter::vault::QueryMsg::GetPoolById { 
-    //     // first pool so it must be 1
-    //     pool_id: Uint128::from(1u128),
+    // HACK: send execute resume create pool manually to find issue
+    // let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
+    //     pool_creation_request_id: 1,
     // };
 
-    // let pool_info: PoolInfoResponse = wasm.query(
-    //     &gov_admin_test_setup.vault_instance.to_string(),
-    //     &get_pool_by_id_query,
+    // let result = wasm.execute(
+    //     &gov_admin_test_setup.gov_admin_instance.to_string(),
+    //     &resume_create_pool_msg,
+    //     &vec![],
+    //     &gov_admin_test_setup.accs[0],
     // ).unwrap();
 
-    // println!("pool_info: {:?}", pool_info);
+    // println!("result: {:?}", result);
 
-    // // validate if reward schedule is created by querying the multistaking contract
-    // let get_reward_schedules_query = dexter::multi_staking::QueryMsg::RewardSchedules {
-    //     lp_token: pool_info.lp_token_addr,
-    //     asset: AssetInfo::native_token("uxprt".to_string()),
-    // };
 
-    // let reward_schedules: Vec<RewardScheduleResponse> = wasm.query(
-    //     &gov_admin_test_setup.multi_staking_instance.to_string(),
-    //     &get_reward_schedules_query,
-    // ).unwrap();
+    // validate that the pool has been created successfully
+    // query the vault contract to find the pool id
 
-    // println!("reward_schedules: {:?}", reward_schedules);
+    let get_pool_by_id_query = dexter::vault::QueryMsg::GetPoolById { 
+        // first pool so it must be 1
+        pool_id: Uint128::from(1u128),
+    };
+
+    let pool_info: PoolInfoResponse = wasm.query(
+        &gov_admin_test_setup.vault_instance.to_string(),
+        &get_pool_by_id_query,
+    ).unwrap();
+
+    println!("pool_info: {:?}", pool_info);
+
+    // validate if reward schedule is created by querying the multistaking contract
+    let get_reward_schedules_query = dexter::multi_staking::QueryMsg::RewardSchedules {
+        lp_token: pool_info.lp_token_addr,
+        asset: AssetInfo::native_token("uxprt".to_string()),
+    };
+
+    let reward_schedules: Vec<RewardScheduleResponse> = wasm.query(
+        &gov_admin_test_setup.multi_staking_instance.to_string(),
+        &get_reward_schedules_query,
+    ).unwrap();
+
+    println!("reward_schedules: {:?}", reward_schedules);
 
     // print
 }

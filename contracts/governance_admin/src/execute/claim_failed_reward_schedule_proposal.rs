@@ -1,44 +1,43 @@
 use std::collections::HashMap;
 
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError, Uint128};
-use dexter::{asset::AssetInfo, helper::build_transfer_token_to_user_msg};
+use dexter::{asset::AssetInfo, helper::build_transfer_token_to_user_msg, governance_admin::{RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus}};
 use persistence_std::types::cosmos::gov::v1::ProposalStatus;
 
 use crate::{
     contract::ContractResult,
     error::ContractError,
-    state::{PoolCreationRequestStatus, POOL_CREATION_REQUEST_DATA},
+    state::{PoolCreationRequestStatus, POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
     utils::query_gov_proposal_by_id,
 };
 
-pub fn execute_claim_failed_create_pool_proposal_funds(
+pub fn execute_claim_failed_reward_schedule_proposal_funds(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    pool_creation_request_id: u64,
+    reward_schedules_creation_request_id: u64,
 ) -> ContractResult<Response> {
     // find the proposal id for the pool creation request id and check the status
-    let mut pool_creation_request_context =
-        POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?;
+    let mut reward_schedule_creation_requests_state =
+        REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedules_creation_request_id)?;
 
     let proposal_id =
-        pool_creation_request_context
+        reward_schedule_creation_requests_state
             .status
             .proposal_id()
             .ok_or(ContractError::Std(StdError::generic_err(format!(
-                "Proposal id not found for pool creation request id {}",
-                pool_creation_request_id
+                "Refund claim can only happen for a reward schedule request linked to a proposal id"
             ))))?;
 
     // validate that the funds are not claimed back already
-    let status = pool_creation_request_context.status;
-    if let PoolCreationRequestStatus::RequestFailedAndRefunded {
+    let status = reward_schedule_creation_requests_state.status;
+    if let RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
         proposal_id: _,
         refund_block_height,
     } = status
     {
         return Err(ContractError::Std(StdError::generic_err(format!(
-            "Funds are already claimed back for this pool creation request in block {refund_block_height}",
+            "Funds are already claimed back for this reward schedules request in block {refund_block_height}",
         ))));
     }
 
@@ -55,14 +54,11 @@ pub fn execute_claim_failed_create_pool_proposal_funds(
         ))));
     }
 
-    // TODO: If passed then, we ned to refund the funds back to the user the propsal deposit amount
-    
-
     // now, let's return the funds back to the user
     let mut messages = vec![];
 
     // return the user funds back
-    for asset in &pool_creation_request_context.total_funds_acquired_from_user {
+    for asset in &reward_schedule_creation_requests_state.total_funds_acquired_from_user {
         let msg = build_transfer_token_to_user_msg(
             asset.info.clone(),
             info.sender.clone(),
@@ -73,15 +69,15 @@ pub fn execute_claim_failed_create_pool_proposal_funds(
     }
 
     // update the context
-    pool_creation_request_context.status = PoolCreationRequestStatus::RequestFailedAndRefunded {
+    reward_schedule_creation_requests_state.status = RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
         proposal_id: proposal_id.clone(),
         refund_block_height: env.block.height,
     };
 
-    POOL_CREATION_REQUEST_DATA.save(
+    REWARD_SCHEDULE_REQUESTS.save(
         deps.storage,
-        pool_creation_request_id,
-        &pool_creation_request_context,
+        reward_schedules_creation_request_id,
+        &reward_schedule_creation_requests_state,
     )?;
 
     Ok(Response::default())

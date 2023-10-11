@@ -4,20 +4,24 @@ use std::ops::Add;
 use std::process::Command;
 
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
+use cosmwasm_std::{Addr, Coin, Timestamp, Uint128, CosmosMsg, WasmMsg, to_binary};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
 use dexter::governance_admin::InstantiateMsg as GovernanceAdminInstantiateMsg;
 use dexter::multi_staking;
-use dexter::vault::FeeInfo;
+use dexter::vault::{FeeInfo, ConfigResponse};
 
 use dexter::vault::{
     InstantiateMsg as VaultInstantiateMsg, PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig,
 };
 
 use dexter::keeper::InstantiateMsg as KeeperInstantiateMsg;
-use persistence_test_tube::{Wasm, Module, Account, PersistenceTestApp, SigningAccount};
+use dexter_governance_admin::contract::GOV_MODULE_ADDRESS;
+use persistence_std::types::cosmos::gov::v1::{MsgSubmitProposal, MsgVote, QueryProposalRequest, VoteOption};
+use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
+use persistence_test_tube::cosmrs::proto::cosmos::gov;
+use persistence_test_tube::{Account, Gov, Module, PersistenceTestApp, SigningAccount, Wasm};
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -30,7 +34,6 @@ macro_rules! uint128_with_precision {
     };
 }
 
-
 fn compile_current_contract_without_symbols() {
     let output = Command::new("cargo")
         .env("RUSTFLAGS", "-C link-arg=-s")
@@ -42,12 +45,17 @@ fn compile_current_contract_without_symbols() {
 }
 
 fn move_compiled_contract_to_artifacts() {
-
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let output = Command::new("cp")
         .args(&[
-            format!("{}/../../target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm", manifest_dir),
-            format!("{}/../../artifacts/dexter_governance_admin.wasm", manifest_dir),
+            format!(
+                "{}/../../target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm",
+                manifest_dir
+            ),
+            format!(
+                "{}/../../artifacts/dexter_governance_admin.wasm",
+                manifest_dir
+            ),
             // "target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm",
             // "artifacts/dexter_governance_admin.wasm",
         ])
@@ -58,7 +66,6 @@ fn move_compiled_contract_to_artifacts() {
 }
 
 fn read_wasm_byte_code_at_path(path: &str) -> Vec<u8> {
-
     let test_base_path = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let path = format!("{}/../../{}", test_base_path, path);
 
@@ -70,7 +77,7 @@ fn read_wasm_byte_code_at_path(path: &str) -> Vec<u8> {
 
 pub struct GovAdminTestSetup {
     pub accs: Vec<SigningAccount>,
-    
+
     pub persistence_test_app: PersistenceTestApp,
 
     pub gov_admin_instance: Addr,
@@ -97,27 +104,58 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         )
         .unwrap();
 
-    let admin = &accs[0];
-    let address = admin.address();
+    let user = &accs[0];
+    let address = user.address();
     println!("admin address: {}", address);
 
     let wasm = Wasm::new(&persistence_test_app);
-    
-    let gov_admin_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_governance_admin-aarch64.wasm");
+
+    let gov_admin_wasm_code =
+        read_wasm_byte_code_at_path("artifacts/dexter_governance_admin-aarch64.wasm");
     let vault_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_vault-aarch64.wasm");
     let keeper_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_keeper-aarch64.wasm");
     let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/stable_pool-aarch64.wasm");
-    let weighted_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/weighted_pool-aarch64.wasm");
-    let multi_staking_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_multi_staking-aarch64.wasm");
+    let weighted_pool_wasm_code =
+        read_wasm_byte_code_at_path("artifacts/weighted_pool-aarch64.wasm");
+    let multi_staking_wasm_code =
+        read_wasm_byte_code_at_path("artifacts/dexter_multi_staking-aarch64.wasm");
     let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/lp_token-aarch64.wasm");
 
-    let gov_admin_code_id = wasm.store_code(&gov_admin_wasm_code, None, &admin).unwrap().data.code_id;
-    let vault_code_id = wasm.store_code(&vault_wasm_code, None, &admin).unwrap().data.code_id;
-    let keeper_code_id = wasm.store_code(&keeper_wasm_code, None, &admin).unwrap().data.code_id;
-    let stable_pool_code_id = wasm.store_code(&stable_pool_wasm_code, None, &admin).unwrap().data.code_id;
-    let weighted_pool_code_id = wasm.store_code(&weighted_pool_wasm_code, None, &admin).unwrap().data.code_id;
-    let lp_token_code_id = wasm.store_code(&lp_token_wasm_code, None, &admin).unwrap().data.code_id;
-    let multi_staking_code_id = wasm.store_code(&multi_staking_wasm_code, None, &admin).unwrap().data.code_id;
+    let gov_admin_code_id = wasm
+        .store_code(&gov_admin_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let vault_code_id = wasm
+        .store_code(&vault_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let keeper_code_id = wasm
+        .store_code(&keeper_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let stable_pool_code_id = wasm
+        .store_code(&stable_pool_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let weighted_pool_code_id = wasm
+        .store_code(&weighted_pool_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let lp_token_code_id = wasm
+        .store_code(&lp_token_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
+    let multi_staking_code_id = wasm
+        .store_code(&multi_staking_wasm_code, None, &user)
+        .unwrap()
+        .data
+        .code_id;
 
     // instantiate gov admin first
     let gov_admin_instantiate_msg = dexter::governance_admin::InstantiateMsg {};
@@ -128,7 +166,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
             None,
             Some("Dexter Gov Admin"),
             &[],
-            &admin,
+            &user,
         )
         .unwrap()
         .data
@@ -152,11 +190,11 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
             None,
             Some("Dexter Multi Staking"),
             &[],
-            &admin,
+            &user,
         )
         .unwrap()
         .data
-        .address;    
+        .address;
 
     let pool_configs = vec![
         PoolTypeConfig {
@@ -181,7 +219,6 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         },
     ];
 
-
     // instantiate the vault with gov admin
     let vault_instantiate_msg = dexter::vault::InstantiateMsg {
         owner: gov_admin_instance.clone(),
@@ -189,7 +226,9 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         lp_token_code_id: Some(lp_token_code_id),
         fee_collector: None,
         pool_creation_fee: PoolCreationFee::default(),
-        auto_stake_impl: dexter::vault::AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked(multi_staking_instance.clone()) },
+        auto_stake_impl: dexter::vault::AutoStakeImpl::Multistaking {
+            contract_addr: Addr::unchecked(multi_staking_instance.clone()),
+        },
     };
 
     let vault_instance = wasm
@@ -199,16 +238,15 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
             None,
             Some("Dexter Vault"),
             &[],
-            &admin,
+            &user,
         )
         .unwrap()
         .data
         .address;
 
-
     // instantiate keeper contract
     let keeper_instantiate_msg = dexter::keeper::InstantiateMsg {
-        owner: Addr::unchecked(admin.address()),
+        owner: Addr::unchecked(user.address()),
         vault_address: Addr::unchecked(vault_instance.clone()),
     };
 
@@ -219,7 +257,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
             None,
             Some("Dexter Keeper"),
             &[],
-            &admin,
+            &user,
         )
         .unwrap()
         .data
@@ -231,8 +269,87 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         fee_collector: Some(keeper_instance.clone()),
         pool_creation_fee: None,
         auto_stake_impl: None,
-        paused: None, 
+        paused: None,
     };
+
+    let msg_update_keeper_in_vault = dexter::governance_admin::ExecuteMsg::ExecuteMsgs {
+        msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute { 
+            contract_addr: vault_instance.clone(),
+            msg: to_binary(&vault_update_keeper_msg).unwrap(),
+            funds: vec![]
+        })],
+    };
+
+    let wasm_msg = MsgExecuteContract {
+        sender: GOV_MODULE_ADDRESS.to_owned(),
+        contract: gov_admin_instance.to_string(),
+        msg: to_binary(&msg_update_keeper_in_vault).unwrap().0,
+        funds: vec![],
+    };
+
+    let msg_submit_proposal = MsgSubmitProposal {
+        messages: vec![wasm_msg.to_any()],
+        initial_deposit: vec![persistence_std::types::cosmos::base::v1beta1::Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::new(1000000000).to_string(),
+        }],
+        proposer: user.address().to_string(),
+        metadata: "Update vault config".to_string(),
+        title: "Update vault config".to_string(),
+        summary: "EMPTY".to_string(),
+    };
+
+    let gov = Gov::new(&persistence_test_app);
+    let proposal_id = gov.submit_proposal(msg_submit_proposal, user).unwrap().data.proposal_id;
+
+    // vote as the validator
+    let validator_signing_account = persistence_test_app
+        .get_first_validator_signing_account()
+        .unwrap();
+    gov.vote(
+        MsgVote {
+            proposal_id,
+            voter: validator_signing_account.address(),
+            option: VoteOption::Yes as i32,
+            metadata: "pass kardo bhai".to_string(),
+        },
+        &validator_signing_account,
+    )
+    .unwrap();
+
+    // make time pass
+    // wait for the proposal to pass
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest {
+            proposal_id: proposal_id,
+        })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // find the proposal voting end time and increase chain time to that
+    let proposal_end_time = proposal.voting_end_time.unwrap();
+    let proposal_start_time = proposal.voting_start_time.unwrap();
+
+    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
+
+    persistence_test_app.increase_time(difference_seconds as u64);
+    // query proposal again
+    let proposal = gov.query_proposal(&QueryProposalRequest {
+        proposal_id,
+    }).unwrap().proposal.unwrap();
+
+    println!("proposal: {:?}", proposal);
+
+    // query vault config
+    let vault_config: ConfigResponse = wasm
+        .query(
+            &vault_instance,
+            &dexter::vault::QueryMsg::Config {},
+        )
+        .unwrap();
+
+    println!("vault config: {:?}", vault_config);
 
     // wasm.execute(
     //     &vault_instance.clone(),
@@ -242,47 +359,51 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     // ).unwrap();
 
     // create 2 CW20 tokens
-    let cw20_test_token_1_address = wasm.instantiate(
-        lp_token_code_id,
-        &cw20_base::msg::InstantiateMsg {
-            name: "Test Token".to_string(),
-            symbol: "TTT".to_string(),
-            decimals: 6,
-            initial_balances: vec![],
-            mint: Some(
-                MinterResponse {
-                    minter: admin.address().to_string(),
+    let cw20_test_token_1_address = wasm
+        .instantiate(
+            lp_token_code_id,
+            &cw20_base::msg::InstantiateMsg {
+                name: "Test Token".to_string(),
+                symbol: "TTT".to_string(),
+                decimals: 6,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: user.address().to_string(),
                     cap: None,
-                }
-            ),
-            marketing: None,
-        },
-        None,
-        Some("Test Token"),
-        &[],
-        &admin,
-    ).unwrap().data.address;
+                }),
+                marketing: None,
+            },
+            None,
+            Some("Test Token"),
+            &[],
+            &user,
+        )
+        .unwrap()
+        .data
+        .address;
 
-    let cw20_test_token_2_address = wasm.instantiate(
-        lp_token_code_id,
-        &cw20_base::msg::InstantiateMsg {
-            name: "Test Token 2".to_string(),
-            symbol: "TTTT".to_string(),
-            decimals: 6,
-            initial_balances: vec![],
-            mint: Some(
-                MinterResponse {
-                    minter: admin.address().to_string(),
+    let cw20_test_token_2_address = wasm
+        .instantiate(
+            lp_token_code_id,
+            &cw20_base::msg::InstantiateMsg {
+                name: "Test Token 2".to_string(),
+                symbol: "TTTT".to_string(),
+                decimals: 6,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: user.address().to_string(),
                     cap: None,
-                }
-            ),
-            marketing: None,
-        },
-        None,
-        Some("Test Token 2"),
-        &[],
-        &admin,
-    ).unwrap().data.address;
+                }),
+                marketing: None,
+            },
+            None,
+            Some("Test Token 2"),
+            &[],
+            &user,
+        )
+        .unwrap()
+        .data
+        .address;
 
     GovAdminTestSetup {
         persistence_test_app,

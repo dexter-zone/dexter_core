@@ -1,6 +1,7 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::execute::claim_failed_create_pool_proposal_funds::execute_claim_failed_create_pool_proposal_funds;
+use crate::execute::claim_failed_reward_schedule_proposal::execute_claim_failed_reward_schedule_proposal_funds;
 use crate::execute::create_pool_creation_proposal::execute_create_pool_creation_proposal;
 use crate::execute::create_reward_schedule_proposal::execute_create_reward_schedule_creation_proposal;
 use crate::execute::post_proposal_creation_callback::execute_post_governance_proposal_creation_callback;
@@ -117,7 +118,7 @@ pub fn execute(
         ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
         } => { 
-            // validate_goverance_module_sender(&info)?;
+            validate_goverance_module_sender(&info)?;
             execute_resume_create_pool(deps, env, info, pool_creation_request_id)
         },
         ExecuteMsg::ResumeJoinPool {
@@ -141,7 +142,7 @@ pub fn execute(
         },
 
         ExecuteMsg::ClaimFailedRewardScheduleProposalFunds { reward_schedule_creation_request_id } => {
-            todo!()
+            execute_claim_failed_reward_schedule_proposal_funds(deps, env, info, reward_schedule_creation_request_id)
         }
     }
 }

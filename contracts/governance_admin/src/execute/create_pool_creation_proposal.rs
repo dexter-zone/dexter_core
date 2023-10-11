@@ -152,9 +152,9 @@ fn validate_create_pool_request(
 /// Validates if the funds sent by the user are enough to create the pool and other operations
 /// and if yes, then transfers the funds to this contract in case of CW20 tokens since they are not sent along with the message
 /// In case of native tokens, the extra funds are returned back to the user
-fn validate_sent_amount_and_transfer_needed_assets(
-    deps: Deps,
-    env: Env,
+pub fn validate_sent_amount_and_transfer_needed_assets(
+    deps: &Deps,
+    env: &Env,
     sender: &Addr,
     total_funds_needed: &Vec<Asset>,
     funds: Vec<Coin>,
@@ -244,8 +244,8 @@ pub fn execute_create_pool_creation_proposal(
     )?;
 
     let mut messages = validate_sent_amount_and_transfer_needed_assets(
-        deps.as_ref(),
-        env.clone(),
+        &deps.as_ref(),
+        &env,
         &info.sender,
         &total_funds_needed,
         info.funds.clone(),
