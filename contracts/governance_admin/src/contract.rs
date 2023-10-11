@@ -1,12 +1,13 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
+use crate::execute::claim_failed_create_pool_proposal_funds::execute_claim_failed_create_pool_proposal_funds;
 use crate::execute::create_pool_creation_proposal::execute_create_pool_creation_proposal;
 use crate::execute::create_reward_schedule_proposal::execute_create_reward_schedule_creation_proposal;
-use crate::execute::post_pool_creation_callback::execute_post_governance_proposal_creation_callback;
+use crate::execute::post_proposal_creation_callback::execute_post_governance_proposal_creation_callback;
 use crate::execute::resume_create_pool::execute_resume_create_pool;
 use crate::execute::resume_join_pool::execute_resume_join_pool;
 use crate::execute::resume_reward_schedule_creation::execute_resume_reward_schedule_creation;
-use crate::state::{POOL_CREATION_REQUESTS, POOL_CREATION_REQUEST_PROPOSAL_ID, REWARD_SCHEDULE_REQUESTS, REWARD_SCHEDULE_REQUEST_PROPOSAL_ID};
+use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS, REWARD_SCHEDULE_REQUEST_PROPOSAL_ID};
 
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
@@ -136,7 +137,7 @@ pub fn execute(
         },
 
         ExecuteMsg::ClaimFailedCreatePoolProposalFunds { pool_creation_request_id } => {
-            todo!()
+            execute_claim_failed_create_pool_proposal_funds(deps, env, info, pool_creation_request_id)
         },
 
         ExecuteMsg::ClaimFailedRewardScheduleProposalFunds { reward_schedule_creation_request_id } => {
@@ -149,10 +150,11 @@ pub fn execute(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::PoolCreationRequest { pool_creation_request_id } => {
-            to_binary(&POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?)
+            to_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?)
         }
         QueryMsg::PoolCreationRequestProposalId { pool_creation_request_id } => {
-            to_binary(&POOL_CREATION_REQUEST_PROPOSAL_ID.load(deps.storage, pool_creation_request_id)?)
+            // to_binary(&POOL_CREATION_REQUEST_PROPOSAL_ID.load(deps.storage, pool_creation_request_id)?)
+            todo!()
         }
         QueryMsg::RewardScheduleRequest { reward_schedule_request_id } => {
             to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?)

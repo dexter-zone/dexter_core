@@ -1,6 +1,7 @@
-use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response};
+use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response, StdError};
+use dexter::governance_admin::RewardSchedulesCreationRequestStatus;
 
-use crate::{add_wasm_execute_msg, contract::ContractResult, state::REWARD_SCHEDULE_REQUESTS};
+use crate::{add_wasm_execute_msg, contract::ContractResult, state::REWARD_SCHEDULE_REQUESTS, error::ContractError};
 
 pub fn execute_resume_reward_schedule_creation(
     deps: DepsMut,
@@ -9,8 +10,33 @@ pub fn execute_resume_reward_schedule_creation(
     let mut msgs: Vec<CosmosMsg> = vec![];
 
     // find the reward schedule creation request
-    let reward_schedule_creation_request =
+    let mut reward_schedule_creation_request =
         REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_creation_request_id)?;
+
+    // mark the request as done
+    match reward_schedule_creation_request.status {
+        RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule => {
+            reward_schedule_creation_request.status = RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
+                proposal_id: None 
+            };
+        }
+        RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id } => {
+            reward_schedule_creation_request.status = RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
+                proposal_id: Some(proposal_id)
+            };
+        }
+        _ => {
+            return Err(ContractError::Std(StdError::generic_err(format!(
+                "invalid reward schedule creation request status"
+            ))));
+        },
+    }
+
+    REWARD_SCHEDULE_REQUESTS.save(
+        deps.storage,
+        reward_schedule_creation_request_id,
+        &reward_schedule_creation_request,
+    )?;
 
     // create the reward schedules
     for request in reward_schedule_creation_request.reward_schedule_creation_requests {
@@ -60,8 +86,6 @@ pub fn execute_resume_reward_schedule_creation(
                 );
             }
         }
-
-        
     }
 
 

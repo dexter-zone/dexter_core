@@ -2,11 +2,11 @@ pub mod cosmos_msgs;
 
 use std::str::FromStr;
 
-use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128};
-use dexter::multi_staking::QueryMsg as MultiStakingQueryMsg;
+use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128, StdError};
+use dexter::{multi_staking::QueryMsg as MultiStakingQueryMsg, querier};
 use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
-    QueryProposalsRequest, QueryProposalsResponse,
+    QueryProposalsRequest, QueryProposalsResponse, QueryProposalRequest, QueryProposalResponse,
 };
 
 use crate::{contract::ContractResult, error::ContractError};
@@ -70,6 +70,28 @@ pub fn query_latest_governance_proposal(
         .unwrap();
 
     Ok(latest_proposal.clone())
+}
+
+pub fn query_gov_proposal_by_id(
+    querier: &QuerierWrapper,
+    proposal_id: u64,
+) -> Result<Proposal, ContractError> {
+
+    let q = QueryProposalRequest {
+        proposal_id,
+    };
+
+    let proposal_response: QueryProposalResponse = querier.query(&QueryRequest::Stargate {
+        path: String::from("/cosmos.gov.v1.Query/Proposal"),
+        data: q.into(),
+    })?;
+
+    proposal_response.proposal.ok_or_else(|| {
+        ContractError::Std(StdError::generic_err(format!(
+            "Proposal with id {} not found",
+            proposal_id
+        )))
+    })
 }
 
 pub fn query_allowed_lp_tokens(

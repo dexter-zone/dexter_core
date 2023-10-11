@@ -4,7 +4,7 @@ use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME, GOV_MODULE_ADDRESS};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
-use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUESTS};
+use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA, PoolCreateRequesContextData};
 use crate::utils::{query_proposal_min_deposit_amount, query_gov_params};
 
 use const_format::concatcp;
@@ -156,16 +156,9 @@ fn validate_sent_amount_and_transfer_needed_assets(
     deps: Deps,
     env: Env,
     sender: &Addr,
-    gov_proposal_min_deposit_amount: &Vec<Coin>,
-    pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
+    total_funds_needed: &Vec<Asset>,
     funds: Vec<Coin>,
 ) -> Result<Vec<CosmosMsg>, ContractError> {
-    // find total needed first
-    let total_funds_needed = find_total_funds_needed(
-        deps,
-        gov_proposal_min_deposit_amount,
-        pool_creation_request_proposal,
-    )?;
 
     // return Err(ContractError::Std(StdError::generic_err(funds_str)));
     let mut messages = vec![];
@@ -243,20 +236,31 @@ pub fn execute_create_pool_creation_proposal(
 
     validate_create_pool_request(&env, &deps, gov_params.voting_period.unwrap().seconds as u64, &pool_creation_request)?;
 
+    // find total needed first
+    let total_funds_needed = find_total_funds_needed(
+        deps.as_ref(),
+        &gov_proposal_min_deposit_amount,
+        &pool_creation_request,
+    )?;
+
     let mut messages = validate_sent_amount_and_transfer_needed_assets(
         deps.as_ref(),
         env.clone(),
         &info.sender,
-        &gov_proposal_min_deposit_amount,
-        &pool_creation_request,
+        &total_funds_needed,
         info.funds.clone(),
     )?;
 
     let pool_creation_request_id = next_pool_creation_request_id(deps.storage)?;
-    POOL_CREATION_REQUESTS.save(
+    POOL_CREATION_REQUEST_DATA.save(
         deps.storage,
         pool_creation_request_id,
-        &pool_creation_request,
+        &PoolCreateRequesContextData {
+            status: crate::state::PoolCreationRequestStatus::PendingProposalCreation,
+            request_sender: info.sender.clone(),
+            total_funds_acquired_from_user: total_funds_needed,
+            pool_creation_request,
+        },
     )?;
 
     let msg_execute_contract = MsgExecuteContract {

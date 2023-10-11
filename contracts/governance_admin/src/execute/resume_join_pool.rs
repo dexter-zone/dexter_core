@@ -2,7 +2,7 @@ use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
 
 use crate::error::ContractError;
-use crate::state::{POOL_CREATION_REQUESTS, REWARD_SCHEDULE_REQUESTS, next_reward_schedule_request_id};
+use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS, next_reward_schedule_request_id, PoolCreationRequestStatus};
 
 use const_format::concatcp;
 
@@ -12,7 +12,7 @@ use cosmwasm_std::{
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
 
-use dexter::governance_admin::{RewardScheduleCreationRequest, RewardScheduleCreationRequestsState};
+use dexter::governance_admin::{RewardScheduleCreationRequest, RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus};
 use dexter::helper::EventExt;
 use dexter::querier::query_vault_config;
 use dexter::vault::AutoStakeImpl;
@@ -23,8 +23,10 @@ pub fn execute_resume_join_pool(
     info: MessageInfo,
     pool_creation_request_id: u64,
 ) -> ContractResult<Response> {
-    let pool_creation_request =
-        POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
+    let mut pool_creation_request_context =
+        POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?;
+
+    let pool_creation_request = &pool_creation_request_context.pool_creation_request;
 
     // find the pool id from the vault by querying the vault for the next pool id
     let vault_config =
@@ -34,6 +36,17 @@ pub fn execute_resume_join_pool(
     let pool_id = vault_config
         .next_pool_id
         .checked_sub(Uint128::from(1u128))?;
+
+    pool_creation_request_context.status = PoolCreationRequestStatus::PoolCreated { 
+        proposal_id: pool_creation_request_context.status.proposal_id().unwrap(),
+        pool_id: pool_id.clone(),
+    };
+
+    POOL_CREATION_REQUEST_DATA.save(
+        deps.storage,
+        pool_creation_request_id,
+        &pool_creation_request_context,
+    )?;
 
     let get_pool_details = dexter::vault::QueryMsg::GetPoolById {
         pool_id,
@@ -53,12 +66,12 @@ pub fn execute_resume_join_pool(
     let lp_token = pool_info_response.lp_token_addr;
 
     // check if the pool creation request has a bootstrapping amount
-    if let Some(bootstrapping_amount) = pool_creation_request.bootstrapping_amount {
+    if let Some(bootstrapping_amount) = &pool_creation_request.bootstrapping_amount {
 
         let mut native_coins = vec![];
 
         // allow the vault to spend the CW20 token funds if there are any in the bootstrapping amount
-        for asset in &bootstrapping_amount {
+        for asset in bootstrapping_amount {
             match &asset.info {
                 AssetInfo::Token { contract_addr} => {
                     let msg = cw20::Cw20ExecuteMsg::IncreaseAllowance {
@@ -80,8 +93,8 @@ pub fn execute_resume_join_pool(
         // now we can just join the pool
         let join_pool_msg = dexter::vault::ExecuteMsg::JoinPool {
             pool_id,
-            recipient: Some(pool_creation_request.bootstrapping_liquidity_owner),
-            assets: Some(bootstrapping_amount),
+            recipient: Some(pool_creation_request.bootstrapping_liquidity_owner.clone()),
+            assets: Some(bootstrapping_amount.clone()),
             min_lp_to_receive: None,
             auto_stake: None,
         };
@@ -103,10 +116,10 @@ pub fn execute_resume_join_pool(
     // store the reward schedule creation request
     let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
 
-    if let Some(reward_schedules) = pool_creation_request.reward_schedules {
+    if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
         let mut updated_reward_schedules =  vec![];
 
-        for reward_schedule in &reward_schedules {
+        for reward_schedule in reward_schedules {
             let updated_reward_schedule = RewardScheduleCreationRequest {
                 lp_token_addr: Some(lp_token.clone()),
                 ..reward_schedule.clone()
@@ -120,6 +133,7 @@ pub fn execute_resume_join_pool(
             deps.storage,
             next_reward_schedules_creation_request_id,
             &RewardScheduleCreationRequestsState { 
+                    status: RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule,
                     multistaking_contract_addr:  multistaking_address,
                     reward_schedule_creation_requests: updated_reward_schedules.clone()
                 },

@@ -1,6 +1,6 @@
 use crate::contract::{ContractResult, CONTRACT_NAME};
 
-use crate::state::POOL_CREATION_REQUESTS;
+use crate::state::POOL_CREATION_REQUEST_DATA;
 
 use const_format::concatcp;
 
@@ -19,8 +19,10 @@ pub fn execute_resume_create_pool(
 ) -> ContractResult<Response> {
     // the proposal has passed, we can now resume the pool creation in the vault directly
     // get the pool creation request
-    let pool_creation_request =
-        POOL_CREATION_REQUESTS.load(deps.storage, pool_creation_request_id)?;
+    let pool_creation_request_data =
+        POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?;
+    
+    let pool_creation_request = pool_creation_request_data.pool_creation_request;
     let mut messages: Vec<CosmosMsg> = vec![];
 
     // create a message for vault
