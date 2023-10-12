@@ -12,7 +12,7 @@ use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
-use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest};
+use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest, UserDeposit, FundsCategory};
 use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::PoolCreationFee;
@@ -28,9 +28,11 @@ fn find_total_funds_needed(
     deps: Deps,
     gov_proposal_min_deposit_amount: &Vec<Coin>,
     pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
-) -> Result<Vec<Asset>, ContractError> {
+) -> ContractResult<(Vec<UserDeposit>, Vec<Asset>)> {
     // let mut total_funds = vec![];
     let mut total_funds_map = std::collections::HashMap::new();
+    let mut user_deposits_detailed = vec![];
+
     let vault_addr = deps
         .api
         .addr_validate(&pool_creation_request_proposal.vault_addr)
@@ -42,6 +44,8 @@ fn find_total_funds_needed(
 
     // add the proposal deposit to the total funds.
     // We need to query the gov module to figure this out
+    let mut proposal_deposit_assets = vec![];
+    
     for coin in gov_proposal_min_deposit_amount {
         let asset_info = AssetInfo::native_token(coin.denom.clone());
         let amount: Uint128 = total_funds_map
@@ -49,13 +53,28 @@ fn find_total_funds_needed(
             .cloned()
             .unwrap_or_default();
         let c_amount = coin.amount;
-        total_funds_map.insert(asset_info, amount.checked_add(c_amount)?);
+        total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
+        proposal_deposit_assets.push(Asset {
+            info: asset_info,
+            amount: c_amount,
+        });
     }
+
+    user_deposits_detailed.push(UserDeposit {
+        category: FundsCategory::ProposalDeposit,
+        assets: proposal_deposit_assets,
+    });
+
 
     // add the pool creation fee to the total funds
     if let PoolCreationFee::Enabled { fee } = pool_creation_fee {
         let amount = total_funds_map.get(&fee.info).cloned().unwrap_or_default();
-        total_funds_map.insert(fee.info, amount.checked_add(fee.amount)?);
+        total_funds_map.insert(fee.clone().info, amount.checked_add(fee.amount)?);
+
+        user_deposits_detailed.push(UserDeposit {
+            category: FundsCategory::PoolCreationFee,
+            assets: vec![fee],
+        });
     }
 
     // add the bootstrapping amount to the total funds
@@ -67,6 +86,11 @@ fn find_total_funds_needed(
                 .unwrap_or_default();
             total_funds_map.insert(asset.info.clone(), amount.checked_add(asset.amount)?);
         }
+
+        user_deposits_detailed.push(UserDeposit {
+            category: FundsCategory::PoolBootstrappingAmount,
+            assets: bootstrapping_amount.clone(),
+        });
     }
 
     // add the reward schedule amounts to the total funds
@@ -80,6 +104,14 @@ fn find_total_funds_needed(
                 reward_schedule.asset.clone(),
                 amount.checked_add(reward_schedule.amount)?,
             );
+
+            user_deposits_detailed.push(UserDeposit {
+                category: FundsCategory::RewardScheduleAmount,
+                assets: vec![Asset {
+                    info: reward_schedule.asset.clone(),
+                    amount: reward_schedule.amount,
+                }],
+            });
         }
     }
 
@@ -87,7 +119,8 @@ fn find_total_funds_needed(
         .into_iter()
         .map(|(k, v)| Asset { info: k, amount: v })
         .collect();
-    Ok(total_funds)
+
+    Ok((user_deposits_detailed, total_funds))
 }
 
 fn validate_create_pool_request(
@@ -240,7 +273,7 @@ pub fn execute_create_pool_creation_proposal(
     validate_create_pool_request(&env, &deps, gov_params.voting_period.unwrap().seconds as u64, &pool_creation_request)?;
 
     // find total needed first
-    let total_funds_needed = find_total_funds_needed(
+    let (user_deposits_detailed, total_funds_needed) = find_total_funds_needed(
         deps.as_ref(),
         &gov_proposal_min_deposit_amount,
         &pool_creation_request,
@@ -262,6 +295,7 @@ pub fn execute_create_pool_creation_proposal(
             status: crate::state::PoolCreationRequestStatus::PendingProposalCreation,
             request_sender: info.sender.clone(),
             total_funds_acquired_from_user: total_funds_needed,
+            user_deposits_detailed,
             pool_creation_request,
         },
     )?;

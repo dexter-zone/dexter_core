@@ -73,6 +73,7 @@ pub struct RewardScheduleCreationRequestsState {
    pub request_sender: Addr,
    /// this field is only set if the request is linked to a governance proposal
    pub total_funds_acquired_from_user: Vec<Asset>,
+   pub user_deposits_detailed: Vec<UserDeposit>,
    pub reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>
 }
 
@@ -141,6 +142,20 @@ pub enum ExecuteMsg {
 
 
 #[cw_serde]
+pub enum FundsCategory {
+   PoolCreationFee,
+   ProposalDeposit,
+   PoolBootstrappingAmount,
+   RewardScheduleAmount
+}
+
+#[cw_serde]
+pub struct UserDeposit {
+   pub category: FundsCategory,
+   pub assets: Vec<Asset>,
+}
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
 
@@ -156,7 +171,7 @@ pub enum QueryMsg {
    #[returns(Uint128)]
    RewardScheduleRequestProposalId { reward_schedule_request_id: u64 },
 
-   #[returns(Uint128)]
+   #[returns(Vec<UserDeposit>)]
    RefundableFunds { pool_creation_request_id: u64 },
 
 }

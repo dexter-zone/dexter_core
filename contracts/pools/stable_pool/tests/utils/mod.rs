@@ -262,7 +262,7 @@ pub fn instantiate_contracts_scaling_factor(
             asset_info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
             },
-            scaling_factor: Decimal256::from_ratio(98u128, 100u128),
+            scaling_factor: Decimal256::from_ratio(86u128, 100u128),
         },
     ];
 
@@ -278,7 +278,7 @@ pub fn instantiate_contracts_scaling_factor(
         asset_infos,
         native_asset_precisions,
         scaling_factors,
-        100,
+        50,
     );
 
     return (vault_addr, pool_addr, lp_token, current_block_time);

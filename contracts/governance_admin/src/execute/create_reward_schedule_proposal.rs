@@ -6,7 +6,7 @@ use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
         GovernanceProposalDescription, RewardScheduleCreationRequest,
-        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
+        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserDeposit, FundsCategory,
     },
 };
 use persistence_std::types::{
@@ -48,10 +48,12 @@ pub fn validate_lp_token_allowed(
 pub fn total_needed_funds(
     requests: &Vec<RewardScheduleCreationRequest>,
     gov_proposal_min_deposit_amount: &Vec<Coin>,
-) -> ContractResult<Vec<Asset>> {
+) -> ContractResult<(Vec<UserDeposit>, Vec<Asset>)> {
 
     let mut total_funds_map = std::collections::HashMap::new();
+    let mut user_deposits_detailed = vec![];
 
+    let mut proposal_deposit_assets = vec![];
     for coin in gov_proposal_min_deposit_amount {
         let asset_info = AssetInfo::native_token(coin.denom.clone());
         let amount: Uint128 = total_funds_map
@@ -59,8 +61,17 @@ pub fn total_needed_funds(
             .cloned()
             .unwrap_or_default();
         let c_amount = coin.amount;
-        total_funds_map.insert(asset_info, amount.checked_add(c_amount)?);
+        total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
+        proposal_deposit_assets.push(Asset {
+            info: asset_info,
+            amount: c_amount,
+        });   
     }
+
+    user_deposits_detailed.push(UserDeposit {
+        category: FundsCategory::ProposalDeposit,
+        assets: proposal_deposit_assets,
+    });
 
     for reward_schedule in requests {
         let amount: Uint128 = total_funds_map
@@ -72,6 +83,14 @@ pub fn total_needed_funds(
             reward_schedule.asset.clone(),
             amount.checked_add(reward_schedule.amount)?,
         );
+
+        user_deposits_detailed.push(UserDeposit {
+            category: FundsCategory::RewardScheduleAmount,
+            assets: vec![Asset {
+                info: reward_schedule.asset.clone(),
+                amount: reward_schedule.amount,
+            }],
+        });
     }
 
     let total_funds: Vec<Asset> = total_funds_map
@@ -79,7 +98,7 @@ pub fn total_needed_funds(
         .map(|(k, v)| Asset { info: k, amount: v })
         .collect();
 
-    Ok(total_funds)
+    Ok((user_deposits_detailed, total_funds))
 }
 
 
@@ -113,7 +132,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?;
 
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
-    let total_needed_funds = total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
+    let (user_deposits_detailed, total_needed_funds) = total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
 
 
     // validatate all the funds are being sent or approved for transfer and transfer them to the contract
@@ -131,6 +150,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
             request_sender: info.sender.clone(),
             multistaking_contract_addr: multistaking_contract,
             reward_schedule_creation_requests: reward_schedules.clone(),
+            user_deposits_detailed,
             total_funds_acquired_from_user: total_needed_funds,
         },
     )?;

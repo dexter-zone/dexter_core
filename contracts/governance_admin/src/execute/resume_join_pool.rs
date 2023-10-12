@@ -137,6 +137,7 @@ pub fn execute_resume_join_pool(
                     status: RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule,
                     multistaking_contract_addr:  multistaking_address,
                     reward_schedule_creation_requests: updated_reward_schedules.clone(),
+                    user_deposits_detailed: vec![],
                     total_funds_acquired_from_user: vec![],
                 },
         )?;

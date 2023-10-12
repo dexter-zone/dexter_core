@@ -2,7 +2,7 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{StdResult, Storage, Uint128, Addr};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::Asset;
-use dexter::governance_admin::{PoolCreationRequest, RewardScheduleCreationRequestsState};
+use dexter::governance_admin::{PoolCreationRequest, RewardScheduleCreationRequestsState, UserDeposit};
 
 // ## Description
 // Stores the contract configuration at the given key
@@ -44,6 +44,7 @@ pub struct PoolCreateRequesContextData {
     pub status: PoolCreationRequestStatus,
     pub request_sender: Addr,
     pub total_funds_acquired_from_user: Vec<Asset>,
+    pub user_deposits_detailed: Vec<UserDeposit>,
     pub pool_creation_request: PoolCreationRequest,
 }
 
