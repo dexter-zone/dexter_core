@@ -47,6 +47,7 @@ pub fn execute_resume_reward_schedule_creation(
                     dexter::multi_staking::Cw20HookMsg::CreateRewardSchedule {
                         lp_token: request.lp_token_addr.unwrap(),
                         title: request.title,
+                        actual_creator: Some(reward_schedule_creation_request.request_sender.clone()),
                         start_block_time: request.start_block_time,
                         end_block_time: request.end_block_time,
                     };
@@ -71,6 +72,7 @@ pub fn execute_resume_reward_schedule_creation(
                     dexter::multi_staking::ExecuteMsg::CreateRewardSchedule {
                         lp_token: request.lp_token_addr.unwrap(),
                         title: request.title,
+                        actual_creator: Some(reward_schedule_creation_request.request_sender.clone()),
                         start_block_time: request.start_block_time,
                         end_block_time: request.end_block_time,
                     };

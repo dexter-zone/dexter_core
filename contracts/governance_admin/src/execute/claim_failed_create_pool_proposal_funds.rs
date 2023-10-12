@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError, Uint128};
-use dexter::{asset::AssetInfo, helper::build_transfer_token_to_user_msg};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
+use dexter::helper::build_transfer_token_to_user_msg;
 use persistence_std::types::cosmos::gov::v1::ProposalStatus;
 
 use crate::{
@@ -14,7 +12,7 @@ use crate::{
 pub fn execute_claim_failed_create_pool_proposal_funds(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     pool_creation_request_id: u64,
 ) -> ContractResult<Response> {
     // find the proposal id for the pool creation request id and check the status
@@ -56,7 +54,7 @@ pub fn execute_claim_failed_create_pool_proposal_funds(
     }
 
     // TODO: If passed then, we ned to refund the funds back to the user the propsal deposit amount
-    
+
 
     // now, let's return the funds back to the user
     let mut messages = vec![];
@@ -65,7 +63,7 @@ pub fn execute_claim_failed_create_pool_proposal_funds(
     for asset in &pool_creation_request_context.total_funds_acquired_from_user {
         let msg = build_transfer_token_to_user_msg(
             asset.info.clone(),
-            info.sender.clone(),
+            pool_creation_request_context.request_sender.clone(),
             asset.amount,
         )?;
 

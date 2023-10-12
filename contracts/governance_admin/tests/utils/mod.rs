@@ -1,29 +1,20 @@
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Add;
 use std::process::Command;
 
-use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{Addr, Coin, Timestamp, Uint128, CosmosMsg, WasmMsg, to_binary};
-use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
-use cw_multi_test::{App, ContractWrapper, Executor};
 
-use dexter::governance_admin::InstantiateMsg as GovernanceAdminInstantiateMsg;
-use dexter::multi_staking;
-use dexter::vault::{FeeInfo, ConfigResponse};
+use cosmwasm_std::{Addr, Coin, Uint128, CosmosMsg, WasmMsg, to_binary};
+use cw20::MinterResponse;
+use dexter::vault::FeeInfo;
 
-use dexter::vault::{
-    InstantiateMsg as VaultInstantiateMsg, PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig,
-};
+use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig,};
 
-use dexter::keeper::InstantiateMsg as KeeperInstantiateMsg;
 use dexter_governance_admin::contract::GOV_MODULE_ADDRESS;
 use persistence_std::types::cosmos::gov::v1::{MsgSubmitProposal, MsgVote, QueryProposalRequest, VoteOption};
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use persistence_test_tube::cosmrs::proto::cosmos::gov;
 use persistence_test_tube::{Account, Gov, Module, PersistenceTestApp, SigningAccount, Wasm};
 
-pub const EPOCH_START: u64 = 1_000_000;
 
 #[macro_export]
 macro_rules! uint128_with_precision {
@@ -34,8 +25,9 @@ macro_rules! uint128_with_precision {
     };
 }
 
+#[allow(dead_code)]
 fn compile_current_contract_without_symbols() {
-    let output = Command::new("cargo")
+    let _output = Command::new("cargo")
         .env("RUSTFLAGS", "-C link-arg=-s")
         .args(&["wasm"])
         .output()
@@ -44,9 +36,10 @@ fn compile_current_contract_without_symbols() {
     // println!("output: {:?}", output);
 }
 
+#[allow(dead_code)]
 fn move_compiled_contract_to_artifacts() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let output = Command::new("cp")
+    let _output = Command::new("cp")
         .args(&[
             format!(
                 "{}/../../target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm",
@@ -87,6 +80,19 @@ pub struct GovAdminTestSetup {
 
     pub cw20_token_1: Addr,
     pub cw20_token_2: Addr,
+}
+
+impl Display for GovAdminTestSetup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "
+            Gov Admin: {}
+            Vault: {}
+            Keeper: {}
+            Multi Staking: {}
+            CW20 Token 1: {}
+            CW20 Token 2: {}
+        ", self.gov_admin_instance, self.vault_instance, self.keeper_instance, self.multi_staking_instance, self.cw20_token_1, self.cw20_token_2)
+    }
 }
 
 pub fn setup_test_contracts() -> GovAdminTestSetup {
@@ -335,21 +341,17 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
 
     persistence_test_app.increase_time(difference_seconds as u64);
     // query proposal again
-    let proposal = gov.query_proposal(&QueryProposalRequest {
-        proposal_id,
-    }).unwrap().proposal.unwrap();
-
-    println!("proposal: {:?}", proposal);
+    // let proposal = gov.query_proposal(&QueryProposalRequest {
+    //     proposal_id,
+    // }).unwrap().proposal.unwrap();
 
     // query vault config
-    let vault_config: ConfigResponse = wasm
-        .query(
-            &vault_instance,
-            &dexter::vault::QueryMsg::Config {},
-        )
-        .unwrap();
-
-    println!("vault config: {:?}", vault_config);
+    // let vault_config: ConfigResponse = wasm
+    //     .query(
+    //         &vault_instance,
+    //         &dexter::vault::QueryMsg::Config {},
+    //     )
+    //     .unwrap();
 
     // wasm.execute(
     //     &vault_instance.clone(),

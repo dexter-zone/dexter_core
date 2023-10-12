@@ -128,6 +128,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
         next_reward_schedules_creation_request_id,
         &RewardScheduleCreationRequestsState {
             status: RewardSchedulesCreationRequestStatus::PendingProposalCreation,
+            request_sender: info.sender.clone(),
             multistaking_contract_addr: multistaking_contract,
             reward_schedule_creation_requests: reward_schedules.clone(),
             total_funds_acquired_from_user: total_needed_funds,

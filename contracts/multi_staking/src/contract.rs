@@ -149,6 +149,7 @@ pub fn execute(
         ExecuteMsg::CreateRewardSchedule {
             lp_token,
             title,
+            actual_creator,
             start_block_time,
             end_block_time,
         } => {
@@ -167,7 +168,10 @@ pub fn execute(
             }
 
             let sent_asset = info.funds[0].clone();
-            let proposer = info.sender.clone();
+            let creator = match actual_creator {
+                Some(creator) => deps.api.addr_validate(&creator.to_string())?,
+                None => info.sender.clone(),
+            };
 
             create_reward_schedule(
                 deps,
@@ -177,7 +181,7 @@ pub fn execute(
                 title,
                 start_block_time,
                 end_block_time,
-                proposer,
+                creator,
                 Asset::new_native(sent_asset.denom, sent_asset.amount),
             )
         }
@@ -539,12 +543,12 @@ fn remove_lp_token(
 pub fn create_reward_schedule(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     lp_token: Addr,
     title: String,
     start_block_time: u64,
     end_block_time: u64,
-    proposer: Addr,
+    creator: Addr,
     asset: Asset,
 ) -> ContractResult<Response> {
     let config = CONFIG.load(deps.storage)?;
@@ -588,7 +592,7 @@ pub fn create_reward_schedule(
 
     let reward_schedule = RewardSchedule {
         title: title.clone(),
-        creator: proposer.clone(),
+        creator: creator.clone(),
         asset: asset.info.clone(),
         amount: asset.amount,
         staking_lp_token: lp_token.clone(),
@@ -615,8 +619,9 @@ pub fn create_reward_schedule(
     Ok(Response::new().add_event(
         Event::from_sender(
             concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
-            proposer,
+            &info.sender,
         )
+        .add_attribute("creator", creator.to_string())
         .add_attribute("lp_token", lp_token.to_string())
         .add_attribute("title", title)
         .add_attribute("start_block_time", start_block_time.to_string())
@@ -655,6 +660,7 @@ pub fn receive_cw20(
         Cw20HookMsg::CreateRewardSchedule {
             lp_token,
             title,
+            actual_creator,
             start_block_time,
             end_block_time,
         } => {
@@ -665,7 +671,11 @@ pub fn receive_cw20(
             }
 
             let token_addr = info.sender.clone();
-            let proposer = deps.api.addr_validate(&cw20_msg.sender)?;
+            
+            let creator = match actual_creator {
+                Some(creator) => deps.api.addr_validate(&creator.to_string())?,
+                None => deps.api.addr_validate(&cw20_msg.sender)?,
+            };
 
             create_reward_schedule(
                 deps,
@@ -675,7 +685,7 @@ pub fn receive_cw20(
                 title,
                 start_block_time,
                 end_block_time,
-                proposer,
+                creator,
                 Asset::new_token(token_addr, cw20_msg.amount),
             )
         }
@@ -985,10 +995,6 @@ pub fn withdraw(
     );
     Ok(response)
 }
-
-// settings for pagination
-const MAX_LIMIT: u32 = 30;
-const DEFAULT_LIMIT: u32 = 10;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {

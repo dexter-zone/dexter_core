@@ -1,5 +1,4 @@
 use cosmwasm_std::{OverflowError, StdError, Uint128};
-use dexter::asset::AssetInfo;
 use thiserror::Error;
 
 /// ## Description
@@ -8,6 +7,9 @@ use thiserror::Error;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("Invalid native asset precision list provided. It should only and exactly contain all native assets of the pool")]
+    InvalidNativeAssetPrecisionList,
 
     #[error("Unauthorized")]
     Unauthorized {},
@@ -34,6 +36,18 @@ pub enum ContractError {
         current_approval: Uint128,
         needed_approval_for_spend: Uint128,
     },
+
+    #[error("Bootstrapping amount must include all the assets in the pool")]
+    BootstrappingAmountMissingAssets {},
+
+    #[error("Bootstrapping amount must be greater than zero")]
+    BootstrappingAmountMustBeGreaterThanZero {},
+
+    #[error("Invalid reward schedule start block time")]
+    InvalidRewardScheduleStartBlockTime {},
+
+    #[error("End block time must be after start block time")]
+    InvalidRewardScheduleEndBlockTime {},
 }
 
 impl From<OverflowError> for ContractError {

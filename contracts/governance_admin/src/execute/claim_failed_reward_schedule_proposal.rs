@@ -1,20 +1,18 @@
-use std::collections::HashMap;
-
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError, Uint128};
-use dexter::{asset::AssetInfo, helper::build_transfer_token_to_user_msg, governance_admin::{RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus}};
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
+use dexter::{helper::build_transfer_token_to_user_msg, governance_admin::RewardSchedulesCreationRequestStatus};
 use persistence_std::types::cosmos::gov::v1::ProposalStatus;
 
 use crate::{
     contract::ContractResult,
     error::ContractError,
-    state::{PoolCreationRequestStatus, POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
+    state::REWARD_SCHEDULE_REQUESTS,
     utils::query_gov_proposal_by_id,
 };
 
 pub fn execute_claim_failed_reward_schedule_proposal_funds(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     reward_schedules_creation_request_id: u64,
 ) -> ContractResult<Response> {
     // find the proposal id for the pool creation request id and check the status
@@ -61,7 +59,7 @@ pub fn execute_claim_failed_reward_schedule_proposal_funds(
     for asset in &reward_schedule_creation_requests_state.total_funds_acquired_from_user {
         let msg = build_transfer_token_to_user_msg(
             asset.info.clone(),
-            info.sender.clone(),
+            reward_schedule_creation_requests_state.request_sender.clone(),
             asset.amount,
         )?;
 

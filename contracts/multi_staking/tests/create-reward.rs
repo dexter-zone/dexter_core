@@ -1,9 +1,9 @@
 use crate::utils::{
     mock_app, create_reward_schedule, setup,
 };
-use cosmwasm_std::{Addr, Coin, StdResult, Uint128};
+use cosmwasm_std::{Addr, Coin, Uint128};
 use cw_multi_test::Executor;
-use dexter::asset::{Asset, AssetInfo};
+use dexter::asset::AssetInfo;
 use dexter::multi_staking::{
     ExecuteMsg, QueryMsg,
 };
@@ -178,8 +178,8 @@ fn test_reward_schedule_creation() {
     assert_eq!(res.is_err(), true);
     assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
 
-    // create a valid reward schedule should succeed by admin
-    let reward_schedule_id = create_reward_schedule(
+    // creation of a valid reward schedule should succeed by admin
+    let _reward_schedule_id = create_reward_schedule(
         &mut app,
         &admin_addr,
         &multi_staking_instance,
@@ -193,6 +193,8 @@ fn test_reward_schedule_creation() {
         1000_302_000,
     )
     .unwrap();
+
+    // TODO: Add more tests for reward schedule creation
 }
 
 #[test]

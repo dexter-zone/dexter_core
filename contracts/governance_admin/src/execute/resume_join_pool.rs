@@ -132,7 +132,8 @@ pub fn execute_resume_join_pool(
         REWARD_SCHEDULE_REQUESTS.save(
             deps.storage,
             next_reward_schedules_creation_request_id,
-            &RewardScheduleCreationRequestsState { 
+            &RewardScheduleCreationRequestsState {
+                    request_sender: pool_creation_request_context.request_sender,
                     status: RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule,
                     multistaking_contract_addr:  multistaking_address,
                     reward_schedule_creation_requests: updated_reward_schedules.clone(),

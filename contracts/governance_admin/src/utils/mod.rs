@@ -3,7 +3,7 @@ pub mod cosmos_msgs;
 use std::str::FromStr;
 
 use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128, StdError};
-use dexter::{multi_staking::QueryMsg as MultiStakingQueryMsg, querier};
+use dexter::multi_staking::QueryMsg as MultiStakingQueryMsg;
 use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
     QueryProposalsRequest, QueryProposalsResponse, QueryProposalRequest, QueryProposalResponse,

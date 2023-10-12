@@ -39,8 +39,40 @@ pub struct RewardScheduleCreationRequest {
 }
 
 #[cw_serde]
+pub enum RewardSchedulesCreationRequestStatus {
+   PendingProposalCreation,
+   NonProposalRewardSchedule,
+   ProposalCreated {
+      proposal_id: u64,
+   },
+   RewardSchedulesCreated {
+      proposal_id: Option<u64>,
+   },
+   RequestFailedAndRefunded {
+      proposal_id: u64,
+      refund_block_height: u64,
+   }
+}
+
+impl RewardSchedulesCreationRequestStatus {
+
+   pub fn proposal_id(&self) -> Option<u64> {
+      match self {
+         RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id } => Some(*proposal_id),
+         RewardSchedulesCreationRequestStatus::RewardSchedulesCreated { proposal_id } => *proposal_id,
+         RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded { proposal_id, .. } => Some(*proposal_id),
+         _ => None,
+      }
+   }
+}
+
+#[cw_serde]
 pub struct RewardScheduleCreationRequestsState {
    pub multistaking_contract_addr: Addr,
+   pub status: RewardSchedulesCreationRequestStatus,
+   pub request_sender: Addr,
+   /// this field is only set if the request is linked to a governance proposal
+   pub total_funds_acquired_from_user: Vec<Asset>,
    pub reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>
 }
 
@@ -76,20 +108,20 @@ pub enum ExecuteMsg {
       reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>,
    },
 
+   ClaimFailedCreatePoolProposalFunds {
+      pool_creation_request_id: u64,
+   },
+
+   ClaimFailedRewardScheduleProposalFunds {
+      reward_schedule_creation_request_id: u64,
+   },
+
    // Gov executable
    ExecuteMsgs {
       msgs: Vec<CosmosMsg>
    },
 
-   PostGovernanceProposalCreationCallback {
-      gov_proposal_type: GovAdminProposalType,
-   },
-
    ResumeCreatePool {
-      pool_creation_request_id: u64,
-   },
-
-   ResumeJoinPool {
       pool_creation_request_id: u64,
    },
 
@@ -97,15 +129,16 @@ pub enum ExecuteMsg {
       reward_schedules_creation_request_id: u64,
    },
 
-   ClaimFailedCreatePoolProposalFunds {
-      pool_creation_request_id: u64,
+   // Self executable
+   PostGovernanceProposalCreationCallback {
+      gov_proposal_type: GovAdminProposalType,
    },
 
-   ClaimFailedRewardScheduleProposalFunds {
-      reward_schedule_creation_request_id: u64,
+   ResumeJoinPool {
+      pool_creation_request_id: u64,
    }
-
 }
+
 
 #[cw_serde]
 #[derive(QueryResponses)]

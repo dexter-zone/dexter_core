@@ -9,7 +9,7 @@ use crate::utils::{query_proposal_min_deposit_amount, query_gov_params};
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128, StdError,
+    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest};
@@ -17,7 +17,6 @@ use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::PoolCreationFee;
 use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
-use persistence_std::types::cosmos::gov;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 
@@ -96,7 +95,7 @@ fn validate_create_pool_request(
     deps: &DepsMut,
     gov_voting_period: u64,
     pool_creation_request: &PoolCreationRequest, 
-) -> Result<(), StdError> {
+) -> Result<(), ContractError> {
 
     // Bootstrapping liquidity owner must be a valid address
     deps.api.addr_validate(&pool_creation_request.bootstrapping_liquidity_owner)?;
@@ -107,7 +106,7 @@ fn validate_create_pool_request(
            AssetInfo::NativeToken { denom } => {
               let native_asset_precision = pool_creation_request.native_asset_precisions.iter().find(|native_asset_precision| native_asset_precision.denom == denom);
               if native_asset_precision.is_none() {
-                 return Err(StdError::generic_err("Native asset precision must be specified for all the native assets in the pool"));
+                 return Err(ContractError::InvalidNativeAssetPrecisionList {});
               }
            },
            _ => {}
@@ -120,7 +119,7 @@ fn validate_create_pool_request(
         // bootstrapping amount must be greater than 0 for all the assets if it is specified
         for asset in bootstrapping_amount {
             if asset.amount.is_zero() {
-               return Err(StdError::generic_err("Bootstrapping amount must be greater than 0 for all the assets if it is specified"));
+               return Err(ContractError::BootstrappingAmountMustBeGreaterThanZero {});
             }
          }
 
@@ -132,7 +131,7 @@ fn validate_create_pool_request(
            .collect::<HashSet<AssetInfo>>();
     
         if asset_info != bootstapping_amount_asset_info {
-           return Err(StdError::generic_err("Bootstrapping amount must include all the assets in the pool"));
+           return Err(ContractError::BootstrappingAmountMissingAssets {});
         }
     }
 
@@ -140,7 +139,11 @@ fn validate_create_pool_request(
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
         for reward_schedule in reward_schedules {
             if reward_schedule.start_block_time < env.block.time.plus_seconds(gov_voting_period).seconds() {
-                return Err(StdError::generic_err("Reward schedules start block time should be a govermance proposal voting period later than the current block time"));
+                return Err(ContractError::InvalidRewardScheduleStartBlockTime {});
+            }
+
+            if reward_schedule.end_block_time <= reward_schedule.start_block_time {
+                return Err(ContractError::InvalidRewardScheduleEndBlockTime {});
             }
         }
     }

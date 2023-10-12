@@ -226,6 +226,7 @@ pub fn create_reward_schedule(
             &ExecuteMsg::CreateRewardSchedule {
                 lp_token: lp_token.clone(),
                 title,
+                actual_creator: Some(proposer.clone()),
                 start_block_time,
                 end_block_time,
             },
@@ -240,6 +241,7 @@ pub fn create_reward_schedule(
                 msg: to_binary(&Cw20HookMsg::CreateRewardSchedule {
                     lp_token: lp_token.clone(),
                     title,
+                    actual_creator: Some(proposer.clone()),
                     start_block_time,
                     end_block_time,
                 })

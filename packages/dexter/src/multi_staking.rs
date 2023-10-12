@@ -251,6 +251,7 @@ pub enum Cw20HookMsg {
     /// The LP Token contract must be in the allowed_lp_tokens list.
     CreateRewardSchedule {
         lp_token: Addr,
+        actual_creator: Option<Addr>,
         title: String,
         start_block_time: u64,
         end_block_time: u64,
@@ -276,6 +277,7 @@ pub enum ExecuteMsg {
     CreateRewardSchedule {
         lp_token: Addr,
         title: String,
+        actual_creator: Option<Addr>,
         start_block_time: u64,
         end_block_time: u64,
     },

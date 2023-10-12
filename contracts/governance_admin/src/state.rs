@@ -1,11 +1,8 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Binary, StdResult, Storage, Uint128, Addr};
+use cosmwasm_std::{StdResult, Storage, Uint128, Addr};
 use cw_storage_plus::{Item, Map};
 use dexter::asset::Asset;
 use dexter::governance_admin::{PoolCreationRequest, RewardScheduleCreationRequestsState};
-use dexter::multi_staking::RewardSchedule;
-// use dexter::governance_admin::PoolCreationRequest;
-use dexter::vault::{FeeInfo, NativeAssetPrecisionInfo};
 
 // ## Description
 // Stores the contract configuration at the given key
