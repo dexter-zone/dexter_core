@@ -10,15 +10,6 @@ use weighted_pool::state::WeightedParams;
 
 mod utils;
 
-#[test]
-fn test_basic_functions() {
-    let governance_params_query = QueryParamsRequest {
-        params_type: String::from("deposit"),
-    };
-
-    println!("{:?}", governance_params_query);
-}
-
 
 #[test]
 fn test_create_pool() {
