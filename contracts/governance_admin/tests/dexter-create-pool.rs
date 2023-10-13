@@ -1,12 +1,12 @@
 use cosmwasm_std::{to_binary, Addr, Coin, Uint128};
 use dexter::{
     asset::{Asset, AssetInfo},
-    governance_admin::{GovernanceProposalDescription, PoolCreationRequest},
+    governance_admin::{GovernanceProposalDescription, PoolCreationRequest, QueryMsg, GovAdminProposalRequestType, RefundResponse},
     multi_staking::{RewardSchedule, RewardScheduleResponse},
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolInfoResponse},
 };
-use persistence_std::types::cosmos::gov::v1::{ProposalStatus, QueryProposalRequest};
-use persistence_test_tube::{Account, Gov, Module, Wasm};
+use persistence_std::types::cosmos::{gov::v1::{ProposalStatus, QueryProposalRequest}, bank::v1beta1::QueryBalanceRequest};
+use persistence_test_tube::{Account, Gov, Module, Wasm, Bank};
 use weighted_pool::state::WeightedParams;
 
 mod utils;
@@ -362,6 +362,75 @@ fn test_create_pool() {
             }
         }
     );
+
+    // query for the refund of the deposit amount
+    let query_refund_msg = QueryMsg::RefundableFunds {
+        request_type: GovAdminProposalRequestType::PoolCreationRequest {
+            request_id: 1,
+        },
+    };
+
+    let refundable_funds: RefundResponse = wasm
+        .query(
+            &gov_admin_test_setup.gov_admin_instance.to_string(),
+            &query_refund_msg,
+        )
+        .unwrap();
+
+    println!("refundable_funds: {:?}", refundable_funds);
+
+    // assert that the refundable funds are equal to the deposit amount
+    assert_eq!(
+        refundable_funds.refund_amount,
+        vec![Asset::new(
+            AssetInfo::native_token("uxprt".to_string()),
+            Uint128::from(10000000u128)
+        )]
+    );
+
+    // Claim the refund
+    let claim_refund_msg = dexter::governance_admin::ExecuteMsg::ClaimRefund {
+        request_type: GovAdminProposalRequestType::PoolCreationRequest {
+            request_id: 1,
+        },
+    };
+
+    let bank = Bank::new(&gov_admin_test_setup.persistence_test_app);
+    
+    // get balance of the user before claiming the refund
+    let user_balance_before_refund = bank
+        .query_balance(&QueryBalanceRequest {
+            address: admin.address().to_string(),
+            denom: "uxprt".to_string(),
+        })
+        .unwrap().balance.unwrap().amount;
+
+
+    let res = wasm
+        .execute(
+            &gov_admin_test_setup.gov_admin_instance.to_string(),
+            &claim_refund_msg,
+            &vec![],
+            &gov_admin_test_setup.accs[0],
+        )
+        .unwrap();
+
+    // gas used log
+    println!("gas used: {}", res.gas_info.gas_used);
+    
+    // events log
+    println!("{}", serde_json_wasm::to_string(&res.events).unwrap());
+
+    // get balance of the user after claiming the refund
+    let user_balance_after_refund =  bank
+        .query_balance(&QueryBalanceRequest {
+            address: admin.address().to_string(),
+            denom: "uxprt".to_string(),
+        })
+        .unwrap().balance.unwrap().amount;
+
+    println!("user_balance_before_refund: {}", user_balance_before_refund);
+    println!("user_balance_after_refund: {}", user_balance_after_refund);
 
     // print
 }

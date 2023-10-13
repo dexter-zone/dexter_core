@@ -393,7 +393,7 @@ pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom: &str) -
     message_info
         .funds
         .iter()
-        .find(|x| x.clone().denom == denom)
+        .find(|x| x.denom == denom)
         .map(|x| x.amount)
         .unwrap_or(Uint128::zero())
 }

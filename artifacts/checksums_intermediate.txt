@@ -4,11 +4,11 @@
 >>>>>>> 1ff8a8d (added gov module access checks)
 =======
 >>>>>>> c249af6 (reward schedule creation functionality)
-48cf8bad852300aefb85edcf7e0535831d00c900a08e6660be5bad15ce2cdbfe  target/wasm32-unknown-unknown/release/dexter_keeper.wasm
-1c439aa92d5721137114f4ac7c3cc673c94b3a173f5a78efcdad9443ed920639  target/wasm32-unknown-unknown/release/dexter_router.wasm
-1d02be97797a6e3b80ad83034e4443018ff4bb4b5dfe0ae961f08e8d64e7eabc  target/wasm32-unknown-unknown/release/lp_token.wasm
-0091a85ab42c71588f608b3d2f1f21a9e152e8a3d6b130fc882b3a41a89aa334  target/wasm32-unknown-unknown/release/stable_pool.wasm
-957103ccc5316deb7ad3f40332fe14e26790621c2fb08c33a653f748dd8acb26  target/wasm32-unknown-unknown/release/weighted_pool.wasm
-e12a7cfb058cc7c2b8abcba562e7cf96799e25b24097141e74e115532eab94a2  target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm
-a5d8fd90105d72461c6e81e1982c9526c5408a2440bf0cb1fc5bac2dd7461a98  target/wasm32-unknown-unknown/release/dexter_multi_staking.wasm
-8376b2a12e4d52115a7eac7dab2f9de781df9cc848deefe385d93c07c4d0277d  target/wasm32-unknown-unknown/release/dexter_vault.wasm
+22492051bbcf14b0e9df9747db00c16b53d21ecf851684aba939f068b5298f34  target/wasm32-unknown-unknown/release/dexter_governance_admin.wasm
+466db08e703b740bd37b6c93db652bfdc9a3679d0f2bbcbb380cfe64e73c01d2  target/wasm32-unknown-unknown/release/dexter_keeper.wasm
+ee926eb90c925f5233acc860fc9a062416e903ac76478f6f3f44674348c23809  target/wasm32-unknown-unknown/release/dexter_multi_staking.wasm
+81c7f54ddac5a104524d2025b6eda2ae684f9938daf9179834e406f0deb0bed7  target/wasm32-unknown-unknown/release/dexter_router.wasm
+9509454121b97ac05b0dd0ed9dd1c49b06ce69c02fa6ef79f31aa78261f93e05  target/wasm32-unknown-unknown/release/dexter_vault.wasm
+e1256eff87ebdb35da3daa9f35a5068c45203965764c4c87745296674dd1f7cc  target/wasm32-unknown-unknown/release/lp_token.wasm
+009372af4896649d78a3719f59d63e2c6607196fbc23deb2a6bff27361974a7f  target/wasm32-unknown-unknown/release/stable_pool.wasm
+3f1f56518397c63ceb2bde4f07229bcc3bf4633f38ce9b6bbc01b4904c1034b6  target/wasm32-unknown-unknown/release/weighted_pool.wasm
