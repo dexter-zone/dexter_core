@@ -4,7 +4,7 @@ use dexter::{
     governance_admin::{GovernanceProposalDescription, PoolCreationRequest},
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolInfoResponse}, multi_staking::{RewardSchedule, RewardScheduleResponse},
 };
-use persistence_std::types::cosmos::gov::v1::{QueryParamsRequest, QueryProposalRequest, ProposalStatus};
+use persistence_std::types::cosmos::gov::v1::{QueryProposalRequest, ProposalStatus};
 use persistence_test_tube::{Account, Module, Wasm, Gov};
 use weighted_pool::state::WeightedParams;
 

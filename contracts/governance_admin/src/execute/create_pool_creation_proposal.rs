@@ -4,7 +4,7 @@ use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME, GOV_MODULE_ADDRESS};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
-use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA, PoolCreateRequesContextData};
+use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA};
 use crate::utils::{query_proposal_min_deposit_amount, query_gov_params};
 
 use const_format::concatcp;
@@ -12,7 +12,7 @@ use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
-use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest, UserDeposit, FundsCategory};
+use dexter::governance_admin::{GovernanceProposalDescription, PoolCreationRequest, UserDeposit, FundsCategory, PoolCreateRequestContextData, PoolCreationRequestStatus};
 use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
 use dexter::querier::query_vault_config;
 use dexter::vault::PoolCreationFee;
@@ -291,8 +291,8 @@ pub fn execute_create_pool_creation_proposal(
     POOL_CREATION_REQUEST_DATA.save(
         deps.storage,
         pool_creation_request_id,
-        &PoolCreateRequesContextData {
-            status: crate::state::PoolCreationRequestStatus::PendingProposalCreation,
+        &PoolCreateRequestContextData {
+            status: PoolCreationRequestStatus::PendingProposalCreation,
             request_sender: info.sender.clone(),
             total_funds_acquired_from_user: total_funds_needed,
             user_deposits_detailed,

@@ -1,14 +1,14 @@
 use crate::contract::{ContractResult, CONTRACT_NAME};
 use crate::error::ContractError;
 
-use crate::state::{REWARD_SCHEDULE_REQUEST_PROPOSAL_ID, POOL_CREATION_REQUEST_DATA, PoolCreationRequestStatus};
+use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
 use crate::utils::query_latest_governance_proposal;
 
 use const_format::concatcp;
 
 use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response, StdError};
 
-use dexter::governance_admin::GovAdminProposalType;
+use dexter::governance_admin::{GovAdminProposalType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus};
 use dexter::helper::EventExt;
 
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
@@ -82,10 +82,16 @@ pub fn execute_post_governance_proposal_creation_callback(
         },
         GovAdminProposalType::RewardSchedulesCreationRequest { request_id } => {
             // store the proposal id in the state
-            REWARD_SCHEDULE_REQUEST_PROPOSAL_ID.save(
+            let mut reward_schedule_request_state = REWARD_SCHEDULE_REQUESTS.load(deps.storage, request_id)?;
+
+            reward_schedule_request_state.status = RewardSchedulesCreationRequestStatus::ProposalCreated {
+                proposal_id: latest_proposal.id.clone()
+            };
+
+            REWARD_SCHEDULE_REQUESTS.save(
                 deps.storage,
                 request_id,
-                &latest_proposal.id,
+                &reward_schedule_request_state,
             )?;
 
             event = event

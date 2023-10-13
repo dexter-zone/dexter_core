@@ -4,5 +4,5 @@ pub mod resume_create_pool;
 pub mod resume_join_pool;
 pub mod create_reward_schedule_proposal;
 pub mod resume_reward_schedule_creation;
-pub mod claim_failed_create_pool_proposal_funds;
+pub mod claim_refunds;
 pub mod claim_failed_reward_schedule_proposal;

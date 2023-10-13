@@ -25,6 +25,48 @@ pub struct PoolCreationRequest {
    pub reward_schedules: Option<Vec<RewardScheduleCreationRequest>>
 }
 
+#[cw_serde]
+#[derive(Copy)]
+pub enum PoolCreationRequestStatus {
+    PendingProposalCreation,
+    ProposalCreated {
+        proposal_id: u64,
+    },
+    PoolCreated {
+        proposal_id: u64,
+        pool_id: Uint128,
+    },
+    RequestFailedAndRefunded {
+        proposal_id: u64,
+        refund_block_height: u64,
+    },
+    RequestSuccessfulAndDepositRefunded {
+        proposal_id: u64,
+        refund_block_height: u64,
+    }
+} 
+
+impl PoolCreationRequestStatus {
+
+    pub fn proposal_id(&self) -> Option<u64> {
+        match self {
+            PoolCreationRequestStatus::ProposalCreated { proposal_id } => Some(*proposal_id),
+            PoolCreationRequestStatus::PoolCreated { proposal_id, .. } => Some(*proposal_id),
+            PoolCreationRequestStatus::RequestFailedAndRefunded { proposal_id, .. } => Some(*proposal_id),
+            _ => None,
+        }
+    }
+}
+
+#[cw_serde]
+pub struct PoolCreateRequestContextData {
+    pub status: PoolCreationRequestStatus,
+    pub request_sender: Addr,
+    pub total_funds_acquired_from_user: Vec<Asset>,
+    pub user_deposits_detailed: Vec<UserDeposit>,
+    pub pool_creation_request: PoolCreationRequest,
+}
+
 
 #[cw_serde]
 pub struct RewardScheduleCreationRequest {
@@ -39,6 +81,7 @@ pub struct RewardScheduleCreationRequest {
 }
 
 #[cw_serde]
+#[derive(Copy)]
 pub enum RewardSchedulesCreationRequestStatus {
    PendingProposalCreation,
    NonProposalRewardSchedule,
@@ -49,6 +92,10 @@ pub enum RewardSchedulesCreationRequestStatus {
       proposal_id: Option<u64>,
    },
    RequestFailedAndRefunded {
+      proposal_id: u64,
+      refund_block_height: u64,
+   },
+   RequestSuccessfulAndDepositRefunded {
       proposal_id: u64,
       refund_block_height: u64,
    }
@@ -109,12 +156,8 @@ pub enum ExecuteMsg {
       reward_schedule_creation_requests: Vec<RewardScheduleCreationRequest>,
    },
 
-   ClaimFailedCreatePoolProposalFunds {
-      pool_creation_request_id: u64,
-   },
-
-   ClaimFailedRewardScheduleProposalFunds {
-      reward_schedule_creation_request_id: u64,
+   ClaimRefund {
+      refund_request: GovAdminProposalType
    },
 
    // Gov executable
@@ -156,22 +199,33 @@ pub struct UserDeposit {
 }
 
 #[cw_serde]
+pub enum RefundReason {
+   ProposalPassedDepositRefund,
+   ProposalRejectedFundRefund,
+   ProposalFailedFundRefund
+}
+
+#[cw_serde]
+pub struct RefundResponse {
+   pub refund_reason: RefundReason,
+   pub refund_receiver : Addr,
+   pub refund_amount: Vec<Asset>,
+   pub detailed_refund_amount: Vec<UserDeposit>,
+}
+
+#[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
 
-   #[returns(PoolCreationRequest)]
+   #[returns(PoolCreateRequestContextData)]
    PoolCreationRequest { pool_creation_request_id: u64 },
    
-   #[returns(Vec<RewardSchedule>)]
+   #[returns(RewardScheduleCreationRequestsState)]
    RewardScheduleRequest { reward_schedule_request_id: u64 },
 
-   #[returns(Uint128)]
-   PoolCreationRequestProposalId { pool_creation_request_id: u64 },
-   
-   #[returns(Uint128)]
-   RewardScheduleRequestProposalId { reward_schedule_request_id: u64 },
-
-   #[returns(Vec<UserDeposit>)]
-   RefundableFunds { pool_creation_request_id: u64 },
+   #[returns(RefundResponse)]
+   RefundableFunds {
+      request_type: GovAdminProposalType
+   },
 
 }

@@ -2,7 +2,7 @@ use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
 
 use crate::error::ContractError;
-use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS, next_reward_schedule_request_id, PoolCreationRequestStatus};
+use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS, next_reward_schedule_request_id};
 
 use const_format::concatcp;
 
@@ -12,7 +12,7 @@ use cosmwasm_std::{
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
 
-use dexter::governance_admin::{RewardScheduleCreationRequest, RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus};
+use dexter::governance_admin::{RewardScheduleCreationRequest, RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, PoolCreationRequestStatus};
 use dexter::helper::EventExt;
 use dexter::querier::query_vault_config;
 use dexter::vault::AutoStakeImpl;
