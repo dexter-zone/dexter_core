@@ -1,11 +1,12 @@
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, StdError};
-use dexter::{helper::build_transfer_token_to_user_msg, governance_admin::RewardSchedulesCreationRequestStatus};
+use dexter::{
+    governance_admin::RewardSchedulesCreationRequestStatus,
+    helper::build_transfer_token_to_user_msg,
+};
 use persistence_std::types::cosmos::gov::v1::ProposalStatus;
 
 use crate::{
-    contract::ContractResult,
-    error::ContractError,
-    state::REWARD_SCHEDULE_REQUESTS,
+    contract::ContractResult, error::ContractError, state::REWARD_SCHEDULE_REQUESTS,
     utils::query_gov_proposal_by_id,
 };
 
@@ -19,13 +20,12 @@ pub fn execute_claim_failed_reward_schedule_proposal_funds(
     let mut reward_schedule_creation_requests_state =
         REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedules_creation_request_id)?;
 
-    let proposal_id =
-        reward_schedule_creation_requests_state
-            .status
-            .proposal_id()
-            .ok_or(ContractError::Std(StdError::generic_err(format!(
-                "Refund claim can only happen for a reward schedule request linked to a proposal id"
-            ))))?;
+    let proposal_id = reward_schedule_creation_requests_state
+        .status
+        .proposal_id()
+        .ok_or(ContractError::Std(StdError::generic_err(format!(
+            "Refund claim can only happen for a reward schedule request linked to a proposal id"
+        ))))?;
 
     // validate that the funds are not claimed back already
     let status = reward_schedule_creation_requests_state.status;
@@ -59,7 +59,9 @@ pub fn execute_claim_failed_reward_schedule_proposal_funds(
     for asset in &reward_schedule_creation_requests_state.total_funds_acquired_from_user {
         let msg = build_transfer_token_to_user_msg(
             asset.info.clone(),
-            reward_schedule_creation_requests_state.request_sender.clone(),
+            reward_schedule_creation_requests_state
+                .request_sender
+                .clone(),
             asset.amount,
         )?;
 
@@ -67,10 +69,11 @@ pub fn execute_claim_failed_reward_schedule_proposal_funds(
     }
 
     // update the context
-    reward_schedule_creation_requests_state.status = RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
-        proposal_id: proposal_id.clone(),
-        refund_block_height: env.block.height,
-    };
+    reward_schedule_creation_requests_state.status =
+        RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
+            proposal_id: proposal_id.clone(),
+            refund_block_height: env.block.height,
+        };
 
     REWARD_SCHEDULE_REQUESTS.save(
         deps.storage,

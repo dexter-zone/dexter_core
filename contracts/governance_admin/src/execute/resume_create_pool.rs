@@ -8,8 +8,8 @@ use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Respo
 
 use dexter::helper::EventExt;
 
-use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 use crate::add_wasm_execute_msg;
+use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
 pub fn execute_resume_create_pool(
     deps: DepsMut,
@@ -21,7 +21,7 @@ pub fn execute_resume_create_pool(
     // get the pool creation request
     let pool_creation_request_data =
         POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?;
-    
+
     let pool_creation_request = pool_creation_request_data.pool_creation_request;
     let mut messages: Vec<CosmosMsg> = vec![];
 

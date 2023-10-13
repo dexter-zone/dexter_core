@@ -1,7 +1,6 @@
 use cosmwasm_std::{StdResult, Storage};
 use cw_storage_plus::{Item, Map};
-use dexter::governance_admin::{RewardScheduleCreationRequestsState, PoolCreateRequestContextData};
-
+use dexter::governance_admin::{PoolCreateRequestContextData, RewardScheduleCreationRequestsState};
 
 /// map of pool creation request id to pool creation request
 pub const POOL_CREATION_REQUEST_DATA: Map<u64, PoolCreateRequestContextData> =
@@ -9,7 +8,6 @@ pub const POOL_CREATION_REQUEST_DATA: Map<u64, PoolCreateRequestContextData> =
 
 pub const REWARD_SCHEDULE_REQUESTS: Map<u64, RewardScheduleCreationRequestsState> =
     Map::new("reward_schedule_requests");
-
 
 /// count of pool creation requests to generate unique ids
 pub const POOL_CREATION_REQUESTS_COUNT: Item<u64> = Item::new("pool_creation_requests_count");

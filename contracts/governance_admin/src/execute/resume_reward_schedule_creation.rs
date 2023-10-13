@@ -1,7 +1,10 @@
 use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response, StdError};
 use dexter::governance_admin::RewardSchedulesCreationRequestStatus;
 
-use crate::{add_wasm_execute_msg, contract::ContractResult, state::REWARD_SCHEDULE_REQUESTS, error::ContractError};
+use crate::{
+    add_wasm_execute_msg, contract::ContractResult, error::ContractError,
+    state::REWARD_SCHEDULE_REQUESTS,
+};
 
 pub fn execute_resume_reward_schedule_creation(
     deps: DepsMut,
@@ -16,20 +19,20 @@ pub fn execute_resume_reward_schedule_creation(
     // mark the request as done
     match reward_schedule_creation_request.status {
         RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule => {
-            reward_schedule_creation_request.status = RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
-                proposal_id: None 
-            };
+            reward_schedule_creation_request.status =
+                RewardSchedulesCreationRequestStatus::RewardSchedulesCreated { proposal_id: None };
         }
         RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id } => {
-            reward_schedule_creation_request.status = RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
-                proposal_id: Some(proposal_id)
-            };
+            reward_schedule_creation_request.status =
+                RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
+                    proposal_id: Some(proposal_id),
+                };
         }
         _ => {
             return Err(ContractError::Std(StdError::generic_err(format!(
                 "invalid reward schedule creation request status"
             ))));
-        },
+        }
     }
 
     REWARD_SCHEDULE_REQUESTS.save(
@@ -47,7 +50,9 @@ pub fn execute_resume_reward_schedule_creation(
                     dexter::multi_staking::Cw20HookMsg::CreateRewardSchedule {
                         lp_token: request.lp_token_addr.unwrap(),
                         title: request.title,
-                        actual_creator: Some(reward_schedule_creation_request.request_sender.clone()),
+                        actual_creator: Some(
+                            reward_schedule_creation_request.request_sender.clone(),
+                        ),
                         start_block_time: request.start_block_time,
                         end_block_time: request.end_block_time,
                     };
@@ -72,7 +77,9 @@ pub fn execute_resume_reward_schedule_creation(
                     dexter::multi_staking::ExecuteMsg::CreateRewardSchedule {
                         lp_token: request.lp_token_addr.unwrap(),
                         title: request.title,
-                        actual_creator: Some(reward_schedule_creation_request.request_sender.clone()),
+                        actual_creator: Some(
+                            reward_schedule_creation_request.request_sender.clone(),
+                        ),
                         start_block_time: request.start_block_time,
                         end_block_time: request.end_block_time,
                     };
@@ -89,7 +96,6 @@ pub fn execute_resume_reward_schedule_creation(
             }
         }
     }
-
 
     let mut response = Response::new();
     response = response.add_messages(msgs);

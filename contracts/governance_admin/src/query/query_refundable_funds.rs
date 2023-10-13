@@ -1,23 +1,31 @@
 use std::collections::HashMap;
 
-use cosmwasm_std::{StdError, DepsMut, Deps};
-use dexter::{governance_admin::{GovAdminProposalType, UserDeposit, PoolCreationRequestStatus, FundsCategory, RewardSchedulesCreationRequestStatus, RefundResponse, RefundReason}, asset::Asset};
+use cosmwasm_std::{Deps, StdError};
+use dexter::{
+    asset::Asset,
+    governance_admin::{
+        FundsCategory, GovAdminProposalRequestType, PoolCreationRequestStatus, RefundReason,
+        RefundResponse, RewardSchedulesCreationRequestStatus,
+    },
+};
 use persistence_std::types::cosmos::gov::v1::ProposalStatus;
 
-use crate::{state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS}, error::ContractError, contract::ContractResult, utils::query_gov_proposal_by_id};
-
-
+use crate::{
+    contract::ContractResult,
+    error::ContractError,
+    state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
+    utils::query_gov_proposal_by_id,
+};
 
 pub fn query_refundable_funds(
     deps: Deps,
-    request_desciption: &GovAdminProposalType
+    request_desciption: &GovAdminProposalRequestType,
 ) -> ContractResult<RefundResponse> {
-    
-    let (proposal_id, refund_receiver, user_total_deposits) =  match request_desciption {
-        GovAdminProposalType::PoolCreationRequest { request_id } => {
+    let (proposal_id, refund_receiver, user_total_deposits) = match request_desciption {
+        GovAdminProposalRequestType::PoolCreationRequest { request_id } => {
             // query pool creation request
-            let mut pool_creation_request_context =
-            POOL_CREATION_REQUEST_DATA.load(deps.storage, *request_id)?;
+            let pool_creation_request_context =
+                POOL_CREATION_REQUEST_DATA.load(deps.storage, *request_id)?;
 
             let proposal_id =
                 pool_creation_request_context
@@ -27,7 +35,7 @@ pub fn query_refundable_funds(
                         "Proposal id not found for pool creation request id {}",
                         request_id
                     ))))?;
-            
+
             // validate that the funds are not claimed back already
             let status = pool_creation_request_context.status;
             if let PoolCreationRequestStatus::RequestFailedAndRefunded {
@@ -40,12 +48,17 @@ pub fn query_refundable_funds(
                 ))));
             }
 
-            (proposal_id, pool_creation_request_context.request_sender, pool_creation_request_context.user_deposits_detailed)
-        },
-        GovAdminProposalType::RewardSchedulesCreationRequest { request_id } => {
+            (
+                proposal_id,
+                pool_creation_request_context.request_sender,
+                pool_creation_request_context.user_deposits_detailed,
+            )
+        }
+        GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             // query reward schedule creation request
 
-            let mut reward_schedule_request_state = REWARD_SCHEDULE_REQUESTS.load(deps.storage, *request_id)?;
+            let reward_schedule_request_state =
+                REWARD_SCHEDULE_REQUESTS.load(deps.storage, *request_id)?;
 
             let proposal_id =
                 reward_schedule_request_state
@@ -69,45 +82,48 @@ pub fn query_refundable_funds(
                 ))));
             }
 
-            (proposal_id, reward_schedule_request_state.request_sender, reward_schedule_request_state.user_deposits_detailed)
+            (
+                proposal_id,
+                reward_schedule_request_state.request_sender,
+                reward_schedule_request_state.user_deposits_detailed,
+            )
         }
     };
 
-     // query the proposal from chain
-     let proposal = query_gov_proposal_by_id(&deps.querier, proposal_id)?;
+    // query the proposal from chain
+    let proposal = query_gov_proposal_by_id(&deps.querier, proposal_id)?;
 
-     // validate that proposal status must be either REJECTED, FAILED
-     let proposal_status = ProposalStatus::try_from(proposal.status).unwrap();
+    // validate that proposal status must be either REJECTED, FAILED
+    let proposal_status = ProposalStatus::try_from(proposal.status).unwrap();
 
-     let (final_refundable_deposits, refund_reason) = match proposal_status {
-         ProposalStatus::Rejected => {
-             // return everything back to the user
-            Ok((user_total_deposits, RefundReason::ProposalRejectedFundRefund))
-         }
-         ProposalStatus::Failed => {
-            Ok((user_total_deposits, RefundReason::ProposalFailedFundRefund))
-         }
+    let (final_refundable_deposits, refund_reason) = match proposal_status {
+        ProposalStatus::Rejected => {
+            // return everything back to the user
+            Ok((
+                user_total_deposits,
+                RefundReason::ProposalRejectedFundRefund,
+            ))
+        }
+        ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFundRefund)),
 
-         ProposalStatus::Passed => {
-             // return only the proposal deposit amount back to the user
-             let mut user_deposits = vec![];
-             for user_deposit in user_total_deposits {
-                 if let FundsCategory::ProposalDeposit = user_deposit.category {
-                     user_deposits.push(user_deposit);
-                 }
-             }
+        ProposalStatus::Passed => {
+            // return only the proposal deposit amount back to the user
+            let mut user_deposits = vec![];
+            for user_deposit in user_total_deposits {
+                if let FundsCategory::ProposalDeposit = user_deposit.category {
+                    user_deposits.push(user_deposit);
+                }
+            }
 
-             Ok((user_deposits, RefundReason::ProposalPassedDepositRefund))
-         }
-         _ => {
-             Err(ContractError::Std(StdError::generic_err(format!(
-                 "Proposal status must be either REJECTED or FAILED or PASSED to be refundable"
-             ))))
-         }
-     }?;
+            Ok((user_deposits, RefundReason::ProposalPassedDepositRefund))
+        }
+        _ => Err(ContractError::Std(StdError::generic_err(format!(
+            "Proposal status must be either REJECTED or FAILED or PASSED to be refundable"
+        )))),
+    }?;
 
-     let mut map_asset_refunds = HashMap::new();
-     for user_deposit in &final_refundable_deposits {
+    let mut map_asset_refunds = HashMap::new();
+    for user_deposit in &final_refundable_deposits {
         let assets = &user_deposit.assets;
         for asset in assets {
             let asset_info = asset.info.clone();

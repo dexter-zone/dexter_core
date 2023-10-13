@@ -2,11 +2,11 @@ pub mod cosmos_msgs;
 
 use std::str::FromStr;
 
-use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128, StdError};
+use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, StdError, Uint128};
 use dexter::multi_staking::QueryMsg as MultiStakingQueryMsg;
 use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
-    QueryProposalsRequest, QueryProposalsResponse, QueryProposalRequest, QueryProposalResponse,
+    QueryProposalRequest, QueryProposalResponse, QueryProposalsRequest, QueryProposalsResponse,
 };
 
 use crate::{contract::ContractResult, error::ContractError};
@@ -76,10 +76,7 @@ pub fn query_gov_proposal_by_id(
     querier: &QuerierWrapper,
     proposal_id: u64,
 ) -> Result<Proposal, ContractError> {
-
-    let q = QueryProposalRequest {
-        proposal_id,
-    };
+    let q = QueryProposalRequest { proposal_id };
 
     let proposal_response: QueryProposalResponse = querier.query(&QueryRequest::Stargate {
         path: String::from("/cosmos.gov.v1.Query/Proposal"),

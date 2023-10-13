@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 
-use crate::asset::{Asset, AssetInfo};
+use crate::asset::{AssetInfo};
 
 /// Maximum number of LP tokens that are allowed by the multi-staking contract at a point in time.
 /// This limit exists to prevent out-of-gas issues during allow and remove LP token operations.

@@ -8,7 +8,9 @@ use const_format::concatcp;
 
 use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response, StdError};
 
-use dexter::governance_admin::{GovAdminProposalType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus};
+use dexter::governance_admin::{
+    GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
+};
 use dexter::helper::EventExt;
 
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
@@ -17,7 +19,7 @@ pub fn execute_post_governance_proposal_creation_callback(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    proposal_type: GovAdminProposalType
+    proposal_type: GovAdminProposalRequestType,
 ) -> ContractResult<Response> {
     // proposal has been successfully created at this point, we can query the governance module and find the proposal id
     // and store it in the state
@@ -31,16 +33,17 @@ pub fn execute_post_governance_proposal_creation_callback(
         MsgExecuteContract::try_from(Binary::from(proposal_content.value.as_slice()))?;
 
     let proposal_msg_bytes = match &proposal_type {
-        GovAdminProposalType::PoolCreationRequest { request_id } => {
+        GovAdminProposalRequestType::PoolCreationRequest { request_id } => {
             let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
-                pool_creation_request_id: request_id.clone()
+                pool_creation_request_id: request_id.clone(),
             };
             to_binary(&resume_create_pool_msg).unwrap()
-        },
-        GovAdminProposalType::RewardSchedulesCreationRequest { request_id } => {
-            let resume_create_reward_schedule_msg = dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
-                reward_schedules_creation_request_id: request_id.clone()
-            };
+        }
+        GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
+            let resume_create_reward_schedule_msg =
+                dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
+                    reward_schedules_creation_request_id: request_id.clone(),
+                };
             to_binary(&resume_create_reward_schedule_msg).unwrap()
         }
     };
@@ -62,14 +65,15 @@ pub fn execute_post_governance_proposal_creation_callback(
     );
 
     match proposal_type {
-        GovAdminProposalType::PoolCreationRequest { request_id } => {
-            let mut pool_creation_request_context = POOL_CREATION_REQUEST_DATA.load(deps.storage, request_id)?;
+        GovAdminProposalRequestType::PoolCreationRequest { request_id } => {
+            let mut pool_creation_request_context =
+                POOL_CREATION_REQUEST_DATA.load(deps.storage, request_id)?;
 
             pool_creation_request_context.status = PoolCreationRequestStatus::ProposalCreated {
-                proposal_id: latest_proposal.id.clone()
+                proposal_id: latest_proposal.id.clone(),
             };
-            
-             // store the proposal id in the state
+
+            // store the proposal id in the state
             POOL_CREATION_REQUEST_DATA.save(
                 deps.storage,
                 request_id,
@@ -77,16 +81,18 @@ pub fn execute_post_governance_proposal_creation_callback(
             )?;
 
             event = event
-                .add_attribute("pool_creation_request_id",request_id.to_string())
-                .add_attribute("proposal_id",latest_proposal.id.to_string());
-        },
-        GovAdminProposalType::RewardSchedulesCreationRequest { request_id } => {
+                .add_attribute("pool_creation_request_id", request_id.to_string())
+                .add_attribute("proposal_id", latest_proposal.id.to_string());
+        }
+        GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             // store the proposal id in the state
-            let mut reward_schedule_request_state = REWARD_SCHEDULE_REQUESTS.load(deps.storage, request_id)?;
+            let mut reward_schedule_request_state =
+                REWARD_SCHEDULE_REQUESTS.load(deps.storage, request_id)?;
 
-            reward_schedule_request_state.status = RewardSchedulesCreationRequestStatus::ProposalCreated {
-                proposal_id: latest_proposal.id.clone()
-            };
+            reward_schedule_request_state.status =
+                RewardSchedulesCreationRequestStatus::ProposalCreated {
+                    proposal_id: latest_proposal.id.clone(),
+                };
 
             REWARD_SCHEDULE_REQUESTS.save(
                 deps.storage,
@@ -95,8 +101,11 @@ pub fn execute_post_governance_proposal_creation_callback(
             )?;
 
             event = event
-                .add_attribute("reward_schedules_creation_request_id",request_id.to_string())
-                .add_attribute("proposal_id",latest_proposal.id.to_string());
+                .add_attribute(
+                    "reward_schedules_creation_request_id",
+                    request_id.to_string(),
+                )
+                .add_attribute("proposal_id", latest_proposal.id.to_string());
         }
     }
 

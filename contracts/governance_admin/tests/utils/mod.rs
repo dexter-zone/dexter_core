@@ -3,18 +3,18 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 
-
-use cosmwasm_std::{Addr, Coin, Uint128, CosmosMsg, WasmMsg, to_binary};
+use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Uint128, WasmMsg};
 use cw20::MinterResponse;
 use dexter::vault::FeeInfo;
 
-use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig,};
+use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
 
 use dexter_governance_admin::contract::GOV_MODULE_ADDRESS;
-use persistence_std::types::cosmos::gov::v1::{MsgSubmitProposal, MsgVote, QueryProposalRequest, VoteOption};
+use persistence_std::types::cosmos::gov::v1::{
+    MsgSubmitProposal, MsgVote, QueryProposalRequest, VoteOption,
+};
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 use persistence_test_tube::{Account, Gov, Module, PersistenceTestApp, SigningAccount, Wasm};
-
 
 #[macro_export]
 macro_rules! uint128_with_precision {
@@ -84,14 +84,23 @@ pub struct GovAdminTestSetup {
 
 impl Display for GovAdminTestSetup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "
+        write!(
+            f,
+            "
             Gov Admin: {}
             Vault: {}
             Keeper: {}
             Multi Staking: {}
             CW20 Token 1: {}
             CW20 Token 2: {}
-        ", self.gov_admin_instance, self.vault_instance, self.keeper_instance, self.multi_staking_instance, self.cw20_token_1, self.cw20_token_2)
+        ",
+            self.gov_admin_instance,
+            self.vault_instance,
+            self.keeper_instance,
+            self.multi_staking_instance,
+            self.cw20_token_1,
+            self.cw20_token_2
+        )
     }
 }
 
@@ -279,10 +288,10 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     };
 
     let msg_update_keeper_in_vault = dexter::governance_admin::ExecuteMsg::ExecuteMsgs {
-        msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute { 
+        msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_instance.clone(),
             msg: to_binary(&vault_update_keeper_msg).unwrap(),
-            funds: vec![]
+            funds: vec![],
         })],
     };
 
@@ -306,7 +315,11 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     };
 
     let gov = Gov::new(&persistence_test_app);
-    let proposal_id = gov.submit_proposal(msg_submit_proposal, user).unwrap().data.proposal_id;
+    let proposal_id = gov
+        .submit_proposal(msg_submit_proposal, user)
+        .unwrap()
+        .data
+        .proposal_id;
 
     // vote as the validator
     let validator_signing_account = persistence_test_app

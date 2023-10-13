@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Binary, CosmosMsg, Uint128, Addr, StdError};
+use cosmwasm_std::{Binary, CosmosMsg, Uint128, Addr};
 
-use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}, multi_staking::RewardSchedule};
+use crate::{vault::{PoolType, NativeAssetPrecisionInfo, FeeInfo}, asset::{AssetInfo, Asset}};
 
 #[cw_serde]
 pub struct InstantiateMsg {}
@@ -132,7 +132,7 @@ pub struct GovernanceProposalDescription {
 }
 
 #[cw_serde]
-pub enum GovAdminProposalType {
+pub enum GovAdminProposalRequestType {
    PoolCreationRequest {
       request_id: u64,
    },
@@ -157,7 +157,7 @@ pub enum ExecuteMsg {
    },
 
    ClaimRefund {
-      refund_request: GovAdminProposalType
+      request_type: GovAdminProposalRequestType
    },
 
    // Gov executable
@@ -175,7 +175,7 @@ pub enum ExecuteMsg {
 
    // Self executable
    PostGovernanceProposalCreationCallback {
-      gov_proposal_type: GovAdminProposalType,
+      gov_proposal_type: GovAdminProposalRequestType,
    },
 
    ResumeJoinPool {
@@ -225,7 +225,7 @@ pub enum QueryMsg {
 
    #[returns(RefundResponse)]
    RefundableFunds {
-      request_type: GovAdminProposalType
+      request_type: GovAdminProposalRequestType
    },
 
 }

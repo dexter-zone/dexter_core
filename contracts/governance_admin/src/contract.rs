@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::execute::claim_refunds::execute_claim_refunds;
-use crate::execute::claim_failed_reward_schedule_proposal::execute_claim_failed_reward_schedule_proposal_funds;
+
 use crate::execute::create_pool_creation_proposal::execute_create_pool_creation_proposal;
 use crate::execute::create_reward_schedule_proposal::execute_create_reward_schedule_creation_proposal;
 use crate::execute::post_proposal_creation_callback::execute_post_governance_proposal_creation_callback;
@@ -14,7 +14,8 @@ use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, to_binary, Uint128,
+    entry_point, to_binary, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError,
+    StdResult,
 };
 use cw2::set_contract_version;
 
@@ -70,7 +71,6 @@ pub fn validate_self_sender(info: &MessageInfo, env: Env) -> StdResult<()> {
     }
 }
 
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -105,41 +105,47 @@ pub fn execute(
             proposal_description,
             pool_creation_request,
         ),
-        ExecuteMsg::PostGovernanceProposalCreationCallback {
-            gov_proposal_type,
-        } => {
+        ExecuteMsg::PostGovernanceProposalCreationCallback { gov_proposal_type } => {
             validate_self_sender(&info, env.clone())?;
-            execute_post_governance_proposal_creation_callback(
-                deps,
-                env,
-                info,
-                gov_proposal_type,
-            )
-        },
+            execute_post_governance_proposal_creation_callback(deps, env, info, gov_proposal_type)
+        }
         ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
-        } => { 
+        } => {
             validate_goverance_module_sender(&info)?;
             execute_resume_create_pool(deps, env, info, pool_creation_request_id)
-        },
+        }
         ExecuteMsg::ResumeJoinPool {
             pool_creation_request_id,
         } => {
             validate_self_sender(&info, env.clone())?;
             execute_resume_join_pool(deps, env, info, pool_creation_request_id)
-        },
+        }
 
-        ExecuteMsg::CreateRewardSchedulesProposal { proposal_description, multistaking_contract_addr, reward_schedule_creation_requests } => {
+        ExecuteMsg::CreateRewardSchedulesProposal {
+            proposal_description,
+            multistaking_contract_addr,
+            reward_schedule_creation_requests,
+        } => {
             let multi_staking_addr = deps.api.addr_validate(&multistaking_contract_addr)?;
-            execute_create_reward_schedule_creation_proposal(deps, env, info, proposal_description, multi_staking_addr, reward_schedule_creation_requests)
-        },
-        ExecuteMsg::ResumeCreateRewardSchedules { reward_schedules_creation_request_id } => {
+            execute_create_reward_schedule_creation_proposal(
+                deps,
+                env,
+                info,
+                proposal_description,
+                multi_staking_addr,
+                reward_schedule_creation_requests,
+            )
+        }
+        ExecuteMsg::ResumeCreateRewardSchedules {
+            reward_schedules_creation_request_id,
+        } => {
             validatate_goverance_module_or_self_sender(&info, env)?;
             execute_resume_reward_schedule_creation(deps, reward_schedules_creation_request_id)
-        },
+        }
 
-        ExecuteMsg::ClaimRefund { refund_request } => {
-            execute_claim_refunds(deps, env, info, refund_request)
+        ExecuteMsg::ClaimRefund { request_type } => {
+            execute_claim_refunds(deps, env, info, request_type)
         }
     }
 }
@@ -147,12 +153,12 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::PoolCreationRequest { pool_creation_request_id } => {
-            to_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?)
-        }
-        QueryMsg::RewardScheduleRequest { reward_schedule_request_id } => {
-            to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?)
-        }
+        QueryMsg::PoolCreationRequest {
+            pool_creation_request_id,
+        } => to_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?),
+        QueryMsg::RewardScheduleRequest {
+            reward_schedule_request_id,
+        } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
         QueryMsg::RefundableFunds { request_type } => {
             let funds = query_refundable_funds(deps, &request_type)
                 .map_err(|e| StdError::generic_err(e.to_string()))?;

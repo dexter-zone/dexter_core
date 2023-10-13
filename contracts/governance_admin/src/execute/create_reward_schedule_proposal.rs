@@ -1,12 +1,12 @@
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response, StdError,
-    Uint128, Coin,
+    to_binary, Addr, Coin, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response,
+    StdError, Uint128,
 };
 use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
-        GovernanceProposalDescription, RewardScheduleCreationRequest,
-        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserDeposit, FundsCategory,
+        FundsCategory, GovernanceProposalDescription, RewardScheduleCreationRequest,
+        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserDeposit,
     },
 };
 use persistence_std::types::{
@@ -17,8 +17,9 @@ use crate::{
     add_wasm_execute_msg,
     contract::{ContractResult, GOV_MODULE_ADDRESS},
     error::ContractError,
+    execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::{query_allowed_lp_tokens, query_proposal_min_deposit_amount}, execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
+    utils::{query_allowed_lp_tokens, query_proposal_min_deposit_amount},
 };
 
 pub fn validate_lp_token_allowed(
@@ -49,7 +50,6 @@ pub fn total_needed_funds(
     requests: &Vec<RewardScheduleCreationRequest>,
     gov_proposal_min_deposit_amount: &Vec<Coin>,
 ) -> ContractResult<(Vec<UserDeposit>, Vec<Asset>)> {
-
     let mut total_funds_map = std::collections::HashMap::new();
     let mut user_deposits_detailed = vec![];
 
@@ -65,7 +65,7 @@ pub fn total_needed_funds(
         proposal_deposit_assets.push(Asset {
             info: asset_info,
             amount: c_amount,
-        });   
+        });
     }
 
     user_deposits_detailed.push(UserDeposit {
@@ -101,7 +101,6 @@ pub fn total_needed_funds(
     Ok((user_deposits_detailed, total_funds))
 }
 
-
 pub fn execute_create_reward_schedule_creation_proposal(
     deps: DepsMut,
     env: Env,
@@ -132,11 +131,17 @@ pub fn execute_create_reward_schedule_creation_proposal(
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?;
 
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
-    let (user_deposits_detailed, total_needed_funds) = total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
-
+    let (user_deposits_detailed, total_needed_funds) =
+        total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
 
     // validatate all the funds are being sent or approved for transfer and transfer them to the contract
-    let mut transfer_msgs = validate_sent_amount_and_transfer_needed_assets(&deps.as_ref(), &env, &info.sender, &total_needed_funds, info.funds)?;
+    let mut transfer_msgs = validate_sent_amount_and_transfer_needed_assets(
+        &deps.as_ref(),
+        &env,
+        &info.sender,
+        &total_needed_funds,
+        info.funds,
+    )?;
     msgs.append(&mut transfer_msgs);
 
     // store the reward schedule creation request
@@ -185,7 +190,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     let callback_msg =
         dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
             gov_proposal_type:
-                dexter::governance_admin::GovAdminProposalType::RewardSchedulesCreationRequest {
+                dexter::governance_admin::GovAdminProposalRequestType::RewardSchedulesCreationRequest {
                     request_id: next_reward_schedules_creation_request_id,
                 },
         };
