@@ -201,8 +201,8 @@ pub struct UserDeposit {
 #[cw_serde]
 pub enum RefundReason {
    ProposalPassedDepositRefund,
-   ProposalRejectedFundRefund,
-   ProposalFailedFundRefund
+   ProposalRejectedFullRefund,
+   ProposalFailedFullRefund
 }
 
 #[cw_serde]

@@ -101,10 +101,10 @@ pub fn query_refundable_funds(
             // return everything back to the user
             Ok((
                 user_total_deposits,
-                RefundReason::ProposalRejectedFundRefund,
+                RefundReason::ProposalRejectedFullRefund,
             ))
         }
-        ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFundRefund)),
+        ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFullRefund)),
 
         ProposalStatus::Passed => {
             // return only the proposal deposit amount back to the user

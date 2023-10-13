@@ -1,4 +1,3 @@
-pub mod claim_failed_reward_schedule_proposal;
 pub mod claim_refunds;
 pub mod create_pool_creation_proposal;
 pub mod create_reward_schedule_proposal;

@@ -58,8 +58,8 @@ pub fn execute_claim_refunds(
                         &pool_creation_request_context,
                     )?;
                 }
-                dexter::governance_admin::RefundReason::ProposalRejectedFundRefund
-                | dexter::governance_admin::RefundReason::ProposalFailedFundRefund => {
+                dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     let mut pool_creation_request_context =
                         POOL_CREATION_REQUEST_DATA.load(deps.storage, *request_id)?;
 
@@ -105,8 +105,8 @@ pub fn execute_claim_refunds(
                         &reward_schedule_request_state,
                     )?;
                 }
-                dexter::governance_admin::RefundReason::ProposalRejectedFundRefund
-                | dexter::governance_admin::RefundReason::ProposalFailedFundRefund => {
+                dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     let mut reward_schedule_request_state =
                         REWARD_SCHEDULE_REQUESTS.load(deps.storage, *request_id)?;
 
