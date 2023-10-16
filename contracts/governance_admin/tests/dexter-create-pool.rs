@@ -1,20 +1,111 @@
 use cosmwasm_std::{to_binary, Addr, Coin, Uint128};
 use dexter::{
     asset::{Asset, AssetInfo},
-    governance_admin::{GovernanceProposalDescription, PoolCreationRequest, QueryMsg, GovAdminProposalRequestType, RefundResponse},
+    governance_admin::{
+        GovAdminProposalRequestType, GovernanceProposalDescription, PoolCreationRequest, QueryMsg,
+        RefundResponse, UserDeposit,
+    },
     multi_staking::{RewardSchedule, RewardScheduleResponse},
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolInfoResponse},
 };
-use persistence_std::types::cosmos::{gov::v1::{ProposalStatus, QueryProposalRequest}, bank::v1beta1::QueryBalanceRequest};
-use persistence_test_tube::{Account, Gov, Module, Wasm, Bank};
+use persistence_std::types::cosmos::{
+    bank::v1beta1::QueryBalanceRequest,
+    gov::v1::{ProposalStatus, QueryProposalRequest, VoteOption},
+};
+use persistence_test_tube::{Account, Bank, Gov, Module, Wasm, PersistenceTestApp, SigningAccount};
 use weighted_pool::state::WeightedParams;
 
 mod utils;
 
+fn vote_on_proposal(
+    gov: &Gov<PersistenceTestApp>,
+    proposal_id: u64,
+    validator_signing_account: &SigningAccount,
+    persistence_test_app: &PersistenceTestApp,
+    vote: VoteOption,
+) {
+
+    // vote on the proposal
+    let vote_msg = persistence_std::types::cosmos::gov::v1::MsgVote {
+        proposal_id,
+        voter: validator_signing_account.address(),
+        option: vote as i32,
+        metadata: "".to_string(),
+    };
+
+    
+    gov.vote(vote_msg, &validator_signing_account).unwrap();
+
+    // make time fast forward for the proposal to pass
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest {
+            proposal_id,
+        })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // find the proposal voting end time and increase chain time to that
+    let proposal_end_time = proposal.voting_end_time.unwrap();
+    let proposal_start_time = proposal.voting_start_time.unwrap();
+
+    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
+    persistence_test_app.increase_time(difference_seconds as u64);
+
+    // query proposal again
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest {
+            proposal_id: proposal_id,
+        })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // assert that the proposal has passed or rejected based on the vote
+    match vote { 
+        VoteOption::Yes => assert_eq!(proposal.status, ProposalStatus::Passed as i32),
+        VoteOption::No => assert_eq!(proposal.status, ProposalStatus::Rejected as i32),
+        _ => panic!("Invalid vote option")
+    }
+}
+
+
+fn create_pool_creation_proposal(
+    wasm: &Wasm<PersistenceTestApp>,
+    gov_admin_test_setup: &utils::GovAdminTestSetup,
+    valid_create_pool_msg: dexter::governance_admin::ExecuteMsg,
+    total_funds_to_send: Vec<Coin>,
+    admin: &SigningAccount,
+) -> u64 {
+
+    let events = wasm
+        .execute(
+            &gov_admin_test_setup.gov_admin_instance.to_string(),
+            &valid_create_pool_msg,
+            &total_funds_to_send,
+            admin,
+        )
+        .unwrap()
+        .events;
+
+    // find the proposal id from events
+    let proposal_id = events
+        .iter()
+        .find(|e| e.ty == "submit_proposal")
+        .unwrap()
+        .attributes
+        .iter()
+        .find(|a| a.key == "proposal_id")
+        .unwrap()
+        .value
+        .clone();
+
+    proposal_id.parse().unwrap()
+}
+
 #[test]
 fn test_create_pool() {
     let gov_admin_test_setup = utils::setup_test_contracts();
-    println!("gov_admin_test_setup: {}", gov_admin_test_setup);
 
     let persistence_test_app = &gov_admin_test_setup.persistence_test_app;
     let wasm = Wasm::new(&gov_admin_test_setup.persistence_test_app);
@@ -247,73 +338,17 @@ fn test_create_pool() {
     let error = result.unwrap_err();
     assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: End block time must be after start block time: execute wasm contract failed");
 
-    // Test Success case
-    let events = wasm
-        .execute(
-            &gov_admin_test_setup.gov_admin_instance.to_string(),
-            &valid_create_pool_msg,
-            &total_funds_to_send,
-            admin,
-        )
-        .unwrap()
-        .events;
+    let proposal_id = create_pool_creation_proposal(
+        &wasm,
+        &gov_admin_test_setup,
+        valid_create_pool_msg.clone(),
+        total_funds_to_send.clone(),
+        admin,
+    );
 
-    // println!("{}", serde_json_wasm::to_string(&events).unwrap());
 
-    // find the proposal id from events
-    let proposal_id = events
-        .iter()
-        .find(|e| e.ty == "submit_proposal")
-        .unwrap()
-        .attributes
-        .iter()
-        .find(|a| a.key == "proposal_id")
-        .unwrap()
-        .value
-        .clone();
-
-    // println!("proposal_id: {}", proposal_id);
-
-    // vote on the proposal
-    let vote_msg = persistence_std::types::cosmos::gov::v1::MsgVote {
-        proposal_id: proposal_id.parse().unwrap(),
-        voter: validator_signing_account.address(),
-        option: persistence_std::types::cosmos::gov::v1::VoteOption::Yes.into(),
-        metadata: "".to_string(),
-    };
-
-    let gov = Gov::new(&gov_admin_test_setup.persistence_test_app);
-    gov.vote(vote_msg, &validator_signing_account).unwrap();
-
-    // make time fast forward for the proposal to pass
-    let proposal = gov
-        .query_proposal(&QueryProposalRequest {
-            proposal_id: proposal_id.parse().unwrap(),
-        })
-        .unwrap()
-        .proposal
-        .unwrap();
-
-    // find the proposal voting end time and increase chain time to that
-    let proposal_end_time = proposal.voting_end_time.unwrap();
-    let proposal_start_time = proposal.voting_start_time.unwrap();
-
-    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
-    persistence_test_app.increase_time(difference_seconds as u64);
-
-    // query proposal again
-    let proposal = gov
-        .query_proposal(&QueryProposalRequest {
-            proposal_id: proposal_id.parse().unwrap(),
-        })
-        .unwrap()
-        .proposal
-        .unwrap();
-
-    // println!("proposal: {:?}", proposal);
-
-    // assert that the proposal has passed
-    assert_eq!(proposal.status, ProposalStatus::Passed as i32);
+    let gov = Gov::new(persistence_test_app);
+    vote_on_proposal(&gov, proposal_id, &validator_signing_account, persistence_test_app, VoteOption::Yes);
 
     // validate that the pool has been created successfully
     // query the vault contract to find the pool id
@@ -329,8 +364,6 @@ fn test_create_pool() {
             &get_pool_by_id_query,
         )
         .unwrap();
-
-    println!("pool_info: {:?}", pool_info);
 
     // validate if reward schedule is created by querying the multistaking contract
     let get_reward_schedules_query = dexter::multi_staking::QueryMsg::RewardSchedules {
@@ -365,9 +398,7 @@ fn test_create_pool() {
 
     // query for the refund of the deposit amount
     let query_refund_msg = QueryMsg::RefundableFunds {
-        request_type: GovAdminProposalRequestType::PoolCreationRequest {
-            request_id: 1,
-        },
+        request_type: GovAdminProposalRequestType::PoolCreationRequest { request_id: 1 },
     };
 
     let refundable_funds: RefundResponse = wasm
@@ -376,8 +407,6 @@ fn test_create_pool() {
             &query_refund_msg,
         )
         .unwrap();
-
-    println!("refundable_funds: {:?}", refundable_funds);
 
     // assert that the refundable funds are equal to the deposit amount
     assert_eq!(
@@ -390,47 +419,175 @@ fn test_create_pool() {
 
     // Claim the refund
     let claim_refund_msg = dexter::governance_admin::ExecuteMsg::ClaimRefund {
-        request_type: GovAdminProposalRequestType::PoolCreationRequest {
-            request_id: 1,
-        },
+        request_type: GovAdminProposalRequestType::PoolCreationRequest { request_id: 1 },
     };
 
     let bank = Bank::new(&gov_admin_test_setup.persistence_test_app);
-    
+
     // get balance of the user before claiming the refund
     let user_balance_before_refund = bank
         .query_balance(&QueryBalanceRequest {
             address: admin.address().to_string(),
             denom: "uxprt".to_string(),
         })
-        .unwrap().balance.unwrap().amount;
+        .unwrap()
+        .balance
+        .unwrap()
+        .amount;
 
-
-    let res = wasm
+    let _ = wasm
         .execute(
             &gov_admin_test_setup.gov_admin_instance.to_string(),
             &claim_refund_msg,
+            &vec![],
+            // anyone can claim the refund for the user but it should go back to the user
+            &validator_signing_account,
+        )
+        .unwrap();
+
+    // get balance of the user after claiming the refund
+    let user_balance_after_refund = bank
+        .query_balance(&QueryBalanceRequest {
+            address: admin.address().to_string(),
+            denom: "uxprt".to_string(),
+        })
+        .unwrap()
+        .balance
+        .unwrap()
+        .amount;
+
+    // assert that the user has received the refund
+    assert_eq!(
+        user_balance_after_refund.parse::<Uint128>().unwrap(),
+        user_balance_before_refund.parse::<Uint128>().unwrap() + Uint128::from(10000000u128)
+    );
+    
+
+    // test failure case. Try to claim the refund again
+    let res = wasm.execute(
+        &gov_admin_test_setup.gov_admin_instance.to_string(),
+        &claim_refund_msg,
+        &vec![],
+        // anyone can claim the refund for the user but it should go back to the user
+        &validator_signing_account,
+    );
+
+    // assert error
+    assert!(res.is_err());
+
+    let error = res.unwrap_err();
+    assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Generic error: Funds are already claimed back for this pool creation request in block 29: execute wasm contract failed");
+
+
+    let current_block_time = persistence_test_app.get_block_time_seconds() as u64;
+    // test failure case. Try to claim the refund for a non-existent pool creation request
+    let modified_create_pool_msg = dexter::governance_admin::ExecuteMsg::CreatePoolCreationProposal {
+        proposal_description: proposal_description.clone(),
+        pool_creation_request: PoolCreationRequest {
+            reward_schedules: Some(vec![dexter::governance_admin::RewardScheduleCreationRequest {
+                lp_token_addr: None,
+                title: "Reward Schedule 1".to_string(),
+                asset: AssetInfo::native_token("uxprt".to_string()),
+                amount: Uint128::from(1000000u128),
+                start_block_time: current_block_time + 3 * 24 * 60 * 60,
+                end_block_time: current_block_time + 10 * 24 * 60 * 60,
+            }]),
+            ..valid_pool_creation_request.clone()
+        },
+    };
+    
+    
+
+     // approve spending of CW20 tokens
+     let approve_msg = cw20_base::msg::ExecuteMsg::IncreaseAllowance {
+        spender: gov_admin_test_setup.gov_admin_instance.to_string(),
+        amount: Uint128::from(1000000u128),
+        expires: None,
+    };
+
+    let _ = wasm
+        .execute(
+            &gov_admin_test_setup.cw20_token_1.to_string(),
+            &approve_msg,
             &vec![],
             &gov_admin_test_setup.accs[0],
         )
         .unwrap();
 
-    // gas used log
-    println!("gas used: {}", res.gas_info.gas_used);
+    // test failure case, create a new pool but reject the proposal
+    let proposal_id = create_pool_creation_proposal(
+        &wasm,
+        &gov_admin_test_setup,
+        modified_create_pool_msg.clone(),
+        total_funds_to_send.clone(),
+        admin,
+    );
+
+    // create a pool using governance admin
+    vote_on_proposal(&gov, proposal_id, &validator_signing_account, persistence_test_app, VoteOption::No);
+
+    // query for the refund of the deposit amount
+    let query_refund_msg = QueryMsg::RefundableFunds {
+        request_type: GovAdminProposalRequestType::PoolCreationRequest { request_id: 2 },
+    };
+
+    let refundable_funds: RefundResponse = wasm
+        .query(
+            &gov_admin_test_setup.gov_admin_instance.to_string(),
+            &query_refund_msg,
+        )
+        .unwrap();
+
+    // verify that the refundable funds are equal to the deposit amount + pool creation fee + reward schedule amount + pool bootstrapping amount
+    assert_eq!(
+        refundable_funds.refund_amount,
+        vec![
+            Asset::new(
+                AssetInfo::token(gov_admin_test_setup.cw20_token_1.clone()),
+                Uint128::from(1000000u128)
+            ),
+            Asset::new(
+                AssetInfo::native_token("uxprt".to_string()),
+                Uint128::from(12000000u128)
+            )
+        ]
+    );
+
+    // verify detailed refund amount
+    assert_eq!(
+        refundable_funds.detailed_refund_amount,
+        vec![
+            UserDeposit {
+                category: dexter::governance_admin::FundsCategory::ProposalDeposit,
+                assets: vec![Asset::new(
+                    AssetInfo::native_token("uxprt".to_string()),
+                    Uint128::from(10000000u128)
+                )]
+            },
+            UserDeposit {
+                category: dexter::governance_admin::FundsCategory::PoolBootstrappingAmount,
+                assets: vec![
+                    Asset::new(
+                        AssetInfo::native_token("uxprt".to_string()),
+                        Uint128::from(1000000u128)
+                    ),
+                    Asset::new(
+                        AssetInfo::token(gov_admin_test_setup.cw20_token_1.clone()),
+                        Uint128::from(1000000u128)
+                    )
+                ]
+            },
+            UserDeposit {
+                category: dexter::governance_admin::FundsCategory::RewardScheduleAmount,
+                assets: vec![Asset::new(
+                    AssetInfo::native_token("uxprt".to_string()),
+                    Uint128::from(1000000u128)
+                )]
+            }
+        ]
+    );
+
+
     
-    // events log
-    println!("{}", serde_json_wasm::to_string(&res.events).unwrap());
 
-    // get balance of the user after claiming the refund
-    let user_balance_after_refund =  bank
-        .query_balance(&QueryBalanceRequest {
-            address: admin.address().to_string(),
-            denom: "uxprt".to_string(),
-        })
-        .unwrap().balance.unwrap().amount;
-
-    println!("user_balance_before_refund: {}", user_balance_before_refund);
-    println!("user_balance_after_refund: {}", user_balance_after_refund);
-
-    // print
 }

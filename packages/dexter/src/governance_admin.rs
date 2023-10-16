@@ -53,6 +53,7 @@ impl PoolCreationRequestStatus {
             PoolCreationRequestStatus::ProposalCreated { proposal_id } => Some(*proposal_id),
             PoolCreationRequestStatus::PoolCreated { proposal_id, .. } => Some(*proposal_id),
             PoolCreationRequestStatus::RequestFailedAndRefunded { proposal_id, .. } => Some(*proposal_id),
+            PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded { proposal_id, .. } => Some(*proposal_id),
             _ => None,
         }
     }

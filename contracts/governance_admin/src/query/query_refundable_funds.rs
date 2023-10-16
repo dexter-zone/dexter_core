@@ -38,14 +38,21 @@ pub fn query_refundable_funds(
 
             // validate that the funds are not claimed back already
             let status = pool_creation_request_context.status;
-            if let PoolCreationRequestStatus::RequestFailedAndRefunded {
-                proposal_id: _,
-                refund_block_height,
-            } = status
-            {
-                return Err(ContractError::Std(StdError::generic_err(format!(
-                    "Funds are already claimed back for this pool creation request in block {refund_block_height}",
-                ))));
+            match status {
+                PoolCreationRequestStatus::RequestFailedAndRefunded {
+                    proposal_id: _,
+                    refund_block_height,
+                } => {
+                    return Err(ContractError::Std(StdError::generic_err(format!(
+                        "Funds are already claimed back for this pool creation request in block {refund_block_height}",
+                    ))));
+                },
+                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded { proposal_id: _, refund_block_height } => {
+                    return Err(ContractError::Std(StdError::generic_err(format!(
+                        "Funds are already claimed back for this pool creation request in block {refund_block_height}",
+                    ))));
+                }
+                _ => (),
             }
 
             (
