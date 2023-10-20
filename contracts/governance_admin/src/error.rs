@@ -48,6 +48,9 @@ pub enum ContractError {
 
     #[error("End block time must be after start block time")]
     InvalidRewardScheduleEndBlockTime {},
+
+    #[error("Must provide at least one reward schedule")]
+    EmptyRewardSchedule {},
 }
 
 impl From<OverflowError> for ContractError {
