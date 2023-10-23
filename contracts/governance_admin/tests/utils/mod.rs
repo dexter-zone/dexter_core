@@ -3,18 +3,19 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 
-use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Uint128, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Event, Uint128, WasmMsg};
 use cw20::MinterResponse;
 use dexter::vault::FeeInfo;
 
 use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
 
 use dexter_governance_admin::contract::GOV_MODULE_ADDRESS;
+use persistence_std::types::cosmos::bank::v1beta1::QueryBalanceRequest;
 use persistence_std::types::cosmos::gov::v1::{
-    MsgSubmitProposal, MsgVote, QueryProposalRequest, VoteOption,
+    MsgSubmitProposal, MsgVote, ProposalStatus, QueryProposalRequest, VoteOption,
 };
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-use persistence_test_tube::{Account, Gov, Module, PersistenceTestApp, SigningAccount, Wasm};
+use persistence_test_tube::{Account, Bank, Gov, Module, PersistenceTestApp, SigningAccount, Wasm};
 
 #[macro_export]
 macro_rules! uint128_with_precision {
@@ -432,4 +433,85 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         multi_staking_instance: Addr::unchecked(multi_staking_instance),
     }
     // persistence_test_app.sed
+}
+
+pub fn vote_on_proposal(
+    gov_admin_test_setup: &GovAdminTestSetup,
+    proposal_id: u64,
+    vote_option: VoteOption,
+) {
+    let validator = gov_admin_test_setup
+        .persistence_test_app
+        .get_first_validator_signing_account()
+        .unwrap();
+
+    // vote on the proposal
+    let vote_msg = persistence_std::types::cosmos::gov::v1::MsgVote {
+        proposal_id: proposal_id.clone(),
+        voter: validator.address(),
+        option: vote_option.into(),
+        metadata: "".to_string(),
+    };
+
+    let gov = Gov::new(&gov_admin_test_setup.persistence_test_app);
+    gov.vote(vote_msg, &validator).unwrap();
+
+    // make time fast forward for the proposal to pass
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest { proposal_id })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // find the proposal voting end time and increase chain time to that
+    let proposal_end_time = proposal.voting_end_time.unwrap();
+    let proposal_start_time = proposal.voting_start_time.unwrap();
+
+    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
+    gov_admin_test_setup
+        .persistence_test_app
+        .increase_time(difference_seconds as u64);
+
+    // query proposal again
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest { proposal_id })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // assert that the proposal has passed or rejected based on the vote
+    match vote_option {
+        VoteOption::Yes => assert_eq!(proposal.status, ProposalStatus::Passed as i32),
+        VoteOption::No => assert_eq!(proposal.status, ProposalStatus::Rejected as i32),
+        _ => panic!("Invalid vote option"),
+    }
+}
+
+pub fn find_event_attr(events: &Vec<Event>, event: &str, attr: &str) -> String {
+    return events
+        .iter()
+        .find(|e| e.ty == event)
+        .unwrap()
+        .attributes
+        .iter()
+        .find(|a| a.key == attr)
+        .unwrap()
+        .value
+        .clone();
+}
+
+pub fn query_balance(
+    gov_admin_test_setup: &GovAdminTestSetup,
+    address: String,
+    denom: String,
+) -> Uint128 {
+    let bank = Bank::new(&gov_admin_test_setup.persistence_test_app);
+    return bank
+        .query_balance(&QueryBalanceRequest { address, denom })
+        .unwrap()
+        .balance
+        .unwrap()
+        .amount
+        .parse()
+        .unwrap();
 }
