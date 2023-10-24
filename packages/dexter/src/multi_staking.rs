@@ -39,7 +39,10 @@ pub enum MigrateMsg {
     /// Adds support for updating keeper address.
     /// Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update.
     /// We can otherwise use V2 message directly for upgrading from v1 to v2.1
-    V2_1 {}
+    V2_1 {},
+    V2_2 {
+        keeper_addr: Addr,
+    }
 }
 
 #[cw_serde]
@@ -101,6 +104,31 @@ pub struct Config {
     pub owner: Addr,
     /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
     pub keeper: Addr,
+    /// LP Token addresses for which reward schedules can be added
+    pub allowed_lp_tokens: Vec<Addr>,
+    /// Unlocking period in seconds
+    /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
+    /// after they have called the unbond function
+    pub unlock_period: u64,
+    /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
+    /// This is to give enough time to review the proposal.
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
+    /// value between 0 and 1000 (0% to 10%) are allowed
+    pub instant_unbond_fee_bp: u64,
+    /// This is the interval period in seconds on which we will have fee tier boundaries.
+    pub fee_tier_interval: u64,
+    /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
+    /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
+    pub instant_unbond_min_fee_bp: u64,
+}
+
+#[cw_serde]
+pub struct ConfigV2_1 {
+    /// owner has privilege to add/remove allowed lp tokens for reward
+    pub owner: Addr,
+    /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
+    pub keeper: Option<Addr>,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
     /// Unlocking period in seconds

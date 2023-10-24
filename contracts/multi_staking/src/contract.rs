@@ -6,7 +6,7 @@ use cosmwasm_std::{
     from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{collections::HashMap, cmp::min};
+use std::{cmp::min, collections::HashMap};
 
 use dexter::{
     asset::AssetInfo,
@@ -14,10 +14,11 @@ use dexter::{
         build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
         propose_new_owner,
     },
+    keeper,
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, ConfigV1, CreatorClaimableRewardState,
-        Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, MigrateMsg, QueryMsg,
-        RewardSchedule, TokenLockInfo, UnclaimedReward,
+        AssetRewardState, AssetStakerInfo, Config, ConfigV1, ConfigV2_1,
+        CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,
+        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward,
     },
 };
 
@@ -27,7 +28,7 @@ use cw_storage_plus::Item;
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP,
 };
 
 use crate::{
@@ -35,8 +36,7 @@ use crate::{
     state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
         CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
-        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS,
-        USER_LP_TOKEN_LOCKS,
+        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS,
     },
 };
 use crate::{
@@ -53,6 +53,7 @@ pub const CONTRACT_NAME: &str = "dexter-multi-staking";
 
 const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V2: &str = "2.0.0";
+const CONTRACT_VERSION_V2_1: &str = "2.1.0";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -290,7 +291,6 @@ fn update_config(
     }
 
     if let Some(unlock_period) = unlock_period {
-
         // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
         if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
             return Err(ContractError::InvalidFeeTierInterval {
@@ -304,7 +304,6 @@ fn update_config(
             config.fee_tier_interval = unlock_period;
             event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
         }
-
 
         config.unlock_period = unlock_period;
         event = event.add_attribute("unlock_period", config.unlock_period.to_string());
@@ -326,9 +325,10 @@ fn update_config(
     }
 
     if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
-
         // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
-        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp {
+        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP
+            || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp
+        {
             return Err(ContractError::InvalidInstantUnbondMinFee {
                 max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
                 received: instant_unbond_min_fee_bp,
@@ -343,7 +343,6 @@ fn update_config(
     }
 
     if let Some(fee_tier_interval) = fee_tier_interval {
-
         // max allowed fee tier interval in equal to the unlock period.
         if fee_tier_interval > config.unlock_period {
             return Err(ContractError::InvalidFeeTierInterval {
@@ -351,7 +350,6 @@ fn update_config(
                 received: fee_tier_interval,
             });
         }
-
 
         config.fee_tier_interval = fee_tier_interval;
         event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
@@ -577,10 +575,7 @@ pub fn create_reward_schedule(
         .may_load(deps.storage, &lp_token)?
         .unwrap_or_default();
 
-    if !lp_global_state
-        .active_reward_assets
-        .contains(&asset.info)
-    {
+    if !lp_global_state.active_reward_assets.contains(&asset.info) {
         lp_global_state
             .active_reward_assets
             .push(asset.info.clone());
@@ -603,10 +598,7 @@ pub fn create_reward_schedule(
     REWARD_SCHEDULES.save(deps.storage, reward_schedule_id, &reward_schedule)?;
 
     let mut reward_schedules_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
-        .may_load(
-            deps.storage,
-            (&lp_token, &asset.info.to_string()),
-        )?
+        .may_load(deps.storage, (&lp_token, &asset.info.to_string()))?
         .unwrap_or_default();
 
     reward_schedules_ids.push(reward_schedule_id);
@@ -671,7 +663,7 @@ pub fn receive_cw20(
             }
 
             let token_addr = info.sender.clone();
-            
+
             let creator = match actual_creator {
                 Some(creator) => deps.api.addr_validate(&creator.to_string())?,
                 None => deps.api.addr_validate(&cw20_msg.sender)?,
@@ -1292,11 +1284,43 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             let contract_version = get_contract_version(deps.storage)?;
             if contract_version.version != CONTRACT_VERSION_V2 {
                 return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION.to_string(),
+                    upgrade_version: "v2.1".to_string(),
+                    expected: CONTRACT_VERSION_V2.to_string(),
                     actual: contract_version.version,
                 });
             }
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        }
+        
+        MigrateMsg::V2_2 { keeper_addr } => {
+            let contract_version = get_contract_version(deps.storage)?;
+            
+            if contract_version.version != CONTRACT_VERSION_V2_1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: "v2.2".to_string(),
+                    expected: CONTRACT_VERSION_V2_1.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+            // load old config in v2.1 struct
+            let config_v2_1: ConfigV2_1 = Item::new("config").load(deps.storage)?;
+            let config_v2_2: Config = Config {
+                keeper: keeper_addr,
+                owner: config_v2_1.owner,
+                allowed_lp_tokens: config_v2_1.allowed_lp_tokens,
+                unlock_period: config_v2_1.unlock_period,
+                minimum_reward_schedule_proposal_start_delay: config_v2_1
+                    .minimum_reward_schedule_proposal_start_delay,
+                instant_unbond_fee_bp: config_v2_1.instant_unbond_fee_bp,
+                fee_tier_interval: config_v2_1.fee_tier_interval,
+                instant_unbond_min_fee_bp: config_v2_1.instant_unbond_min_fee_bp,
+            };
+
+            CONFIG.save(deps.storage, &config_v2_2)?;
         }
     }
 
