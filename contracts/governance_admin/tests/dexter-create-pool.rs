@@ -1,5 +1,4 @@
 use cosmwasm_std::{to_binary, Addr, Coin, Uint128};
-use cw20::Cw20ExecuteMsg;
 use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
@@ -10,7 +9,7 @@ use dexter::{
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolInfoResponse},
 };
 use persistence_std::types::cosmos::gov::v1::VoteOption;
-use persistence_test_tube::{Account, Bank, Module, PersistenceTestApp, SigningAccount, Wasm};
+use persistence_test_tube::{Account, Module, PersistenceTestApp, SigningAccount, Wasm};
 use weighted_pool::state::WeightedParams;
 
 mod utils;
@@ -354,8 +353,6 @@ fn test_create_pool() {
     let claim_refund_msg = dexter::governance_admin::ExecuteMsg::ClaimRefund {
         request_type: GovAdminProposalRequestType::PoolCreationRequest { request_id: 1 },
     };
-
-    let bank = Bank::new(&gov_admin_test_setup.persistence_test_app);
 
     // get balance of the user before claiming the refund
     let user_balance_before_refund = utils::query_balance(

@@ -14,7 +14,6 @@ use dexter::{
         build_transfer_token_to_user_msg, claim_ownership, drop_ownership_proposal,
         propose_new_owner,
     },
-    keeper,
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, ConfigV1, ConfigV2_1,
         CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,

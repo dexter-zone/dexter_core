@@ -313,7 +313,7 @@ fn test_staking() {
         RewardScheduleResponse {
             id: 1,
             reward_schedule: RewardSchedule {
-                title: lp_token_addr.as_str().to_owned() + "-" + admin_addr.as_str(),
+                title: "Reward Schedule for XPRT".to_string(),
                 creator: admin_addr.clone(),
                 asset: AssetInfo::NativeToken {
                     denom: "uxprt".to_string(),

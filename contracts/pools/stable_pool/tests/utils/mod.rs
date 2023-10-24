@@ -262,7 +262,7 @@ pub fn instantiate_contracts_scaling_factor(
             asset_info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
             },
-            scaling_factor: Decimal256::from_ratio(86u128, 100u128),
+            scaling_factor: Decimal256::from_ratio(98u128, 100u128),
         },
     ];
 
