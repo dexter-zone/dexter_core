@@ -38,8 +38,7 @@ fn find_total_funds_needed(
 
     let vault_addr = deps
         .api
-        .addr_validate(&pool_creation_request_proposal.vault_addr)
-        .unwrap();
+        .addr_validate(&pool_creation_request_proposal.vault_addr)?;
 
     // find the pool creation fee by querying the vault contract currently
     let vault_config = query_vault_config(&deps.querier, vault_addr.to_string())?;
@@ -55,6 +54,7 @@ fn find_total_funds_needed(
             .get(&asset_info)
             .cloned()
             .unwrap_or_default();
+
         let c_amount = coin.amount;
         total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
         proposal_deposit_assets.push(Asset {
@@ -238,11 +238,9 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                     sender,
                     &deps
                         .api
-                        .addr_validate(&env.contract.address.to_string())
-                        .unwrap(),
+                        .addr_validate(&env.contract.address.to_string())?,
                     &deps.querier,
-                )
-                .unwrap();
+                )?;
 
                 if asset.amount > spend_limit {
                     return Err(ContractError::InsufficientSpendLimit {
@@ -258,8 +256,7 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                     sender.to_string(),
                     env.contract.address.to_string(),
                     asset.amount,
-                )
-                .unwrap();
+                )?;
 
                 // add the message to the list of messages
                 messages.push(transfer_msg);
@@ -297,7 +294,7 @@ pub fn execute_create_pool_creation_proposal(
     validate_create_pool_request(
         &env,
         &deps,
-        gov_params.voting_period.unwrap().seconds as u64,
+        gov_params.voting_period.ok_or(ContractError::VotingPeriodNull)?.seconds as u64,
         &pool_creation_request,
     )?;
 

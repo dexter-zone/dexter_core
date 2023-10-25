@@ -48,7 +48,7 @@ pub fn execute_resume_reward_schedule_creation(
                 // send a CW20 hook msg to the multistaking contract
                 let msg_create_reward_schedule =
                     dexter::multi_staking::Cw20HookMsg::CreateRewardSchedule {
-                        lp_token: request.lp_token_addr.unwrap(),
+                        lp_token: request.lp_token_addr.ok_or(ContractError::LpTokenNull)?,
                         title: request.title,
                         actual_creator: Some(
                             reward_schedule_creation_request.request_sender.clone(),
@@ -75,7 +75,7 @@ pub fn execute_resume_reward_schedule_creation(
             dexter::asset::AssetInfo::NativeToken { denom } => {
                 let msg_create_reward_schedule =
                     dexter::multi_staking::ExecuteMsg::CreateRewardSchedule {
-                        lp_token: request.lp_token_addr.unwrap(),
+                        lp_token: request.lp_token_addr.ok_or(ContractError::LpTokenNull)?,
                         title: request.title,
                         actual_creator: Some(
                             reward_schedule_creation_request.request_sender.clone(),

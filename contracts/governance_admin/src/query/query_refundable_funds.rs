@@ -107,7 +107,11 @@ pub fn query_refundable_funds(
     let proposal = query_gov_proposal_by_id(&deps.querier, proposal_id)?;
 
     // validate that proposal status must be either REJECTED, FAILED
-    let proposal_status = ProposalStatus::try_from(proposal.status).unwrap();
+    let proposal_status = ProposalStatus::try_from(proposal.status).map_err(|_| {
+        ContractError::CannotDecodeProposalStatus {
+            status: proposal.status,
+        }
+    })?;
 
     let (final_refundable_deposits, refund_reason) = match proposal_status {
         ProposalStatus::Rejected => {

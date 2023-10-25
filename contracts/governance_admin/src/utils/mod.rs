@@ -21,7 +21,7 @@ pub fn query_proposal_min_deposit_amount(deps: Deps) -> Result<Vec<Coin>, Contra
     for coin in proposal_deposit {
         coins.push(Coin {
             denom: coin.denom,
-            amount: Uint128::from_str(&coin.amount).unwrap(),
+            amount: Uint128::from_str(&coin.amount).map_err(|err| ContractError::Std(err))?,
         })
     }
 
@@ -38,12 +38,9 @@ pub fn query_gov_params(querier: &QuerierWrapper) -> Result<GovParams, ContractE
         data: governance_params_query.into(),
     })?;
 
-    // let params_str = format!("Params response: {:?}", params_response);
-    // return Err(ContractError::Std(StdError::generic_err(params_str)));
+    let params = params_response.params.ok_or(ContractError::GovParamsNull)?;
 
-    // let params: QueryParamsResponse = cosmwasm_std::from_binary(&governance_config)?;
-
-    Ok(params_response.params.unwrap())
+    Ok(params)
 }
 
 pub fn query_latest_governance_proposal(
@@ -67,7 +64,7 @@ pub fn query_latest_governance_proposal(
         .proposals
         .iter()
         .max_by(|a, b| a.id.cmp(&b.id))
-        .unwrap();
+        .ok_or(ContractError::NoProposalsFound)?;
 
     Ok(latest_proposal.clone())
 }

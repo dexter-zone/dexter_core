@@ -43,7 +43,7 @@ pub fn execute_resume_join_pool(
         .checked_sub(Uint128::from(1u128))?;
 
     pool_creation_request_context.status = PoolCreationRequestStatus::PoolCreated {
-        proposal_id: pool_creation_request_context.status.proposal_id().unwrap(),
+        proposal_id: pool_creation_request_context.status.proposal_id().ok_or(ContractError::ProposalIdNotFound { pool_creation_request_id } )?,
         pool_id: pool_id.clone(),
     };
 

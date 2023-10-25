@@ -27,7 +27,7 @@ pub fn execute_post_governance_proposal_creation_callback(
 
     // validate the proposal content to make sure that pool creation request id matches.
     // this is more of a sanity check
-    let proposal_content = latest_proposal.messages.first().unwrap();
+    let proposal_content = latest_proposal.messages.first().ok_or(ContractError::LatestProposalNotFound)?;
 
     let execute_contract_proposal_content =
         MsgExecuteContract::try_from(Binary::from(proposal_content.value.as_slice()))?;
@@ -37,14 +37,14 @@ pub fn execute_post_governance_proposal_creation_callback(
             let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
                 pool_creation_request_id: request_id.clone(),
             };
-            to_binary(&resume_create_pool_msg).unwrap()
+            to_binary(&resume_create_pool_msg)?
         }
         GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             let resume_create_reward_schedule_msg =
                 dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
                     reward_schedules_creation_request_id: request_id.clone(),
                 };
-            to_binary(&resume_create_reward_schedule_msg).unwrap()
+            to_binary(&resume_create_reward_schedule_msg)?
         }
     };
 
