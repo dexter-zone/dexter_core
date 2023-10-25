@@ -17,6 +17,12 @@ use crate::{
     utils::query_gov_proposal_by_id,
 };
 
+/// Query refundable funds for a given request type
+/// Refundable funds are the funds that are not claimed back yet from the governance admin contract since it owns the all the deposits
+/// Claim refunds can be done only in the following states:
+/// 1. Proposal is rejected and no refund is done
+/// 2. Proposal is passed but the creation of the pool failed i.e. Proposal failed, and no refund is done
+/// 3. Proposal is passed and creation of the pool was successful but the Governance Proposal deposit is not yet refunded to the user
 pub fn query_refundable_funds(
     deps: Deps,
     request_desciption: &GovAdminProposalRequestType,
