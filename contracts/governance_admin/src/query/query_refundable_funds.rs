@@ -52,8 +52,11 @@ pub fn query_refundable_funds(
                     return Err(ContractError::Std(StdError::generic_err(format!(
                         "Funds are already claimed back for this pool creation request in block {refund_block_height}",
                     ))));
-                },
-                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded { proposal_id: _, refund_block_height } => {
+                }
+                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
+                    proposal_id: _,
+                    refund_block_height,
+                } => {
                     return Err(ContractError::Std(StdError::generic_err(format!(
                         "Funds are already claimed back for this pool creation request in block {refund_block_height}",
                     ))));
@@ -114,15 +117,11 @@ pub fn query_refundable_funds(
     })?;
 
     let (final_refundable_deposits, refund_reason) = match proposal_status {
-        ProposalStatus::Rejected => {
-            // return everything back to the user
-            Ok((
-                user_total_deposits,
-                RefundReason::ProposalRejectedFullRefund,
-            ))
-        }
+        ProposalStatus::Rejected => Ok((
+            user_total_deposits,
+            RefundReason::ProposalRejectedFullRefund,
+        )),
         ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFullRefund)),
-
         ProposalStatus::Passed => {
             // return only the proposal deposit amount back to the user
             let mut user_deposits = vec![];
