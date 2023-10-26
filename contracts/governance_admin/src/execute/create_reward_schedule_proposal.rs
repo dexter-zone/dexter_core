@@ -159,7 +159,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     // TODO(ajeet): should validate multistaking_contract address?
     
     let gov_params = query_gov_params(&deps.querier)?;
-    let gov_voting_period = gov_params.voting_period.unwrap().seconds as u64;
+    let gov_voting_period = gov_params.voting_period.ok_or(ContractError::VotingPeriodNull)?.seconds as u64;
 
     let lp_tokens = validate_create_reward_schedules_request(
         &env,

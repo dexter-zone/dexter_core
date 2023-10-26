@@ -23,10 +23,10 @@ use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 
-// Sums up the requirements in terms of pool creation fee, pool bootstrapping amount and reward schedule
-// amounts and returns it
-// This can later be used to validate if the user has sent enough funds to create the pool and
-// transfer Cw20 token to this contract for further processing
+/// Sums up the requirements in terms of pool creation fee, pool bootstrapping amount and reward schedule
+/// amounts and returns it
+/// This can later be used to validate if the user has sent enough funds to create the pool and
+/// transfer Cw20 token to this contract for further processing
 fn find_total_funds_needed(
     deps: Deps,
     gov_proposal_min_deposit_amount: &Vec<Coin>,
@@ -38,8 +38,7 @@ fn find_total_funds_needed(
 
     let vault_addr = deps
         .api
-        .addr_validate(&pool_creation_request_proposal.vault_addr)
-        .unwrap();
+        .addr_validate(&pool_creation_request_proposal.vault_addr)?;
 
     // find the pool creation fee by querying the vault contract currently
     let vault_config = query_vault_config(&deps.querier, vault_addr.to_string())?;
@@ -55,6 +54,7 @@ fn find_total_funds_needed(
             .get(&asset_info)
             .cloned()
             .unwrap_or_default();
+
         let c_amount = coin.amount;
         total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
         proposal_deposit_assets.push(Asset {
@@ -125,6 +125,11 @@ fn find_total_funds_needed(
     Ok((user_deposits_detailed, total_funds))
 }
 
+/// Validates a create pool request, particularly the following checks
+/// 1. Bootstrapping liquidity owner must be a valid address
+/// 2. Native asset precision must be specified for all the native assets in the pool
+/// 3. Bootstrapping amount if set, must include all the assets in the pool
+/// 4. Reward schedules start block time should be a govermance proposal voting period later than the current block time
 fn validate_create_pool_request(
     env: &Env,
     deps: &DepsMut,
@@ -233,11 +238,9 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                     sender,
                     &deps
                         .api
-                        .addr_validate(&env.contract.address.to_string())
-                        .unwrap(),
+                        .addr_validate(&env.contract.address.to_string())?,
                     &deps.querier,
-                )
-                .unwrap();
+                )?;
 
                 if asset.amount > spend_limit {
                     return Err(ContractError::InsufficientSpendLimit {
@@ -253,8 +256,7 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                     sender.to_string(),
                     env.contract.address.to_string(),
                     asset.amount,
-                )
-                .unwrap();
+                )?;
 
                 // add the message to the list of messages
                 messages.push(transfer_msg);
@@ -265,6 +267,19 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
     Ok(messages)
 }
 
+/// Creates a proposal to create a pool
+/// The proposal is created by the governance admin contract on behalf of the user to enable easy accounting of funds for pool creation
+/// Pool creation follows the following steps:
+/// 1. User calls this contract with a pool creation request and required funds and(or) approval to spend funds in case of CW20 tokens
+/// 2. This contract verifies the funds, and transfers the funds to this contract in case of CW20 tokens. The custody of the funds is transferred to the governance admin contract.
+/// 3. This contract stores the pool creation request in its state.
+/// 3. Then, this contract creates a proposal to resume the pool creation process, which returns a callback to itself with the pool creation request id.
+/// 4. If the proposal is passed, governance module of the chain will call the callback with the pool creation request id.
+/// 5. This contract will then resume the pool creation process and create the pool in the vault contract.
+/// 6. If specified, it will also bootstrap the pool with the bootstrapping amount.
+/// 7. If specified, it will also create the reward schedules for the pool in the multi-staking contract.
+/// 8. If the pool creation fails or if the proposal is rejected, the user can request all the funds back by executing the `ClaimRefund` message.
+/// 9. If the pool creation is successful, the user can request Proposal Deposit amount by the same `ClaimRefund` message.
 pub fn execute_create_pool_creation_proposal(
     deps: DepsMut,
     env: Env,
@@ -279,7 +294,7 @@ pub fn execute_create_pool_creation_proposal(
     validate_create_pool_request(
         &env,
         &deps,
-        gov_params.voting_period.unwrap().seconds as u64,
+        gov_params.voting_period.ok_or(ContractError::VotingPeriodNull)?.seconds as u64,
         &pool_creation_request,
     )?;
 
@@ -344,9 +359,9 @@ pub fn execute_create_pool_creation_proposal(
         value: proposal_msg.into(),
     });
 
-    // // add a message to return callback to the contract post proposal creation so we can find the
-    // // proposal id of the proposal we just created. This can be just found by querying the latest proposal id
-    // // and doing a verification on the proposal content
+    // add a message to return callback to the contract post proposal creation so we can find the
+    // proposal id of the proposal we just created. This can be just found by querying the latest proposal id
+    // and doing a verification on the proposal content
     let callback_msg =
         dexter::governance_admin::ExecuteMsg::PostGovernanceProposalCreationCallback {
             gov_proposal_type:

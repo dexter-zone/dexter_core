@@ -12,6 +12,13 @@ use crate::{
     state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
 };
 
+/// Claim refunds for the given request type
+/// Any address can submit this request but the final claim will go back to the user who submitted the request initially
+/// This is to allow bots to claim the refunds on behalf of the user
+/// Claim refunds can be done only if the proposal is in the following states:
+/// 1. Proposal is rejected and no refund is done
+/// 2. Proposal is passed but the creation of the pool failed i.e. Proposal failed, and no refund is done
+/// 3. Proposal is passed and creation of the pool was successful but the Governance Proposal deposit is not yet refunded to the user
 pub fn execute_claim_refunds(
     deps: DepsMut,
     env: Env,

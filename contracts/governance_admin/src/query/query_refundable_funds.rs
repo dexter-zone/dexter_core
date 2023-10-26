@@ -17,6 +17,12 @@ use crate::{
     utils::query_gov_proposal_by_id,
 };
 
+/// Query refundable funds for a given request type
+/// Refundable funds are the funds that are not claimed back yet from the governance admin contract since it owns the all the deposits
+/// Claim refunds can be done only in the following states:
+/// 1. Proposal is rejected and no refund is done
+/// 2. Proposal is passed but the creation of the pool failed i.e. Proposal failed, and no refund is done
+/// 3. Proposal is passed and creation of the pool was successful but the Governance Proposal deposit is not yet refunded to the user
 pub fn query_refundable_funds(
     deps: Deps,
     request_desciption: &GovAdminProposalRequestType,
@@ -46,8 +52,11 @@ pub fn query_refundable_funds(
                     return Err(ContractError::Std(StdError::generic_err(format!(
                         "Funds are already claimed back for this pool creation request in block {refund_block_height}",
                     ))));
-                },
-                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded { proposal_id: _, refund_block_height } => {
+                }
+                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
+                    proposal_id: _,
+                    refund_block_height,
+                } => {
                     return Err(ContractError::Std(StdError::generic_err(format!(
                         "Funds are already claimed back for this pool creation request in block {refund_block_height}",
                     ))));
@@ -101,18 +110,18 @@ pub fn query_refundable_funds(
     let proposal = query_gov_proposal_by_id(&deps.querier, proposal_id)?;
 
     // validate that proposal status must be either REJECTED, FAILED
-    let proposal_status = ProposalStatus::try_from(proposal.status).unwrap();
+    let proposal_status = ProposalStatus::try_from(proposal.status).map_err(|_| {
+        ContractError::CannotDecodeProposalStatus {
+            status: proposal.status,
+        }
+    })?;
 
     let (final_refundable_deposits, refund_reason) = match proposal_status {
-        ProposalStatus::Rejected => {
-            // return everything back to the user
-            Ok((
-                user_total_deposits,
-                RefundReason::ProposalRejectedFullRefund,
-            ))
-        }
+        ProposalStatus::Rejected => Ok((
+            user_total_deposits,
+            RefundReason::ProposalRejectedFullRefund,
+        )),
         ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFullRefund)),
-
         ProposalStatus::Passed => {
             // return only the proposal deposit amount back to the user
             let mut user_deposits = vec![];

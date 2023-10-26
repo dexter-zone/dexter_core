@@ -432,7 +432,7 @@ impl<'a> RewardScheduleTestSuite<'a> {
             bal_before_refund + Uint128::from(10000000u128)
         );
 
-        // check request status is RewardSchedulesCreated
+        // check request status is RequestSuccessfulAndDepositRefunded
         assert_eq!(
             self.query_request_status(reward_schedule_request_id),
             RewardSchedulesCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
