@@ -278,7 +278,7 @@ pub fn instantiate_contracts_scaling_factor(
         asset_infos,
         native_asset_precisions,
         scaling_factors,
-        50,
+        100,
     );
 
     return (vault_addr, pool_addr, lp_token, current_block_time);
