@@ -156,6 +156,9 @@ pub fn execute_create_reward_schedule_creation_proposal(
 ) -> ContractResult<Response> {
     let mut msgs: Vec<CosmosMsg> = vec![];
 
+    // validate multistaking_contract address
+    deps.api.addr_validate(&multistaking_contract.to_string())?;
+
     // TODO(ajeet): should validate multistaking_contract address?
     
     let gov_params = query_gov_params(&deps.querier)?;
@@ -187,17 +190,19 @@ pub fn execute_create_reward_schedule_creation_proposal(
     // store the reward schedule creation request
     let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
 
+    let reward_schedule_creation_request = RewardScheduleCreationRequestsState {
+        status: RewardSchedulesCreationRequestStatus::PendingProposalCreation,
+        request_sender: info.sender.clone(),
+        multistaking_contract_addr: multistaking_contract,
+        reward_schedule_creation_requests: reward_schedules.clone(),
+        user_deposits_detailed,
+        total_funds_acquired_from_user: total_needed_funds,
+    };
+
     REWARD_SCHEDULE_REQUESTS.save(
         deps.storage,
         next_reward_schedules_creation_request_id,
-        &RewardScheduleCreationRequestsState {
-            status: RewardSchedulesCreationRequestStatus::PendingProposalCreation,
-            request_sender: info.sender.clone(),
-            multistaking_contract_addr: multistaking_contract,
-            reward_schedule_creation_requests: reward_schedules.clone(),
-            user_deposits_detailed,
-            total_funds_acquired_from_user: total_needed_funds,
-        },
+        &reward_schedule_creation_request,
     )?;
 
     // create a proposal for approving the reward schedule creation

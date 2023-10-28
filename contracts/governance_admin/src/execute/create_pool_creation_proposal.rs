@@ -140,6 +140,9 @@ fn validate_create_pool_request(
     deps.api
         .addr_validate(&pool_creation_request.bootstrapping_liquidity_owner)?;
 
+    // validate vault address
+    deps.api.addr_validate(&pool_creation_request.vault_addr)?;
+
     // native asset precision must be specified for all the native assets in the pool
     for asset in pool_creation_request.asset_info.clone() {
         match asset {

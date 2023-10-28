@@ -128,9 +128,10 @@ pub fn execute_resume_join_pool(
 
     // create a reward schedule creation request if there are any reward schedules
     // store the reward schedule creation request
-    let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
-
+    
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
+        
+        let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
         let mut updated_reward_schedules = vec![];
 
         for reward_schedule in reward_schedules {
