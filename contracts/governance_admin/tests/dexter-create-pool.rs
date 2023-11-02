@@ -3,7 +3,7 @@ use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
         GovAdminProposalRequestType, GovernanceProposalDescription, PoolCreationRequest, QueryMsg,
-        RefundResponse, UserDeposit,
+        RefundResponse, UserDeposit, UserTotalDeposit,
     },
     multi_staking::{RewardSchedule, RewardScheduleResponse},
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolInfoResponse},
@@ -149,6 +149,10 @@ impl<'a> CreatePoolTestSuite<'a> {
     }
 
     fn run_all(&self) {
+
+        println!("Test pool creation funds query");
+        self.test_pool_creation_funds_query();
+
         println!("Running failure case: Create Pool with incorrect bootstrapping amount");
         self.test_failure_create_pool_with_incorrect_bootstrapping_amount();
 
@@ -172,6 +176,30 @@ impl<'a> CreatePoolTestSuite<'a> {
 
         println!("Running success case: Refund amount post rejected proposal");
         self.test_refund_for_rejected_proposal();
+    }
+
+    fn test_pool_creation_funds_query(&self) {
+        let wasm = Wasm::new(self.persistence);
+
+        let query_funds_msg = QueryMsg::FundsForPoolCreation {
+            request: self.valid_request.clone(),
+        };
+
+        let funds_for_pool_creation: UserTotalDeposit = wasm
+            .query(
+                &self.test_setup.gov_admin_instance.to_string(),
+                &query_funds_msg,
+            )
+            .unwrap();
+
+        // assert that the funds are equal to the deposit amount
+        assert_eq!(
+            funds_for_pool_creation.total_deposit,
+            vec![Asset::new(
+                AssetInfo::native_token("uxprt".to_string()),
+                Uint128::from(10000000u128)
+            )]
+        );
     }
 
     fn test_failure_create_pool_with_incorrect_bootstrapping_amount(&self) {

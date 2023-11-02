@@ -8,11 +8,14 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Invalid native asset precision list provided. It should only and exactly contain all native assets of the pool")]
-    InvalidNativeAssetPrecisionList,
+    #[error("{0}")]
+    Bug(String),
 
     #[error("Unauthorized")]
     Unauthorized,
+    
+    #[error("Invalid native asset precision list provided. It should only and exactly contain all native assets of the pool")]
+    InvalidNativeAssetPrecisionList,
 
     #[error("DEX Token contract already set")]
     DexTokenAlreadySet,
@@ -37,8 +40,8 @@ pub enum ContractError {
         needed_approval_for_spend: Uint128,
     },
 
-    #[error("Bootstrapping amount must include all the assets in the pool")]
-    BootstrappingAmountMissingAssets,
+    #[error("Bootstrapping amount must exactly include all the assets in the pool")]
+    BootstrappingAmountMismatchAssets,
 
     #[error("Bootstrapping amount must be greater than zero")]
     BootstrappingAmountMustBeGreaterThanZero,
@@ -72,6 +75,9 @@ pub enum ContractError {
 
     #[error("Proposal id not found for pool creation request id {pool_creation_request_id}")]
     ProposalIdNotFound { pool_creation_request_id: u64 },
+
+    #[error("Auto stake implementation is expected to be multi-staking")]
+    InvalidAutoStakeImpl,
 }
 
 impl From<OverflowError> for ContractError {

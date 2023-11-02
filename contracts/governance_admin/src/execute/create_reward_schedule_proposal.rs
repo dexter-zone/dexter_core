@@ -19,11 +19,11 @@ use persistence_std::types::{
 
 use crate::{
     add_wasm_execute_msg,
-    contract::{ContractResult, GOV_MODULE_ADDRESS, CONTRACT_NAME},
+    contract::{ContractResult, CONTRACT_NAME},
     error::ContractError,
     execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::{query_allowed_lp_tokens, query_proposal_min_deposit_amount, query_gov_params},
+    utils::{queries::{query_allowed_lp_tokens, query_proposal_min_deposit_amount, query_gov_params}, constants::GOV_MODULE_ADDRESS},
 };
 
 pub fn validate_create_reward_schedules_request(
@@ -155,10 +155,6 @@ pub fn execute_create_reward_schedule_creation_proposal(
     reward_schedules: Vec<RewardScheduleCreationRequest>,
 ) -> ContractResult<Response> {
     let mut msgs: Vec<CosmosMsg> = vec![];
-
-    // validate multistaking_contract address
-    deps.api.addr_validate(&multistaking_contract.to_string())?;
-
     // TODO(ajeet): should validate multistaking_contract address?
     
     let gov_params = query_gov_params(&deps.querier)?;

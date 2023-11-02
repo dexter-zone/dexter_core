@@ -12,7 +12,8 @@ use dexter::{
         PoolInfoResponse, QueryMsg as VaultQueryMsg,
     },
 };
-use dexter_governance_admin::contract::GOV_MODULE_ADDRESS;
+
+use dexter_governance_admin::utils::constants::GOV_MODULE_ADDRESS;
 use persistence_std::types::{
     cosmos::gov::v1::{MsgSubmitProposal, VoteOption},
     cosmwasm::wasm::v1::{MsgExecuteContract, MsgExecuteContractResponse},

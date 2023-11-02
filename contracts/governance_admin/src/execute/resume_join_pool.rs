@@ -9,7 +9,7 @@ use crate::state::{
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, StdError, Uint128,
+    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
@@ -42,6 +42,25 @@ pub fn execute_resume_join_pool(
         .next_pool_id
         .checked_sub(Uint128::from(1u128))?;
 
+    let get_pool_details = dexter::vault::QueryMsg::GetPoolById { pool_id };
+
+    let pool_info_response: dexter::vault::PoolInfoResponse = deps.querier.query_wasm_smart(
+        pool_creation_request.vault_addr.to_string(),
+        &get_pool_details,
+    )?;
+
+    // sanity check: the pool info should match the pool creation request
+    let pool_assets = pool_info_response.assets.iter().map(|asset| asset.info.clone()).collect::<Vec<AssetInfo>>();
+
+    let mut pool_creation_request_assets = pool_creation_request.asset_info.clone();
+    pool_creation_request_assets.sort();
+
+    if pool_assets != pool_creation_request_assets {
+        return Err(ContractError::Bug(format!(
+            "Sanity check failed. Pool assets post creation do not match pool creation request assets"
+        )));
+    }
+
     pool_creation_request_context.status = PoolCreationRequestStatus::PoolCreated {
         proposal_id: pool_creation_request_context.status.proposal_id().ok_or(ContractError::ProposalIdNotFound { pool_creation_request_id } )?,
         pool_id: pool_id.clone(),
@@ -53,20 +72,11 @@ pub fn execute_resume_join_pool(
         &pool_creation_request_context,
     )?;
 
-    let get_pool_details = dexter::vault::QueryMsg::GetPoolById { pool_id };
-
-    let pool_info_response: dexter::vault::PoolInfoResponse = deps.querier.query_wasm_smart(
-        pool_creation_request.vault_addr.to_string(),
-        &get_pool_details,
-    )?;
-
     let multistaking_address =
         if let AutoStakeImpl::Multistaking { contract_addr } = vault_config.auto_stake_impl {
             contract_addr
         } else {
-            return Err(ContractError::Std(StdError::generic_err(format!(
-                "Auto stake implementation is not multistaking"
-            ))));
+            return Err(ContractError::InvalidAutoStakeImpl);
         };
 
     let lp_token = pool_info_response.lp_token_addr;

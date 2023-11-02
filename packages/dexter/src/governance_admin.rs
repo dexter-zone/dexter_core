@@ -172,6 +172,12 @@ pub struct RefundResponse {
 }
 
 #[cw_serde]
+pub struct UserTotalDeposit {
+    pub total_deposit: Vec<Asset>,
+    pub deposit_breakdown: Vec<UserDeposit>
+}
+
+#[cw_serde]
 pub struct InstantiateMsg {}
 
 #[cw_serde]
@@ -261,6 +267,9 @@ pub enum QueryMsg {
     /// Returns the state of the reward schedule creation request
     #[returns(RewardScheduleCreationRequestsState)]
     RewardScheduleRequest { reward_schedule_request_id: u64 },
+
+    #[returns(UserTotalDeposit)]
+    FundsForPoolCreation { request: PoolCreationRequest },
 
     /// Returns the refundable funds for the user.
     /// It provides total refund and also a breakdown of the refundable funds so that the user can understand the reason for the refund

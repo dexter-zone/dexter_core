@@ -2,7 +2,8 @@ use crate::contract::{ContractResult, CONTRACT_NAME};
 use crate::error::ContractError;
 
 use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
-use crate::utils::query_latest_governance_proposal;
+use crate::utils::queries::query_latest_governance_proposal;
+
 
 use const_format::concatcp;
 

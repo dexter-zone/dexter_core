@@ -14,7 +14,7 @@ use crate::{
     contract::ContractResult,
     error::ContractError,
     state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
-    utils::query_gov_proposal_by_id,
+    utils::queries::query_gov_proposal_by_id,
 };
 
 /// Query refundable funds for a given request type

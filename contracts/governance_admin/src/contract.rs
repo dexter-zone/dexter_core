@@ -8,8 +8,10 @@ use crate::execute::post_proposal_creation_callback::execute_post_governance_pro
 use crate::execute::resume_create_pool::execute_resume_create_pool;
 use crate::execute::resume_join_pool::execute_resume_join_pool;
 use crate::execute::resume_reward_schedule_creation::execute_resume_reward_schedule_creation;
+use crate::query::query_pool_creation_funds::query_funds_for_pool_creation_request;
 use crate::query::query_refundable_funds::query_refundable_funds;
 use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
+use crate::utils::validate_sender::{validate_goverance_module_sender, validate_self_sender, validatate_goverance_module_or_self_sender};
 
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
@@ -26,9 +28,6 @@ use dexter::helper::EventExt;
 pub const CONTRACT_NAME: &str = "dexter-governance-admin";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// this address is derived using: https://gist.github.com/xlab/490d0e7937a8ccdbf805acb00f5dd9a1
-pub const GOV_MODULE_ADDRESS: &str = "persistence10d07y265gmmuvt4z0w9aw880jnsr700j5w4kch";
 
 pub type ContractResult<T> = Result<T, ContractError>;
 
@@ -47,30 +46,6 @@ pub fn instantiate(
     )))
 }
 
-pub fn validate_goverance_module_sender(info: &MessageInfo) -> StdResult<()> {
-    if info.sender != GOV_MODULE_ADDRESS {
-        return Err(StdError::generic_err("unauthorized"));
-    } else {
-        return Ok(());
-    }
-}
-
-pub fn validatate_goverance_module_or_self_sender(info: &MessageInfo, env: Env) -> StdResult<()> {
-    if info.sender != GOV_MODULE_ADDRESS && info.sender != env.contract.address {
-        return Err(StdError::generic_err("unauthorized"));
-    } else {
-        return Ok(());
-    }
-}
-
-pub fn validate_self_sender(info: &MessageInfo, env: Env) -> StdResult<()> {
-    if info.sender != env.contract.address {
-        return Err(StdError::generic_err("unauthorized"));
-    } else {
-        return Ok(());
-    }
-}
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -83,7 +58,6 @@ pub fn execute(
             // validatate that the governance module is sending the message
             validate_goverance_module_sender(&info)?;
 
-            // validate that all funds were sent along with the message. Ideally this contract should not hold any funds.
             let mut res = Response::new();
             let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::execute_msgs"), &info);
             // log if this part of a transaction or not
@@ -159,6 +133,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RewardScheduleRequest {
             reward_schedule_request_id,
         } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
+        QueryMsg::FundsForPoolCreation { 
+            request 
+        } => {
+            let user_total_deposit = query_funds_for_pool_creation_request(
+                deps,
+                &request
+            ).map_err(|e| StdError::generic_err(e.to_string()))?;
+            to_binary(&user_total_deposit)
+        }
         QueryMsg::RefundableFunds { request_type } => {
             let funds = query_refundable_funds(deps, &request_type)
                 .map_err(|e| StdError::generic_err(e.to_string()))?;

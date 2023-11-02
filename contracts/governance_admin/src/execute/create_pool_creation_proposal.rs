@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
 use crate::add_wasm_execute_msg;
-use crate::contract::{ContractResult, CONTRACT_NAME, GOV_MODULE_ADDRESS};
+use crate::contract::{ContractResult, CONTRACT_NAME};
 #[cfg(not(feature = "library"))]
 use crate::error::ContractError;
+use crate::query::query_pool_creation_funds::find_total_funds_needed;
 use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA};
-use crate::utils::{query_gov_params, query_proposal_min_deposit_amount};
+use crate::utils::constants::GOV_MODULE_ADDRESS;
+use crate::utils::queries::{query_gov_params, query_proposal_min_deposit_amount};
 
 use const_format::concatcp;
 use cosmwasm_std::{
@@ -13,117 +15,14 @@ use cosmwasm_std::{
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::governance_admin::{
-    FundsCategory, GovernanceProposalDescription, PoolCreateRequestContextData,
-    PoolCreationRequest, PoolCreationRequestStatus, UserDeposit,
+    GovernanceProposalDescription, PoolCreateRequestContextData,
+    PoolCreationRequest, PoolCreationRequestStatus,
 };
-use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt};
-use dexter::querier::query_vault_config;
-use dexter::vault::PoolCreationFee;
+use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt, build_transfer_token_to_user_msg};
 use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 
-/// Sums up the requirements in terms of pool creation fee, pool bootstrapping amount and reward schedule
-/// amounts and returns it
-/// This can later be used to validate if the user has sent enough funds to create the pool and
-/// transfer Cw20 token to this contract for further processing
-fn find_total_funds_needed(
-    deps: Deps,
-    gov_proposal_min_deposit_amount: &Vec<Coin>,
-    pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
-) -> ContractResult<(Vec<UserDeposit>, Vec<Asset>)> {
-    // let mut total_funds = vec![];
-    let mut total_funds_map = std::collections::HashMap::new();
-    let mut user_deposits_detailed = vec![];
-
-    let vault_addr = deps
-        .api
-        .addr_validate(&pool_creation_request_proposal.vault_addr)?;
-
-    // find the pool creation fee by querying the vault contract currently
-    let vault_config = query_vault_config(&deps.querier, vault_addr.to_string())?;
-    let pool_creation_fee = vault_config.pool_creation_fee;
-
-    // add the proposal deposit to the total funds.
-    // We need to query the gov module to figure this out
-    let mut proposal_deposit_assets = vec![];
-
-    for coin in gov_proposal_min_deposit_amount {
-        let asset_info = AssetInfo::native_token(coin.denom.clone());
-        let amount: Uint128 = total_funds_map
-            .get(&asset_info)
-            .cloned()
-            .unwrap_or_default();
-
-        let c_amount = coin.amount;
-        total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
-        proposal_deposit_assets.push(Asset {
-            info: asset_info,
-            amount: c_amount,
-        });
-    }
-
-    user_deposits_detailed.push(UserDeposit {
-        category: FundsCategory::ProposalDeposit,
-        assets: proposal_deposit_assets,
-    });
-
-    // add the pool creation fee to the total funds
-    if let PoolCreationFee::Enabled { fee } = pool_creation_fee {
-        let amount = total_funds_map.get(&fee.info).cloned().unwrap_or_default();
-        total_funds_map.insert(fee.clone().info, amount.checked_add(fee.amount)?);
-
-        user_deposits_detailed.push(UserDeposit {
-            category: FundsCategory::PoolCreationFee,
-            assets: vec![fee],
-        });
-    }
-
-    // add the bootstrapping amount to the total funds
-    if let Some(bootstrapping_amount) = &pool_creation_request_proposal.bootstrapping_amount {
-        for asset in bootstrapping_amount {
-            let amount = total_funds_map
-                .get(&asset.info)
-                .cloned()
-                .unwrap_or_default();
-            total_funds_map.insert(asset.info.clone(), amount.checked_add(asset.amount)?);
-        }
-
-        user_deposits_detailed.push(UserDeposit {
-            category: FundsCategory::PoolBootstrappingAmount,
-            assets: bootstrapping_amount.clone(),
-        });
-    }
-
-    // add the reward schedule amounts to the total funds
-    if let Some(reward_schedules) = &pool_creation_request_proposal.reward_schedules {
-        for reward_schedule in reward_schedules {
-            let amount = total_funds_map
-                .get(&reward_schedule.asset)
-                .cloned()
-                .unwrap_or_default();
-            total_funds_map.insert(
-                reward_schedule.asset.clone(),
-                amount.checked_add(reward_schedule.amount)?,
-            );
-
-            user_deposits_detailed.push(UserDeposit {
-                category: FundsCategory::RewardScheduleAmount,
-                assets: vec![Asset {
-                    info: reward_schedule.asset.clone(),
-                    amount: reward_schedule.amount,
-                }],
-            });
-        }
-    }
-
-    let total_funds = total_funds_map
-        .into_iter()
-        .map(|(k, v)| Asset { info: k, amount: v })
-        .collect();
-
-    Ok((user_deposits_detailed, total_funds))
-}
 
 /// Validates a create pool request, particularly the following checks
 /// 1. Bootstrapping liquidity owner must be a valid address
@@ -180,11 +79,11 @@ fn validate_create_pool_request(
             .collect::<HashSet<AssetInfo>>();
 
         if asset_info != bootstapping_amount_asset_info {
-            return Err(ContractError::BootstrappingAmountMissingAssets {});
+            return Err(ContractError::BootstrappingAmountMismatchAssets {});
         }
     }
 
-    // reward schedules start block time should be a govermance proposal voting period later than the current block time
+    // reward schedules start block time should be a governance proposal voting period later than the current block time
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
         for reward_schedule in reward_schedules {
             if reward_schedule.start_block_time
@@ -212,7 +111,6 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
     total_funds_needed: &Vec<Asset>,
     funds: Vec<Coin>,
 ) -> Result<Vec<CosmosMsg>, ContractError> {
-    // return Err(ContractError::Std(StdError::generic_err(funds_str)));
     let mut messages = vec![];
 
     // validate that the funds sent are enough for native assets
@@ -232,6 +130,15 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                         amount_sent: amount,
                         needed_amount: asset.amount,
                     });
+                }
+
+                // return the extra funds back to the user if any
+                if amount > asset.amount {
+                    messages.push(build_transfer_token_to_user_msg(
+                        asset.info.clone(),
+                        sender.clone(),
+                        amount.checked_sub(asset.amount)?,
+                    )?);
                 }
             }
             AssetInfo::Token { contract_addr } => {
@@ -302,7 +209,7 @@ pub fn execute_create_pool_creation_proposal(
     )?;
 
     // find total needed first
-    let (user_deposits_detailed, total_funds_needed) = find_total_funds_needed(
+    let user_total_deposit_funds = find_total_funds_needed(
         deps.as_ref(),
         &gov_proposal_min_deposit_amount,
         &pool_creation_request,
@@ -312,7 +219,7 @@ pub fn execute_create_pool_creation_proposal(
         &deps.as_ref(),
         &env,
         &info.sender,
-        &total_funds_needed,
+        &user_total_deposit_funds.total_deposit,
         info.funds.clone(),
     )?;
 
@@ -323,8 +230,8 @@ pub fn execute_create_pool_creation_proposal(
         &PoolCreateRequestContextData {
             status: PoolCreationRequestStatus::PendingProposalCreation,
             request_sender: info.sender.clone(),
-            total_funds_acquired_from_user: total_funds_needed,
-            user_deposits_detailed,
+            total_funds_acquired_from_user: user_total_deposit_funds.total_deposit,
+            user_deposits_detailed: user_total_deposit_funds.deposit_breakdown,
             pool_creation_request,
         },
     )?;
