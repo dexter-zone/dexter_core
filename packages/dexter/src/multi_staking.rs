@@ -123,31 +123,20 @@ pub struct Config {
     pub instant_unbond_min_fee_bp: u64,
 }
 
+/// config structure of contract version v2.1. Used for migration.
 #[cw_serde]
 pub struct ConfigV2_1 {
-    /// owner has privilege to add/remove allowed lp tokens for reward
     pub owner: Addr,
-    /// Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.
     pub keeper: Option<Addr>,
-    /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
-    /// Unlocking period in seconds
-    /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
-    /// after they have called the unbond function
     pub unlock_period: u64,
-    /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
-    /// This is to give enough time to review the proposal.
     pub minimum_reward_schedule_proposal_start_delay: u64,
-    /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
-    /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
-    /// This is the interval period in seconds on which we will have fee tier boundaries.
     pub fee_tier_interval: u64,
-    /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
-    /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
     pub instant_unbond_min_fee_bp: u64,
 }
 
+/// config structure of contract version v1. Used for migration.
 #[cw_serde]
 pub struct ConfigV1 {
      pub owner: Addr,
@@ -297,7 +286,7 @@ pub enum ExecuteMsg {
         instant_unbond_min_fee_bp: Option<u64>,
         fee_tier_interval: Option<u64>,
     },
-    /// Crates a new reward schedule for rewarding LP token holders a specific asset.
+    /// Creates a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
     /// This entry point is strictly meant for proposing reward schedules with native tokens.
     /// For proposing reward schedules with CW20 tokens, CW20 transfer with CreateRewardSchedule
@@ -305,6 +294,9 @@ pub enum ExecuteMsg {
     CreateRewardSchedule {
         lp_token: Addr,
         title: String,
+        /// The user on whose behalf the reward schedule might be being created by the owner
+        /// This is particularly useful for the Gov admin scenario where a user proposes a reward schedule on the chain governance
+        /// and the gov admin actually creates the reward schedule for the user
         actual_creator: Option<Addr>,
         start_block_time: u64,
         end_block_time: u64,

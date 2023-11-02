@@ -195,10 +195,16 @@ impl<'a> CreatePoolTestSuite<'a> {
         // assert that the funds are equal to the deposit amount
         assert_eq!(
             funds_for_pool_creation.total_deposit,
-            vec![Asset::new(
-                AssetInfo::native_token("uxprt".to_string()),
-                Uint128::from(10000000u128)
-            )]
+            vec![
+                Asset::new(
+                    AssetInfo::token(self.test_setup.cw20_token_1.clone()),
+                    Uint128::from(1000000u128)
+                ),
+                Asset::new(
+                    AssetInfo::native_token("uxprt".to_string()),
+                    Uint128::from(12000000u128)
+                ),
+            ]
         );
     }
 
@@ -237,7 +243,7 @@ impl<'a> CreatePoolTestSuite<'a> {
         // assert error
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Bootstrapping amount must include all the assets in the pool: execute wasm contract failed");
+        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Bootstrapping amount must exactly include all the assets in the pool: execute wasm contract failed");
     }
 
     fn test_failure_without_cw20_approval(&self) {

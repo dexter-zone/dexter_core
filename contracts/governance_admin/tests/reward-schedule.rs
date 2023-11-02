@@ -4,7 +4,7 @@ use dexter::{
     governance_admin::{
         ExecuteMsg as GovExecuteMsg, GovAdminProposalRequestType, GovernanceProposalDescription,
         QueryMsg as GovQueryMsg, RefundReason, RefundResponse, RewardScheduleCreationRequest,
-        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
+        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserTotalDeposit, UserDeposit, FundsCategory,
     },
     multi_staking::{QueryMsg, RewardSchedule, RewardScheduleResponse},
     vault::{
@@ -88,6 +88,10 @@ impl<'a> RewardScheduleTestSuite<'a> {
     }
 
     fn run_all(&self) {
+
+        println!("test: Query for reward schedule deposits");
+        self.query_reward_schedule_creation_funds();
+
         println!("test: Empty reward schedule");
         self.test_empty_reward_schedules();
 
@@ -116,6 +120,44 @@ impl<'a> RewardScheduleTestSuite<'a> {
         self.test_valid_input_passed_proposal();
 
         // TODO(ajeet): add a test case - more than required funds deposited
+    }
+
+    fn query_reward_schedule_creation_funds(&self) {
+        let wasm = Wasm::new(self.persistence);
+        let res = wasm.query(
+            &self.gov_admin.gov_admin_instance.to_string(),
+            &GovQueryMsg::FundsForRewardScheduleCreation {
+                requests: vec![self.valid_request.clone()],
+            },
+        );
+
+        assert!(res.is_ok());
+        let funds: UserTotalDeposit = res.unwrap();
+        assert_eq!(
+            funds,
+            UserTotalDeposit {
+                deposit_breakdown: vec![
+                    UserDeposit {
+                        category: FundsCategory::ProposalDeposit,
+                        assets: vec![Asset::new(
+                            AssetInfo::native_token("uxprt".to_string()),
+                            Uint128::from(10000000u128),
+                        )],
+                    },
+                    UserDeposit {
+                        category: FundsCategory::RewardScheduleAmount,
+                        assets: vec![Asset::new(
+                            AssetInfo::native_token("uxprt".to_string()),
+                            Uint128::from(1000000u128),
+                        )],
+                    }
+                ],
+                total_deposit: vec![Asset::new(
+                    AssetInfo::native_token("uxprt".to_string()),
+                    Uint128::from(11000000u128),
+                )],
+            }
+        );
     }
 
     fn test_empty_reward_schedules(&self) {

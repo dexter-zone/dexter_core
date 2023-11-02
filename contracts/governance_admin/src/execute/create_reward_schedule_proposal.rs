@@ -1,14 +1,13 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response,
-    StdError, Uint128, Event,
+    to_binary, Addr, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response,
+    StdError, Event,
 };
 use dexter::{
-    asset::{Asset, AssetInfo},
     helper::EventExt,
     governance_admin::{
-        FundsCategory, GovernanceProposalDescription, RewardScheduleCreationRequest,
-        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserDeposit,
+        GovernanceProposalDescription, RewardScheduleCreationRequest,
+        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
     },
 };
 use persistence_std::types::{
@@ -23,7 +22,7 @@ use crate::{
     error::ContractError,
     execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::{queries::{query_allowed_lp_tokens, query_proposal_min_deposit_amount, query_gov_params}, constants::GOV_MODULE_ADDRESS},
+    utils::{queries::{query_allowed_lp_tokens, query_proposal_min_deposit_amount, query_gov_params}, constants::GOV_MODULE_ADDRESS}, query::query_reward_schedule_creation_funds::find_total_needed_funds,
 };
 
 pub fn validate_create_reward_schedules_request(
@@ -91,61 +90,6 @@ pub fn validate_lp_token_allowed(
     Ok(())
 }
 
-pub fn total_needed_funds(
-    requests: &Vec<RewardScheduleCreationRequest>,
-    gov_proposal_min_deposit_amount: &Vec<Coin>,
-) -> ContractResult<(Vec<UserDeposit>, Vec<Asset>)> {
-    let mut total_funds_map = std::collections::HashMap::new();
-    let mut user_deposits_detailed = vec![];
-
-    let mut proposal_deposit_assets = vec![];
-    for coin in gov_proposal_min_deposit_amount {
-        let asset_info = AssetInfo::native_token(coin.denom.clone());
-        let amount: Uint128 = total_funds_map
-            .get(&asset_info)
-            .cloned()
-            .unwrap_or_default();
-        let c_amount = coin.amount;
-        total_funds_map.insert(asset_info.clone(), amount.checked_add(c_amount)?);
-        proposal_deposit_assets.push(Asset {
-            info: asset_info,
-            amount: c_amount,
-        });
-    }
-
-    user_deposits_detailed.push(UserDeposit {
-        category: FundsCategory::ProposalDeposit,
-        assets: proposal_deposit_assets,
-    });
-
-    for reward_schedule in requests {
-        let amount: Uint128 = total_funds_map
-            .get(&reward_schedule.asset)
-            .cloned()
-            .unwrap_or_default();
-
-        total_funds_map.insert(
-            reward_schedule.asset.clone(),
-            amount.checked_add(reward_schedule.amount)?,
-        );
-
-        user_deposits_detailed.push(UserDeposit {
-            category: FundsCategory::RewardScheduleAmount,
-            assets: vec![Asset {
-                info: reward_schedule.asset.clone(),
-                amount: reward_schedule.amount,
-            }],
-        });
-    }
-
-    let total_funds: Vec<Asset> = total_funds_map
-        .into_iter()
-        .map(|(k, v)| Asset { info: k, amount: v })
-        .collect();
-
-    Ok((user_deposits_detailed, total_funds))
-}
-
 pub fn execute_create_reward_schedule_creation_proposal(
     deps: DepsMut,
     env: Env,
@@ -171,7 +115,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
 
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
     let (user_deposits_detailed, total_needed_funds) =
-        total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
+        find_total_needed_funds(&reward_schedules, &gov_proposal_min_deposit_amount)?;
 
     // validatate all the funds are being sent or approved for transfer and transfer them to the contract
     let mut transfer_msgs = validate_sent_amount_and_transfer_needed_assets(

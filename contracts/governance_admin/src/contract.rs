@@ -10,6 +10,7 @@ use crate::execute::resume_join_pool::execute_resume_join_pool;
 use crate::execute::resume_reward_schedule_creation::execute_resume_reward_schedule_creation;
 use crate::query::query_pool_creation_funds::query_funds_for_pool_creation_request;
 use crate::query::query_refundable_funds::query_refundable_funds;
+use crate::query::query_reward_schedule_creation_funds::query_funds_for_reward_schedule_creation;
 use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
 use crate::utils::validate_sender::{validate_goverance_module_sender, validate_self_sender, validatate_goverance_module_or_self_sender};
 
@@ -133,13 +134,19 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RewardScheduleRequest {
             reward_schedule_request_id,
         } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
-        QueryMsg::FundsForPoolCreation { 
-            request 
-        } => {
+        QueryMsg::FundsForPoolCreation { request} => {
             let user_total_deposit = query_funds_for_pool_creation_request(
                 deps,
                 &request
             ).map_err(|e| StdError::generic_err(e.to_string()))?;
+            to_binary(&user_total_deposit)
+        }
+        QueryMsg::FundsForRewardScheduleCreation { requests } => {
+            let user_total_deposit = query_funds_for_reward_schedule_creation(
+                deps,
+                &requests
+            ).map_err(|e| StdError::generic_err(e.to_string()))?;
+
             to_binary(&user_total_deposit)
         }
         QueryMsg::RefundableFunds { request_type } => {

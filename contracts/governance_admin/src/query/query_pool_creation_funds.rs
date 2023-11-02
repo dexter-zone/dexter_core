@@ -13,7 +13,6 @@ pub fn find_total_funds_needed(
     gov_proposal_min_deposit_amount: &Vec<Coin>,
     pool_creation_request_proposal: &dexter::governance_admin::PoolCreationRequest,
 ) -> ContractResult<UserTotalDeposit> {
-    // let mut total_funds = vec![];
     let mut total_funds_map = std::collections::HashMap::new();
     let mut user_deposits_detailed = vec![];
 
