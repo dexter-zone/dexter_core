@@ -1,8 +1,8 @@
+#[cfg(not(feature = "library"))]
 use std::collections::HashSet;
 
 use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
-#[cfg(not(feature = "library"))]
 use crate::error::ContractError;
 use crate::query::query_pool_creation_funds::find_total_funds_needed;
 use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA};
@@ -15,14 +15,15 @@ use cosmwasm_std::{
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::governance_admin::{
-    GovernanceProposalDescription, PoolCreateRequestContextData,
-    PoolCreationRequest, PoolCreationRequestStatus,
+    GovernanceProposalDescription, PoolCreateRequestContextData, PoolCreationRequest,
+    PoolCreationRequestStatus,
 };
-use dexter::helper::{build_transfer_cw20_from_user_msg, EventExt, build_transfer_token_to_user_msg};
+use dexter::helper::{
+    build_transfer_cw20_from_user_msg, build_transfer_token_to_user_msg, EventExt,
+};
 use persistence_std::types::cosmos::base::v1beta1::Coin as StdCoin;
 use persistence_std::types::cosmos::gov::v1::MsgSubmitProposal;
 use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-
 
 /// Validates a create pool request, particularly the following checks
 /// 1. Bootstrapping liquidity owner must be a valid address
@@ -146,9 +147,7 @@ pub fn validate_sent_amount_and_transfer_needed_assets(
                 let spend_limit = AssetInfo::query_spend_limits(
                     &contract_addr,
                     sender,
-                    &deps
-                        .api
-                        .addr_validate(&env.contract.address.to_string())?,
+                    &deps.api.addr_validate(&env.contract.address.to_string())?,
                     &deps.querier,
                 )?;
 
@@ -204,7 +203,10 @@ pub fn execute_create_pool_creation_proposal(
     validate_create_pool_request(
         &env,
         &deps,
-        gov_params.voting_period.ok_or(ContractError::VotingPeriodNull)?.seconds as u64,
+        gov_params
+            .voting_period
+            .ok_or(ContractError::VotingPeriodNull)?
+            .seconds as u64,
         &pool_creation_request,
     )?;
 

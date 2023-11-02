@@ -1,7 +1,8 @@
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
 use dexter::{
     governance_admin::{
-        GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
+        GovAdminProposalRequestType, PoolCreationRequestStatus,
+        RewardSchedulesCreationRequestStatus,
     },
     helper::build_transfer_token_to_user_msg,
 };

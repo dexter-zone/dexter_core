@@ -12,7 +12,10 @@ use crate::query::query_pool_creation_funds::query_funds_for_pool_creation_reque
 use crate::query::query_refundable_funds::query_refundable_funds;
 use crate::query::query_reward_schedule_creation_funds::query_funds_for_reward_schedule_creation;
 use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
-use crate::utils::validate_sender::{validate_goverance_module_sender, validate_self_sender, validatate_goverance_module_or_self_sender};
+use crate::utils::validate_sender::{
+    validatate_goverance_module_or_self_sender, validate_goverance_module_sender,
+    validate_self_sender,
+};
 
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
@@ -134,18 +137,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RewardScheduleRequest {
             reward_schedule_request_id,
         } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
-        QueryMsg::FundsForPoolCreation { request} => {
-            let user_total_deposit = query_funds_for_pool_creation_request(
-                deps,
-                &request
-            ).map_err(|e| StdError::generic_err(e.to_string()))?;
+        QueryMsg::FundsForPoolCreation { request } => {
+            let user_total_deposit = query_funds_for_pool_creation_request(deps, &request)
+                .map_err(|e| StdError::generic_err(e.to_string()))?;
             to_binary(&user_total_deposit)
         }
         QueryMsg::FundsForRewardScheduleCreation { requests } => {
-            let user_total_deposit = query_funds_for_reward_schedule_creation(
-                deps,
-                &requests
-            ).map_err(|e| StdError::generic_err(e.to_string()))?;
+            let user_total_deposit = query_funds_for_reward_schedule_creation(deps, &requests)
+                .map_err(|e| StdError::generic_err(e.to_string()))?;
 
             to_binary(&user_total_deposit)
         }

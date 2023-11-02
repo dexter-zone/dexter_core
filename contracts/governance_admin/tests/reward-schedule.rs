@@ -2,9 +2,10 @@ use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Uint128, WasmMsg};
 use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
-        ExecuteMsg as GovExecuteMsg, GovAdminProposalRequestType, GovernanceProposalDescription,
-        QueryMsg as GovQueryMsg, RefundReason, RefundResponse, RewardScheduleCreationRequest,
-        RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus, UserTotalDeposit, UserDeposit, FundsCategory,
+        ExecuteMsg as GovExecuteMsg, FundsCategory, GovAdminProposalRequestType,
+        GovernanceProposalDescription, QueryMsg as GovQueryMsg, RefundReason, RefundResponse,
+        RewardScheduleCreationRequest, RewardScheduleCreationRequestsState,
+        RewardSchedulesCreationRequestStatus, UserDeposit, UserTotalDeposit,
     },
     multi_staking::{QueryMsg, RewardSchedule, RewardScheduleResponse},
     vault::{
@@ -88,7 +89,6 @@ impl<'a> RewardScheduleTestSuite<'a> {
     }
 
     fn run_all(&self) {
-
         println!("test: Query for reward schedule deposits");
         self.query_reward_schedule_creation_funds();
 

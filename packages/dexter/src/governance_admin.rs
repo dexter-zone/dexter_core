@@ -174,7 +174,7 @@ pub struct RefundResponse {
 #[cw_serde]
 pub struct UserTotalDeposit {
     pub total_deposit: Vec<Asset>,
-    pub deposit_breakdown: Vec<UserDeposit>
+    pub deposit_breakdown: Vec<UserDeposit>,
 }
 
 #[cw_serde]
@@ -272,7 +272,9 @@ pub enum QueryMsg {
     FundsForPoolCreation { request: PoolCreationRequest },
 
     #[returns(UserTotalDeposit)]
-    FundsForRewardScheduleCreation { requests: Vec<RewardScheduleCreationRequest> },
+    FundsForRewardScheduleCreation {
+        requests: Vec<RewardScheduleCreationRequest>,
+    },
 
     /// Returns the refundable funds for the user.
     /// It provides total refund and also a breakdown of the refundable funds so that the user can understand the reason for the refund

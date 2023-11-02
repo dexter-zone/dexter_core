@@ -1,14 +1,14 @@
 pub mod asset;
 pub mod error;
+pub mod governance_admin;
 pub mod helper;
 pub mod keeper;
 pub mod lp_token;
+pub mod multi_staking;
 pub mod pool;
 pub mod querier;
 pub mod router;
 pub mod vault;
-pub mod multi_staking;
-pub mod governance_admin;
 
 #[allow(clippy::all)]
 mod uints {

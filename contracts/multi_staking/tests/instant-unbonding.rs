@@ -89,7 +89,6 @@ fn validate_fee_tier_logic() {
     assert_eq!(fee_tiers[5].seconds_till_unlock_end, 600_000);
     assert_eq!(fee_tiers[5].seconds_till_unlock_start, 500_000);
     assert_eq!(fee_tiers[5].unlock_fee_bp, 500u64);
-
 }
 
 // This test performs the following steps:

@@ -50,7 +50,11 @@ pub fn execute_resume_join_pool(
     )?;
 
     // sanity check: the pool info should match the pool creation request
-    let pool_assets = pool_info_response.assets.iter().map(|asset| asset.info.clone()).collect::<Vec<AssetInfo>>();
+    let pool_assets = pool_info_response
+        .assets
+        .iter()
+        .map(|asset| asset.info.clone())
+        .collect::<Vec<AssetInfo>>();
 
     let mut pool_creation_request_assets = pool_creation_request.asset_info.clone();
     pool_creation_request_assets.sort();
@@ -62,7 +66,14 @@ pub fn execute_resume_join_pool(
     }
 
     pool_creation_request_context.status = PoolCreationRequestStatus::PoolCreated {
-        proposal_id: pool_creation_request_context.status.proposal_id().ok_or(ContractError::ProposalIdNotFound { pool_creation_request_id } )?,
+        proposal_id: pool_creation_request_context.status.proposal_id().ok_or(
+            ContractError::ProposalIdNotSet {
+                request_type:
+                    dexter::governance_admin::GovAdminProposalRequestType::PoolCreationRequest {
+                        request_id: pool_creation_request_id,
+                    },
+            },
+        )?,
         pool_id: pool_id.clone(),
     };
 
@@ -138,10 +149,10 @@ pub fn execute_resume_join_pool(
 
     // create a reward schedule creation request if there are any reward schedules
     // store the reward schedule creation request
-    
+
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
-        
-        let next_reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
+        let next_reward_schedules_creation_request_id =
+            next_reward_schedule_request_id(deps.storage)?;
         let mut updated_reward_schedules = vec![];
 
         for reward_schedule in reward_schedules {

@@ -149,7 +149,6 @@ impl<'a> CreatePoolTestSuite<'a> {
     }
 
     fn run_all(&self) {
-
         println!("Test pool creation funds query");
         self.test_pool_creation_funds_query();
 
@@ -522,7 +521,6 @@ impl<'a> CreatePoolTestSuite<'a> {
     }
 
     fn test_refund_for_rejected_proposal(&self) {
-
         let wasm = Wasm::new(self.persistence);
         let current_block_time = self.persistence.get_block_time_seconds() as u64;
 
@@ -592,14 +590,8 @@ impl<'a> CreatePoolTestSuite<'a> {
         assert_eq!(
             refundable_funds.refund_amount,
             vec![
-                Asset::new(
-                    cw20_asset.clone(),
-                    Uint128::from(1000000u128)
-                ),
-                Asset::new(
-                    xprt_asset.clone(),
-                    Uint128::from(12000000u128)
-                )
+                Asset::new(cw20_asset.clone(), Uint128::from(1000000u128)),
+                Asset::new(xprt_asset.clone(), Uint128::from(12000000u128))
             ]
         );
 
@@ -609,30 +601,18 @@ impl<'a> CreatePoolTestSuite<'a> {
             vec![
                 UserDeposit {
                     category: dexter::governance_admin::FundsCategory::ProposalDeposit,
-                    assets: vec![Asset::new(
-                        xprt_asset.clone(),
-                        Uint128::from(10000000u128)
-                    )]
+                    assets: vec![Asset::new(xprt_asset.clone(), Uint128::from(10000000u128))]
                 },
                 UserDeposit {
                     category: dexter::governance_admin::FundsCategory::PoolBootstrappingAmount,
                     assets: vec![
-                        Asset::new(
-                            xprt_asset.clone(),
-                            Uint128::from(1000000u128)
-                        ),
-                        Asset::new(
-                            cw20_asset.clone(),
-                            Uint128::from(1000000u128)
-                        )
+                        Asset::new(xprt_asset.clone(), Uint128::from(1000000u128)),
+                        Asset::new(cw20_asset.clone(), Uint128::from(1000000u128))
                     ]
                 },
                 UserDeposit {
                     category: dexter::governance_admin::FundsCategory::RewardScheduleAmount,
-                    assets: vec![Asset::new(
-                        xprt_asset.clone(),
-                        Uint128::from(1000000u128)
-                    )]
+                    assets: vec![Asset::new(xprt_asset.clone(), Uint128::from(1000000u128))]
                 }
             ]
         );

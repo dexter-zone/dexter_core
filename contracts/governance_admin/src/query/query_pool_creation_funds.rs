@@ -1,8 +1,12 @@
-use cosmwasm_std::{Deps, Coin, Uint128};
-use dexter::{governance_admin::{PoolCreationRequest, UserDeposit, UserTotalDeposit, FundsCategory}, querier::query_vault_config, asset::{AssetInfo, Asset}, vault::PoolCreationFee};
+use cosmwasm_std::{Coin, Deps, Uint128};
+use dexter::{
+    asset::{Asset, AssetInfo},
+    governance_admin::{FundsCategory, PoolCreationRequest, UserDeposit, UserTotalDeposit},
+    querier::query_vault_config,
+    vault::PoolCreationFee,
+};
 
 use crate::{contract::ContractResult, utils::queries::query_proposal_min_deposit_amount};
-
 
 /// Sums up the requirements in terms of pool creation fee, pool bootstrapping amount and reward schedule
 /// amounts and returns it
@@ -89,7 +93,10 @@ pub fn find_total_funds_needed(
 
             user_deposits_detailed.push(UserDeposit {
                 category: FundsCategory::RewardScheduleAmount,
-                assets: vec![Asset::new(reward_schedule.asset.clone(), reward_schedule.amount)]
+                assets: vec![Asset::new(
+                    reward_schedule.asset.clone(),
+                    reward_schedule.amount,
+                )],
             });
         }
     }
@@ -99,7 +106,10 @@ pub fn find_total_funds_needed(
         .map(|(k, v)| Asset { info: k, amount: v })
         .collect();
 
-    Ok(UserTotalDeposit { total_deposit: total_funds, deposit_breakdown: user_deposits_detailed })
+    Ok(UserTotalDeposit {
+        total_deposit: total_funds,
+        deposit_breakdown: user_deposits_detailed,
+    })
 }
 
 /// returns the total funds needed for creating a pool
@@ -108,9 +118,16 @@ pub fn find_total_funds_needed(
 /// 2. Pool creation fee
 /// 3. Bootstrapping amount
 /// 4. Reward schedule amount
-pub fn query_funds_for_pool_creation_request(deps: Deps, pool_creation_request: &PoolCreationRequest) -> ContractResult<UserTotalDeposit> {
+pub fn query_funds_for_pool_creation_request(
+    deps: Deps,
+    pool_creation_request: &PoolCreationRequest,
+) -> ContractResult<UserTotalDeposit> {
     // query gov module for the proposal deposit
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps)?;
-    let user_total_deposit = find_total_funds_needed(deps, &gov_proposal_min_deposit_amount, &pool_creation_request)?;
+    let user_total_deposit = find_total_funds_needed(
+        deps,
+        &gov_proposal_min_deposit_amount,
+        &pool_creation_request,
+    )?;
     Ok(user_total_deposit)
 }

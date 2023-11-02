@@ -1,19 +1,17 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Env, MessageInfo, QuerierWrapper, Response,
-    StdError, Event,
+    to_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, QuerierWrapper, Response,
 };
 use dexter::{
-    helper::EventExt,
     governance_admin::{
         GovernanceProposalDescription, RewardScheduleCreationRequest,
         RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
     },
+    helper::EventExt,
 };
 use persistence_std::types::{
-    cosmos::gov::v1::MsgSubmitProposal,
+    cosmos::base::v1beta1::Coin as StdCoin, cosmos::gov::v1::MsgSubmitProposal,
     cosmwasm::wasm::v1::MsgExecuteContract,
-    cosmos::base::v1beta1::Coin as StdCoin,
 };
 
 use crate::{
@@ -21,8 +19,12 @@ use crate::{
     contract::{ContractResult, CONTRACT_NAME},
     error::ContractError,
     execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
+    query::query_reward_schedule_creation_funds::find_total_needed_funds,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::{queries::{query_allowed_lp_tokens, query_proposal_min_deposit_amount, query_gov_params}, constants::GOV_MODULE_ADDRESS}, query::query_reward_schedule_creation_funds::find_total_needed_funds,
+    utils::{
+        constants::GOV_MODULE_ADDRESS,
+        queries::{query_allowed_lp_tokens, query_gov_params, query_proposal_min_deposit_amount},
+    },
 };
 
 pub fn validate_create_reward_schedules_request(
@@ -53,9 +55,7 @@ pub fn validate_create_reward_schedules_request(
     for reward_schedule in reward_schedules {
         match &reward_schedule.lp_token_addr {
             None => {
-                return Err(ContractError::Std(StdError::generic_err(format!(
-                    "LP token address is required for reward schedule creation request"
-                ))));
+                return Err(ContractError::LpTokenNotAllowed);
             }
             Some(lp_token) => {
                 lp_tokens.push(lp_token.clone());
@@ -80,10 +80,7 @@ pub fn validate_lp_token_allowed(
         .collect::<std::collections::HashSet<Addr>>();
     for lp_token in lp_tokens {
         if !allowed_tokens_set.contains(&lp_token) {
-            return Err(ContractError::Std(StdError::generic_err(format!(
-                "LP token {} is not allowed for reward distribution",
-                lp_token
-            ))));
+            return Err(ContractError::LpTokenNull);
         }
     }
 
@@ -100,15 +97,15 @@ pub fn execute_create_reward_schedule_creation_proposal(
 ) -> ContractResult<Response> {
     let mut msgs: Vec<CosmosMsg> = vec![];
     // TODO(ajeet): should validate multistaking_contract address?
-    
-    let gov_params = query_gov_params(&deps.querier)?;
-    let gov_voting_period = gov_params.voting_period.ok_or(ContractError::VotingPeriodNull)?.seconds as u64;
 
-    let lp_tokens = validate_create_reward_schedules_request(
-        &env,
-        gov_voting_period,
-        &reward_schedules,
-    )?;
+    let gov_params = query_gov_params(&deps.querier)?;
+    let gov_voting_period = gov_params
+        .voting_period
+        .ok_or(ContractError::VotingPeriodNull)?
+        .seconds as u64;
+
+    let lp_tokens =
+        validate_create_reward_schedules_request(&env, gov_voting_period, &reward_schedules)?;
 
     // validate that all the requested LP tokens are already whitelisted for reward distribution
     validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?;

@@ -1,5 +1,10 @@
-use cosmwasm_std::{Uint128, Coin, Deps};
-use dexter::{governance_admin::{FundsCategory, UserDeposit, RewardScheduleCreationRequest, UserTotalDeposit}, asset::{AssetInfo, Asset}};
+use cosmwasm_std::{Coin, Deps, Uint128};
+use dexter::{
+    asset::{Asset, AssetInfo},
+    governance_admin::{
+        FundsCategory, RewardScheduleCreationRequest, UserDeposit, UserTotalDeposit,
+    },
+};
 
 use crate::{contract::ContractResult, utils::queries::query_proposal_min_deposit_amount};
 
@@ -58,9 +63,13 @@ pub fn find_total_needed_funds(
     Ok((user_deposits_detailed, total_funds))
 }
 
-pub fn query_funds_for_reward_schedule_creation(deps: Deps, requests: &Vec<RewardScheduleCreationRequest>) -> ContractResult<UserTotalDeposit> {
+pub fn query_funds_for_reward_schedule_creation(
+    deps: Deps,
+    requests: &Vec<RewardScheduleCreationRequest>,
+) -> ContractResult<UserTotalDeposit> {
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps)?;
-    let (user_deposits_detailed, total_needed_funds) = find_total_needed_funds(requests, &gov_proposal_min_deposit_amount)?;
+    let (user_deposits_detailed, total_needed_funds) =
+        find_total_needed_funds(requests, &gov_proposal_min_deposit_amount)?;
 
     Ok(UserTotalDeposit {
         deposit_breakdown: user_deposits_detailed,

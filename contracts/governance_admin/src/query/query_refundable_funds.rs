@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cosmwasm_std::{Deps, StdError};
+use cosmwasm_std::Deps;
 use dexter::{
     asset::Asset,
     governance_admin::{
@@ -33,14 +33,13 @@ pub fn query_refundable_funds(
             let pool_creation_request_context =
                 POOL_CREATION_REQUEST_DATA.load(deps.storage, *request_id)?;
 
-            let proposal_id =
-                pool_creation_request_context
-                    .status
-                    .proposal_id()
-                    .ok_or(ContractError::Std(StdError::generic_err(format!(
-                        "Proposal id not found for pool creation request id {}",
-                        request_id
-                    ))))?;
+            let proposal_id = pool_creation_request_context.status.proposal_id().ok_or(
+                ContractError::ProposalIdNotSet {
+                    request_type: GovAdminProposalRequestType::PoolCreationRequest {
+                        request_id: *request_id,
+                    },
+                },
+            )?;
 
             // validate that the funds are not claimed back already
             let status = pool_creation_request_context.status;
@@ -48,18 +47,14 @@ pub fn query_refundable_funds(
                 PoolCreationRequestStatus::RequestFailedAndRefunded {
                     proposal_id: _,
                     refund_block_height,
-                } => {
-                    return Err(ContractError::Std(StdError::generic_err(format!(
-                        "Funds are already claimed back for this pool creation request in block {refund_block_height}",
-                    ))));
                 }
-                PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
+                | PoolCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
                     proposal_id: _,
                     refund_block_height,
                 } => {
-                    return Err(ContractError::Std(StdError::generic_err(format!(
-                        "Funds are already claimed back for this pool creation request in block {refund_block_height}",
-                    ))));
+                    return Err(ContractError::FundsAlreadyClaimed {
+                        refund_block_height,
+                    });
                 }
                 _ => (),
             }
@@ -76,26 +71,31 @@ pub fn query_refundable_funds(
             let reward_schedule_request_state =
                 REWARD_SCHEDULE_REQUESTS.load(deps.storage, *request_id)?;
 
-            let proposal_id =
-                reward_schedule_request_state
-                    .status
-                    .proposal_id()
-                    .ok_or(ContractError::Std(StdError::generic_err(format!(
-                        "Proposal id not found for reward schedule creation request id {}",
-                        request_id
-                    ))))?;
+            let proposal_id = reward_schedule_request_state.status.proposal_id().ok_or(
+                ContractError::ProposalIdNotSet {
+                    request_type: GovAdminProposalRequestType::RewardSchedulesCreationRequest {
+                        request_id: *request_id,
+                    },
+                },
+            )?;
 
             // validate that the funds are not claimed back already
             let status = reward_schedule_request_state.status;
 
-            if let RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
-                proposal_id: _,
-                refund_block_height,
-            } = status
-            {
-                return Err(ContractError::Std(StdError::generic_err(format!(
-                    "Funds are already claimed back for this reward schedule creation request in block {refund_block_height}",
-                ))));
+            match status {
+                RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
+                    proposal_id: _,
+                    refund_block_height,
+                }
+                | RewardSchedulesCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
+                    proposal_id: _,
+                    refund_block_height,
+                } => {
+                    return Err(ContractError::FundsAlreadyClaimed {
+                        refund_block_height,
+                    });
+                }
+                _ => (),
             }
 
             (
@@ -133,9 +133,7 @@ pub fn query_refundable_funds(
 
             Ok((user_deposits, RefundReason::ProposalPassedDepositRefund))
         }
-        _ => Err(ContractError::Std(StdError::generic_err(format!(
-            "Proposal status must be either REJECTED or FAILED or PASSED to be refundable"
-        )))),
+        _ => Err(ContractError::InvalidProposalStatusForRefund),
     }?;
 
     let mut map_asset_refunds = HashMap::new();

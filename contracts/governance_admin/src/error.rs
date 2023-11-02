@@ -1,4 +1,5 @@
 use cosmwasm_std::{OverflowError, StdError, Uint128};
+use dexter::governance_admin::GovAdminProposalRequestType;
 use thiserror::Error;
 
 /// ## Description
@@ -13,7 +14,7 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized,
-    
+
     #[error("Invalid native asset precision list provided. It should only and exactly contain all native assets of the pool")]
     InvalidNativeAssetPrecisionList,
 
@@ -22,6 +23,9 @@ pub enum ContractError {
 
     #[error("Staking contract already set")]
     StakingAddrAlreadySet,
+
+    #[error("Invalid reward schedule request status")]
+    InvalidRewardScheduleRequestStatus,
 
     #[error("Insufficient funds to execute this transaction")]
     InsufficientBalance,
@@ -39,6 +43,9 @@ pub enum ContractError {
         current_approval: Uint128,
         needed_approval_for_spend: Uint128,
     },
+
+    #[error("Proposal content mismatch. Expected: {expected} Actual: {actual}")]
+    ProposalContentMismatch { expected: String, actual: String },
 
     #[error("Bootstrapping amount must exactly include all the assets in the pool")]
     BootstrappingAmountMismatchAssets,
@@ -64,6 +71,9 @@ pub enum ContractError {
     #[error("LP Token is expected in the reward schedule creation request but it is None")]
     LpTokenNull,
 
+    #[error("LP Token not allowed for reward schedule creation yet")]
+    LpTokenNotAllowed,
+
     #[error("Cannot decode proposal status from {status} to a valid proposal status enum variant")]
     CannotDecodeProposalStatus { status: i32 },
 
@@ -73,11 +83,22 @@ pub enum ContractError {
     #[error("No proposals found for the given query")]
     NoProposalsFound,
 
-    #[error("Proposal id not found for pool creation request id {pool_creation_request_id}")]
-    ProposalIdNotFound { pool_creation_request_id: u64 },
+    #[error("Proposal id not set for request: {request_type:?}")]
+    ProposalIdNotSet {
+        request_type: GovAdminProposalRequestType,
+    },
+
+    #[error("Proposal id not found in the gov module {proposal_id}")]
+    ProposalIdNotFound { proposal_id: u64 },
 
     #[error("Auto stake implementation is expected to be multi-staking")]
     InvalidAutoStakeImpl,
+
+    #[error("Proposal status must be either REJECTED or FAILED or PASSED to be refundable")]
+    InvalidProposalStatusForRefund,
+
+    #[error("Funds already claimed for this request at block height: {refund_block_height}")]
+    FundsAlreadyClaimed { refund_block_height: u64 },
 }
 
 impl From<OverflowError> for ContractError {

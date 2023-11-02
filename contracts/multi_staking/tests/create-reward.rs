@@ -1,12 +1,8 @@
-use crate::utils::{
-    mock_app, create_reward_schedule, setup,
-};
+use crate::utils::{create_reward_schedule, mock_app, setup};
 use cosmwasm_std::{Addr, Coin, Uint128};
 use cw_multi_test::Executor;
 use dexter::asset::AssetInfo;
-use dexter::multi_staking::{
-    ExecuteMsg, QueryMsg,
-};
+use dexter::multi_staking::{ExecuteMsg, QueryMsg};
 
 pub mod utils;
 
@@ -299,5 +295,4 @@ fn test_reward_schedule_queries() {
         1000_302_000,
     )
     .unwrap();
-
 }

@@ -207,7 +207,6 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
     return (multi_staking_instance, lp_token_addr);
 }
 
-
 pub fn create_reward_schedule(
     app: &mut App,
     proposer: &Addr,

@@ -4,10 +4,9 @@ use crate::error::ContractError;
 use crate::state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS};
 use crate::utils::queries::query_latest_governance_proposal;
 
-
 use const_format::concatcp;
 
-use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response, StdError};
+use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response};
 
 use dexter::governance_admin::{
     GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
@@ -28,7 +27,10 @@ pub fn execute_post_governance_proposal_creation_callback(
 
     // validate the proposal content to make sure that pool creation request id matches.
     // this is more of a sanity check
-    let proposal_content = latest_proposal.messages.first().ok_or(ContractError::LatestProposalNotFound)?;
+    let proposal_content = latest_proposal
+        .messages
+        .first()
+        .ok_or(ContractError::LatestProposalNotFound)?;
 
     let execute_contract_proposal_content =
         MsgExecuteContract::try_from(Binary::from(proposal_content.value.as_slice()))?;
@@ -50,11 +52,10 @@ pub fn execute_post_governance_proposal_creation_callback(
     };
 
     if execute_contract_proposal_content.msg != proposal_msg_bytes {
-        return Err(ContractError::Std(StdError::generic_err(format!(
-            "proposal content does not match. B1: {} B2: {}",
-            String::from_utf8_lossy(&execute_contract_proposal_content.msg),
-            String::from_utf8_lossy(&proposal_msg_bytes)
-        ))));
+        return Err(ContractError::ProposalContentMismatch {
+            expected: String::from_utf8_lossy(&execute_contract_proposal_content.msg).to_string(),
+            actual: String::from_utf8_lossy(&proposal_msg_bytes).to_string(),
+        });
     }
 
     let mut event = Event::from_info(

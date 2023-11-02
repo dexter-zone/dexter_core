@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, StdError, Uint128};
+use cosmwasm_std::{Addr, Coin, Deps, QuerierWrapper, QueryRequest, Uint128};
 use dexter::multi_staking::QueryMsg as MultiStakingQueryMsg;
 use persistence_std::types::cosmos::gov::v1::{
     Params as GovParams, Proposal, ProposalStatus, QueryParamsRequest, QueryParamsResponse,
@@ -78,12 +78,9 @@ pub fn query_gov_proposal_by_id(
         data: q.into(),
     })?;
 
-    proposal_response.proposal.ok_or_else(|| {
-        ContractError::Std(StdError::generic_err(format!(
-            "Proposal with id {} not found",
-            proposal_id
-        )))
-    })
+    proposal_response
+        .proposal
+        .ok_or_else(|| ContractError::ProposalIdNotFound { proposal_id })
 }
 
 pub fn query_allowed_lp_tokens(

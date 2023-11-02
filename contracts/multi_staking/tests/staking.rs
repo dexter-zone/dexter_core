@@ -9,8 +9,8 @@ use crate::utils::{
     assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token,
     create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
     mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
-    query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
-    withdraw_unclaimed_rewards, setup_generic,
+    query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens,
+    unlock_lp_tokens, withdraw_unclaimed_rewards,
 };
 pub mod utils;
 
@@ -39,7 +39,7 @@ fn test_staking() {
         1000,
         200,
         500,
-        1000
+        1000,
     );
 
     create_reward_schedule(
@@ -88,12 +88,7 @@ fn test_staking() {
     .unwrap();
 
     // Validate that user balance is reduced after bonding
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_500);
@@ -128,12 +123,7 @@ fn test_staking() {
     assert_eq!(creator_claimable_reward.claimed, false);
 
     // Validate that user balance is still zero after bonding till unlock happens
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     let token_lock_info = query_token_locks(
         &mut app,
@@ -158,12 +148,7 @@ fn test_staking() {
     );
 
     // Validate that user balance is still zero after bonding till unlock happens
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_302_001);
@@ -827,14 +812,8 @@ fn test_multi_user_multi_reward_schedule() {
     let user2_uxprt_balance = user_2_balance.iter().find(|b| b.denom == "uxprt").unwrap();
     let user2_uatom_balance = user_2_balance.iter().find(|b| b.denom == "uatom").unwrap();
 
-    assert_eq!(
-        user2_uxprt_balance.amount,
-        Uint128::from(170_129_870u64)
-    );
-    assert_eq!(
-        user2_uatom_balance.amount,
-        Uint128::from(187_229_437u64)
-    );
+    assert_eq!(user2_uxprt_balance.amount, Uint128::from(170_129_870u64));
+    assert_eq!(user2_uatom_balance.amount, Uint128::from(187_229_437u64));
 }
 
 /// This test is to check if the rewards are calculated correctly when we add a new reward schedule

@@ -1,4 +1,4 @@
-use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response, StdError};
+use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response};
 use dexter::governance_admin::RewardSchedulesCreationRequestStatus;
 
 use crate::{
@@ -29,9 +29,7 @@ pub fn execute_resume_reward_schedule_creation(
                 };
         }
         _ => {
-            return Err(ContractError::Std(StdError::generic_err(format!(
-                "invalid reward schedule creation request status"
-            ))));
+            return Err(ContractError::InvalidRewardScheduleRequestStatus);
         }
     }
 

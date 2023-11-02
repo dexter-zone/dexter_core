@@ -105,14 +105,17 @@ pub enum ContractError {
     InvalidFeeTierInterval { max_allowed: u64, received: u64 },
 
     #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
-    InvalidContractVersionForUpgrade { upgrade_version: String, expected: String, actual: String },
+    InvalidContractVersionForUpgrade {
+        upgrade_version: String,
+        expected: String,
+        actual: String,
+    },
 
     #[error("No locks exist for the user")]
     NoLocks,
 
     #[error("No valid lock found from supplied input which can be unlocked")]
     NoValidLocks,
-
 }
 
 impl From<OverflowError> for ContractError {
