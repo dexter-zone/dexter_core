@@ -232,7 +232,7 @@ pub fn execute_create_pool_creation_proposal(
         &PoolCreateRequestContextData {
             status: PoolCreationRequestStatus::PendingProposalCreation,
             request_sender: info.sender.clone(),
-            total_funds_acquired_from_user: user_total_deposit_funds.total_deposit,
+            total_funds_acquired_from_user: user_total_deposit_funds.total_deposit.clone(),
             user_deposits_detailed: user_total_deposit_funds.deposit_breakdown,
             pool_creation_request,
         },
@@ -300,7 +300,7 @@ pub fn execute_create_pool_creation_proposal(
     )
     .add_attribute(
         "total_funds_acquired_from_user",
-        serde_json_wasm::to_string(&total_funds_needed).unwrap(),
+        serde_json_wasm::to_string(&user_total_deposit_funds.total_deposit).unwrap(),
     );
 
     Ok(Response::new().add_messages(messages).add_event(event))

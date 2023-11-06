@@ -136,17 +136,17 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         } => to_json_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?),
         QueryMsg::RewardScheduleRequest {
             reward_schedule_request_id,
-        } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
+        } => to_json_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
         QueryMsg::FundsForPoolCreation { request } => {
             let user_total_deposit = query_funds_for_pool_creation_request(deps, &request)
                 .map_err(|e| StdError::generic_err(e.to_string()))?;
-            to_binary(&user_total_deposit)
+            to_json_binary(&user_total_deposit)
         }
         QueryMsg::FundsForRewardScheduleCreation { requests } => {
             let user_total_deposit = query_funds_for_reward_schedule_creation(deps, &requests)
                 .map_err(|e| StdError::generic_err(e.to_string()))?;
 
-            to_binary(&user_total_deposit)
+            to_json_binary(&user_total_deposit)
         }
         QueryMsg::RefundableFunds { request_type } => {
             let funds = query_refundable_funds(deps, &request_type)
