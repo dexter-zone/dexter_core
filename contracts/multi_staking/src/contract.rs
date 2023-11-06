@@ -15,9 +15,9 @@ use dexter::{
         propose_new_owner,
     },
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, ConfigV1, ConfigV2_1,
+        AssetRewardState, AssetStakerInfo, Config, ConfigV1,
         CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,
-        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward,
+        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward, ConfigV2_1, ConfigV2_2,
     },
 };
 
@@ -53,6 +53,7 @@ pub const CONTRACT_NAME: &str = "dexter-multi-staking";
 const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V2: &str = "2.0.0";
 const CONTRACT_VERSION_V2_1: &str = "2.1.0";
+const CONTRACT_VERSION_V2_2: &str = "2.2.0";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -96,8 +97,6 @@ pub fn instantiate(
         &Config {
             keeper: msg.keeper_addr,
             unlock_period: msg.unlock_period,
-            minimum_reward_schedule_proposal_start_delay: msg
-                .minimum_reward_schedule_proposal_start_delay,
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
             instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
@@ -127,7 +126,6 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig {
             keeper_addr,
-            minimum_reward_schedule_proposal_start_delay,
             unlock_period,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
@@ -137,7 +135,6 @@ pub fn execute(
             env,
             info,
             keeper_addr,
-            minimum_reward_schedule_proposal_start_delay,
             unlock_period,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
@@ -258,7 +255,6 @@ fn update_config(
     _env: Env,
     info: MessageInfo,
     keeper_addr: Option<Addr>,
-    minimum_reward_schedule_proposal_start_delay: Option<u64>,
     unlock_period: Option<u64>,
     instant_unbond_fee_bp: Option<u64>,
     instant_unbond_min_fee_bp: Option<u64>,
@@ -276,17 +272,6 @@ fn update_config(
     if let Some(keeper_addr) = keeper_addr {
         config.keeper = keeper_addr.clone();
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
-    }
-
-    if let Some(reward_schedule_proposal_start_delay) = minimum_reward_schedule_proposal_start_delay
-    {
-        config.minimum_reward_schedule_proposal_start_delay = reward_schedule_proposal_start_delay;
-        event = event.add_attribute(
-            "minimum_reward_schedule_proposal_start_delay",
-            config
-                .minimum_reward_schedule_proposal_start_delay
-                .to_string(),
-        );
     }
 
     if let Some(unlock_period) = unlock_period {
@@ -558,12 +543,11 @@ pub fn create_reward_schedule(
             end_block_time,
         });
     }
-    if start_block_time
-        <= env.block.time.seconds() + config.minimum_reward_schedule_proposal_start_delay
+    if start_block_time <= env.block.time.seconds()
     {
-        return Err(ContractError::ProposedStartBlockTimeMustBeReviewable {
-            min_reward_schedule_proposal_start_delay: config
-                .minimum_reward_schedule_proposal_start_delay,
+        return Err(ContractError::InvalidStartBlockTime {
+            start_block_time,
+            current_block_time: env.block.time.seconds(),
         });
     }
 
@@ -1221,11 +1205,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
-        MigrateMsg::V2 {
+        MigrateMsg::V3FromV1 {
             keeper_addr,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
-            fee_tier_interval,
+            fee_tier_interval
         } => {
             // verify if we are running on V1 right now
             let contract_version = get_contract_version(deps.storage)?;
@@ -1267,8 +1251,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
                 unlock_period: config_v1.unlock_period,
-                minimum_reward_schedule_proposal_start_delay: config_v1
-                    .minimum_reward_schedule_proposal_start_delay,
                 keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                 instant_unbond_fee_bp,
                 instant_unbond_min_fee_bp,
@@ -1277,49 +1259,60 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
-        }
-        MigrateMsg::V2_1 {} => {
-            // validate that we are on v2 right now
+        },
+        MigrateMsg::V3FromV2 { keeper_addr } => {
             let contract_version = get_contract_version(deps.storage)?;
-            if contract_version.version != CONTRACT_VERSION_V2 {
+            // if version is v2 or v2.1, apply the changes.
+            if contract_version.version == CONTRACT_VERSION_V2 || contract_version.version == CONTRACT_VERSION_V2_1 {
+                let config_v2: ConfigV2_1 = Item::new("config").load(deps.storage)?;
+                let config = Config {
+                    owner: config_v2.owner,
+                    allowed_lp_tokens: config_v2.allowed_lp_tokens,
+                    unlock_period: config_v2.unlock_period,
+                    keeper: keeper_addr,
+                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
+                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
+                    fee_tier_interval: config_v2.fee_tier_interval,
+                };
+
+                CONFIG.save(deps.storage, &config)?;
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+            } else {
                 return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: "v2.1".to_string(),
+                    upgrade_version: CONTRACT_VERSION.to_string(),
                     expected: CONTRACT_VERSION_V2.to_string(),
                     actual: contract_version.version,
                 });
             }
-
-            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
         }
-        
-        MigrateMsg::V2_2 { keeper_addr } => {
+
+        MigrateMsg::V3FromV2_2 {} => {
             let contract_version = get_contract_version(deps.storage)?;
-            
-            if contract_version.version != CONTRACT_VERSION_V2_1 {
+            // if version if v2.2 apply the changes and return
+            if contract_version.version == CONTRACT_VERSION_V2_2 {
+                let config_v2: ConfigV2_2 = Item::new("config").load(deps.storage)?;
+                let config = Config {
+                    owner: config_v2.owner,
+                    allowed_lp_tokens: config_v2.allowed_lp_tokens,
+                    unlock_period: config_v2.unlock_period,
+                    keeper: config_v2.keeper,
+                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
+                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
+                    fee_tier_interval: config_v2.fee_tier_interval,
+                };
+
+                CONFIG.save(deps.storage, &config)?;
+
+                // set the contract version to v3
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+            } else {
                 return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: "v2.2".to_string(),
-                    expected: CONTRACT_VERSION_V2_1.to_string(),
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V2_2.to_string(),
                     actual: contract_version.version,
                 });
             }
-
-            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
-            // load old config in v2.1 struct
-            let config_v2_1: ConfigV2_1 = Item::new("config").load(deps.storage)?;
-            let config_v2_2: Config = Config {
-                keeper: keeper_addr,
-                owner: config_v2_1.owner,
-                allowed_lp_tokens: config_v2_1.allowed_lp_tokens,
-                unlock_period: config_v2_1.unlock_period,
-                minimum_reward_schedule_proposal_start_delay: config_v2_1
-                    .minimum_reward_schedule_proposal_start_delay,
-                instant_unbond_fee_bp: config_v2_1.instant_unbond_fee_bp,
-                fee_tier_interval: config_v2_1.fee_tier_interval,
-                instant_unbond_min_fee_bp: config_v2_1.instant_unbond_min_fee_bp,
-            };
-
-            CONFIG.save(deps.storage, &config_v2_2)?;
         }
     }
 

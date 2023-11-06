@@ -56,10 +56,11 @@ pub enum ContractError {
     },
 
     #[error(
-        "Start block time must be at least {min_reward_schedule_proposal_start_delay} seconds in future at the time of proposal to give enough time to review"
+        "Start block time should be later than current block time. Start block time {start_block_time}, Current block time {current_block_time}"
     )]
-    ProposedStartBlockTimeMustBeReviewable {
-        min_reward_schedule_proposal_start_delay: u64,
+    InvalidStartBlockTime {
+        start_block_time: u64,
+        current_block_time: u64,
     },
 
     #[error("Proposal not found for ID: {proposal_id}")]

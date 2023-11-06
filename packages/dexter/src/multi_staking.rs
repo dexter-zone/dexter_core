@@ -30,18 +30,19 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum MigrateMsg {
-    V2 {
+    // Removes the reward schedule proposal start delay config param.
+    // This migration is supported from version v2.0, v2.1 and v2.2
+    V3FromV2 {
+        keeper_addr: Addr
+    },
+    V3FromV2_2 {},
+    /// Removes the reward schedule proposal start delay config param
+    /// Instant unbonding fee and keeper address are added
+    V3FromV1 {
         keeper_addr: Addr,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
-    },
-    /// Adds support for updating keeper address.
-    /// Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update.
-    /// We can otherwise use V2 message directly for upgrading from v1 to v2.1
-    V2_1 {},
-    V2_2 {
-        keeper_addr: Addr,
     }
 }
 
@@ -110,9 +111,6 @@ pub struct Config {
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
-    /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
-    /// This is to give enough time to review the proposal.
-    pub minimum_reward_schedule_proposal_start_delay: u64,
     /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
@@ -123,11 +121,24 @@ pub struct Config {
     pub instant_unbond_min_fee_bp: u64,
 }
 
-/// config structure of contract version v2.1. Used for migration.
+/// config structure of contract version v2 and v2.1 . Used for migration.
 #[cw_serde]
 pub struct ConfigV2_1 {
     pub owner: Addr,
     pub keeper: Option<Addr>,
+    pub allowed_lp_tokens: Vec<Addr>,
+    pub unlock_period: u64,
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub instant_unbond_fee_bp: u64,
+    pub fee_tier_interval: u64,
+    pub instant_unbond_min_fee_bp: u64,
+}
+
+/// config structure of contract version v2.2 . Used for migration.
+#[cw_serde]
+pub struct ConfigV2_2 {
+    pub owner: Addr,
+    pub keeper: Addr,
     pub allowed_lp_tokens: Vec<Addr>,
     pub unlock_period: u64,
     pub minimum_reward_schedule_proposal_start_delay: u64,
@@ -279,7 +290,6 @@ pub enum Cw20HookMsg {
 pub enum ExecuteMsg {
     /// Allows an admin to update config params
     UpdateConfig {
-        minimum_reward_schedule_proposal_start_delay: Option<u64>,
         keeper_addr: Option<Addr>,
         unlock_period: Option<u64>,
         instant_unbond_fee_bp: Option<u64>,
