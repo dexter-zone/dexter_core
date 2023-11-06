@@ -5,11 +5,12 @@ use std::process::Command;
 
 use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Event, Uint128, WasmMsg};
 use cw20::MinterResponse;
+use dexter::constants::GOV_MODULE_ADDRESS;
 use dexter::vault::FeeInfo;
 
 use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
 
-use dexter_governance_admin::utils::constants::GOV_MODULE_ADDRESS;
+
 use persistence_std::types::cosmos::bank::v1beta1::QueryBalanceRequest;
 use persistence_std::types::cosmos::gov::v1::{
     MsgSubmitProposal, MsgVote, ProposalStatus, QueryProposalRequest, VoteOption,

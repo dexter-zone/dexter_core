@@ -16,6 +16,7 @@ use itertools::Itertools;
 
 const ATTR_SENDER: &str = "sender";
 
+
 /// This trait helps implement certain conventions for events across all contracts. Such as:
 /// * Using `sender` as the name for the human sender of the message instead of using multiple
 /// aliases like `user`, `address`, etc. in different contracts.
@@ -30,6 +31,7 @@ pub trait EventExt {
 }
 
 impl EventExt for Event {
+
     fn from_info(name: impl Into<String>, info: &MessageInfo) -> Event {
         Event::new(name).add_attribute(ATTR_SENDER, info.sender.to_string())
     }
@@ -88,9 +90,9 @@ pub fn propose_new_owner(
     )?;
 
     Ok(Response::new().add_event(
-        Event::from_info(contract_name.into() + "::propose_new_owner", &info)
+        Event::from_info(contract_name.into() + "::propose_new_owner" , &info)
             .add_attribute("new_owner", new_owner)
-            .add_attribute("expires_in", expires_in.to_string()),
+            .add_attribute("expires_in", expires_in.to_string())
     ))
 }
 
@@ -109,10 +111,7 @@ pub fn drop_ownership_proposal(
     }
 
     proposal.remove(deps.storage);
-    Ok(Response::new().add_event(Event::from_info(
-        contract_name.into() + "::drop_ownership_proposal",
-        &info,
-    )))
+    Ok(Response::new().add_event(Event::from_info(contract_name.into() + "::drop_ownership_proposal", &info)))
 }
 
 /// ## Description
@@ -142,10 +141,7 @@ pub fn claim_ownership(
     ownership_proposal.remove(deps.storage);
     callback(deps, proposal.owner.clone())?;
 
-    Ok(Response::new().add_event(Event::from_info(
-        contract_name.into() + "::claim_ownership",
-        &info,
-    )))
+    Ok(Response::new().add_event(Event::from_info(contract_name.into() + "::claim_ownership", &info)))
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

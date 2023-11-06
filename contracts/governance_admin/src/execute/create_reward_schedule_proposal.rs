@@ -7,7 +7,7 @@ use dexter::{
         GovernanceProposalDescription, RewardScheduleCreationRequest,
         RewardScheduleCreationRequestsState, RewardSchedulesCreationRequestStatus,
     },
-    helper::EventExt,
+    helper::EventExt, constants::GOV_MODULE_ADDRESS,
 };
 use persistence_std::types::{
     cosmos::base::v1beta1::Coin as StdCoin, cosmos::gov::v1::MsgSubmitProposal,
@@ -21,10 +21,7 @@ use crate::{
     execute::create_pool_creation_proposal::validate_sent_amount_and_transfer_needed_assets,
     query::query_reward_schedule_creation_funds::find_total_needed_funds,
     state::{next_reward_schedule_request_id, REWARD_SCHEDULE_REQUESTS},
-    utils::{
-        constants::GOV_MODULE_ADDRESS,
-        queries::{query_allowed_lp_tokens, query_gov_params, query_proposal_min_deposit_amount},
-    },
+    utils::queries::{query_allowed_lp_tokens, query_gov_params, query_proposal_min_deposit_amount},
 };
 
 pub fn validate_create_reward_schedules_request(
@@ -38,7 +35,7 @@ pub fn validate_create_reward_schedules_request(
 
     let voting_end_time = env.block.time.plus_seconds(gov_voting_period).seconds();
     for reward_schedule in reward_schedules {
-        // reward schedules start block time should be a govermance proposal voting period later than the current block time
+        // reward schedules start block time should be a governance proposal voting period later than the current block time
         if reward_schedule.start_block_time < voting_end_time {
             return Err(ContractError::InvalidRewardScheduleStartBlockTime {});
         }

@@ -1,14 +1,9 @@
 use crate::contract::{ContractResult, CONTRACT_NAME};
-
 use crate::state::POOL_CREATION_REQUEST_DATA;
-
-use const_format::concatcp;
-
-use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
-
-use dexter::helper::EventExt;
-
 use crate::add_wasm_execute_msg;
+use const_format::concatcp;
+use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
+use dexter::helper::EventExt;
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
 pub fn execute_resume_create_pool(

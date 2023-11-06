@@ -1,8 +1,7 @@
 use cosmwasm_std::{Env, MessageInfo};
-
+use dexter::constants::GOV_MODULE_ADDRESS;
 use crate::{contract::ContractResult, error::ContractError};
 
-use super::constants::GOV_MODULE_ADDRESS;
 
 pub fn validate_goverance_module_sender(info: &MessageInfo) -> ContractResult<()> {
     if info.sender != GOV_MODULE_ADDRESS {

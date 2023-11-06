@@ -147,12 +147,17 @@ pub fn execute_resume_join_pool(
         vec![]
     );
 
-    // create a reward schedule creation request if there are any reward schedules
-    // store the reward schedule creation request
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_join_pool"), &info);
+    event = event
+        .add_attribute(
+            "pool_creation_request_id",
+            pool_creation_request_id.to_string(),
+        )
+        .add_attribute("pool_id", pool_id.to_string());
 
+    // create a reward schedule creation request if there are any reward schedules
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
-        let next_reward_schedules_creation_request_id =
-            next_reward_schedule_request_id(deps.storage)?;
+        let reward_schedules_creation_request_id = next_reward_schedule_request_id(deps.storage)?;
         let mut updated_reward_schedules = vec![];
 
         for reward_schedule in reward_schedules {
@@ -164,9 +169,10 @@ pub fn execute_resume_join_pool(
             updated_reward_schedules.push(updated_reward_schedule);
         }
 
+        // store the reward schedule creation request
         REWARD_SCHEDULE_REQUESTS.save(
             deps.storage,
-            next_reward_schedules_creation_request_id,
+            reward_schedules_creation_request_id,
             &RewardScheduleCreationRequestsState {
                 request_sender: pool_creation_request_context.request_sender,
                 status: RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule,
@@ -180,7 +186,7 @@ pub fn execute_resume_join_pool(
         // add a message to resume the reward schedule creation
         let resume_create_reward_schedules_msg =
             dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
-                reward_schedules_creation_request_id: next_reward_schedules_creation_request_id,
+                reward_schedules_creation_request_id,
             };
 
         // add the message to the list of messages
@@ -190,17 +196,14 @@ pub fn execute_resume_join_pool(
             resume_create_reward_schedules_msg,
             vec![]
         );
+
+        // add an event
+        event = event.add_attribute(
+            "reward_schedules_creation_request_id",
+            reward_schedules_creation_request_id.to_string(),
+        );
     }
 
-    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_join_pool"), &info);
-    event = event
-        .add_attribute(
-            "pool_creation_request_id",
-            pool_creation_request_id.to_string(),
-        )
-        .add_attribute("pool_id", pool_id.to_string());
-
     let res = Response::new().add_messages(messages).add_event(event);
-
     Ok(res)
 }

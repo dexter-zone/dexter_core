@@ -1,3 +1,5 @@
+use std::fmt::{Formatter, Display, self};
+
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, CosmosMsg, Uint128};
 
@@ -161,6 +163,22 @@ pub enum RefundReason {
     ProposalPassedDepositRefund,
     ProposalRejectedFullRefund,
     ProposalFailedFullRefund,
+}
+
+impl Display for RefundReason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RefundReason::ProposalPassedDepositRefund => {
+                write!(f, "ProposalPassedDepositRefund")
+            }
+            RefundReason::ProposalRejectedFullRefund => {
+                write!(f, "ProposalRejectedFullRefund")
+            }
+            RefundReason::ProposalFailedFullRefund => {
+                write!(f, "ProposalFailedFullRefund")
+            }
+        }
+    }
 }
 
 #[cw_serde]

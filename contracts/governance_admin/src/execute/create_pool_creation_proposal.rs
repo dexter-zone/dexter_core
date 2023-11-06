@@ -6,7 +6,6 @@ use crate::contract::{ContractResult, CONTRACT_NAME};
 use crate::error::ContractError;
 use crate::query::query_pool_creation_funds::find_total_funds_needed;
 use crate::state::{next_pool_creation_request_id, POOL_CREATION_REQUEST_DATA};
-use crate::utils::constants::GOV_MODULE_ADDRESS;
 use crate::utils::queries::{query_gov_params, query_proposal_min_deposit_amount};
 
 use const_format::concatcp;
@@ -14,6 +13,7 @@ use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
+use dexter::constants::GOV_MODULE_ADDRESS;
 use dexter::governance_admin::{
     GovernanceProposalDescription, PoolCreateRequestContextData, PoolCreationRequest,
     PoolCreationRequestStatus,
@@ -29,7 +29,7 @@ use persistence_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
 /// 1. Bootstrapping liquidity owner must be a valid address
 /// 2. Native asset precision must be specified for all the native assets in the pool
 /// 3. Bootstrapping amount if set, must include all the assets in the pool
-/// 4. Reward schedules start block time should be a govermance proposal voting period later than the current block time
+/// 4. Reward schedules start block time should be a governance proposal voting period later than the current block time
 fn validate_create_pool_request(
     env: &Env,
     deps: &DepsMut,
