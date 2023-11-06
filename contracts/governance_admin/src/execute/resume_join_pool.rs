@@ -9,7 +9,7 @@ use crate::state::{
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128,
+    to_json_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, StdError, Uint128,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
@@ -65,15 +65,17 @@ pub fn execute_resume_join_pool(
         )));
     }
 
+    let proposal_id = pool_creation_request_context.status.proposal_id().ok_or(
+        ContractError::ProposalIdNotSet {
+            request_type:
+                dexter::governance_admin::GovAdminProposalRequestType::PoolCreationRequest {
+                    request_id: pool_creation_request_id,
+                },
+        },
+    )?;
+
     pool_creation_request_context.status = PoolCreationRequestStatus::PoolCreated {
-        proposal_id: pool_creation_request_context.status.proposal_id().ok_or(
-            ContractError::ProposalIdNotSet {
-                request_type:
-                    dexter::governance_admin::GovAdminProposalRequestType::PoolCreationRequest {
-                        request_id: pool_creation_request_id,
-                    },
-            },
-        )?,
+        proposal_id,
         pool_id: pool_id.clone(),
     };
 
@@ -148,12 +150,6 @@ pub fn execute_resume_join_pool(
     );
 
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::resume_join_pool"), &info);
-    event = event
-        .add_attribute(
-            "pool_creation_request_id",
-            pool_creation_request_id.to_string(),
-        )
-        .add_attribute("pool_id", pool_id.to_string());
 
     // create a reward schedule creation request if there are any reward schedules
     if let Some(reward_schedules) = &pool_creation_request.reward_schedules {
@@ -174,9 +170,9 @@ pub fn execute_resume_join_pool(
             deps.storage,
             reward_schedules_creation_request_id,
             &RewardScheduleCreationRequestsState {
-                request_sender: pool_creation_request_context.request_sender,
+                request_sender: pool_creation_request_context.request_sender.clone(),
                 status: RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule,
-                multistaking_contract_addr: multistaking_address,
+                multistaking_contract_addr: multistaking_address.clone(),
                 reward_schedule_creation_requests: updated_reward_schedules.clone(),
                 user_deposits_detailed: vec![],
                 total_funds_acquired_from_user: vec![],
@@ -198,11 +194,30 @@ pub fn execute_resume_join_pool(
         );
 
         // add an event
-        event = event.add_attribute(
-            "reward_schedules_creation_request_id",
-            reward_schedules_creation_request_id.to_string(),
-        );
+        event = event
+            .add_attribute(
+                "reward_schedules_creation_request_id",
+                reward_schedules_creation_request_id.to_string(),
+            )
+            .add_attribute(
+                "request_sender",
+                pool_creation_request_context.request_sender.to_string(),
+            );
     }
+
+    event = event
+        .add_attribute(
+            "pool_creation_request_id",
+            pool_creation_request_id.to_string(),
+        )
+        .add_attribute("pool_id", pool_id.to_string())
+        .add_attribute("proposal_id", proposal_id.to_string())
+        .add_attribute("vault_addr)", pool_creation_request.vault_addr.to_string())
+        .add_attribute(
+            "multistaking_contract_addr",
+            multistaking_address.to_string(),
+        )
+        .add_attribute("lp_token", lp_token.to_string());
 
     let res = Response::new().add_messages(messages).add_event(event);
     Ok(res)

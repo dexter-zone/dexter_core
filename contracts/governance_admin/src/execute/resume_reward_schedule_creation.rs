@@ -1,13 +1,19 @@
-use cosmwasm_std::{to_binary, Coin, CosmosMsg, DepsMut, Response};
-use dexter::governance_admin::RewardSchedulesCreationRequestStatus;
+use const_format::concatcp;
+use cosmwasm_std::{
+    to_json_binary, Coin, CosmosMsg, DepsMut, Event, MessageInfo, Response, StdError,
+};
+use dexter::{governance_admin::RewardSchedulesCreationRequestStatus, helper::EventExt};
 
 use crate::{
-    add_wasm_execute_msg, contract::ContractResult, error::ContractError,
+    add_wasm_execute_msg,
+    contract::{ContractResult, CONTRACT_NAME},
+    error::ContractError,
     state::REWARD_SCHEDULE_REQUESTS,
 };
 
 pub fn execute_resume_reward_schedule_creation(
     deps: DepsMut,
+    info: MessageInfo,
     reward_schedule_creation_request_id: u64,
 ) -> ContractResult<Response> {
     let mut msgs: Vec<CosmosMsg> = vec![];
@@ -16,17 +22,24 @@ pub fn execute_resume_reward_schedule_creation(
     let mut reward_schedule_creation_request =
         REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_creation_request_id)?;
 
+    let mut event = Event::from_info(
+        concatcp!(CONTRACT_NAME, "::resume_reward_schedule_creation"),
+        &info,
+    );
+
     // mark the request as done
     match reward_schedule_creation_request.status {
         RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule => {
             reward_schedule_creation_request.status =
                 RewardSchedulesCreationRequestStatus::RewardSchedulesCreated { proposal_id: None };
+            event = event.add_attribute("proposal_id", "-1".to_string());
         }
         RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id } => {
             reward_schedule_creation_request.status =
                 RewardSchedulesCreationRequestStatus::RewardSchedulesCreated {
                     proposal_id: Some(proposal_id),
                 };
+            event = event.add_attribute("proposal_id", "proposal_id".to_string());
         }
         _ => {
             return Err(ContractError::InvalidRewardScheduleRequestStatus);
@@ -40,7 +53,7 @@ pub fn execute_resume_reward_schedule_creation(
     )?;
 
     // create the reward schedules
-    for request in reward_schedule_creation_request.reward_schedule_creation_requests {
+    for request in reward_schedule_creation_request.reward_schedule_creation_requests.clone() {
         match request.asset {
             dexter::asset::AssetInfo::Token { contract_addr } => {
                 // send a CW20 hook msg to the multistaking contract
@@ -60,7 +73,7 @@ pub fn execute_resume_reward_schedule_creation(
                         .multistaking_contract_addr
                         .to_string(),
                     amount: request.amount,
-                    msg: to_binary(&msg_create_reward_schedule)?,
+                    msg: to_json_binary(&msg_create_reward_schedule)?,
                 };
 
                 add_wasm_execute_msg!(
@@ -69,6 +82,7 @@ pub fn execute_resume_reward_schedule_creation(
                     cw20_transfer_msg_lp_token,
                     vec![]
                 );
+
             }
             dexter::asset::AssetInfo::NativeToken { denom } => {
                 let msg_create_reward_schedule =
@@ -95,8 +109,19 @@ pub fn execute_resume_reward_schedule_creation(
         }
     }
 
-    let mut response = Response::new();
-    response = response.add_messages(msgs);
+    event = event
+        .add_attribute(
+            "reward_schedule_creation_request_id",
+            reward_schedule_creation_request_id.to_string(),
+        )
+        .add_attribute(
+            "reward_schedule_creation_requests",
+            serde_json_wasm::to_string(
+                &reward_schedule_creation_request.reward_schedule_creation_requests,
+            )
+            .unwrap(),
+        );
+    let response = Response::new().add_messages(msgs).add_event(event);
 
     Ok(response)
 }

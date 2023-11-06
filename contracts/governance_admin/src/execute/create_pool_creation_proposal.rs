@@ -10,7 +10,7 @@ use crate::utils::queries::{query_gov_params, query_proposal_min_deposit_amount}
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
+    to_json_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::constants::GOV_MODULE_ADDRESS;
@@ -243,7 +243,7 @@ pub fn execute_create_pool_creation_proposal(
         // that the governance is able to send a message which only it can execute
         sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
-        msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
+        msg: to_json_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
         })?
         .to_vec(),
@@ -252,7 +252,7 @@ pub fn execute_create_pool_creation_proposal(
 
     // we'll create a proposal to create a pool
     let proposal_msg = MsgSubmitProposal {
-        title: proposal_description.title,
+        title: proposal_description.title.clone(),
         metadata: proposal_description.metadata,
         summary: proposal_description.summary,
         initial_deposit: gov_proposal_min_deposit_amount
@@ -291,6 +291,16 @@ pub fn execute_create_pool_creation_proposal(
     .add_attribute(
         "pool_creation_request_id",
         pool_creation_request_id.to_string(),
+    )
+    .add_attribute("sender", info.sender.to_string())
+    .add_attribute("title", proposal_description.title)
+    .add_attribute(
+        "initial_deposit",
+        serde_json_wasm::to_string(&gov_proposal_min_deposit_amount).unwrap(),
+    )
+    .add_attribute(
+        "total_funds_acquired_from_user",
+        serde_json_wasm::to_string(&total_funds_needed).unwrap(),
     );
 
     Ok(Response::new().add_messages(messages).add_event(event))

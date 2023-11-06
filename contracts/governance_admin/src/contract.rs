@@ -20,7 +20,7 @@ use crate::utils::validate_sender::{
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError,
+    entry_point, to_json_binary, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError,
     StdResult,
 };
 use cw2::set_contract_version;
@@ -119,7 +119,7 @@ pub fn execute(
             reward_schedules_creation_request_id,
         } => {
             validatate_goverance_module_or_self_sender(&info, env)?;
-            execute_resume_reward_schedule_creation(deps, reward_schedules_creation_request_id)
+            execute_resume_reward_schedule_creation(deps, info, reward_schedules_creation_request_id)
         }
 
         ExecuteMsg::ClaimRefund { request_type } => {
@@ -133,7 +133,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::PoolCreationRequest {
             pool_creation_request_id,
-        } => to_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?),
+        } => to_json_binary(&POOL_CREATION_REQUEST_DATA.load(deps.storage, pool_creation_request_id)?),
         QueryMsg::RewardScheduleRequest {
             reward_schedule_request_id,
         } => to_binary(&REWARD_SCHEDULE_REQUESTS.load(deps.storage, reward_schedule_request_id)?),
@@ -152,7 +152,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             let funds = query_refundable_funds(deps, &request_type)
                 .map_err(|e| StdError::generic_err(e.to_string()))?;
 
-            to_binary(&funds)
+            to_json_binary(&funds)
         }
     }
 }

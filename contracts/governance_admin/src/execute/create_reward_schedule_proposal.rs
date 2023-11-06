@@ -1,6 +1,6 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, QuerierWrapper, Response,
+    to_json_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, QuerierWrapper, Response,
 };
 use dexter::{
     governance_admin::{
@@ -105,7 +105,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
         validate_create_reward_schedules_request(&env, gov_voting_period, &reward_schedules)?;
 
     // validate that all the requested LP tokens are already whitelisted for reward distribution
-    validate_lp_token_allowed(&multistaking_contract, lp_tokens, &deps.querier)?;
+    validate_lp_token_allowed(&multistaking_contract, lp_tokens.clone(), &deps.querier)?;
 
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
     let (user_deposits_detailed, total_needed_funds) =
@@ -127,9 +127,9 @@ pub fn execute_create_reward_schedule_creation_proposal(
     let reward_schedule_creation_request = RewardScheduleCreationRequestsState {
         status: RewardSchedulesCreationRequestStatus::PendingProposalCreation,
         request_sender: info.sender.clone(),
-        multistaking_contract_addr: multistaking_contract,
+        multistaking_contract_addr: multistaking_contract.clone(),
         reward_schedule_creation_requests: reward_schedules.clone(),
-        user_deposits_detailed,
+        user_deposits_detailed: user_deposits_detailed.clone(),
         total_funds_acquired_from_user: total_needed_funds,
     };
 
@@ -148,12 +148,12 @@ pub fn execute_create_reward_schedule_creation_proposal(
     let msg = MsgExecuteContract {
         sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
-        msg: to_binary(&create_reward_schedule_proposal_msg)?.to_vec(),
+        msg: to_json_binary(&create_reward_schedule_proposal_msg)?.to_vec(),
         funds: vec![],
     };
 
     let proposal_msg = MsgSubmitProposal {
-        title: proposal_description.title,
+        title: proposal_description.title.clone(),
         metadata: proposal_description.metadata,
         summary: proposal_description.summary,
         initial_deposit: gov_proposal_min_deposit_amount
@@ -189,7 +189,26 @@ pub fn execute_create_reward_schedule_creation_proposal(
     .add_attribute(
         "reward_schedules_creation_request_id",
         next_reward_schedules_creation_request_id.to_string(),
-    );
+    )
+    .add_attribute(
+        "multistaking_contract_addr",
+        multistaking_contract.to_string(),
+    )
+    .add_attribute("sender", info.sender.to_string())
+    .add_attribute("title", proposal_description.title)
+    .add_attribute(
+        "reward_schedules",
+        serde_json_wasm::to_string(&reward_schedules).unwrap(),
+    )
+    .add_attribute(
+        "initial_deposit",
+        serde_json_wasm::to_string(&gov_proposal_min_deposit_amount).unwrap(),
+    )
+    .add_attribute(
+        "user_deposits_detailed",
+        serde_json_wasm::to_string(&user_deposits_detailed).unwrap(),
+    )
+    .add_attribute("lp_tokens", serde_json_wasm::to_string(&lp_tokens).unwrap());
 
     Ok(Response::new().add_messages(msgs).add_event(event))
 }

@@ -2,7 +2,9 @@ use crate::contract::{ContractResult, CONTRACT_NAME};
 use crate::state::POOL_CREATION_REQUEST_DATA;
 use crate::add_wasm_execute_msg;
 use const_format::concatcp;
-use cosmwasm_std::{to_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
+
+use cosmwasm_std::{to_json_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
+
 use dexter::helper::EventExt;
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
@@ -46,6 +48,11 @@ pub fn execute_resume_create_pool(
         .add_attribute(
             "pool_creation_request_id",
             pool_creation_request_id.to_string(),
+        )
+        .add_attribute("vault_address", vault_addr.to_string())
+        .add_attribute(
+            "pool_creation_request",
+            serde_json_wasm::to_string(&pool_creation_request).unwrap(),
         );
 
     Ok(Response::new().add_messages(messages).add_event(event))
