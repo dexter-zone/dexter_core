@@ -62,14 +62,11 @@ pub fn execute(
             // validatate that the governance module is sending the message
             validate_goverance_module_sender(&info)?;
 
-            let mut res = Response::new();
-            let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::execute_msgs"), &info);
-            // log if this part of a transaction or not
-            event = match env.transaction {
-                None => event.add_attribute("tx", "none"),
-                Some(tx) => event.add_attribute("tx", tx.index.to_string()),
-            };
-            res = res.add_messages(msgs).add_event(event);
+            let event = Event::from_info(concatcp!(CONTRACT_NAME, "::execute_msgs"), &info);
+            let res = Response::new()
+                .add_event(event)
+                .add_messages(msgs);
+            
             Ok(res)
         }
 
@@ -162,6 +159,6 @@ pub struct MigrateMsg {}
 
 // migrate handler
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    return Ok(Response::default());
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {  
+    return Err(ContractError::MigrationNotSupported {});
 }

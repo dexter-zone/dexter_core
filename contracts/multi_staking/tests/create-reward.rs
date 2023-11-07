@@ -171,8 +171,9 @@ fn test_reward_schedule_creation() {
         1000_001_000,
         1000_002_000,
     );
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
+    assert_eq!(res.is_err(), false);
+    // We removed the requirement of a delay in the reward schedule start time so this doesn't apply anymore
+    // assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
 
     // creation of a valid reward schedule should succeed by admin
     let _reward_schedule_id = create_reward_schedule(

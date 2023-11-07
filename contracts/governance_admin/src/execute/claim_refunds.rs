@@ -27,6 +27,11 @@ pub fn execute_claim_refunds(
     info: MessageInfo,
     request_type: GovAdminProposalRequestType,
 ) -> ContractResult<Response> {
+    // validate that no funds are sent
+    if info.funds.len() > 0 {
+        return Err(ContractError::NoFundsExpected {});
+    }
+
     let refund_response = query_refundable_funds(deps.as_ref(), &request_type)?;
     let mut messages = vec![];
 

@@ -9,14 +9,14 @@ use crate::state::{
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, StdError, Uint128,
+    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;
 
 use dexter::governance_admin::{
     PoolCreationRequestStatus, RewardScheduleCreationRequest, RewardScheduleCreationRequestsState,
-    RewardSchedulesCreationRequestStatus,
+    RewardSchedulesCreationRequestStatus, GovAdminProposalRequestType,
 };
 use dexter::helper::EventExt;
 use dexter::querier::query_vault_config;
@@ -67,10 +67,9 @@ pub fn execute_resume_join_pool(
 
     let proposal_id = pool_creation_request_context.status.proposal_id().ok_or(
         ContractError::ProposalIdNotSet {
-            request_type:
-                dexter::governance_admin::GovAdminProposalRequestType::PoolCreationRequest {
+            request_type: GovAdminProposalRequestType::PoolCreationRequest {
                     request_id: pool_creation_request_id,
-                },
+            },
         },
     )?;
 

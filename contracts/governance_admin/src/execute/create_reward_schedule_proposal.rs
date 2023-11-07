@@ -26,9 +26,11 @@ use crate::{
 
 pub fn validate_create_reward_schedules_request(
     env: &Env,
+    querier: &QuerierWrapper,
+    multistaking_contract: &Addr,
     gov_voting_period: u64,
     reward_schedules: &Vec<RewardScheduleCreationRequest>,
-) -> Result<Vec<Addr>, ContractError> {
+) -> ContractResult<()> {
     if reward_schedules.len() == 0 {
         return Err(ContractError::EmptyRewardSchedule {});
     }
@@ -52,7 +54,7 @@ pub fn validate_create_reward_schedules_request(
     for reward_schedule in reward_schedules {
         match &reward_schedule.lp_token_addr {
             None => {
-                return Err(ContractError::LpTokenNotAllowed);
+                return Err(ContractError::LpTokenNull);
             }
             Some(lp_token) => {
                 lp_tokens.push(lp_token.clone());
@@ -60,10 +62,12 @@ pub fn validate_create_reward_schedules_request(
         }
     }
 
-    Ok(lp_tokens)
+    // validate that all the requested LP tokens are already whitelisted for reward distribution
+    validate_lp_token_allowed(multistaking_contract, lp_tokens, querier)?;
+    Ok(())
 }
 
-pub fn validate_lp_token_allowed(
+fn validate_lp_token_allowed(
     multistaking_contract: &Addr,
     lp_tokens: Vec<Addr>,
     querier: &QuerierWrapper,
@@ -77,7 +81,7 @@ pub fn validate_lp_token_allowed(
         .collect::<std::collections::HashSet<Addr>>();
     for lp_token in lp_tokens {
         if !allowed_tokens_set.contains(&lp_token) {
-            return Err(ContractError::LpTokenNull);
+            return Err(ContractError::LpTokenNotAllowed { lp_token_addr: lp_token });
         }
     }
 
@@ -101,11 +105,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
         .ok_or(ContractError::VotingPeriodNull)?
         .seconds as u64;
 
-    let lp_tokens =
-        validate_create_reward_schedules_request(&env, gov_voting_period, &reward_schedules)?;
-
-    // validate that all the requested LP tokens are already whitelisted for reward distribution
-    validate_lp_token_allowed(&multistaking_contract, lp_tokens.clone(), &deps.querier)?;
+    validate_create_reward_schedules_request(&env, &deps.querier, &multistaking_contract, gov_voting_period, &reward_schedules)?;
 
     let gov_proposal_min_deposit_amount = query_proposal_min_deposit_amount(deps.as_ref())?;
     let (user_deposits_detailed, total_needed_funds) =

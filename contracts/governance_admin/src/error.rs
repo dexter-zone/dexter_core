@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError, Uint128};
+use cosmwasm_std::{OverflowError, StdError, Uint128, Addr};
 use dexter::governance_admin::GovAdminProposalRequestType;
 use thiserror::Error;
 
@@ -71,8 +71,8 @@ pub enum ContractError {
     #[error("LP Token is expected in the reward schedule creation request but it is None")]
     LpTokenNull,
 
-    #[error("LP Token not allowed for reward schedule creation yet")]
-    LpTokenNotAllowed,
+    #[error("LP Token: {lp_token_addr} not allowed for reward schedule creation yet")]
+    LpTokenNotAllowed { lp_token_addr: Addr },
 
     #[error("Cannot decode proposal status from {status} to a valid proposal status enum variant")]
     CannotDecodeProposalStatus { status: i32 },
@@ -99,6 +99,12 @@ pub enum ContractError {
 
     #[error("Funds already claimed for this request at block height: {refund_block_height}")]
     FundsAlreadyClaimed { refund_block_height: u64 },
+
+    #[error("No funds expected for this request")]
+    NoFundsExpected {},
+
+    #[error("Migration is not supported for v1 of the contract")]
+    MigrationNotSupported {},
 }
 
 impl From<OverflowError> for ContractError {

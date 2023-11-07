@@ -517,7 +517,7 @@ impl<'a> CreatePoolTestSuite<'a> {
         assert!(res.is_err());
 
         let error = res.unwrap_err();
-        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Generic error: Funds are already claimed back for this pool creation request in block 29: execute wasm contract failed");
+        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Funds already claimed for this request at block height: 29: execute wasm contract failed");
     }
 
     fn test_refund_for_rejected_proposal(&self) {

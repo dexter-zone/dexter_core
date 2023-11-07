@@ -21,7 +21,11 @@ Dexter Multi-staking contract enables LP incentivization mechanism on Dexter. It
 
 Following transition functions can only be executed by the `owner` of the contract. 
 
-#### 1. _**
+#### 1. _**Create Reward Schedule**_
+Creates a new reward schedule. Owner can create a reward sFchedule on the behalf of a user.
+
+
+
 
 
 

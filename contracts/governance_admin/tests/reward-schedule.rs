@@ -193,7 +193,7 @@ impl<'a> RewardScheduleTestSuite<'a> {
         assert!(result.is_err());
         let error = result.unwrap_err();
         let expected_error = format!(
-            "execute error: failed to execute message; message index: 0: Generic error: LP token {} is not allowed for reward distribution: execute wasm contract failed",
+            "execute error: failed to execute message; message index: 0: LP Token: {} not allowed for reward schedule creation yet: execute wasm contract failed",
             self.pool_info.lp_token_addr,
         );
         assert_eq!(error.to_string(), expected_error);
@@ -262,7 +262,7 @@ impl<'a> RewardScheduleTestSuite<'a> {
 
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: Generic error: LP token address is required for reward schedule creation request: execute wasm contract failed");
+        assert_eq!(error.to_string(), "execute error: failed to execute message; message index: 0: LP Token is expected in the reward schedule creation request but it is None: execute wasm contract failed");
     }
 
     fn test_insufficient_fund(&self) {
@@ -374,7 +374,7 @@ impl<'a> RewardScheduleTestSuite<'a> {
         assert!(res.is_err());
         let error = res.unwrap_err();
         let expected_err = format!(
-            "execute error: failed to execute message; message index: 0: Generic error: Funds are already claimed back for this reward schedule creation request in block {}: execute wasm contract failed",
+            "execute error: failed to execute message; message index: 0: Funds already claimed for this request at block height: {}: execute wasm contract failed",
             self.persistence.get_block_height() - 1,
         );
         assert_eq!(error.to_string(), expected_err);

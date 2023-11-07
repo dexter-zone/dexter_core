@@ -1,6 +1,6 @@
 {
   "contract_name": "dexter-multi-staking",
-  "contract_version": "2.1.0",
+  "contract_version": "3.0.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -105,14 +105,6 @@
                   }
                 ]
               },
-              "minimum_reward_schedule_proposal_start_delay": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
-              },
               "unlock_period": {
                 "type": [
                   "integer",
@@ -128,7 +120,7 @@
         "additionalProperties": false
       },
       {
-        "description": "Crates a new reward schedule for rewarding LP token holders a specific asset. Asset is distributed linearly over the duration of the reward schedule. This entry point is strictly meant for proposing reward schedules with native tokens. For proposing reward schedules with CW20 tokens, CW20 transfer with CreateRewardSchedule HookMsg is used. Only owner can create a reward schedule proposal.",
+        "description": "Creates a new reward schedule for rewarding LP token holders a specific asset. Asset is distributed linearly over the duration of the reward schedule. This entry point is strictly meant for proposing reward schedules with native tokens. For proposing reward schedules with CW20 tokens, CW20 transfer with CreateRewardSchedule HookMsg is used. Only owner can create a reward schedule proposal.",
         "type": "object",
         "required": [
           "create_reward_schedule"
@@ -143,10 +135,15 @@
               "title"
             ],
             "properties": {
-              "description": {
-                "type": [
-                  "string",
-                  "null"
+              "actual_creator": {
+                "description": "The user on whose behalf the reward schedule might be being created by the owner This is particularly useful for the Gov admin scenario where a user proposes a reward schedule on the chain governance and the gov admin actually creates the reward schedule for the user",
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Addr"
+                  },
+                  {
+                    "type": "null"
+                  }
                 ]
               },
               "end_block_time": {
@@ -922,10 +919,45 @@
       {
         "type": "object",
         "required": [
-          "v2"
+          "v3_from_v2"
         ],
         "properties": {
-          "v2": {
+          "v3_from_v2": {
+            "type": "object",
+            "required": [
+              "keeper_addr"
+            ],
+            "properties": {
+              "keeper_addr": {
+                "$ref": "#/definitions/Addr"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "v3_from_v2_2"
+        ],
+        "properties": {
+          "v3_from_v2_2": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Removes the reward schedule proposal start delay config param Instant unbonding fee and keeper address are added",
+        "type": "object",
+        "required": [
+          "v3_from_v1"
+        ],
+        "properties": {
+          "v3_from_v1": {
             "type": "object",
             "required": [
               "fee_tier_interval",
@@ -953,20 +985,6 @@
                 "$ref": "#/definitions/Addr"
               }
             },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
-        "description": "Adds support for updating keeper address. Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update. We can otherwise use V2 message directly for upgrading from v1 to v2.1",
-        "type": "object",
-        "required": [
-          "v2_1"
-        ],
-        "properties": {
-          "v2_1": {
-            "type": "object",
             "additionalProperties": false
           }
         },
@@ -1012,7 +1030,6 @@
         "instant_unbond_fee_bp",
         "instant_unbond_min_fee_bp",
         "keeper",
-        "minimum_reward_schedule_proposal_start_delay",
         "owner",
         "unlock_period"
       ],
@@ -1049,12 +1066,6 @@
               "$ref": "#/definitions/Addr"
             }
           ]
-        },
-        "minimum_reward_schedule_proposal_start_delay": {
-          "description": "Minimum number of seconds after which a proposed reward schedule can start after it is proposed. This is to give enough time to review the proposal.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
         },
         "owner": {
           "description": "owner has privilege to add/remove allowed lp tokens for reward",
