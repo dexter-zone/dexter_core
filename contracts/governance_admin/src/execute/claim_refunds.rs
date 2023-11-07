@@ -1,5 +1,5 @@
 use const_format::concatcp;
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response, Event};
+use cosmwasm_std::{DepsMut, Env, Event, MessageInfo, Response};
 use dexter::{
     governance_admin::{
         GovAdminProposalRequestType, PoolCreationRequestStatus,
@@ -24,7 +24,7 @@ use crate::{
 pub fn execute_claim_refunds(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     request_type: GovAdminProposalRequestType,
 ) -> ContractResult<Response> {
     let refund_response = query_refundable_funds(deps.as_ref(), &request_type)?;
@@ -42,6 +42,8 @@ pub fn execute_claim_refunds(
     }
 
     let refund_block_height = env.block.height;
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::claim_refund"), &info);
+
     match &request_type {
         GovAdminProposalRequestType::PoolCreationRequest { request_id } => {
             let mut pool_creation_request_context = POOL_CREATION_REQUEST_DATA.load(deps.storage, *request_id)?;
@@ -75,6 +77,10 @@ pub fn execute_claim_refunds(
                 *request_id,
                 &pool_creation_request_context,
             )?;
+
+            event = event
+                .add_attribute("proposal_id", proposal_id.to_string())
+                .add_attribute("request_id", request_id.to_string());
         }
         GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             let mut reward_schedule_request_state = REWARD_SCHEDULE_REQUESTS.load(deps.storage, *request_id)?;
@@ -108,14 +114,18 @@ pub fn execute_claim_refunds(
                 *request_id,
                 &reward_schedule_request_state,
             )?;
+
+            event = event
+                .add_attribute("proposal_id", proposal_id.to_string())
+                .add_attribute("request_id", request_id.to_string());
         }
     }
 
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::claim_refunds"), &_info)
+    event = event
         .add_attribute("request_type", serde_json_wasm::to_string(&request_type).unwrap())
         .add_attribute("refund_receiver", refund_response.refund_receiver)
         .add_attribute("refund_amount", serde_json_wasm::to_string(&refund_response.refund_amount).unwrap())
-        .add_attribute("refund_reason", refund_response.refund_reason.to_string());
+        .add_attribute("refund_reason", serde_json_wasm::to_string(&refund_response.refund_reason).unwrap());
 
     Ok(Response::new().add_event(event).add_messages(messages))
 }

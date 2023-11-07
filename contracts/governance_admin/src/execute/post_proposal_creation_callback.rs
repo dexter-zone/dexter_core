@@ -6,7 +6,7 @@ use crate::utils::queries::query_latest_governance_proposal;
 
 use const_format::concatcp;
 
-use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response};
+use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response, StdError};
 
 use dexter::governance_admin::{
     GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
@@ -82,9 +82,7 @@ pub fn execute_post_governance_proposal_creation_callback(
                 &pool_creation_request_context,
             )?;
 
-            event = event
-                .add_attribute("pool_creation_request_id", request_id.to_string())
-                .add_attribute("proposal_id", latest_proposal.id.to_string());
+            event = event.add_attribute("proposal_id", latest_proposal.id.to_string());
         }
         GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             // store the proposal id in the state
@@ -102,14 +100,14 @@ pub fn execute_post_governance_proposal_creation_callback(
                 &reward_schedule_request_state,
             )?;
 
-            event = event
-                .add_attribute(
-                    "reward_schedules_creation_request_id",
-                    request_id.to_string(),
-                )
-                .add_attribute("proposal_id", latest_proposal.id.to_string());
+            event = event.add_attribute("proposal_id", latest_proposal.id.to_string());
         }
     }
+
+    event = event.add_attribute(
+        "proposal_type",
+        serde_json_wasm::to_string(&proposal_type).unwrap(),
+    );
 
     Ok(Response::default().add_event(event))
 }

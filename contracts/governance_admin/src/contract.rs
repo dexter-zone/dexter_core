@@ -119,7 +119,7 @@ pub fn execute(
             reward_schedules_creation_request_id,
         } => {
             validatate_goverance_module_or_self_sender(&info, env)?;
-            execute_resume_reward_schedule_creation(deps, reward_schedules_creation_request_id)
+            execute_resume_reward_schedule_creation(deps, info, reward_schedules_creation_request_id)
         }
 
         ExecuteMsg::ClaimRefund { request_type } => {

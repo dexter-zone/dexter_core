@@ -232,8 +232,8 @@ pub fn execute_create_pool_creation_proposal(
         &PoolCreateRequestContextData {
             status: PoolCreationRequestStatus::PendingProposalCreation,
             request_sender: info.sender.clone(),
-            total_funds_acquired_from_user: user_total_deposit_funds.total_deposit,
-            user_deposits_detailed: user_total_deposit_funds.deposit_breakdown,
+            total_funds_acquired_from_user: user_total_deposit_funds.total_deposit.clone(),
+            user_deposits_detailed: user_total_deposit_funds.deposit_breakdown.clone(),
             pool_creation_request,
         },
     )?;
@@ -252,7 +252,7 @@ pub fn execute_create_pool_creation_proposal(
 
     // we'll create a proposal to create a pool
     let proposal_msg = MsgSubmitProposal {
-        title: proposal_description.title,
+        title: proposal_description.title.clone(),
         metadata: proposal_description.metadata,
         summary: proposal_description.summary,
         initial_deposit: gov_proposal_min_deposit_amount
@@ -291,6 +291,20 @@ pub fn execute_create_pool_creation_proposal(
     .add_attribute(
         "pool_creation_request_id",
         pool_creation_request_id.to_string(),
+    )
+    .add_attribute("sender", info.sender.to_string())
+    .add_attribute("title", proposal_description.title)
+    .add_attribute(
+        "initial_deposit",
+        serde_json_wasm::to_string(&gov_proposal_min_deposit_amount).unwrap(),
+    )
+    .add_attribute(
+        "total_funds_acquired_from_user",
+        serde_json_wasm::to_string(&user_total_deposit_funds.total_deposit).unwrap(),
+    )
+    .add_attribute(
+        "user_deposits_detailed",
+        serde_json_wasm::to_string(&user_total_deposit_funds.deposit_breakdown).unwrap(),
     );
 
     Ok(Response::new().add_messages(messages).add_event(event))
