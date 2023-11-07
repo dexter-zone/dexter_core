@@ -32,7 +32,6 @@ pub fn execute_resume_reward_schedule_creation(
         RewardSchedulesCreationRequestStatus::NonProposalRewardSchedule => {
             reward_schedule_creation_request.status =
                 RewardSchedulesCreationRequestStatus::RewardSchedulesCreated { proposal_id: None };
-            event = event.add_attribute("proposal_id", "-1".to_string());
         }
         RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id } => {
             reward_schedule_creation_request.status =

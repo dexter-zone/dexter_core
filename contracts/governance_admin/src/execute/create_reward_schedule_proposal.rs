@@ -207,8 +207,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     .add_attribute(
         "user_deposits_detailed",
         serde_json_wasm::to_string(&user_deposits_detailed).unwrap(),
-    )
-    .add_attribute("lp_tokens", serde_json_wasm::to_string(&lp_tokens).unwrap());
+    );
 
     Ok(Response::new().add_messages(msgs).add_event(event))
 }

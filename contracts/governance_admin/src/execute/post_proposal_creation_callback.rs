@@ -82,9 +82,7 @@ pub fn execute_post_governance_proposal_creation_callback(
                 &pool_creation_request_context,
             )?;
 
-            event = event
-                .add_attribute("request_id", request_id.to_string())
-                .add_attribute("proposal_id", latest_proposal.id.to_string());
+            event = event.add_attribute("proposal_id", latest_proposal.id.to_string());
         }
         GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             // store the proposal id in the state
@@ -102,9 +100,7 @@ pub fn execute_post_governance_proposal_creation_callback(
                 &reward_schedule_request_state,
             )?;
 
-            event = event
-                .add_attribute("request_id", request_id.to_string())
-                .add_attribute("proposal_id", latest_proposal.id.to_string());
+            event = event.add_attribute("proposal_id", latest_proposal.id.to_string());
         }
     }
 

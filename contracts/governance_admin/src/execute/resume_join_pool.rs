@@ -205,19 +205,10 @@ pub fn execute_resume_join_pool(
             );
     }
 
-    event = event
-        .add_attribute(
-            "pool_creation_request_id",
-            pool_creation_request_id.to_string(),
-        )
-        .add_attribute("pool_id", pool_id.to_string())
-        .add_attribute("proposal_id", proposal_id.to_string())
-        .add_attribute("vault_addr)", pool_creation_request.vault_addr.to_string())
-        .add_attribute(
-            "multistaking_contract_addr",
-            multistaking_address.to_string(),
-        )
-        .add_attribute("lp_token", lp_token.to_string());
+    event = event.add_attribute(
+        "pool_creation_request_id",
+        pool_creation_request_id.to_string(),
+    );
 
     let res = Response::new().add_messages(messages).add_event(event);
     Ok(res)
