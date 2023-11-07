@@ -10,7 +10,7 @@ use crate::utils::queries::{query_gov_params, query_proposal_min_deposit_amount}
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_json_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
+    to_binary, Addr, Coin, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Response, Uint128,
 };
 use dexter::asset::{Asset, AssetInfo};
 use dexter::constants::GOV_MODULE_ADDRESS;
@@ -243,7 +243,7 @@ pub fn execute_create_pool_creation_proposal(
         // that the governance is able to send a message which only it can execute
         sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
-        msg: to_json_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
+        msg: to_binary(&dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
             pool_creation_request_id,
         })?
         .to_vec(),

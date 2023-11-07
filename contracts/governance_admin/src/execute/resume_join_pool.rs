@@ -9,7 +9,7 @@ use crate::state::{
 use const_format::concatcp;
 
 use cosmwasm_std::{
-    to_json_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, StdError, Uint128,
+    to_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, StdError, Uint128,
 };
 use cw20::Expiration;
 use dexter::asset::AssetInfo;

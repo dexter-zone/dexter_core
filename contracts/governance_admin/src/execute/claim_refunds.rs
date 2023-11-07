@@ -121,7 +121,7 @@ pub fn execute_claim_refunds(
         }
     }
 
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::claim_refunds"), &info)
+    event = event
         .add_attribute("request_type", serde_json_wasm::to_string(&request_type).unwrap())
         .add_attribute("refund_receiver", refund_response.refund_receiver)
         .add_attribute("refund_amount", serde_json_wasm::to_string(&refund_response.refund_amount).unwrap())
