@@ -1,6 +1,6 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Coin, CosmosMsg, DepsMut, Event, MessageInfo, Response, StdError,
+    to_binary, Coin, CosmosMsg, DepsMut, Event, MessageInfo, Response,
 };
 use dexter::{governance_admin::RewardSchedulesCreationRequestStatus, helper::EventExt};
 

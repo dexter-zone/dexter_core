@@ -6,7 +6,7 @@ use crate::utils::queries::query_latest_governance_proposal;
 
 use const_format::concatcp;
 
-use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response, StdError};
+use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response};
 
 use dexter::governance_admin::{
     GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
