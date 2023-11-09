@@ -1,6 +1,6 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Coin, CosmosMsg, DepsMut, Event, MessageInfo, Response,
+    to_json_binary, Coin, CosmosMsg, DepsMut, Event, MessageInfo, Response,
 };
 use dexter::{governance_admin::RewardSchedulesCreationRequestStatus, helper::EventExt};
 
@@ -72,7 +72,7 @@ pub fn execute_resume_reward_schedule_creation(
                         .multistaking_contract_addr
                         .to_string(),
                     amount: request.amount,
-                    msg: to_binary(&msg_create_reward_schedule)?,
+                    msg: to_json_binary(&msg_create_reward_schedule)?,
                 };
 
                 add_wasm_execute_msg!(

@@ -6,7 +6,7 @@ use crate::state::{
     ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO,
 };
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut,
+    entry_point, from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut,
     Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
     Uint128, WasmMsg, WasmQuery,
 };
@@ -286,7 +286,7 @@ pub fn receive_cw20(
     let sender = cw20_msg.sender;
     let lp_received = cw20_msg.amount;
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::ExitPool {
             pool_id,
             recipient,
@@ -523,7 +523,7 @@ fn execute_update_pool_config(
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: pool.pool_addr.to_string(),
             funds: vec![],
-            msg: to_binary(&dexter::pool::ExecuteMsg::UpdateFee {
+            msg: to_json_binary(&dexter::pool::ExecuteMsg::UpdateFee {
                 total_fee_bps: pool.fee_info.total_fee_bps.clone(),
             })?,
         }));
@@ -569,7 +569,7 @@ fn execute_update_pool_params(
     let msg = WasmMsg::Execute {
         contract_addr: pool.pool_addr.to_string(),
         funds: vec![],
-        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateConfig {
+        msg: to_json_binary(&dexter::pool::ExecuteMsg::UpdateConfig {
             params,
         })?,
     };
@@ -877,7 +877,7 @@ pub fn execute_create_pool_instance(
             code_id: config
                 .lp_token_code_id
                 .ok_or(ContractError::LpTokenCodeIdNotSet)?,
-            msg: to_binary(&TokenInstantiateMsg {
+            msg: to_json_binary(&TokenInstantiateMsg {
                 name: token_name,
                 symbol: token_symbol,
                 decimals: Decimal::DECIMAL_PLACES as u8,
@@ -949,7 +949,7 @@ pub fn reply(deps: DepsMut, env: Env, msg: Reply) -> Result<Response, ContractEr
                 msg: WasmMsg::Instantiate {
                     admin: Some(CONFIG.load(deps.storage)?.owner.to_string()),
                     code_id: tmp_pool_info.code_id,
-                    msg: to_binary(&PoolInstantiateMsg {
+                    msg: to_json_binary(&PoolInstantiateMsg {
                         pool_id: tmp_pool_info.pool_id,
                         pool_type: tmp_pool_info.pool_type,
                         vault_addr: env.contract.address,
@@ -1068,7 +1068,7 @@ pub fn execute_join_pool(
     let pool_join_transition: dexter::pool::AfterJoinResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
-            msg: to_binary(&dexter::pool::QueryMsg::OnJoinPool {
+            msg: to_json_binary(&dexter::pool::QueryMsg::OnJoinPool {
                 assets_in: assets,
                 mint_amount: None,
             })?,
@@ -1360,7 +1360,7 @@ pub fn execute_exit_pool(
     let pool_exit_transition: dexter::pool::AfterExitResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
-            msg: to_binary(&dexter::pool::QueryMsg::OnExitPool {
+            msg: to_json_binary(&dexter::pool::QueryMsg::OnExitPool {
                exit_type: query_exit_type
             })?,
         }))?;
@@ -1546,7 +1546,7 @@ pub fn execute_exit_pool(
     // ExecuteMsg:: Burn LP Tokens
     execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_info.lp_token_addr.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Burn {
+        msg: to_json_binary(&Cw20ExecuteMsg::Burn {
             amount: pool_exit_transition.burn_shares.clone(),
         })?,
         funds: vec![],
@@ -1556,7 +1556,7 @@ pub fn execute_exit_pool(
     if !lp_to_return.is_zero() {
         execute_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: pool_info.lp_token_addr.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                 amount: lp_to_return,
                 recipient: sender.clone(),
             })?,
@@ -1646,7 +1646,7 @@ pub fn execute_swap(
     let pool_swap_transition: dexter::pool::SwapResponse =
         deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: pool_info.pool_addr.to_string(),
-            msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
+            msg: to_json_binary(&dexter::pool::QueryMsg::OnSwap {
                 swap_type: swap_request.swap_type.clone(),
                 offer_asset: swap_request.asset_in.clone(),
                 ask_asset: swap_request.asset_out.clone(),
@@ -1858,14 +1858,14 @@ pub fn execute_swap(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::QueryRegistry { pool_type } => to_binary(&query_registry(deps, pool_type)?),
-        QueryMsg::GetPoolById { pool_id } => to_binary(&query_pool_by_id(deps, pool_id)?),
+        QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
+        QueryMsg::QueryRegistry { pool_type } => to_json_binary(&query_registry(deps, pool_type)?),
+        QueryMsg::GetPoolById { pool_id } => to_json_binary(&query_pool_by_id(deps, pool_id)?),
         QueryMsg::GetPoolByAddress { pool_addr } => {
-            to_binary(&query_pool_by_addr(deps, pool_addr)?)
+            to_json_binary(&query_pool_by_addr(deps, pool_addr)?)
         }
         QueryMsg::GetPoolByLpTokenAddress { lp_token_addr } => {
-            to_binary(&query_pool_by_lp_token_addr(deps, lp_token_addr)?)
+            to_json_binary(&query_pool_by_lp_token_addr(deps, lp_token_addr)?)
         }
     }
 }
@@ -1905,7 +1905,7 @@ pub fn query_pool_by_id(deps: Deps, pool_id: Uint128) -> StdResult<PoolInfoRespo
 pub fn query_pool_by_addr(deps: Deps, pool_addr: String) -> StdResult<PoolInfoResponse> {
     let pool_id: Uint128 = deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: pool_addr.to_string(),
-        msg: to_binary(&dexter::pool::QueryMsg::PoolId {})?,
+        msg: to_json_binary(&dexter::pool::QueryMsg::PoolId {})?,
     }))?;
 
     ACTIVE_POOLS.load(deps.storage, pool_id.to_string().as_bytes())
@@ -1962,7 +1962,7 @@ fn build_mint_lp_token_msg(
     if !auto_stake {
         return Ok(vec![CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Mint {
+            msg: to_json_binary(&Cw20ExecuteMsg::Mint {
                 recipient: recipient.to_string(),
                 amount,
             })?,
@@ -1972,7 +1972,7 @@ fn build_mint_lp_token_msg(
 
     let mut msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Mint {
+        msg: to_json_binary(&Cw20ExecuteMsg::Mint {
             recipient: env.contract.address.to_string(),
             amount,
         })?,
@@ -1985,10 +1985,10 @@ fn build_mint_lp_token_msg(
             // Address of multistaking
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Send {
+                msg: to_json_binary(&Cw20ExecuteMsg::Send {
                     contract: contract_addr.to_string(),
                     amount,
-                    msg: to_binary(&dexter::multi_staking::Cw20HookMsg::Bond {
+                    msg: to_json_binary(&dexter::multi_staking::Cw20HookMsg::Bond {
                         beneficiary_user: Some(recipient),
                     })?,
                 })?,
@@ -2011,6 +2011,6 @@ pub fn build_update_pool_state_msg(
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_address,
         funds: vec![],
-        msg: to_binary(&dexter::pool::ExecuteMsg::UpdateLiquidity { assets })?,
+        msg: to_json_binary(&dexter::pool::ExecuteMsg::UpdateLiquidity { assets })?,
     }))
 }

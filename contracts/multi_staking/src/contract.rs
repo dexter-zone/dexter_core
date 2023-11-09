@@ -3,7 +3,7 @@ use cosmwasm_std::entry_point;
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    from_binary, to_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
+    from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 use std::{cmp::min, collections::HashMap};
@@ -188,7 +188,7 @@ pub fn execute(
             let transfer_msg = CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: lp_token.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
+                msg: to_json_binary(&Cw20ExecuteMsg::TransferFrom {
                     owner: sender.to_string(),
                     recipient: env.contract.address.to_string(),
                     amount,
@@ -612,7 +612,7 @@ pub fn receive_cw20(
     info: MessageInfo,
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::Bond { beneficiary_user } => {
             let token_address = info.sender;
             let cw20_sender = deps.api.addr_validate(&cw20_msg.sender)?;
@@ -978,7 +978,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             let bonded_amount = USER_BONDED_LP_TOKENS
                 .may_load(deps.storage, (&lp_token, &user))?
                 .unwrap_or_default();
-            to_binary(&bonded_amount).map_err(ContractError::from)
+            to_json_binary(&bonded_amount).map_err(ContractError::from)
         }
         QueryMsg::InstantUnlockFee {
             user,
@@ -1009,7 +1009,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 unlock_fee,
             };
 
-            to_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
+            to_json_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
         }
         QueryMsg::InstantUnlockFeeTiers {} => {
             let config = CONFIG.load(deps.storage)?;
@@ -1024,7 +1024,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 max_fee,
             );
 
-            to_binary(&fee_tiers).map_err(ContractError::from)
+            to_json_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::UnclaimedRewards {
             lp_token,
@@ -1098,16 +1098,16 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 }
             }
 
-            to_binary(&reward_info).map_err(ContractError::from)
+            to_json_binary(&reward_info).map_err(ContractError::from)
         }
         QueryMsg::AllowedLPTokensForReward {} => {
             let config = CONFIG.load(deps.storage)?;
             let allowed_lp_tokens = config.allowed_lp_tokens;
-            to_binary(&allowed_lp_tokens).map_err(ContractError::from)
+            to_json_binary(&allowed_lp_tokens).map_err(ContractError::from)
         }
         QueryMsg::Owner {} => {
             let config = CONFIG.load(deps.storage)?;
-            to_binary(&config.owner).map_err(ContractError::from)
+            to_json_binary(&config.owner).map_err(ContractError::from)
         }
         QueryMsg::RewardSchedules { lp_token, asset } => {
             let reward_schedule_ids = LP_TOKEN_ASSET_REWARD_SCHEDULE
@@ -1121,7 +1121,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                     reward_schedule: REWARD_SCHEDULES.load(deps.storage, *id)?.clone(),
                 });
             }
-            to_binary(&reward_schedules).map_err(ContractError::from)
+            to_json_binary(&reward_schedules).map_err(ContractError::from)
         }
         QueryMsg::TokenLocks {
             lp_token,
@@ -1145,7 +1145,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 }
             }
 
-            to_binary(&TokenLockInfo {
+            to_json_binary(&TokenLockInfo {
                 unlocked_amount,
                 locks: filtered_locks,
             })
@@ -1156,14 +1156,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 .may_load(deps.storage, (&lp_token, &user))?
                 .unwrap_or_default();
 
-            to_binary(&locks).map_err(ContractError::from)
+            to_json_binary(&locks).map_err(ContractError::from)
         }
         QueryMsg::RewardState { lp_token, asset } => {
             let reward_state =
                 ASSET_LP_REWARD_STATE.may_load(deps.storage, (&asset.to_string(), &lp_token))?;
 
             match reward_state {
-                Some(reward_state) => to_binary(&reward_state).map_err(ContractError::from),
+                Some(reward_state) => to_json_binary(&reward_state).map_err(ContractError::from),
                 None => Err(ContractError::NoRewardState),
             }
         }
@@ -1176,7 +1176,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 ASSET_STAKER_INFO.may_load(deps.storage, (&lp_token, &user, &asset.to_string()))?;
 
             match reward_state {
-                Some(reward_state) => to_binary(&reward_state).map_err(ContractError::from),
+                Some(reward_state) => to_json_binary(&reward_state).map_err(ContractError::from),
                 None => Err(ContractError::NoUserRewardState),
             }
         }
@@ -1193,11 +1193,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
                 &mut creator_claimable_reward,
             )?;
 
-            to_binary(&creator_claimable_reward).map_err(ContractError::from)
+            to_json_binary(&creator_claimable_reward).map_err(ContractError::from)
         }
         QueryMsg::Config {} => {
             let config = CONFIG.load(deps.storage)?;
-            to_binary(&config).map_err(ContractError::from)
+            to_json_binary(&config).map_err(ContractError::from)
         }
     }
 }

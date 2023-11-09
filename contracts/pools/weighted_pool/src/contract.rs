@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use const_format::concatcp;
 use cosmwasm_std::{
-    entry_point, from_binary, to_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
+    entry_point, from_json, to_json_binary, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
@@ -66,7 +66,7 @@ pub fn instantiate(
     let WeightedParams {
         mut weights,
         exit_fee,
-    } = from_binary(&msg.init_params.unwrap())?;
+    } = from_json(&msg.init_params.unwrap())?;
 
     // Exit fee cannot be set more than 1%
     if exit_fee.is_some() {
@@ -264,13 +264,13 @@ pub fn execute_update_liquidity(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::FeeParams {} => to_binary(&query_fee_params(deps)?),
-        QueryMsg::PoolId {} => to_binary(&query_pool_id(deps)?),
+        QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
+        QueryMsg::FeeParams {} => to_json_binary(&query_fee_params(deps)?),
+        QueryMsg::PoolId {} => to_json_binary(&query_pool_id(deps)?),
         QueryMsg::OnJoinPool {
             assets_in,
             mint_amount,
-        } => to_binary(&query_on_join_pool(
+        } => to_json_binary(&query_on_join_pool(
             deps,
             env,
             assets_in,
@@ -278,7 +278,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         )?),
         QueryMsg::OnExitPool {
             exit_type
-        } => to_binary(&query_on_exit_pool(deps, env, exit_type)?),
+        } => to_json_binary(&query_on_exit_pool(deps, env, exit_type)?),
         QueryMsg::OnSwap {
             swap_type,
             offer_asset,
@@ -286,7 +286,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             amount,
             max_spread,
             belief_price,
-        } => to_binary(&query_on_swap(
+        } => to_json_binary(&query_on_swap(
             deps,
             env,
             swap_type,
@@ -299,8 +299,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::CumulativePrice {
             offer_asset,
             ask_asset,
-        } => to_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
-        QueryMsg::CumulativePrices {} => to_binary(&query_cumulative_prices(deps, env)?),
+        } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
+        QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
 }
 
@@ -333,8 +333,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         pool_type: config.pool_type,
         fee_info: config.fee_info,
         block_time_last: config.block_time_last,
-        math_params: Some(to_binary(&math_config).unwrap()),
-        additional_params: Some(to_binary(&pool_assets_weighted).unwrap()),
+        math_params: Some(to_json_binary(&math_config).unwrap()),
+        additional_params: Some(to_json_binary(&pool_assets_weighted).unwrap()),
     })
 }
 

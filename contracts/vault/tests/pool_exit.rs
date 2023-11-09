@@ -1,6 +1,6 @@
 pub mod utils;
 
-use cosmwasm_std::{to_binary, Addr, Coin, Uint128};
+use cosmwasm_std::{to_json_binary, Addr, Coin, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
@@ -259,7 +259,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(500_000000_000000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
             exit_type: ExitType::ExactAssetsOut {
@@ -356,7 +356,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(500_000000_000000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
             exit_type: ExitType::ExactAssetsOut {
@@ -523,7 +523,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(50_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
             exit_type: ExitType::ExactLpBurn {
@@ -549,7 +549,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5000_000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
             exit_type: ExitType::ExactLpBurn {
@@ -573,7 +573,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5_000000_000000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(weighted_pool_id),
             recipient: None,
             exit_type: ExitType::ExactLpBurn {
@@ -645,7 +645,7 @@ fn test_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(500_000000_000000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(stable5_pool_id),
             recipient: None,
             exit_type: ExitType::ExactAssetsOut {

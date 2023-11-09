@@ -5,7 +5,7 @@ use crate::{
 };
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
+    to_json_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
 };
 
 use cw20::Cw20ExecuteMsg;
@@ -146,7 +146,7 @@ pub fn unlock(
     response = response.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
+        msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
             recipient: info.sender.to_string(),
             amount: total_unlocked_amount,
         })?,

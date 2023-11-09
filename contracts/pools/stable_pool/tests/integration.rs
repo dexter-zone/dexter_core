@@ -1,6 +1,6 @@
-use cosmwasm_std::{from_binary, to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
-use cw_multi_test::{Executor};
+use cw_multi_test::Executor;
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
 use dexter::pool::{AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg, ExitType, QueryMsg, ResponseType, SwapResponse};
@@ -156,7 +156,7 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with incorrect next amp   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_json_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: MAX_AMP + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
@@ -176,7 +176,7 @@ fn test_update_config() {
     //  ###########  Check :: Failure ::  Start changing amp with big difference between the old and new amp value   ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_json_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 100 * MAX_AMP_CHANGE + 1,
                 next_amp_time: app.block_info().time.seconds(),
             })
@@ -196,7 +196,7 @@ fn test_update_config() {
     //  ########### Check :: Failure ::   Start changing amp earlier than the MIN_AMP_CHANGING_TIME has elapsed    ###########
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_json_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds(),
             })
@@ -220,7 +220,7 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_json_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 25,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
@@ -238,7 +238,7 @@ fn test_update_config() {
         .wrap()
         .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 17u64);
 
     app.update_block(|b| {
@@ -249,7 +249,7 @@ fn test_update_config() {
         .wrap()
         .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 25u64);
 
     // Start decreasing amp
@@ -258,7 +258,7 @@ fn test_update_config() {
     });
 
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StartChangingAmp {
+        params: to_json_binary(&StablePoolUpdateParams::StartChangingAmp {
                 next_amp: 15,
                 next_amp_time: app.block_info().time.seconds() + MIN_AMP_CHANGING_TIME,
             })
@@ -277,12 +277,12 @@ fn test_update_config() {
         .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 20u64);
 
     // Stop changing amp
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap(),
+        params: to_json_binary(&StablePoolUpdateParams::StopChangingAmp {}).unwrap(),
     };
     app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
         .unwrap();
@@ -296,12 +296,12 @@ fn test_update_config() {
         .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 20u64);
 
     // Change max allowed spread limits for trades
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(90),
             })
             .unwrap(),
@@ -315,12 +315,12 @@ fn test_update_config() {
         .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
         .unwrap();
 
-    let params: StablePoolParams = from_binary(&res.additional_params.unwrap()).unwrap();
+    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.max_allowed_spread, Decimal::percent(90));
 
     // try updating max spread to an invalid value
     let msg = ExecuteMsg::UpdateConfig {
-        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
+        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
                 max_allowed_spread: Decimal::percent(100),
             })
             .unwrap(),
@@ -1137,7 +1137,7 @@ fn test_on_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(50u8),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactLpBurn {
@@ -1162,7 +1162,7 @@ fn test_on_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(50u8),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactLpBurn {
@@ -1218,7 +1218,7 @@ fn test_on_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5000_000000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactLpBurn {
@@ -1463,7 +1463,7 @@ fn test_on_exit_pool() {
     Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactAssetsOut {
@@ -1568,7 +1568,7 @@ fn test_on_exit_pool() {
     Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactAssetsOut {
@@ -1675,7 +1675,7 @@ fn test_on_exit_pool() {
     Cw20ExecuteMsg::Send {
         contract: vault_instance.clone().to_string(),
         amount: Uint128::from(5000_000000u128),
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: Uint128::from(1u128),
             recipient: None,
             exit_type: vault::ExitType::ExactAssetsOut {

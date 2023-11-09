@@ -1,6 +1,6 @@
 use const_format::concatcp;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, QuerierWrapper, Response,
+    to_json_binary, Addr, CosmosMsg, DepsMut, Env, Event, MessageInfo, QuerierWrapper, Response,
 };
 use dexter::{
     governance_admin::{
@@ -148,7 +148,7 @@ pub fn execute_create_reward_schedule_creation_proposal(
     let msg = MsgExecuteContract {
         sender: GOV_MODULE_ADDRESS.to_string(),
         contract: env.contract.address.to_string(),
-        msg: to_binary(&create_reward_schedule_proposal_msg)?.to_vec(),
+        msg: to_json_binary(&create_reward_schedule_proposal_msg)?.to_vec(),
         funds: vec![],
     };
 
