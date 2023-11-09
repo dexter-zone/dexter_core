@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 
-use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Event, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, Coin, CosmosMsg, Event, Uint128, WasmMsg};
 use cw20::MinterResponse;
 use dexter::constants::GOV_MODULE_ADDRESS;
 use dexter::vault::FeeInfo;
@@ -292,7 +292,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     let msg_update_keeper_in_vault = dexter::governance_admin::ExecuteMsg::ExecuteMsgs {
         msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_instance.clone(),
-            msg: to_binary(&vault_update_keeper_msg).unwrap(),
+            msg: to_json_binary(&vault_update_keeper_msg).unwrap(),
             funds: vec![],
         })],
     };
@@ -300,7 +300,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     let wasm_msg = MsgExecuteContract {
         sender: GOV_MODULE_ADDRESS.to_owned(),
         contract: gov_admin_instance.to_string(),
-        msg: to_binary(&msg_update_keeper_in_vault).unwrap().0,
+        msg: to_json_binary(&msg_update_keeper_in_vault).unwrap().0,
         funds: vec![],
     };
 

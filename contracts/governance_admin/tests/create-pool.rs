@@ -1,4 +1,4 @@
-use cosmwasm_std::{to_binary, Addr, Coin, Uint128};
+use cosmwasm_std::{to_json_binary, Addr, Coin, Uint128};
 use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
@@ -111,7 +111,7 @@ impl<'a> CreatePoolTestSuite<'a> {
             }],
             asset_info: asset_info.clone(),
             init_params: Some(
-                to_binary(&WeightedParams {
+                to_json_binary(&WeightedParams {
                     weights: asset_info
                         .iter()
                         .map(|i| Asset::new(i.clone(), Uint128::from(1u128)))

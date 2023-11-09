@@ -6,7 +6,7 @@ use crate::utils::queries::query_latest_governance_proposal;
 
 use const_format::concatcp;
 
-use cosmwasm_std::{to_binary, Binary, DepsMut, Env, Event, MessageInfo, Response};
+use cosmwasm_std::{to_json_binary, Binary, DepsMut, Env, Event, MessageInfo, Response};
 
 use dexter::governance_admin::{
     GovAdminProposalRequestType, PoolCreationRequestStatus, RewardSchedulesCreationRequestStatus,
@@ -40,14 +40,14 @@ pub fn execute_post_governance_proposal_creation_callback(
             let resume_create_pool_msg = dexter::governance_admin::ExecuteMsg::ResumeCreatePool {
                 pool_creation_request_id: request_id.clone(),
             };
-            to_binary(&resume_create_pool_msg)?
+            to_json_binary(&resume_create_pool_msg)?
         }
         GovAdminProposalRequestType::RewardSchedulesCreationRequest { request_id } => {
             let resume_create_reward_schedule_msg =
                 dexter::governance_admin::ExecuteMsg::ResumeCreateRewardSchedules {
                     reward_schedules_creation_request_id: request_id.clone(),
                 };
-            to_binary(&resume_create_reward_schedule_msg)?
+            to_json_binary(&resume_create_reward_schedule_msg)?
         }
     };
 

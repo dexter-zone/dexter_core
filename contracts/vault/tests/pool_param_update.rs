@@ -3,7 +3,7 @@ pub mod utils;
 
 use std::vec;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary, Decimal, from_binary};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary, Decimal, from_json};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
@@ -99,7 +99,7 @@ fn update_pool_params() {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
-        init_params: Some(to_binary(&StablePoolParams {
+        init_params: Some(to_json_binary(&StablePoolParams {
             amp: 100u64,
             scaling_factor_manager: None,
             supports_scaling_factors_update: false,
@@ -162,7 +162,7 @@ fn update_pool_params() {
     // Let's update the pool params: max_allowed_spread
     let msg = ExecuteMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
-        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
+        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
             max_allowed_spread: Decimal::from_ratio(10u64, 100u64)
         }).unwrap(),
     };
@@ -186,13 +186,13 @@ fn update_pool_params() {
         .unwrap();
 
     // unmarshal the pool params
-    let pool_params: StablePoolParams = from_binary(&pool_res.additional_params.unwrap()).unwrap();
+    let pool_params: StablePoolParams = from_json(&pool_res.additional_params.unwrap()).unwrap();
     assert_eq!(Decimal::from_ratio(10u64, 100u64), pool_params.max_allowed_spread);
 
     // Try to update the pool params with a non owner
     let msg = ExecuteMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
-        params: to_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
+        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
             max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap(),
     };

@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Timestamp, Uint128};
+use cosmwasm_std::{to_json_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg, Cw20Coin, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::Asset;
@@ -136,7 +136,7 @@ pub fn instantiate_contracts(
             .collect(),
         fee_info: Some(fee_info.clone()),
         init_params: Some(
-            to_binary(&WeightedParams {
+            to_json_binary(&WeightedParams {
                 weights: asset_infos
                     .iter()
                     .map(|info| Asset {

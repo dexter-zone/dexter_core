@@ -1,4 +1,4 @@
-use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, Coin, CosmosMsg, Uint128, WasmMsg};
 use dexter::{
     asset::{Asset, AssetInfo},
     governance_admin::{
@@ -494,14 +494,14 @@ impl<'a> RewardScheduleTestSuite<'a> {
         let gov_exec_msg = GovExecuteMsg::ExecuteMsgs {
             msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: self.gov_admin.multi_staking_instance.to_string(),
-                msg: to_binary(&allow_lp_token_msg).unwrap(),
+                msg: to_json_binary(&allow_lp_token_msg).unwrap(),
                 funds: vec![],
             })],
         };
         let wasm_msg = MsgExecuteContract {
             sender: GOV_MODULE_ADDRESS.to_owned(),
             contract: self.gov_admin.gov_admin_instance.to_string(),
-            msg: to_binary(&gov_exec_msg).unwrap().0,
+            msg: to_json_binary(&gov_exec_msg).unwrap().0,
             funds: vec![],
         };
 
@@ -599,7 +599,7 @@ fn create_pool(gov_admin_test_setup: &GovAdminTestSetup, asset_infos: Vec<AssetI
             precision: 6,
         }],
         init_params: Some(
-            to_binary(&WeightedParams {
+            to_json_binary(&WeightedParams {
                 weights: asset_infos
                     .iter()
                     .map(|i| Asset::new(i.clone(), Uint128::from(1u128)))

@@ -25,7 +25,7 @@ library = []
 
 [dependencies]
 dexter = { path = "../../packages/dexter", default-features = false }
-cosmwasm-std = "1.2.1"
+cosmwasm-std = "1.5.0"
 cw-storage-plus = "1.0.1"
 cw2 = "1.0.1"
 cw20 = "1.0.1"
@@ -35,7 +35,7 @@ serde = { version = "1.0.152", default-features = false, features = ["derive"] }
 thiserror = "1.0.38"
 protobuf = { version = "2", features = ["with-bytes"] }
 serde-json-wasm = "0.5.0"
-cosmwasm-schema = "1.2.1"
+cosmwasm-schema = "1.5.0"
 const_format = "0.2.30"
 
 [dev-dependencies]

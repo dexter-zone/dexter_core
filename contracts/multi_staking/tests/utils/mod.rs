@@ -1,4 +1,4 @@
-use cosmwasm_std::{testing::mock_env, to_binary, Addr, Coin, Timestamp, Uint128};
+use cosmwasm_std::{testing::mock_env, to_json_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
 use dexter::{
@@ -237,7 +237,7 @@ pub fn create_reward_schedule(
             &Cw20ExecuteMsg::Send {
                 contract: multistaking_contract.to_string(),
                 amount,
-                msg: to_binary(&Cw20HookMsg::CreateRewardSchedule {
+                msg: to_json_binary(&Cw20HookMsg::CreateRewardSchedule {
                     lp_token: lp_token.clone(),
                     title,
                     actual_creator: Some(proposer.clone()),
@@ -339,7 +339,7 @@ pub fn bond_lp_tokens(
         &Cw20ExecuteMsg::Send {
             contract: multistaking_contract.to_string(),
             amount,
-            msg: to_binary(&Cw20HookMsg::Bond {
+            msg: to_json_binary(&Cw20HookMsg::Bond {
                 beneficiary_user: None,
             })
             .unwrap(),

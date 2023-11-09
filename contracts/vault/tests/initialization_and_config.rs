@@ -1,6 +1,6 @@
 pub mod utils;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_binary, Decimal};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary, Decimal};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::AssetInfo;
@@ -526,7 +526,7 @@ fn test_pool_config_update() {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
-        init_params: Some(to_binary(&StablePoolParams { 
+        init_params: Some(to_json_binary(&StablePoolParams { 
             amp: 100u64,
             supports_scaling_factors_update: false,
             scaling_factor_manager: None,
