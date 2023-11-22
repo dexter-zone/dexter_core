@@ -18,13 +18,13 @@ dexter = { path = "../../packages/dexter", default-features = false }
 cw20 = "1.0.1"
 cw2 = "1.0.1"
 cw20-base = { version = "1.0.1", features = ["library"] }
-cosmwasm-std = "1.2.1"
+cosmwasm-std = "1.5.0"
 cw-storage-plus = "1.0.1"
 schemars = "0.8.11"
 thiserror = "1.0.38"
 serde = { version = "1.0.152", default-features = false, features = ["derive"] }
 serde-json-wasm = "0.5.0"
-cosmwasm-schema = "1.2.1"
+cosmwasm-schema = "1.5.0"
 const_format = "0.2.30"
 
 [dev-dependencies]

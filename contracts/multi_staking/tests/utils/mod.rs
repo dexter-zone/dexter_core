@@ -1,7 +1,6 @@
-use cosmwasm_std::{testing::mock_env, to_binary, Addr, Coin, Timestamp, Uint128};
+use cosmwasm_std::{testing::mock_env, to_json_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
-use dexter::multi_staking::ReviewProposedRewardSchedule;
 use dexter::{
     asset::AssetInfo,
     multi_staking::{
@@ -210,45 +209,10 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
 
 pub fn create_reward_schedule(
     app: &mut App,
-    admin_addr: &Addr,
-    multistaking_contract: &Addr,
-    lp_token: &Addr,
-    reward_asset: AssetInfo,
-    amount: Uint128,
-    start_block_time: u64,
-    end_block_time: u64,
-) -> anyhow::Result<AppResponse> {
-    let proposal_id = propose_reward_schedule(
-        app,
-        admin_addr,
-        multistaking_contract,
-        lp_token,
-        lp_token.as_str().to_owned() + "-" + admin_addr.as_str(),
-        None,
-        reward_asset,
-        amount,
-        start_block_time,
-        end_block_time,
-    )
-    .unwrap();
-    review_reward_schedule(
-        app,
-        admin_addr,
-        multistaking_contract,
-        vec![ReviewProposedRewardSchedule {
-            proposal_id,
-            approve: true,
-        }],
-    )
-}
-
-pub fn propose_reward_schedule(
-    app: &mut App,
     proposer: &Addr,
     multistaking_contract: &Addr,
     lp_token: &Addr,
     title: String,
-    description: Option<String>,
     reward_asset: AssetInfo,
     amount: Uint128,
     start_block_time: u64,
@@ -258,10 +222,10 @@ pub fn propose_reward_schedule(
         AssetInfo::NativeToken { denom } => app.execute_contract(
             proposer.clone(),
             multistaking_contract.clone(),
-            &ExecuteMsg::ProposeRewardSchedule {
+            &ExecuteMsg::CreateRewardSchedule {
                 lp_token: lp_token.clone(),
                 title,
-                description,
+                actual_creator: Some(proposer.clone()),
                 start_block_time,
                 end_block_time,
             },
@@ -273,10 +237,10 @@ pub fn propose_reward_schedule(
             &Cw20ExecuteMsg::Send {
                 contract: multistaking_contract.to_string(),
                 amount,
-                msg: to_binary(&Cw20HookMsg::ProposeRewardSchedule {
+                msg: to_json_binary(&Cw20HookMsg::CreateRewardSchedule {
                     lp_token: lp_token.clone(),
                     title,
-                    description,
+                    actual_creator: Some(proposer.clone()),
                     start_block_time,
                     end_block_time,
                 })
@@ -286,50 +250,22 @@ pub fn propose_reward_schedule(
         ),
     };
 
-    let proposal_id: anyhow::Result<u64> = res.map(|r| {
+    let reward_schedule_id: anyhow::Result<u64> = res.map(|r| {
         r.events
             .iter()
-            .filter(|&e| e.ty == "wasm-dexter-multi-staking::propose_reward_schedule")
+            .filter(|&e| e.ty == "wasm-dexter-multi-staking::create_reward_schedule")
             .fold(Vec::new(), |acc, e| {
                 let mut res = e.attributes.clone();
                 res.append(&mut acc.clone());
                 res
             })
             .iter()
-            .find(|&a| a.key == "proposal_id")
+            .find(|&a| a.key == "reward_schedule_id")
             .map(|a| a.value.parse::<u64>().unwrap())
             .unwrap()
     });
 
-    return proposal_id;
-}
-
-pub fn review_reward_schedule(
-    app: &mut App,
-    admin_addr: &Addr,
-    multistaking_contract: &Addr,
-    reviews: Vec<ReviewProposedRewardSchedule>,
-) -> anyhow::Result<AppResponse> {
-    app.execute_contract(
-        admin_addr.clone(),
-        multistaking_contract.clone(),
-        &ExecuteMsg::ReviewRewardScheduleProposals { reviews },
-        &vec![],
-    )
-}
-
-pub fn drop_reward_schedule(
-    app: &mut App,
-    proposer: &Addr,
-    multistaking_contract: &Addr,
-    proposal_id: u64,
-) -> anyhow::Result<AppResponse> {
-    app.execute_contract(
-        proposer.clone(),
-        multistaking_contract.clone(),
-        &ExecuteMsg::DropRewardScheduleProposal { proposal_id },
-        &vec![],
-    )
+    return reward_schedule_id;
 }
 
 pub fn update_fee_tier_interval(
@@ -343,7 +279,6 @@ pub fn update_fee_tier_interval(
         multistaking_contract.clone(),
         &ExecuteMsg::UpdateConfig {
             keeper_addr: None,
-            minimum_reward_schedule_proposal_start_delay: None,
             unlock_period: None,
             instant_unbond_fee_bp: None,
             instant_unbond_min_fee_bp: None,
@@ -404,7 +339,7 @@ pub fn bond_lp_tokens(
         &Cw20ExecuteMsg::Send {
             contract: multistaking_contract.to_string(),
             amount,
-            msg: to_binary(&Cw20HookMsg::Bond {
+            msg: to_json_binary(&Cw20HookMsg::Bond {
                 beneficiary_user: None,
             })
             .unwrap(),

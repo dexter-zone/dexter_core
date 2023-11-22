@@ -9,8 +9,8 @@ use crate::utils::{
     assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token,
     create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
     mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
-    query_unclaimed_rewards, setup, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens,
-    withdraw_unclaimed_rewards, setup_generic,
+    query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens,
+    unlock_lp_tokens, withdraw_unclaimed_rewards,
 };
 pub mod utils;
 
@@ -39,7 +39,7 @@ fn test_staking() {
         1000,
         200,
         500,
-        1000
+        1000,
     );
 
     create_reward_schedule(
@@ -47,10 +47,11 @@ fn test_staking() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "Reward Schedule for XPRT".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_000,
         1000_302_000,
     )
@@ -67,14 +68,14 @@ fn test_staking() {
         &admin_addr,
         &lp_token_addr,
         &user_addr,
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
     );
     // Check user LP Balance
     assert_user_lp_token_balance(
         &mut app,
         &user_addr,
         &lp_token_addr,
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
     );
 
     bond_lp_tokens(
@@ -82,17 +83,12 @@ fn test_staking() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
     )
     .unwrap();
 
     // Validate that user balance is reduced after bonding
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0 as u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_301_500);
@@ -105,7 +101,7 @@ fn test_staking() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        Uint128::from(50_000_000 as u64),
+        Uint128::from(50_000_000u64),
     )
     .unwrap();
 
@@ -122,17 +118,12 @@ fn test_staking() {
 
     assert_eq!(
         creator_claimable_reward.amount,
-        Uint128::from(10_000_000 as u64)
+        Uint128::from(10_000_000u64)
     );
     assert_eq!(creator_claimable_reward.claimed, false);
 
     // Validate that user balance is still zero after bonding till unlock happens
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0 as u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     let token_lock_info = query_token_locks(
         &mut app,
@@ -143,9 +134,9 @@ fn test_staking() {
     );
     let token_locks = token_lock_info.locks;
 
-    assert_eq!(token_lock_info.unlocked_amount, Uint128::from(0 as u64));
+    assert_eq!(token_lock_info.unlocked_amount, Uint128::from(0u64));
     assert_eq!(token_locks.len(), 1);
-    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000u64));
     assert_eq!(token_locks[0].unlock_time, 1_000_302_500);
 
     // try to unlock some tokens, but it should not alter any balance as unlock time is not reached
@@ -157,12 +148,7 @@ fn test_staking() {
     );
 
     // Validate that user balance is still zero after bonding till unlock happens
-    assert_user_lp_token_balance(
-        &mut app,
-        &user_addr,
-        &lp_token_addr,
-        Uint128::from(0 as u64),
-    );
+    assert_user_lp_token_balance(&mut app, &user_addr, &lp_token_addr, Uint128::from(0u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_302_001);
@@ -174,7 +160,7 @@ fn test_staking() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_addr,
-        Uint128::from(50_000_000 as u64),
+        Uint128::from(50_000_000u64),
     )
     .unwrap();
 
@@ -188,9 +174,9 @@ fn test_staking() {
     );
     let token_locks = token_lock_info.locks;
     assert_eq!(token_locks.len(), 2);
-    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000u64));
     assert_eq!(token_locks[0].unlock_time, 1_000_302_500);
-    assert_eq!(token_locks[1].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[1].amount, Uint128::from(50_000_000u64));
     assert_eq!(token_locks[1].unlock_time, 1_000_303_001);
 
     app.update_block(|b| {
@@ -211,7 +197,7 @@ fn test_staking() {
         &mut app,
         &user_addr,
         &lp_token_addr,
-        Uint128::from(50_000_000 as u64),
+        Uint128::from(50_000_000u64),
     );
 
     // validate unlocks are updated after first unlock
@@ -224,7 +210,7 @@ fn test_staking() {
     );
     let token_locks = token_lock_info.locks;
     assert_eq!(token_locks.len(), 1);
-    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000 as u64));
+    assert_eq!(token_locks[0].amount, Uint128::from(50_000_000u64));
     assert_eq!(token_locks[0].unlock_time, 1_000_303_001);
 
     app.update_block(|b| {
@@ -243,7 +229,7 @@ fn test_staking() {
     assert_eq!(token_locks.len(), 0);
     assert_eq!(
         token_lock_info.unlocked_amount,
-        Uint128::from(50_000_000 as u64)
+        Uint128::from(50_000_000u64)
     );
 
     // Unlock second set of tokens
@@ -259,7 +245,7 @@ fn test_staking() {
         &mut app,
         &user_addr,
         &lp_token_addr,
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
     );
 
     // validate unlocks are updated after second unlock
@@ -285,7 +271,7 @@ fn test_staking() {
 
     assert_eq!(response.len(), 1);
     let unclaimed_reward = response.get(0).unwrap();
-    assert_eq!(unclaimed_reward.amount, Uint128::from(90_000_000 as u64));
+    assert_eq!(unclaimed_reward.amount, Uint128::from(90_000_000u64));
     assert_eq!(
         unclaimed_reward.asset,
         AssetInfo::NativeToken {
@@ -312,12 +298,12 @@ fn test_staking() {
         RewardScheduleResponse {
             id: 1,
             reward_schedule: RewardSchedule {
-                title: lp_token_addr.as_str().to_owned() + "-" + admin_addr.as_str(),
+                title: "Reward Schedule for XPRT".to_string(),
                 creator: admin_addr.clone(),
                 asset: AssetInfo::NativeToken {
                     denom: "uxprt".to_string(),
                 },
-                amount: Uint128::from(100_000_000 as u64),
+                amount: Uint128::from(100_000_000u64),
                 staking_lp_token: lp_token_addr.clone(),
                 start_block_time: 1000_301_000,
                 end_block_time: 1000_302_000,
@@ -336,7 +322,7 @@ fn test_staking() {
     // query bank module for user balance
     let balances = app.wrap().query_all_balances(user_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(90_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(90_000_000u64));
 
     // Claim creator rewards
     claim_creator_rewards(&mut app, &multi_staking_instance, 1, &admin_addr).unwrap();
@@ -351,14 +337,14 @@ fn test_staking() {
         .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
         .unwrap();
 
-    assert_eq!(response.amount, Uint128::from(10_000_000 as u64));
+    assert_eq!(response.amount, Uint128::from(10_000_000u64));
     assert_eq!(response.claimed, true);
 
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
 
-    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000u64));
 
     // claiming creator rewards again should fail
     let response = claim_creator_rewards(&mut app, &multi_staking_instance, 1, &admin_addr);
@@ -374,10 +360,11 @@ fn test_staking() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_601_000,
         1000_602_000,
     )
@@ -392,13 +379,13 @@ fn test_staking() {
         .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
         .unwrap();
 
-    assert_eq!(response.amount, Uint128::from(0 as u64));
+    assert_eq!(response.amount, Uint128::from(0u64));
     assert_eq!(response.claimed, false);
 
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr.clone()).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(810_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(810_000_000u64));
 
     // skip the whole reward schedule duration
     app.update_block(|b| {
@@ -412,7 +399,7 @@ fn test_staking() {
         .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
         .unwrap();
 
-    assert_eq!(response.amount, Uint128::from(100_000_000 as u64));
+    assert_eq!(response.amount, Uint128::from(100_000_000u64));
     assert_eq!(response.claimed, false);
 
     // claim the unused rewards
@@ -421,7 +408,7 @@ fn test_staking() {
     // Verify balance of admin addr
     let balances = app.wrap().query_all_balances(admin_addr).unwrap();
     let balance_uxprt = balances.iter().find(|b| b.denom == "uxprt").unwrap();
-    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000 as u64));
+    assert_eq!(balance_uxprt.amount, Uint128::from(910_000_000u64));
 }
 
 #[test]
@@ -446,10 +433,11 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_000,
         1000_302_000,
     )
@@ -460,10 +448,11 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "ATOM reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(150_000_000 as u64),
+        Uint128::from(150_000_000u64),
         1000_301_500,
         1000_302_000,
     )
@@ -474,10 +463,11 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
-        Uint128::from(200_000_000 as u64),
+        Uint128::from(200_000_000u64),
         1000_301_200,
         1000_302_000,
     )
@@ -494,7 +484,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &admin_addr,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(200_000 as u64),
+        Uint128::from(200_000u64),
     );
 
     bond_lp_tokens(
@@ -502,7 +492,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -517,7 +507,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(50_000 as u64),
+        Uint128::from(50_000u64),
     )
     .unwrap();
 
@@ -533,9 +523,9 @@ fn test_multi_asset_multi_reward_schedules() {
         match unclaimed_reward.asset {
             AssetInfo::NativeToken { denom } => {
                 if denom == "uxprt" {
-                    assert_eq!(unclaimed_reward.amount, Uint128::from(50_000_000 as u64));
+                    assert_eq!(unclaimed_reward.amount, Uint128::from(50_000_000u64));
                 } else if denom == "uatom" {
-                    assert_eq!(unclaimed_reward.amount, Uint128::from(75_000_000 as u64));
+                    assert_eq!(unclaimed_reward.amount, Uint128::from(75_000_000u64));
                 } else {
                     panic!("Unexpected denom");
                 }
@@ -554,7 +544,7 @@ fn test_multi_asset_multi_reward_schedules() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(50_000 as u64),
+        Uint128::from(50_000u64),
     )
     .unwrap();
 
@@ -571,9 +561,9 @@ fn test_multi_asset_multi_reward_schedules() {
         match unclaimed_reward.asset {
             AssetInfo::NativeToken { denom } => {
                 if denom == "uxprt" {
-                    assert_eq!(unclaimed_reward.amount, Uint128::from(250_000_000 as u64));
+                    assert_eq!(unclaimed_reward.amount, Uint128::from(250_000_000u64));
                 } else if denom == "uatom" {
-                    assert_eq!(unclaimed_reward.amount, Uint128::from(200_000_000 as u64));
+                    assert_eq!(unclaimed_reward.amount, Uint128::from(200_000_000u64));
                 } else {
                     panic!("Unexpected denom");
                 }
@@ -594,8 +584,8 @@ fn test_multi_asset_multi_reward_schedules() {
     let uxprt_balance = balances.iter().find(|b| b.denom == "uxprt").unwrap();
     let uatom_balance = balances.iter().find(|b| b.denom == "uatom").unwrap();
 
-    assert_eq!(uxprt_balance.amount, Uint128::from(250_000_000 as u64));
-    assert_eq!(uatom_balance.amount, Uint128::from(200_000_000 as u64));
+    assert_eq!(uxprt_balance.amount, Uint128::from(250_000_000u64));
+    assert_eq!(uatom_balance.amount, Uint128::from(200_000_000u64));
 }
 
 #[test]
@@ -622,10 +612,11 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_000,
         1000_302_000,
     )
@@ -636,10 +627,11 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_500,
         1000_302_000,
     )
@@ -650,10 +642,11 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "ATOM reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uatom".to_string(),
         },
-        Uint128::from(200_000_000 as u64),
+        Uint128::from(200_000_000u64),
         1000_301_200,
         1000_302_000,
     )
@@ -670,14 +663,14 @@ fn test_multi_user_multi_reward_schedule() {
         &admin_addr,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(200_000 as u64),
+        Uint128::from(200_000u64),
     );
     mint_lp_tokens_to_addr(
         &mut app,
         &admin_addr,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     );
 
     bond_lp_tokens(
@@ -685,7 +678,7 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -699,7 +692,7 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     )
     .unwrap();
 
@@ -714,7 +707,7 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(50_000 as u64),
+        Uint128::from(50_000u64),
     )
     .unwrap();
 
@@ -725,7 +718,7 @@ fn test_multi_user_multi_reward_schedule() {
         &lp_token_addr,
         &user_1_addr,
     );
-    assert_eq!(user_1_bonded, Uint128::from(50_000 as u64));
+    assert_eq!(user_1_bonded, Uint128::from(50_000u64));
 
     app.update_block(|b| {
         b.time = Timestamp::from_seconds(1_000_302_001);
@@ -737,7 +730,7 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(50_000 as u64),
+        Uint128::from(50_000u64),
     )
     .unwrap();
 
@@ -746,7 +739,7 @@ fn test_multi_user_multi_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     )
     .unwrap();
 
@@ -770,8 +763,8 @@ fn test_multi_user_multi_reward_schedule() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(29_870_129 as u64)),
-                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(12_770_561 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(29_870_129u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(12_770_561u64)),
                 _ => panic!("Unexpected denom"),
             }
         } else {
@@ -782,8 +775,8 @@ fn test_multi_user_multi_reward_schedule() {
     for unclaimed_reward in unclaimed_rewards_user_2 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(170_129_870 as u64)),
-                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(187_229_437 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(170_129_870u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(187_229_437u64)),
                 _ => panic!("Unexpected denom"),
             }
         } else {
@@ -804,8 +797,8 @@ fn test_multi_user_multi_reward_schedule() {
     let user1_uxprt_balance = user_1_balance.iter().find(|b| b.denom == "uxprt").unwrap();
     let user1_uatom_balance = user_1_balance.iter().find(|b| b.denom == "uatom").unwrap();
 
-    assert_eq!(user1_uxprt_balance.amount, Uint128::from(29_870_129 as u64));
-    assert_eq!(user1_uatom_balance.amount, Uint128::from(12_770_561 as u64));
+    assert_eq!(user1_uxprt_balance.amount, Uint128::from(29_870_129u64));
+    assert_eq!(user1_uatom_balance.amount, Uint128::from(12_770_561u64));
 
     withdraw_unclaimed_rewards(
         &mut app,
@@ -819,14 +812,8 @@ fn test_multi_user_multi_reward_schedule() {
     let user2_uxprt_balance = user_2_balance.iter().find(|b| b.denom == "uxprt").unwrap();
     let user2_uatom_balance = user_2_balance.iter().find(|b| b.denom == "uatom").unwrap();
 
-    assert_eq!(
-        user2_uxprt_balance.amount,
-        Uint128::from(170_129_870 as u64)
-    );
-    assert_eq!(
-        user2_uatom_balance.amount,
-        Uint128::from(187_229_437 as u64)
-    );
+    assert_eq!(user2_uxprt_balance.amount, Uint128::from(170_129_870u64));
+    assert_eq!(user2_uatom_balance.amount, Uint128::from(187_229_437u64));
 }
 
 /// This test is to check if the rewards are calculated correctly when we add a new reward schedule
@@ -853,10 +840,11 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_000,
         1000_602_000,
     )
@@ -868,7 +856,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     );
 
     // bond some LP tokens
@@ -877,7 +865,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -893,10 +881,11 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(500_000_000 as u64),
+        Uint128::from(500_000_000u64),
         1000_601_500,
         1000_602_000,
     )
@@ -913,7 +902,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &admin_addr,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     );
 
     // bond LP tokens
@@ -922,7 +911,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -938,7 +927,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -947,7 +936,7 @@ fn test_reward_schedule_creation_after_bonding() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_2_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -962,8 +951,8 @@ fn test_reward_schedule_creation_after_bonding() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(399_933_554 as u64)),
-                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(399_933_554u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0u64)),
                 _ => panic!("Unexpected denom"),
             }
         } else {
@@ -981,8 +970,8 @@ fn test_reward_schedule_creation_after_bonding() {
     for unclaimed_reward in unclaimed_rewards_user_2 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             match denom.as_str() {
-                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(200_066_445 as u64)),
-                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0 as u64)),
+                "uxprt" => assert_eq!(unclaimed_reward.amount, Uint128::from(200_066_445u64)),
+                "uatom" => assert_eq!(unclaimed_reward.amount, Uint128::from(0u64)),
                 _ => panic!("Unexpected denom"),
             }
         } else {
@@ -1015,7 +1004,7 @@ fn test_create_cw20_reward_schedule() {
         &admin_addr,
         &cw20_token_addr,
         &admin_addr,
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
     );
 
     // create a reward schedule
@@ -1024,10 +1013,11 @@ fn test_create_cw20_reward_schedule() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "CW20 reward schedule".to_string(),
         AssetInfo::Token {
             contract_addr: cw20_token_addr.clone(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_000,
         1000_302_000,
     );
@@ -1040,7 +1030,7 @@ fn test_create_cw20_reward_schedule() {
         &admin_addr,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     );
     // bond some LP tokens
     bond_lp_tokens(
@@ -1048,7 +1038,7 @@ fn test_create_cw20_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -1064,7 +1054,7 @@ fn test_create_cw20_reward_schedule() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -1085,7 +1075,7 @@ fn test_create_cw20_reward_schedule() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::Token { contract_addr } = unclaimed_reward.asset {
             assert_eq!(contract_addr, cw20_token_addr);
-            assert_eq!(unclaimed_reward.amount, Uint128::from(50_000_000 as u64));
+            assert_eq!(unclaimed_reward.amount, Uint128::from(50_000_000u64));
         } else {
             panic!("Unexpected asset type")
         }
@@ -1111,7 +1101,7 @@ fn test_create_cw20_reward_schedule() {
 
     // validate user cw20 balance
     let user_1_cw20_balance = query_cw20_balance(&mut app, &cw20_token_addr, &user_1_addr);
-    assert_eq!(user_1_cw20_balance, Uint128::from(50_000_000 as u64));
+    assert_eq!(user_1_cw20_balance, Uint128::from(50_000_000u64));
 }
 
 /// This test checks if the after disallowing an LP token, the operations of
@@ -1137,7 +1127,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &admin_addr,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(1_000_000 as u64),
+        Uint128::from(1_000_000u64),
     );
 
     // bond some LP tokens
@@ -1146,7 +1136,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     )
     .unwrap();
 
@@ -1162,10 +1152,11 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
+        "XPRT reward schedule".to_string(),
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_301_500,
         1000_302_000,
     )
@@ -1185,7 +1176,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     );
 
     assert!(res.is_err());
@@ -1206,7 +1197,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
         &multi_staking_instance,
         &lp_token_addr,
         &user_1_addr,
-        Uint128::from(100_000 as u64),
+        Uint128::from(100_000u64),
     );
 
     assert!(unbond_response.is_ok());
@@ -1223,7 +1214,7 @@ fn test_lp_methods_after_lp_allowance_removal() {
     for unclaimed_reward in unclaimed_rewards_user_1 {
         if let AssetInfo::NativeToken { denom } = unclaimed_reward.asset {
             assert_eq!(denom, "uxprt");
-            assert_eq!(unclaimed_reward.amount, Uint128::from(100_000_000 as u64));
+            assert_eq!(unclaimed_reward.amount, Uint128::from(100_000_000u64));
         } else {
             panic!("Unexpected asset type")
         }

@@ -7,7 +7,7 @@ use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
 use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::{Item, Map};
-use crate::helper::{EventExt};
+use crate::helper::EventExt;
 
 /// The default spread (0.5%)
 pub const DEFAULT_SPREAD: &str = "0.005";

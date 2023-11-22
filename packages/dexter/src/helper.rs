@@ -3,7 +3,7 @@ use crate::error::ContractError;
 use crate::vault::FEE_PRECISION;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env, Event,
+    to_json_binary, Addr, BankMsg, Coin, CosmosMsg, Decimal, Decimal256, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw20_base::msg::ExecuteMsg as CW20ExecuteMsg;
@@ -15,6 +15,7 @@ use itertools::Itertools;
 // ----------------x----------------x----------------x----------------x----------------x----------------
 
 const ATTR_SENDER: &str = "sender";
+
 
 /// This trait helps implement certain conventions for events across all contracts. Such as:
 /// * Using `sender` as the name for the human sender of the message instead of using multiple
@@ -158,7 +159,7 @@ pub fn build_transfer_cw20_token_msg(
 ) -> StdResult<CosmosMsg> {
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: token_contract_address,
-        msg: to_binary(&CW20ExecuteMsg::Transfer {
+        msg: to_json_binary(&CW20ExecuteMsg::Transfer {
             recipient: recipient.into(),
             amount,
         })?,
@@ -194,7 +195,7 @@ pub fn build_transfer_cw20_from_user_msg(
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: cw20_token_address,
         funds: vec![],
-        msg: to_binary(&cw20::Cw20ExecuteMsg::TransferFrom {
+        msg: to_json_binary(&cw20::Cw20ExecuteMsg::TransferFrom {
             owner,
             recipient,
             amount,
@@ -392,7 +393,7 @@ pub fn find_sent_native_token_balance(message_info: &MessageInfo, denom: &str) -
     message_info
         .funds
         .iter()
-        .find(|x| x.clone().denom == denom)
+        .find(|x| x.denom == denom)
         .map(|x| x.amount)
         .unwrap_or(Uint128::zero())
 }

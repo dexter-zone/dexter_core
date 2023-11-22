@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
-cosmwasm-std = "1.2.1"
+cosmwasm-std = "1.5.0"
 cw2 = "1.0.1"
 cw20 = "1.0.1"
 cw-storage-plus = { version = "1.0.1", features = ["iterator"] }
@@ -29,12 +29,12 @@ schemars = "0.8.11"
 dexter = { path = "../../packages/dexter", default-features = false }
 serde = { version = "1.0.152", default-features = false, features = ["derive"] }
 thiserror = "1.0.38"
-cosmwasm-schema = "1.2.1"
+cosmwasm-schema = "1.5.0"
 serde-json-wasm = "0.5.0"
 const_format = "0.2.30"
 
 [dev-dependencies]
-cosmwasm-schema = "1.2.1"
+cosmwasm-schema = "1.5.0"
 dexter-vault = {path = "../vault"}
 stable-pool = {path = "../pools/stable_pool" }
 weighted-pool = {path = "../pools/weighted_pool" }

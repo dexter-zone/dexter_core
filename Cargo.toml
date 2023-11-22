@@ -6,8 +6,11 @@ members = [
     "contracts/pools/*",
     "contracts/multi_staking",
     "contracts/router",
+    "contracts/governance_admin",
     "packages/*"
 ]
+
+resolver = "2"
 
 
 [profile.release]

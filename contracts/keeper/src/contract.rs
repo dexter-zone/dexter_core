@@ -4,7 +4,7 @@ use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
+    entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
@@ -215,7 +215,7 @@ fn create_dexter_exit_pool_msg(
     let msg = Cw20ExecuteMsg::Send {
         contract: vault_address.to_string(),
         amount,
-        msg: to_binary(&Cw20HookMsg::ExitPool {
+        msg: to_json_binary(&Cw20HookMsg::ExitPool {
             pool_id: pool_info.pool_id,
             recipient: Some(recipient.to_string()),
             exit_type: ExitType::ExactLpBurn {
@@ -228,7 +228,7 @@ fn create_dexter_exit_pool_msg(
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token_address.to_string(),
         funds: vec![],
-        msg: to_binary(&msg)?,
+        msg: to_json_binary(&msg)?,
     }))
 }
 
@@ -310,7 +310,7 @@ fn swap_asset(
         AssetInfo::Token { contract_addr } => {
             let msg: CosmosMsg = CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: contract_addr.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+                msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
                     spender: config.vault_address.to_string(),
                     amount: offer_asset.amount,
                     // since they are happening in the same transaction, we only approve for 1 extra height
@@ -346,7 +346,7 @@ fn swap_asset(
     let cosmos_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.vault_address.to_string(),
         funds: funds_to_send,
-        msg: to_binary(&swap_msg)?,
+        msg: to_json_binary(&swap_msg)?,
     });
 
     msgs.push(cosmos_msg);
@@ -379,8 +379,8 @@ fn swap_asset(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_get_config(deps)?),
-        QueryMsg::Balances { assets } => to_binary(&query_get_balances(deps, env, assets)?),
+        QueryMsg::Config {} => to_json_binary(&query_get_config(deps)?),
+        QueryMsg::Balances { assets } => to_json_binary(&query_get_balances(deps, env, assets)?),
     }
 }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Decimal256, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_json_binary, Addr, Coin, Decimal, Decimal256, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
@@ -143,7 +143,7 @@ pub fn instantiate_contract_generic(
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: native_asset_precisions.clone(),
         init_params: Some(
-            to_binary(&StablePoolParams {
+            to_json_binary(&StablePoolParams {
                 amp,
                 scaling_factors,
                 supports_scaling_factors_update: false,
@@ -212,7 +212,7 @@ pub fn instantiate_contract_generic(
         }
     }
 
-    let math_config_binary = to_binary(&MathConfig {
+    let math_config_binary = to_json_binary(&MathConfig {
         init_amp: amp * 100,
         init_amp_time: EPOCH_START,
         next_amp: amp * 100,
@@ -773,7 +773,7 @@ pub fn perform_and_test_exit_pool(
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_addr.to_string(),
         amount: burn_amount,
-        msg: to_binary(&exit_pool_hook_msg).unwrap(),
+        msg: to_json_binary(&exit_pool_hook_msg).unwrap(),
     };
 
     // Execute the exit pool message
@@ -831,7 +831,7 @@ pub fn perform_and_test_imbalanced_exit(
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_addr.to_string(),
         amount: expected_burn_amount,
-        msg: to_binary(&exit_pool_hook_msg).unwrap(),
+        msg: to_json_binary(&exit_pool_hook_msg).unwrap(),
     };
 
     // Execute the exit pool message

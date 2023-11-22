@@ -1,5 +1,5 @@
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{to_json_binary, Addr, Coin, Decimal, Timestamp, Uint128};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
@@ -264,7 +264,7 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
         pool_type: PoolType::StableSwap {},
         asset_infos: asset_infos.to_vec(),
         native_asset_precisions: vec![],
-        init_params: Some(to_binary(&StablePoolParams { 
+        init_params: Some(to_json_binary(&StablePoolParams { 
             amp: 100u64,
             scaling_factor_manager: None,
             scaling_factors: vec![],
@@ -309,7 +309,7 @@ pub fn initialize_stable_5_pool_2_asset(
             denom: denom0.clone(),
             precision: 6u8,
         }],
-        init_params: Some(to_binary(&StablePoolParams {
+        init_params: Some(to_json_binary(&StablePoolParams {
             amp: 10u64,
             scaling_factor_manager: None,
             scaling_factors: vec![],
@@ -384,7 +384,7 @@ pub fn initialize_stable_5_pool(
                 denom: denom1.clone(),
                 precision: 6u8,
             },],
-        init_params: Some(to_binary(&StablePoolParams {
+        init_params: Some(to_json_binary(&StablePoolParams {
             amp: 10u64,
             scaling_factor_manager: None,
             scaling_factors: vec![],
@@ -491,7 +491,7 @@ pub fn initialize_weighted_pool(
                 precision: 6u8,
             },],
         init_params: Some(
-            to_binary(&weighted_pool::state::WeightedParams {
+            to_json_binary(&weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,
                 exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })

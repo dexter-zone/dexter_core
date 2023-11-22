@@ -56,10 +56,11 @@ pub enum ContractError {
     },
 
     #[error(
-        "Start block time must be at least {min_reward_schedule_proposal_start_delay} seconds in future at the time of proposal to give enough time to review"
+        "Start block time should be later than current block time. Start block time {start_block_time}, Current block time {current_block_time}"
     )]
-    ProposedStartBlockTimeMustBeReviewable {
-        min_reward_schedule_proposal_start_delay: u64,
+    InvalidStartBlockTime {
+        start_block_time: u64,
+        current_block_time: u64,
     },
 
     #[error("Proposal not found for ID: {proposal_id}")]
@@ -105,14 +106,17 @@ pub enum ContractError {
     InvalidFeeTierInterval { max_allowed: u64, received: u64 },
 
     #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
-    InvalidContractVersionForUpgrade { upgrade_version: String, expected: String, actual: String },
+    InvalidContractVersionForUpgrade {
+        upgrade_version: String,
+        expected: String,
+        actual: String,
+    },
 
     #[error("No locks exist for the user")]
     NoLocks,
 
     #[error("No valid lock found from supplied input which can be unlocked")]
     NoValidLocks,
-
 }
 
 impl From<OverflowError> for ContractError {

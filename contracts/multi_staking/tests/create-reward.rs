@@ -1,13 +1,8 @@
-use crate::utils::{
-    drop_reward_schedule, mock_app, propose_reward_schedule, review_reward_schedule, setup,
-};
-use cosmwasm_std::{Addr, Coin, StdResult, Uint128};
+use crate::utils::{create_reward_schedule, mock_app, setup};
+use cosmwasm_std::{Addr, Coin, Uint128};
 use cw_multi_test::Executor;
-use dexter::asset::{Asset, AssetInfo};
-use dexter::multi_staking::{
-    ExecuteMsg, ProposedRewardSchedule, ProposedRewardSchedulesResponse, QueryMsg,
-    ReviewProposedRewardSchedule,
-};
+use dexter::asset::AssetInfo;
+use dexter::multi_staking::{ExecuteMsg, QueryMsg};
 
 pub mod utils;
 
@@ -73,7 +68,7 @@ fn test_allow_lp_token() {
 }
 
 #[test]
-fn test_reward_schedule_proposal_flow() {
+fn test_reward_schedule_creation() {
     // setup
     let admin_addr = Addr::unchecked("admin");
     let user1_addr = Addr::unchecked("user1");
@@ -105,18 +100,37 @@ fn test_reward_schedule_proposal_flow() {
     )
     .unwrap();
 
-    // trying to propose a reward schedule for unallowed LP token should fail
-    let res = propose_reward_schedule(
+    // trying to create a reward schedule by a non-admin user should fail
+    let res = create_reward_schedule(
         &mut app,
         &user1_addr,
         &multi_staking_instance,
-        &Addr::unchecked("unknown_token"),
+        &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
+        1000_001_000,
+        1000_002_000,
+    );
+    assert_eq!(res.is_err(), true);
+    assert_eq!(
+        res.unwrap_err().root_cause().to_string(),
+        "Unauthorized".to_string()
+    );
+
+    // trying to create a reward schedule for unallowed LP token should fail
+    let res = create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &Addr::unchecked("unknown_token"),
+        "prop-1".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(100_000_000u64),
         1000_001_000,
         1000_002_000,
     );
@@ -127,17 +141,16 @@ fn test_reward_schedule_proposal_flow() {
     );
 
     // trying to propose a reward schedule with invalid start & end block time should fail
-    let res = propose_reward_schedule(
+    let res = create_reward_schedule(
         &mut app,
-        &user1_addr,
+        &admin_addr,
         &multi_staking_instance,
         &lp_token_addr,
         "prop-1".to_string(),
-        None,
         AssetInfo::NativeToken {
             denom: "uxprt".to_string(),
         },
-        Uint128::from(100_000_000 as u64),
+        Uint128::from(100_000_000u64),
         1000_002_000,
         1000_001_000,
     );
@@ -145,158 +158,40 @@ fn test_reward_schedule_proposal_flow() {
     assert_eq!(res.unwrap_err().root_cause().to_string(), "Invalid block times. Start block time 1000002000 is greater than end block time 1000001000");
 
     // trying to propose a reward schedule too soon in future should fail
-    let res = propose_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-1".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(100_000_000 as u64),
-        1000_001_000,
-        1000_002_000,
-    );
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
-
-    // proposing a valid reward schedule should succeed
-    let prop1_id = propose_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-1".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(100_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-
-    // propose few more reward schedules by user2
-    let prop2_id = propose_reward_schedule(
-        &mut app,
-        &user2_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-2".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(100_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-
-    let prop3_id = propose_reward_schedule(
-        &mut app,
-        &user2_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-3".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(10_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-
-    // reviewing proposals by non-admin should fail
-    let res = review_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        vec![ReviewProposedRewardSchedule {
-            proposal_id: prop1_id,
-            approve: true,
-        }],
-    );
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
-
-    // reviewing proposals by admin should work
-    review_reward_schedule(
+    let res = create_reward_schedule(
         &mut app,
         &admin_addr,
         &multi_staking_instance,
-        vec![
-            ReviewProposedRewardSchedule {
-                proposal_id: prop1_id,
-                approve: false,
-            },
-            ReviewProposedRewardSchedule {
-                proposal_id: prop2_id,
-                approve: true,
-            },
-        ],
+        &lp_token_addr,
+        "prop-1".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(100_000_000u64),
+        1000_001_000,
+        1000_002_000,
+    );
+    assert_eq!(res.is_err(), false);
+    // We removed the requirement of a delay in the reward schedule start time so this doesn't apply anymore
+    // assert_eq!(res.unwrap_err().root_cause().to_string(), "Start block time must be at least 259200 seconds in future at the time of proposal to give enough time to review");
+
+    // creation of a valid reward schedule should succeed by admin
+    let _reward_schedule_id = create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        "prop-1".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(100_000_000u64),
+        1000_301_000,
+        1000_302_000,
     )
     .unwrap();
 
-    // dropping proposal by non-proposer should fail
-    let res = drop_reward_schedule(&mut app, &user2_addr, &multi_staking_instance, prop1_id);
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().root_cause().to_string(), "Unauthorized");
-
-    // dropping an approved proposal should fail
-    let res = drop_reward_schedule(&mut app, &user2_addr, &multi_staking_instance, prop2_id);
-    assert_eq!(res.is_err(), true);
-    assert_eq!(
-        res.unwrap_err().root_cause().to_string(),
-        "dexter::multi_staking::ProposedRewardSchedule not found"
-    );
-
-    // dropping proposal by the proposer should work
-
-    // 1. dropping a rejected proposal
-
-    // assert user1 balance
-    let user1_balance = app
-        .wrap()
-        .query_balance(user1_addr.clone(), "uxprt")
-        .unwrap()
-        .amount;
-    assert_eq!(user1_balance, Uint128::from(100_000_000u128)); // 200 - 100
-
-    drop_reward_schedule(&mut app, &user1_addr, &multi_staking_instance, prop1_id).unwrap();
-
-    // ensure user got the refund
-    let user1_balance = app
-        .wrap()
-        .query_balance(user1_addr.clone(), "uxprt")
-        .unwrap()
-        .amount;
-    assert_eq!(user1_balance, Uint128::from(200_000_000u128)); // 200 - 100 + 100
-
-    // 2. dropping a non-reviewed proposal
-
-    // assert user1 balance
-    let user2_balance = app
-        .wrap()
-        .query_balance(user2_addr.clone(), "uxprt")
-        .unwrap()
-        .amount;
-    assert_eq!(user2_balance, Uint128::from(90_000_000u128)); // 200 - 100 - 10
-
-    drop_reward_schedule(&mut app, &user2_addr, &multi_staking_instance, prop3_id).unwrap();
-
-    // ensure user got the refund
-    let user2_balance = app
-        .wrap()
-        .query_balance(user2_addr.clone(), "uxprt")
-        .unwrap()
-        .amount;
-    assert_eq!(user2_balance, Uint128::from(100_000_000u128)); // 200 - 100 - 10 + 10
+    // TODO: Add more tests for reward schedule creation
 }
 
 #[test]
@@ -345,306 +240,60 @@ fn test_reward_schedule_queries() {
     .unwrap();
 
     // propose some reward schedules
-    propose_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-1".to_string(),
-        Some("This is proposal 1".to_string()),
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(10_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-    propose_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-2".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(10_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-    propose_reward_schedule(
-        &mut app,
-        &user1_addr,
-        &multi_staking_instance,
-        &lp_token1_addr,
-        "prop-3".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(10_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-    propose_reward_schedule(
-        &mut app,
-        &user2_addr,
-        &multi_staking_instance,
-        &lp_token_addr,
-        "prop-4".to_string(),
-        None,
-        AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        },
-        Uint128::from(10_000_000 as u64),
-        1000_301_000,
-        1000_302_000,
-    )
-    .unwrap();
-
-    // ensure get query works
-    let res: ProposedRewardSchedule = app
-        .wrap()
-        .query_wasm_smart(
-            multi_staking_instance.clone(),
-            &QueryMsg::ProposedRewardSchedule { proposal_id: 1 },
-        )
-        .unwrap();
-    let expected_reward_schedule = ProposedRewardSchedule {
-        lp_token: lp_token_addr.clone(),
-        proposer: user1_addr.clone(),
-        title: "prop-1".to_string(),
-        description: Some("This is proposal 1".to_string()),
-        asset: Asset {
-            info: AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
-            },
-            amount: Uint128::from(10_000_000 as u64),
-        },
-        start_block_time: 1000_301_000,
-        end_block_time: 1000_302_000,
-        rejected: false,
-    };
-    assert_eq!(res, expected_reward_schedule);
-
-    // ensure get query fails for non-existent proposal
-    let res: StdResult<ProposedRewardSchedule> = app.wrap().query_wasm_smart(
-        multi_staking_instance.clone(),
-        &QueryMsg::ProposedRewardSchedule { proposal_id: 5 },
-    );
-    assert_eq!(res.is_err(), true);
-    assert_eq!(res.unwrap_err().to_string().contains("not found"), true);
-
-    // reject a proposal
-    review_reward_schedule(
+    create_reward_schedule(
         &mut app,
         &admin_addr,
         &multi_staking_instance,
-        vec![ReviewProposedRewardSchedule {
-            proposal_id: 2,
-            approve: false,
-        }],
+        &lp_token_addr,
+        "prop-1".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(10_000_000u64),
+        1000_301_000,
+        1000_302_000,
     )
     .unwrap();
-
-    // ensure list query works with pagination
-
-    // combo-1: start_after & limit
-    let res: Vec<ProposedRewardSchedulesResponse> = app
-        .wrap()
-        .query_wasm_smart(
-            multi_staking_instance.clone(),
-            &QueryMsg::ProposedRewardSchedules {
-                start_after: Some(1),
-                limit: Some(1),
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        res,
-        vec![ProposedRewardSchedulesResponse {
-            proposal_id: 2,
-            proposal: ProposedRewardSchedule {
-                lp_token: lp_token_addr.clone(),
-                proposer: user1_addr.clone(),
-                title: "prop-2".to_string(),
-                description: None,
-                asset: Asset {
-                    info: AssetInfo::NativeToken {
-                        denom: "uxprt".to_string()
-                    },
-                    amount: Uint128::from(10_000_000 as u64),
-                },
-                start_block_time: 1000_301_000,
-                end_block_time: 1000_302_000,
-                rejected: true,
-            }
-        },]
-    );
-
-    // combo-2: no params
-    let res: Vec<ProposedRewardSchedulesResponse> = app
-        .wrap()
-        .query_wasm_smart(
-            multi_staking_instance.clone(),
-            &QueryMsg::ProposedRewardSchedules {
-                start_after: None,
-                limit: None,
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        res,
-        vec![
-            ProposedRewardSchedulesResponse {
-                proposal_id: 1,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user1_addr.clone(),
-                    title: "prop-1".to_string(),
-                    description: Some("This is proposal 1".to_string()),
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: false,
-                }
-            },
-            ProposedRewardSchedulesResponse {
-                proposal_id: 2,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user1_addr.clone(),
-                    title: "prop-2".to_string(),
-                    description: None,
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: true,
-                }
-            },
-            ProposedRewardSchedulesResponse {
-                proposal_id: 3,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token1_addr.clone(),
-                    proposer: user1_addr.clone(),
-                    title: "prop-3".to_string(),
-                    description: None,
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: false,
-                }
-            },
-            ProposedRewardSchedulesResponse {
-                proposal_id: 4,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user2_addr.clone(),
-                    title: "prop-4".to_string(),
-                    description: None,
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: false,
-                }
-            },
-        ]
-    );
-
-    // drop a proposal
-    drop_reward_schedule(&mut app, &user1_addr, &multi_staking_instance, 3).unwrap();
-    // query again, the query should reflect the updated state
-    let res: Vec<ProposedRewardSchedulesResponse> = app
-        .wrap()
-        .query_wasm_smart(
-            multi_staking_instance.clone(),
-            &QueryMsg::ProposedRewardSchedules {
-                start_after: None,
-                limit: None,
-            },
-        )
-        .unwrap();
-    assert_eq!(
-        res,
-        vec![
-            ProposedRewardSchedulesResponse {
-                proposal_id: 1,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user1_addr.clone(),
-                    title: "prop-1".to_string(),
-                    description: Some("This is proposal 1".to_string()),
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: false,
-                }
-            },
-            ProposedRewardSchedulesResponse {
-                proposal_id: 2,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user1_addr.clone(),
-                    title: "prop-2".to_string(),
-                    description: None,
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: true,
-                }
-            },
-            ProposedRewardSchedulesResponse {
-                proposal_id: 4,
-                proposal: ProposedRewardSchedule {
-                    lp_token: lp_token_addr.clone(),
-                    proposer: user2_addr.clone(),
-                    title: "prop-4".to_string(),
-                    description: None,
-                    asset: Asset {
-                        info: AssetInfo::NativeToken {
-                            denom: "uxprt".to_string()
-                        },
-                        amount: Uint128::from(10_000_000 as u64),
-                    },
-                    start_block_time: 1000_301_000,
-                    end_block_time: 1000_302_000,
-                    rejected: false,
-                }
-            },
-        ]
-    );
+    create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        "prop-2".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(10_000_000u64),
+        1000_301_000,
+        1000_302_000,
+    )
+    .unwrap();
+    create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token1_addr,
+        "prop-3".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(10_000_000u64),
+        1000_301_000,
+        1000_302_000,
+    )
+    .unwrap();
+    create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        "prop-4".to_string(),
+        AssetInfo::NativeToken {
+            denom: "uxprt".to_string(),
+        },
+        Uint128::from(10_000_000u64),
+        1000_301_000,
+        1000_302_000,
+    )
+    .unwrap();
 }

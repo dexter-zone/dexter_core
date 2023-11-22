@@ -4,11 +4,11 @@ use const_format::concatcp;
 
 use crate::error::ContractError;
 use crate::state::CONFIG;
-use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery, Api, Event};
+use cosmwasm_std::{entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QueryRequest, Response, StdResult, Uint128, WasmMsg, WasmQuery, Api, Event};
 use cw2::{get_contract_version, set_contract_version};
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::helper::{EventExt};
+use dexter::helper::EventExt;
 use dexter::pool::ResponseType;
 use dexter::router::{return_swap_sim_failure, CallbackMsg, Config, ConfigResponse, ExecuteMsg, HopSwapRequest, InstantiateMsg, MigrateMsg, QueryMsg, SimulateMultiHopResponse, SimulatedTrade, MAX_SWAP_OPERATIONS};
 use dexter::vault::{self, SingleSwapRequest, SwapType};
@@ -202,7 +202,7 @@ pub fn execute_multihop_swap(
         let allowance_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: requests[0].asset_in.to_string(),
             funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+            msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
                 spender: config.dexter_vault.to_string(),
                 amount: offer_amount,
                 expires: None,
@@ -238,7 +238,7 @@ pub fn execute_multihop_swap(
     let first_hop_execute_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.dexter_vault.to_string(),
         funds: coins,
-        msg: to_binary(&vault::ExecuteMsg::Swap {
+        msg: to_json_binary(&vault::ExecuteMsg::Swap {
             swap_request: first_hop_swap_request.clone(),
             recipient: Some(env.contract.address.clone().to_string()),
             min_receive: None,
@@ -352,7 +352,7 @@ pub fn continue_hop_swap(
             let allowance_msg = CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: offer_asset.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+                msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
                     spender: config.dexter_vault.to_string(),
                     amount: amount_returned_prev_hop,
                     expires: None,
@@ -387,7 +387,7 @@ pub fn continue_hop_swap(
         let next_hop_execute_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: config.dexter_vault.to_string(),
             funds: coins,
-            msg: to_binary(&vault::ExecuteMsg::Swap {
+            msg: to_json_binary(&vault::ExecuteMsg::Swap {
                 swap_request: next_hop_swap_request.clone(),
                 recipient: Some(env.contract.address.clone().to_string()),
                 min_receive: None,
@@ -426,12 +426,12 @@ pub fn continue_hop_swap(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_get_config(deps)?),
+        QueryMsg::Config {} => to_json_binary(&query_get_config(deps)?),
         QueryMsg::SimulateMultihopSwap {
             multiswap_request,
             swap_type,
             amount,
-        } => to_binary(&query_simulate_multihop(
+        } => to_json_binary(&query_simulate_multihop(
             deps,
             env,
             multiswap_request,
@@ -507,7 +507,7 @@ fn query_simulate_multihop(
                 let pool_response: dexter::vault::PoolInfoResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
                         contract_addr: config.dexter_vault.clone().to_string(),
-                        msg: to_binary(&dexter::vault::QueryMsg::GetPoolById {
+                        msg: to_json_binary(&dexter::vault::QueryMsg::GetPoolById {
                             pool_id: hop.pool_id,
                         })?,
                     }))?;
@@ -516,7 +516,7 @@ fn query_simulate_multihop(
                 let pool_swap_transition: dexter::pool::SwapResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
                         contract_addr: pool_response.pool_addr.to_string(),
-                        msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
+                        msg: to_json_binary(&dexter::pool::QueryMsg::OnSwap {
                             swap_type: SwapType::GiveIn {},
                             offer_asset: next_token_in.clone(),
                             ask_asset: hop.asset_out.clone(),
@@ -576,7 +576,7 @@ fn query_simulate_multihop(
                 let pool_response: dexter::vault::PoolInfoResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
                         contract_addr: config.dexter_vault.clone().to_string(),
-                        msg: to_binary(&dexter::vault::QueryMsg::GetPoolById {
+                        msg: to_json_binary(&dexter::vault::QueryMsg::GetPoolById {
                             pool_id: hop.pool_id,
                         })?,
                     }))?;
@@ -585,7 +585,7 @@ fn query_simulate_multihop(
                 let pool_swap_transition: dexter::pool::SwapResponse =
                     deps.querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
                         contract_addr: pool_response.pool_addr.to_string(),
-                        msg: to_binary(&dexter::pool::QueryMsg::OnSwap {
+                        msg: to_json_binary(&dexter::pool::QueryMsg::OnSwap {
                             swap_type: SwapType::GiveOut {},
                             offer_asset: hop.asset_in.clone(),
                             ask_asset: hop.asset_out.clone(),

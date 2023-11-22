@@ -7,7 +7,7 @@ use crate::utils::{
     perform_and_test_swap_give_out, store_token_code, validate_culumative_prices,
     log_pool_info
 };
-use cosmwasm_std::{to_binary, Addr, Coin, Decimal, Decimal256, Uint128};
+use cosmwasm_std::{to_json_binary, Addr, Coin, Decimal, Decimal256, Uint128};
 use cw20::Cw20ExecuteMsg;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
@@ -253,7 +253,7 @@ fn test_join_and_exit_pool() {
     let exit_msg = Cw20ExecuteMsg::Send {
         contract: vault_addr.to_string(),
         amount: Uint128::new(2_000_000_000u128),
-        msg: to_binary(&exit_pool_hook_msg).unwrap(),
+        msg: to_json_binary(&exit_pool_hook_msg).unwrap(),
     };
 
     // Execute the exit pool message

@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
 
-use crate::asset::{Asset, AssetInfo};
+use crate::asset::AssetInfo;
 
 /// Maximum number of LP tokens that are allowed by the multi-staking contract at a point in time.
 /// This limit exists to prevent out-of-gas issues during allow and remove LP token operations.
@@ -30,16 +30,20 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum MigrateMsg {
-    V2 {
+    // Removes the reward schedule proposal start delay config param.
+    // This migration is supported from version v2.0, v2.1 and v2.2
+    V3FromV2 {
+        keeper_addr: Addr
+    },
+    V3FromV2_2 {},
+    /// Removes the reward schedule proposal start delay config param
+    /// Instant unbonding fee and keeper address are added
+    V3FromV1 {
         keeper_addr: Addr,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
-    },
-    /// Adds support for updating keeper address.
-    /// Only needed for upgrading contracts that were upgraded from v1 to a fauly v2 without support for keeper address update.
-    /// We can otherwise use V2 message directly for upgrading from v1 to v2.1
-    V2_1 {}
+    }
 }
 
 #[cw_serde]
@@ -87,41 +91,6 @@ impl Default for CreatorClaimableRewardState {
     }
 }
 
-#[cw_serde]
-/// The proposed reward schedule for a LP token
-pub struct ProposedRewardSchedule {
-    /// The LP token for which to propose the reward schedule
-    pub lp_token: Addr,
-    /// The proposer of the reward schedule
-    pub proposer: Addr,
-    /// The title of the proposal.
-    pub title: String,
-    /// Any description that the proposer wants to give about the proposal.
-    pub description: Option<String>,
-    /// The asset proposed as reward.
-    /// The asset would go back to the proposer when the proposer drops the proposal.
-    pub asset: Asset,
-    /// Block time when the reward schedule will become effective.
-    /// This must be at least 3 days in future at the time of proposal to give enough time to review.
-    /// This also acts as the expiry of the proposal. If time has elapsed after the start_block_time,
-    /// then the proposal can't be approved by the admin. After that, it can only be rejected by the
-    /// admin, or dropped by the proposer.
-    pub start_block_time: u64,
-    /// Block time when reward schedule ends.
-    pub end_block_time: u64,
-    /// True if proposal was rejected, false if proposal hasn't yet been reviewed.
-    /// Once rejected, a proposal can't be reviewed again. It can only be dropped by the proposer.
-    pub rejected: bool,
-}
-
-#[cw_serde]
-/// Review of a proposed reward schedule for a LP token
-pub struct ReviewProposedRewardSchedule {
-    /// ID of the proposal to review
-    pub proposal_id: u64,
-    /// true if approved, false if rejected
-    pub approve: bool,
-}
 
 #[cw_serde]
 pub struct UnlockFeeTier {
@@ -142,9 +111,6 @@ pub struct Config {
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
-    /// Minimum number of seconds after which a proposed reward schedule can start after it is proposed.
-    /// This is to give enough time to review the proposal.
-    pub minimum_reward_schedule_proposal_start_delay: u64,
     /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
     /// value between 0 and 1000 (0% to 10%) are allowed
     pub instant_unbond_fee_bp: u64,
@@ -155,6 +121,33 @@ pub struct Config {
     pub instant_unbond_min_fee_bp: u64,
 }
 
+/// config structure of contract version v2 and v2.1 . Used for migration.
+#[cw_serde]
+pub struct ConfigV2_1 {
+    pub owner: Addr,
+    pub keeper: Option<Addr>,
+    pub allowed_lp_tokens: Vec<Addr>,
+    pub unlock_period: u64,
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub instant_unbond_fee_bp: u64,
+    pub fee_tier_interval: u64,
+    pub instant_unbond_min_fee_bp: u64,
+}
+
+/// config structure of contract version v2.2 . Used for migration.
+#[cw_serde]
+pub struct ConfigV2_2 {
+    pub owner: Addr,
+    pub keeper: Addr,
+    pub allowed_lp_tokens: Vec<Addr>,
+    pub unlock_period: u64,
+    pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub instant_unbond_fee_bp: u64,
+    pub fee_tier_interval: u64,
+    pub instant_unbond_min_fee_bp: u64,
+}
+
+/// config structure of contract version v1. Used for migration.
 #[cw_serde]
 pub struct ConfigV1 {
      pub owner: Addr,
@@ -188,12 +181,6 @@ pub struct AssetStakerInfo {
 pub struct LpGlobalState {
     pub total_bond_amount: Uint128,
     pub active_reward_assets: Vec<AssetInfo>
-}
-
-#[cw_serde]
-pub struct ProposedRewardSchedulesResponse {
-    pub proposal_id: u64,
-    pub proposal: ProposedRewardSchedule,
 }
 
 #[cw_serde]
@@ -263,12 +250,6 @@ pub enum QueryMsg {
     /// Returns the current owner of the contract
     #[returns(Addr)]
     Owner {},
-    /// Returns the proposed reward schedules matching the given pagination params.
-    #[returns(Vec<ProposedRewardSchedulesResponse>)]
-    ProposedRewardSchedules { start_after: Option<u64>, limit: Option<u32> },
-    /// Returns the proposed reward schedule matching the given proposal_id
-    #[returns(ProposedRewardSchedule)]
-    ProposedRewardSchedule { proposal_id: u64 },
     /// Returns the reward schedule for a given LP token and a reward asset
     #[returns(Vec<RewardScheduleResponse>)]
     RewardSchedules { lp_token: Addr, asset: AssetInfo },
@@ -296,10 +277,10 @@ pub enum Cw20HookMsg {
     },
     /// This hook message is sent from a CW20 asset contract to propose a reward schedule for some LP.
     /// The LP Token contract must be in the allowed_lp_tokens list.
-    ProposeRewardSchedule {
+    CreateRewardSchedule {
         lp_token: Addr,
+        actual_creator: Option<Addr>,
         title: String,
-        description: Option<String>,
         start_block_time: u64,
         end_block_time: u64,
     },
@@ -309,34 +290,26 @@ pub enum Cw20HookMsg {
 pub enum ExecuteMsg {
     /// Allows an admin to update config params
     UpdateConfig {
-        minimum_reward_schedule_proposal_start_delay: Option<u64>,
         keeper_addr: Option<Addr>,
         unlock_period: Option<u64>,
         instant_unbond_fee_bp: Option<u64>,
         instant_unbond_min_fee_bp: Option<u64>,
         fee_tier_interval: Option<u64>,
     },
-    /// Proposes a new reward schedule for rewarding LP token holders a specific asset.
+    /// Creates a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
     /// This entry point is strictly meant for proposing reward schedules with native tokens.
-    /// For proposing reward schedules with CW20 tokens, CW20 transfer with ProposeRewardSchedule
-    /// HookMsg is used. Anyone can initiate a reward schedule proposal.
-    ProposeRewardSchedule {
+    /// For proposing reward schedules with CW20 tokens, CW20 transfer with CreateRewardSchedule
+    /// HookMsg is used. Only owner can create a reward schedule proposal.
+    CreateRewardSchedule {
         lp_token: Addr,
         title: String,
-        description: Option<String>,
+        /// The user on whose behalf the reward schedule might be being created by the owner
+        /// This is particularly useful for the Gov admin scenario where a user proposes a reward schedule on the chain governance
+        /// and the gov admin actually creates the reward schedule for the user
+        actual_creator: Option<Addr>,
         start_block_time: u64,
         end_block_time: u64,
-    },
-    /// Only the multi-staking admin can approve/reject proposed reward schedules.
-    ReviewRewardScheduleProposals {
-        reviews: Vec<ReviewProposedRewardSchedule>,
-    },
-    /// Only the proposer can drop the proposal.
-    /// A proposal can be dropped either if its not yet been reviewed or has been rejected by admin.
-    /// If approved, a proposal can't be dropped.
-    DropRewardScheduleProposal {
-        proposal_id: u64,
     },
     /// Allows an admin to allow a new LP token to be rewarded
     /// This is needed to prevent spam related to adding new reward schedules for random LP tokens

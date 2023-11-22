@@ -1,7 +1,7 @@
 use crate::pool;
 use crate::{asset::AssetInfo, vault};
 use cosmwasm_std::{
-    to_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper, QueryRequest, StdResult, Uint128,
+    to_json_binary, Addr, BalanceResponse, BankQuery, QuerierWrapper, QueryRequest, StdResult, Uint128,
     WasmQuery,
 };
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
@@ -42,7 +42,7 @@ pub fn query_token_balance(
     querier
         .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: String::from(contract_addr),
-            msg: to_binary(&Cw20QueryMsg::Balance {
+            msg: to_json_binary(&Cw20QueryMsg::Balance {
                 address: String::from(account_addr),
             })?,
         }))
@@ -58,7 +58,7 @@ pub fn query_token_balance(
 pub fn query_supply(querier: &QuerierWrapper, contract_addr: Addr) -> StdResult<Uint128> {
     let res: TokenInfoResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: String::from(contract_addr),
-        msg: to_binary(&Cw20QueryMsg::TokenInfo {})?,
+        msg: to_json_binary(&Cw20QueryMsg::TokenInfo {})?,
     }))?;
 
     Ok(res.total_supply)
