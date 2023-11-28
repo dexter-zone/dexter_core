@@ -1,0 +1,38 @@
+[package]
+name = "dexter-superfluid-lp"
+version = "1.0.0"
+authors = ["pranjal@persistence.one"]
+edition = "2021"
+description = "Superfluid LP contract to facilitate staked token -> LST -> LP 1-click conversion"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+backtraces = ["cosmwasm-std/backtraces"]
+
+
+[dependencies]
+dexter = { path = "../../packages/dexter", default-features = false }
+cw20 = "1.0.1"
+cw2 = "1.0.1"
+cw20-base = { version = "1.0.1", features = ["library"] }
+cosmwasm-std = "1.5.0"
+cw-storage-plus = "1.0.1"
+schemars = "0.8.11"
+thiserror = "1.0.38"
+serde = { version = "1.0.152", default-features = false, features = ["derive"] }
+serde-json-wasm = "0.5.0"
+cosmwasm-schema = "1.5.0"
+const_format = "0.2.30"
+
+[dev-dependencies]
+# we only need to enable this if we use integration tests
+cw-multi-test = "0.16.2"
+dexter-vault = { path = "../vault"}
+dexter-multi-staking = { path = "../multi_staking"}
+stable-pool = { path = "../pools/stable_pool" }
+weighted-pool = { path = "../pools/weighted_pool"}
+lp-token = { path = "../lp_token"}
+cw20 = "1.0.1"
