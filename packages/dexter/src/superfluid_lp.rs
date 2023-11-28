@@ -1,4 +1,4 @@
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 
 use crate::asset::Asset;
@@ -40,6 +40,11 @@ pub enum ExecuteMsg {
 
 
 #[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
-    
+    #[returns(Uint128)]
+    LockedLstForUser {
+        user: Addr,
+        asset: Asset
+    }
 }

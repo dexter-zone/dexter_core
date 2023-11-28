@@ -34,8 +34,17 @@ pub fn instantiate(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> Result<Binary, ContractError> {
-    Err(ContractError::NotImplemented)
+pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
+    match msg {
+        QueryMsg::LockedLstForUser { user, asset } => {
+            let locked_tokens: Uint128 = LOCKED_TOKENS
+                .may_load(_deps.storage, (&user, &asset.info.to_string()))?
+                .unwrap_or_default();
+
+            Ok(to_json_binary(&locked_tokens)?)
+        }
+    
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
