@@ -68,6 +68,7 @@ pub fn execute_claim_refunds(
                     }
                 }
                 dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalVetoedRefundExceptDeposit
                 | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     PoolCreationRequestStatus::RequestFailedAndRefunded {
                             proposal_id,
@@ -105,6 +106,7 @@ pub fn execute_claim_refunds(
                     }
                 }
                 dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalVetoedRefundExceptDeposit
                 | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
                             proposal_id,
