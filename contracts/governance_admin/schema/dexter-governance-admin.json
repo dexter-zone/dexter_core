@@ -2620,6 +2620,7 @@
           "enum": [
             "proposal_passed_deposit_refund",
             "proposal_rejected_full_refund",
+            "proposal_vetoed_refund_except_deposit",
             "proposal_failed_full_refund"
           ]
         },
