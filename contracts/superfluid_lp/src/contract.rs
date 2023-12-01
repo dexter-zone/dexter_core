@@ -43,7 +43,6 @@ pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractEr
 
             Ok(to_json_binary(&locked_tokens)?)
         }
-    
     }
 }
 
@@ -56,11 +55,6 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::LockLstAssetForUser { asset, user } => {
-            // validate that the sender is the PSTAKE issuance module on the Persistence chain i.e. lscosmos module.
-            if info.sender != "persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq" {
-                return Err(ContractError::Unauthorized);
-            }
-
             let locked_tokens: Uint128 = LOCKED_TOKENS
                 .may_load(deps.storage, (&user, &asset.info.to_string()))?
                 .unwrap_or_default();
@@ -73,6 +67,14 @@ pub fn execute(
                             // validate that the amount sent is exactly equal to the amount that is expected to be locked.
                             if coin.amount != asset.amount {
                                 return Err(ContractError::InvalidAmount);
+                            }
+                        }
+
+                        if coin.denom != "stk/uxprt" {
+                            // validate that the sender of asset is PSTAKE issuance module on the Persistence chain,
+                            // in case the denom is not liquid stkXPRT. We allow to send stkXPRT directly.
+                            if info.sender != "persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq" {
+                                return Err(ContractError::Unauthorized);
                             }
                         }
                     }
@@ -109,9 +111,7 @@ pub fn execute(
                 min_lp_to_receive,
             )
         }
-        ExecuteMsg::DirectlyUnlockBaseLst { asset: _ } => {
-            Err(ContractError::NotImplemented)
-        }
+        ExecuteMsg::DirectlyUnlockBaseLst { asset: _ } => Err(ContractError::NotImplemented),
     }
 }
 
