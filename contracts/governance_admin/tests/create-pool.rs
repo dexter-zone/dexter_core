@@ -689,7 +689,7 @@ impl<'a> CreatePoolTestSuite<'a> {
             )
             .unwrap();
 
-        // verify that the refundable funds are equal to the deposit amount + pool creation fee + reward schedule amount + pool bootstrapping amount
+        // verify that the refundable funds are equal to the pool creation fee + reward schedule amount + pool bootstrapping amount
         assert_eq!(
             refundable_funds.refund_amount,
             vec![
