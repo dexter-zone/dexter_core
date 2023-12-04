@@ -175,6 +175,9 @@ impl<'a> CreatePoolTestSuite<'a> {
 
         println!("Running success case: Refund amount post rejected proposal");
         self.test_refund_for_rejected_proposal();
+
+        println!("Running success case: Refund amount post vetoed proposal");
+        self.test_refund_for_vetoed_proposal();
     }
 
     fn test_pool_creation_funds_query(&self) {
@@ -617,6 +620,103 @@ impl<'a> CreatePoolTestSuite<'a> {
             ]
         );
     }
+
+    fn test_refund_for_vetoed_proposal(&self) {
+        let wasm = Wasm::new(self.persistence);
+        let current_block_time = self.persistence.get_block_time_seconds() as u64;
+
+        let xprt_asset = self.asset_info[0].clone();
+        let cw20_asset = self.asset_info[1].clone();
+
+        // test failure case. Try to claim the refund for a non-existent pool creation request
+        let modified_create_pool_msg =
+            dexter::governance_admin::ExecuteMsg::CreatePoolCreationProposal {
+                proposal_description: self.proposal_description.clone(),
+                pool_creation_request: PoolCreationRequest {
+                    reward_schedules: Some(vec![
+                        dexter::governance_admin::RewardScheduleCreationRequest {
+                            lp_token_addr: None,
+                            title: "Reward Schedule 1".to_string(),
+                            asset: AssetInfo::native_token("uxprt".to_string()),
+                            amount: Uint128::from(1000000u128),
+                            start_block_time: current_block_time + 3 * 24 * 60 * 60,
+                            end_block_time: current_block_time + 10 * 24 * 60 * 60,
+                        },
+                    ]),
+                    ..self.valid_request.clone()
+                },
+            };
+
+        // approve spending of CW20 tokens
+        let approve_msg: cw20::Cw20ExecuteMsg = cw20_base::msg::ExecuteMsg::IncreaseAllowance {
+            spender: self.test_setup.gov_admin_instance.to_string(),
+            amount: Uint128::from(1000000u128),
+            expires: None,
+        };
+
+        let _ = wasm
+            .execute(
+                &self.test_setup.cw20_token_1.to_string(),
+                &approve_msg,
+                &vec![],
+                &self.user,
+            )
+            .unwrap();
+
+        // test failure case, create a new pool but reject the proposal
+        let proposal_id = create_pool_creation_proposal(
+            &wasm,
+            self.test_setup,
+            modified_create_pool_msg.clone(),
+            self.valid_funds.clone(),
+            self.user,
+        );
+
+        // create a pool using governance admin
+        utils::vote_on_proposal(&self.test_setup, proposal_id, VoteOption::NoWithVeto);
+
+        // query for the refund of the deposit amount
+        let query_refund_msg = QueryMsg::RefundableFunds {
+            request_type: GovAdminProposalRequestType::PoolCreationRequest { request_id: 3 },
+        };
+
+
+
+        let refundable_funds: RefundResponse = wasm
+            .query(
+                &self.test_setup.gov_admin_instance.to_string(),
+                &query_refund_msg,
+            )
+            .unwrap();
+
+        // verify that the refundable funds are equal to the pool creation fee + reward schedule amount + pool bootstrapping amount
+        assert_eq!(
+            refundable_funds.refund_amount,
+            vec![
+                Asset::new(cw20_asset.clone(), Uint128::from(1000000u128)),
+                Asset::new(xprt_asset.clone(), Uint128::from(2000000u128))
+            ]
+        );
+
+        // verify detailed refund amount
+        assert_eq!(
+            refundable_funds.detailed_refund_amount,
+            vec![
+                UserDeposit {
+                    category: dexter::governance_admin::FundsCategory::PoolBootstrappingAmount,
+                    assets: vec![
+                        Asset::new(xprt_asset.clone(), Uint128::from(1000000u128)),
+                        Asset::new(cw20_asset.clone(), Uint128::from(1000000u128))
+                    ]
+                },
+                UserDeposit {
+                    category: dexter::governance_admin::FundsCategory::RewardScheduleAmount,
+                    assets: vec![Asset::new(xprt_asset.clone(), Uint128::from(1000000u128))]
+                }
+            ]
+        );
+    }
+
 }
 
 #[test]

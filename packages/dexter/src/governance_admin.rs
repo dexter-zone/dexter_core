@@ -162,6 +162,7 @@ pub struct UserDeposit {
 pub enum RefundReason {
     ProposalPassedDepositRefund,
     ProposalRejectedFullRefund,
+    ProposalVetoedRefundExceptDeposit,
     ProposalFailedFullRefund,
 }
 
@@ -173,7 +174,10 @@ impl Display for RefundReason {
             }
             RefundReason::ProposalRejectedFullRefund => {
                 write!(f, "ProposalRejectedFullRefund")
-            }
+            },
+            RefundReason::ProposalVetoedRefundExceptDeposit => {
+                write!(f, "ProposalVetoedRefundExceptDeposit")
+            },
             RefundReason::ProposalFailedFullRefund => {
                 write!(f, "ProposalFailedFullRefund")
             }

@@ -68,6 +68,7 @@ pub fn execute_claim_refunds(
                     }
                 }
                 dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalVetoedRefundExceptDeposit
                 | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     PoolCreationRequestStatus::RequestFailedAndRefunded {
                             proposal_id,
@@ -105,6 +106,7 @@ pub fn execute_claim_refunds(
                     }
                 }
                 dexter::governance_admin::RefundReason::ProposalRejectedFullRefund
+                | dexter::governance_admin::RefundReason::ProposalVetoedRefundExceptDeposit
                 | dexter::governance_admin::RefundReason::ProposalFailedFullRefund => {
                     RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
                             proposal_id,
@@ -130,7 +132,8 @@ pub fn execute_claim_refunds(
         .add_attribute("request_type", serde_json_wasm::to_string(&request_type).unwrap())
         .add_attribute("refund_receiver", refund_response.refund_receiver)
         .add_attribute("refund_amount", serde_json_wasm::to_string(&refund_response.refund_amount).unwrap())
-        .add_attribute("refund_reason", serde_json_wasm::to_string(&refund_response.refund_reason).unwrap());
+        .add_attribute("detailed_refund_amount", serde_json_wasm::to_string(&refund_response.detailed_refund_amount).unwrap())
+        .add_attribute("refund_reason", refund_response.refund_reason.to_string());
 
     Ok(Response::new().add_event(event).add_messages(messages))
 }

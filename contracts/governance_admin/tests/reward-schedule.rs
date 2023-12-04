@@ -66,8 +66,8 @@ impl<'a> RewardScheduleTestSuite<'a> {
             title: "Reward Schedule".to_string(),
             asset: AssetInfo::native_token("uxprt".to_string()),
             amount: Uint128::from(1000000u128),
-            start_block_time: current_block_time + 7 * 24 * 60 * 60,
-            end_block_time: current_block_time + 14 * 24 * 60 * 60,
+            start_block_time: current_block_time + 10 * 24 * 60 * 60,
+            end_block_time: current_block_time + 17 * 24 * 60 * 60,
         };
 
         RewardScheduleTestSuite {
@@ -115,6 +115,9 @@ impl<'a> RewardScheduleTestSuite<'a> {
         println!("test: Valid input & rejected proposal");
         self.test_valid_input_rejected_proposal();
 
+        println!("test: Valid input & rejected proposal with veto");
+        self.test_valid_input_rejected_proposal_with_veto();
+        
         println!("test: Valid input & passed proposal");
         self.test_valid_input_passed_proposal();
 
@@ -358,6 +361,105 @@ impl<'a> RewardScheduleTestSuite<'a> {
         assert_eq!(
             bal_after_refund,
             bal_before_refund + self.valid_funds[0].amount
+        );
+
+        // check request status is RequestFailedAndRefunded
+        assert_eq!(
+            self.query_request_status(reward_schedule_request_id),
+            RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
+                proposal_id,
+                refund_block_height: self.persistence.get_block_height() as u64,
+            }
+        );
+
+        // try to claim again
+        let res = self.claim_refund(reward_schedule_request_id);
+        assert!(res.is_err());
+        let error = res.unwrap_err();
+        let expected_err = format!(
+            "execute error: failed to execute message; message index: 0: Funds already claimed for this request at block height: {}: execute wasm contract failed",
+            self.persistence.get_block_height() - 1,
+        );
+        assert_eq!(error.to_string(), expected_err);
+    }
+
+    fn test_valid_input_rejected_proposal_with_veto(&self) {
+        let wasm = Wasm::new(self.persistence);
+        let result = wasm.execute(
+            &self.gov_admin.gov_admin_instance.to_string(),
+            &GovExecuteMsg::CreateRewardSchedulesProposal {
+                proposal_description: self.proposal_description.clone(),
+                multistaking_contract_addr: self.gov_admin.multi_staking_instance.to_string(),
+                reward_schedule_creation_requests: vec![self.valid_request.clone()],
+            },
+            &self.valid_funds,
+            &self.user,
+        );
+
+        assert!(result.is_ok());
+        let events = result.unwrap().events;
+        let proposal_id: u64 = utils::find_event_attr(&events, "submit_proposal", "proposal_id")
+            .parse()
+            .unwrap();
+
+        utils::vote_on_proposal(&self.gov_admin, proposal_id, VoteOption::NoWithVeto);
+
+        let reward_schedule_request_id: u64 = utils::find_event_attr(
+            &events,
+            "wasm-dexter-governance-admin::create_reward_schedule_proposal",
+            "reward_schedules_creation_request_id",
+        )
+        .parse()
+        .unwrap();
+
+        // check request status is ProposalCreated
+        assert_eq!(
+            self.query_request_status(reward_schedule_request_id),
+            RewardSchedulesCreationRequestStatus::ProposalCreated { proposal_id }
+        );
+
+        // check rewards not created
+        let reward_schedules = self.query_reward_schedules();
+        assert_eq!(reward_schedules.len(), 0);
+
+        let refundable_funds = self.query_refundable_funds(reward_schedule_request_id);
+
+        // check refundable reason is ProposalRejectedFullRefund
+        assert_eq!(
+            refundable_funds.refund_reason,
+            RefundReason::ProposalVetoedRefundExceptDeposit
+        );
+
+        // check refundable funds includes total deposited funds
+        assert_eq!(
+            refundable_funds.refund_amount,
+            vec![Asset::new(
+                AssetInfo::native_token("uxprt".to_string()),
+                // remove the proposal deposit
+                self.valid_funds[0].amount - Uint128::from(10000000u128),
+            )]
+        );
+
+        // claim refunds
+        let bal_before_refund = utils::query_balance(
+            &self.gov_admin,
+            self.user.address().to_string(),
+            "uxprt".to_string(),
+        );
+
+        self.claim_refund(reward_schedule_request_id).unwrap();
+
+        let bal_after_refund = utils::query_balance(
+            &self.gov_admin,
+            self.user.address().to_string(),
+            "uxprt".to_string(),
+        );
+
+        // check balance includes the claim amount
+        assert_eq!(
+            bal_after_refund,
+            // remove the proposal deposit
+            bal_before_refund + self.valid_funds[0].amount - Uint128::from(10000000u128)
         );
 
         // check request status is RequestFailedAndRefunded

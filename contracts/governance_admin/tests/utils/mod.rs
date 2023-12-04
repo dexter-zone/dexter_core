@@ -484,6 +484,7 @@ pub fn vote_on_proposal(
     match vote_option {
         VoteOption::Yes => assert_eq!(proposal.status, ProposalStatus::Passed as i32),
         VoteOption::No => assert_eq!(proposal.status, ProposalStatus::Rejected as i32),
+        VoteOption::NoWithVeto => assert_eq!(proposal.status, ProposalStatus::Rejected as i32),
         _ => panic!("Invalid vote option"),
     }
 }

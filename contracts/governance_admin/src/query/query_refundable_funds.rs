@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
-use cosmwasm_std::Deps;
+use cosmwasm_std::{Decimal256, Deps, Uint128};
 use dexter::{
     asset::Asset,
     governance_admin::{
@@ -14,7 +14,7 @@ use crate::{
     contract::ContractResult,
     error::ContractError,
     state::{POOL_CREATION_REQUEST_DATA, REWARD_SCHEDULE_REQUESTS},
-    utils::queries::query_gov_proposal_by_id,
+    utils::queries::{query_gov_params, query_gov_proposal_by_id},
 };
 
 /// Query refundable funds for a given request type
@@ -117,10 +117,55 @@ pub fn query_refundable_funds(
     })?;
 
     let (final_refundable_deposits, refund_reason) = match proposal_status {
-        ProposalStatus::Rejected => Ok((
-            user_total_deposits,
-            RefundReason::ProposalRejectedFullRefund,
-        )),
+        ProposalStatus::Rejected => {
+            // if rejected, check if it was vetoed or not
+            let tally_result = proposal.final_tally_result.ok_or(ContractError::Bug(
+                "Proposal tally result is null".to_string(),
+            ))?;
+
+            let veto_no_count = Uint128::from_str(&tally_result.no_with_veto_count)?;
+            let yes_count = Uint128::from_str(&tally_result.yes_count)?;
+            let no_count = Uint128::from_str(&tally_result.no_count)?;
+            let abstain_count = Uint128::from_str(&tally_result.abstain_count)?;
+
+            let total_count = veto_no_count + yes_count + no_count + abstain_count;
+            let veto_percentage = if total_count.is_zero() {
+                Decimal256::zero()
+            } else {
+                Decimal256::checked_from_ratio(veto_no_count, total_count).map_err(|err| {
+                    ContractError::Bug(format!(
+                        "Error while calculating veto percentage: {}",
+                        err.to_string()
+                    ))
+                })?
+            };
+
+            // check veto threshold by gov params
+            let gov_params = query_gov_params(&deps.querier)?;
+            let veto_threshold = Decimal256::from_str(&gov_params.veto_threshold)?;
+
+            if veto_percentage > veto_threshold {
+                // vetoed, return everything except the proposal deposit
+                let mut user_deposits_except_deposit = vec![];
+                for user_deposit in user_total_deposits {
+                    match user_deposit.category {
+                        FundsCategory::ProposalDeposit => {}
+                        _ => user_deposits_except_deposit.push(user_deposit),
+                    }
+                }
+
+                Ok((
+                    user_deposits_except_deposit,
+                    RefundReason::ProposalVetoedRefundExceptDeposit,
+                ))
+            } else {
+                // not vetoed, return all the funds back to the user
+                Ok((
+                    user_total_deposits,
+                    RefundReason::ProposalRejectedFullRefund,
+                ))
+            }
+        }
         ProposalStatus::Failed => Ok((user_total_deposits, RefundReason::ProposalFailedFullRefund)),
         ProposalStatus::Passed => {
             // return only the proposal deposit amount back to the user
