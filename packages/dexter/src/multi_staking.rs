@@ -362,7 +362,7 @@ pub enum ExecuteMsg {
         /// order of transaction execution, thus it is better to pass the full lock explicitly.
         token_locks: Vec<TokenLock>,
     },
-    /// Allows to withdraw unbonded rewards for a specific LP token.
+    /// Allows to withdraw rewards for a specific LP token.
     /// The rewards are sent to the user's address.
     Withdraw {
         lp_token: Addr,
