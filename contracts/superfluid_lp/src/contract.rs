@@ -45,6 +45,21 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
+        QueryMsg::LockedLstForUser { user, asset } => {
+            let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
+                .may_load(_deps.storage, (&user, &asset.info.to_string()))?
+                .unwrap_or_default();
+
+            // sum all the locked tokens
+            let mut total_locked_amount = Uint128::zero();
+
+            for lock in locked_tokens {
+                total_locked_amount = total_locked_amount + lock.amount;
+            }
+
+            Ok(to_json_binary(&total_locked_amount)?)
+        },
+
         QueryMsg::TotalAmountLocked { user, asset_info } => {
             let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
                 .may_load(_deps.storage, (&user, &asset_info.to_string()))?
@@ -96,7 +111,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::LockLstAsset { asset} => {
+        ExecuteMsg::LockLstAssetForUser { asset, user} => {
 
             let user = info.sender.clone();
             let mut locked_tokens: Vec<LockInfo> = LOCKED_TOKENS

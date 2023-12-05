@@ -315,13 +315,14 @@ fn test_superfluid_lp_locking() {
     // let lscomos_module_address =
     //     Addr::unchecked("persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq");
 
-    let msg = dexter::superfluid_lp::ExecuteMsg::LockLstAsset {
+    let msg = dexter::superfluid_lp::ExecuteMsg::LockLstAssetForUser {
         asset: Asset {
             info: AssetInfo::NativeToken {
                 denom: "stk/uxprt".to_string(),
             },
             amount: Uint128::from(10000000u128),
         },
+        user: user_addr.clone(),
     };
 
     app

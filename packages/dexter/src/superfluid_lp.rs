@@ -34,8 +34,10 @@ pub enum ExecuteMsg {
     /// In that time period, the user can only join pool using the locked LST and not withdraw it.
     /// After the completion of the time-lock, the user can withdraw the LST normally also.
     /// This message can only be executed by the whitelisted LST issuance modules like lscosmos module on the Persistence chain.
-    LockLstAsset {
+    LockLstAssetForUser {
         asset: Asset,
+        // this is just to maintain the same interface as the original contract, this field is not used
+        user: Addr
     },
 
     /// Join pool on behalf of the user using the locked LST and any extra tokens that the user is willing to spend.
@@ -78,6 +80,14 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+
+    // only to maintain the same interface as the original contract, this query method is deprecated
+    #[returns(Uint128)]
+    LockedLstForUser {
+        user: Addr,
+        asset: Asset
+    },
+
     #[returns(Uint128)]
     TotalAmountLocked {
         user: Addr,
