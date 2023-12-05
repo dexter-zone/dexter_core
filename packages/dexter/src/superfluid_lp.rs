@@ -5,8 +5,25 @@ use crate::asset::{Asset, AssetInfo};
 
 #[cw_serde]
 pub struct InstantiateMsg {
+    pub vault_addr: Addr,
     /// lock period for any LST token that is locked for the user
     pub base_lock_period: u64,
+    /// owner of the contract
+    pub owner: Addr,
+}
+
+#[cw_serde]
+#[derive(Eq)]
+pub struct LockInfo {
+    pub amount: Uint128,
+    pub unlock_time: u64,
+}
+
+#[cw_serde]
+pub struct Config {
+    pub base_lock_period: u64,
+    pub vault_addr: Addr,
+    pub owner: Addr,
 }
 
 
@@ -35,6 +52,26 @@ pub enum ExecuteMsg {
     DirectlyUnlockBaseLst {
         asset: Asset
     },
+
+    /// Update config
+    UpdateConfig {
+        base_lock_period: Option<u64>,
+        vault_addr: Option<Addr>,
+    },
+
+    /// Allows the owner to transfer ownership to a new address.
+    /// Ownership transfer is done in two steps:
+    /// 1. The owner proposes a new owner.
+    /// 2. The new owner accepts the ownership.
+    /// The proposal expires after a certain period of time within which the new owner must accept the ownership.
+    ProposeNewOwner {
+        owner: Addr,
+        expires_in: u64,
+    },
+    /// Allows the new owner to accept ownership.
+    ClaimOwnership {},
+    /// Allows the owner to drop the ownership transfer proposal.
+    DropOwnershipProposal {}
 }
 
 
@@ -42,8 +79,23 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     #[returns(Uint128)]
-    LockedLstForUser {
+    TotalAmountLocked {
+        user: Addr,
+        asset_info: AssetInfo
+    },
+    
+    /// Returns the amount of LST that is currently unlocked for the user and available to withdraw.
+    /// This is amount that has served the base lock period in this contract.
+    #[returns(Uint128)]
+    UnlockedAmount {
+        user: Addr,
+        asset_info: AssetInfo
+    },
+
+    #[returns(Vec<LockInfo>)]
+    TokenLocks {
         user: Addr,
         asset_info: AssetInfo
     }
+
 }

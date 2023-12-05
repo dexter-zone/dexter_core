@@ -3,10 +3,18 @@ use cosmwasm_std::{Addr, Coin, Timestamp, Uint128, to_json_binary};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
-use dexter::superfluid_lp;
 use dexter::vault::{FeeInfo, PauseInfo, PoolCreationFee, PoolTypeConfig, NativeAssetPrecisionInfo};
 
 const EPOCH_START: u64 = 1_000_000;
+
+#[macro_export]
+macro_rules! uint128_with_precision {
+    ($value:expr, $precision:expr) => {
+        cosmwasm_std::Uint128::from($value)
+            .checked_mul(cosmwasm_std::Uint128::from(10u64).pow($precision as u32))
+            .unwrap()
+    };
+}
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     let mut env = mock_env();
@@ -30,12 +38,16 @@ fn store_multi_staking_code(app: &mut App) -> u64 {
 }
 
 fn store_vault_code(app: &mut App) -> u64 {
-    let vault_contract = Box::new(ContractWrapper::new_with_empty(
-        dexter_vault::contract::execute,
-        dexter_vault::contract::instantiate,
-        dexter_vault::contract::query,
-    ));
-    app.store_code(vault_contract)
+    let dexter_vault = Box::new(
+        ContractWrapper::new_with_empty(
+            dexter_vault::contract::execute,
+            dexter_vault::contract::instantiate,
+            dexter_vault::contract::query,
+        )
+        .with_reply_empty(dexter_vault::contract::reply),
+    );
+
+    app.store_code(dexter_vault)
 }
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
@@ -92,14 +104,13 @@ pub fn create_lp_token(app: &mut App, code_id: u64, sender: Addr, token_name: St
     return lp_token_instance;
 }
 
-fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr) {
+fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr) {
     let token_code_id = store_token_code(app);
     let multistaking_code = store_multi_staking_code(app);
     let superfluid_lp_code = store_superfluid_lp_code(app);
     let vault_code = store_vault_code(app);
     let weighted_pool_code = store_weighted_pool_code(app);
 
-    let user = String::from("user");
     let keeper = String::from("keeper");
 
     let keeper_addr = Addr::unchecked(keeper.clone());
@@ -122,21 +133,6 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr)
             &msg,
             &[],
             "multi_staking",
-            None,
-        )
-        .unwrap();
-
-    let superfluid_lp_instantiate_msg = dexter::superfluid_lp::InstantiateMsg {
-        base_lock_period: 7 * 24 * 60 * 60,
-    };
-
-    let superfluid_lp_instance = app
-        .instantiate_contract(
-            superfluid_lp_code,
-            owner.clone(),
-            &superfluid_lp_instantiate_msg,
-            &[],
-            "superfluid_lp",
             None,
         )
         .unwrap();
@@ -176,13 +172,27 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr, Addr)
         )
         .unwrap();
 
-    let lp_token = create_lp_token(app, token_code_id, owner.clone(), "lp_token".to_string());
+    let superfluid_lp_instantiate_msg = dexter::superfluid_lp::InstantiateMsg {
+        base_lock_period: 7 * 24 * 60 * 60,
+        vault_addr: vault_instance.clone(),
+        owner: owner.clone(),
+    };
+
+    let superfluid_lp_instance = app
+        .instantiate_contract(
+            superfluid_lp_code,
+            owner.clone(),
+            &superfluid_lp_instantiate_msg,
+            &[],
+            "superfluid_lp",
+            None,
+        )
+        .unwrap();
 
     return (
         multi_staking_instance,
         superfluid_lp_instance,
-        vault_instance,
-        lp_token,
+        vault_instance
     );
 }
 
@@ -199,8 +209,9 @@ fn test_superfluid_lp_locking() {
         },
     ];
 
-    let mut app = mock_app(Addr::unchecked("owner"), coins);
-    let (multi_staking_instance, superfluid_lp_instance, vault_instance, lp_token) =
+    let owner = Addr::unchecked("owner");
+    let mut app = mock_app(owner.clone(), coins);
+    let (multi_staking_instance, superfluid_lp_instance, vault_instance) =
         instantiate_contract(&mut app, &Addr::unchecked("owner"));
 
     let create_pool_msg = dexter::vault::ExecuteMsg::CreatePoolInstance {
@@ -249,17 +260,58 @@ fn test_superfluid_lp_locking() {
     };
 
     app.execute_contract(
+        owner.clone(),
         vault_instance.clone(),
-        lp_token.clone(),
         &create_pool_msg,
         &[],
     ).unwrap();
 
-    let user = String::from("user");
-    let keeper = String::from("keeper");
+    // get LP token address for the pool
+    let query_msg = dexter::vault::QueryMsg::GetPoolById {
+        pool_id: Uint128::from(1u128),
+    };
 
+    let res: dexter::vault::PoolInfoResponse = app
+        .wrap()
+        .query_wasm_smart(vault_instance.clone(), &query_msg)
+        .unwrap();
+
+
+    let lp_token_addr = res.lp_token_addr;
+
+    // allow LP token in the multistaking contract
+    let msg = dexter::multi_staking::ExecuteMsg::AllowLpToken {
+        lp_token: lp_token_addr.clone(),
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        multi_staking_instance.clone(),
+        &msg,
+        &[],
+    ).unwrap();
+    
+
+    let user = String::from("user");
     let user_addr = Addr::unchecked(user.clone());
-    let keeper_addr = Addr::unchecked(keeper.clone());
+
+    // send XPRT and stkXPRT to the user
+    app.send_tokens(
+        owner,
+        user_addr.clone(),
+        &[
+            Coin {
+                denom: "uxprt".to_string(),
+                amount: Uint128::from(10000000u128),
+            },
+            Coin {
+                denom: "stk/uxprt".to_string(),
+                amount: Uint128::from(10000000u128),
+            }
+        ],
+    ).unwrap();
+    
+
     // let lscomos_module_address =
     //     Addr::unchecked("persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq");
 
@@ -272,19 +324,20 @@ fn test_superfluid_lp_locking() {
         },
     };
 
-    let res = app
+    app
         .execute_contract(
-            user_addr,
+            user_addr.clone(),
             superfluid_lp_instance.clone(),
             &msg,
-            &[],
+            &[Coin {
+                denom: "stk/uxprt".to_string(),
+                amount: Uint128::from(10000000u128),
+            }],
         )
         .unwrap();
 
-    println!("res: {:?}", res);
-
     // query the locked tokens
-    let query_msg = dexter::superfluid_lp::QueryMsg::LockedLstForUser {
+    let query_msg = dexter::superfluid_lp::QueryMsg::TotalAmountLocked {
         user: Addr::unchecked(user.clone()),
         asset_info: AssetInfo::NativeToken {
             denom: "stk/uxprt".to_string(),
@@ -296,7 +349,7 @@ fn test_superfluid_lp_locking() {
         .query_wasm_smart(superfluid_lp_instance.clone(), &query_msg)
         .unwrap();
 
-    println!("res: {:?}", res);
+    assert_eq!(res, Uint128::from(10000000u128));
 
     // join pool using the locked tokens
     let join_pool_msg = dexter::superfluid_lp::ExecuteMsg::JoinPoolAndBondUsingLockedLst { 
@@ -318,9 +371,9 @@ fn test_superfluid_lp_locking() {
         min_lp_to_receive: None,
     };
 
-    let res = app
+    app
         .execute_contract(
-            keeper_addr,
+            user_addr.clone(),
             superfluid_lp_instance.clone(),
             &join_pool_msg,
             // add funds to the message
@@ -331,6 +384,19 @@ fn test_superfluid_lp_locking() {
         )
         .unwrap();
 
+    // confirm LP tokens are minted for the user and bonded
 
-    println!("res: {:?}", res);
+    let query_msg = dexter::multi_staking::QueryMsg::BondedLpTokens {
+        lp_token: lp_token_addr.clone(),
+        user: user_addr.clone(),
+    };
+
+    let res: Uint128 = app
+        .wrap()
+        .query_wasm_smart(multi_staking_instance.clone(), &query_msg)
+        .unwrap();
+
+    // validate that it must be equal to 100 (Decimal 18) since that's the default amount of LP tokens minted for the first time user
+    assert_eq!(res, uint128_with_precision!(100u128, 18));
+
 }
