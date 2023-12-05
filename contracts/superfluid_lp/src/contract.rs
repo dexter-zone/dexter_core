@@ -36,9 +36,9 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
-        QueryMsg::LockedLstForUser { user, asset } => {
+        QueryMsg::LockedLstForUser { user, asset_info } => {
             let locked_tokens: Uint128 = LOCKED_TOKENS
-                .may_load(_deps.storage, (&user, &asset.info.to_string()))?
+                .may_load(_deps.storage, (&user, &asset_info.to_string()))?
                 .unwrap_or_default();
 
             Ok(to_json_binary(&locked_tokens)?)
@@ -55,12 +55,9 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::LockLstAssetForUser { asset, user } => {
-            // validate that the sender is the PSTAKE issuance module on the Persistence chain i.e. lscosmos module.
-            if info.sender != "persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq" {
-                return Err(ContractError::Unauthorized);
-            }
+        ExecuteMsg::LockLstAsset { asset} => {
 
+            let user = info.sender.clone();
             let locked_tokens: Uint128 = LOCKED_TOKENS
                 .may_load(deps.storage, (&user, &asset.info.to_string()))?
                 .unwrap_or_default();

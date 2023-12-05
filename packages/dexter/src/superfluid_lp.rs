@@ -1,12 +1,12 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 
-use crate::asset::Asset;
+use crate::asset::{Asset, AssetInfo};
 
 #[cw_serde]
 pub struct InstantiateMsg {
     /// lock period for any LST token that is locked for the user
-    base_lock_period: u64,
+    pub base_lock_period: u64,
 }
 
 
@@ -17,9 +17,8 @@ pub enum ExecuteMsg {
     /// In that time period, the user can only join pool using the locked LST and not withdraw it.
     /// After the completion of the time-lock, the user can withdraw the LST normally also.
     /// This message can only be executed by the whitelisted LST issuance modules like lscosmos module on the Persistence chain.
-    LockLstAssetForUser {
+    LockLstAsset {
         asset: Asset,
-        user: Addr
     },
 
     /// Join pool on behalf of the user using the locked LST and any extra tokens that the user is willing to spend.
@@ -45,6 +44,6 @@ pub enum QueryMsg {
     #[returns(Uint128)]
     LockedLstForUser {
         user: Addr,
-        asset: Asset
+        asset_info: AssetInfo
     }
 }
