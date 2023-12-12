@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::ContractError;
-use crate::state::{LOCKED_TOKENS, CONFIG, OWNERSHIP_PROPOSAL};
+use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, LOCK_AMOUNT};
 use cosmwasm_std::{
     entry_point, to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Empty, Env, MessageInfo,
     Response, Uint128, WasmMsg, StdError, Coin,
@@ -9,12 +9,12 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::helper::{build_send_native_asset_msg, build_transfer_cw20_from_user_msg, build_transfer_token_to_user_msg, propose_new_owner, claim_ownership, drop_ownership_proposal};
-use dexter::superfluid_lp::{ExecuteMsg, InstantiateMsg, QueryMsg, LockInfo, Config};
+use dexter::helper::{build_send_native_asset_msg, build_transfer_cw20_from_user_msg, propose_new_owner, claim_ownership, drop_ownership_proposal};
+use dexter::superfluid_lp::{ExecuteMsg, InstantiateMsg, QueryMsg, Config};
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "dexter-router";
+const CONTRACT_NAME: &str = "dexter-superfluid-lp";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -32,7 +32,6 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
-        base_lock_period: msg.base_lock_period,
         vault_addr: msg.vault_addr,
         owner: msg.owner,
     };
@@ -43,48 +42,21 @@ pub fn instantiate(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
+pub fn query(_deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
         QueryMsg::TotalAmountLocked { user, asset_info } => {
-            let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
+            
+            let locked_amount = LOCK_AMOUNT
                 .may_load(_deps.storage, (&user, &asset_info.to_string()))?
                 .unwrap_or_default();
 
-            // sum all the locked tokens
-            let mut total_locked_amount = Uint128::zero();
-
-            for lock in locked_tokens {
-                total_locked_amount = total_locked_amount + lock.amount;
-            }
-
-            Ok(to_json_binary(&total_locked_amount)?)
+            Ok(to_json_binary(&locked_amount)?)
         },
 
-        QueryMsg::UnlockedAmount { user, asset_info } => {
-            let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
-                .may_load(_deps.storage, (&user, &asset_info.to_string()))?
-                .unwrap_or_default();
-
-            // sum all the locked tokens
-            let mut total_locked_amount = Uint128::zero();
-
-            for lock in locked_tokens {
-                if lock.unlock_time <= env.block.time.seconds() {
-                    total_locked_amount = total_locked_amount + lock.amount;
-                }
-            }
-
-            Ok(to_json_binary(&total_locked_amount)?)
-        },
-
-        QueryMsg::TokenLocks { user, asset_info } => {
-            let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
-                .may_load(_deps.storage, (&user, &asset_info.to_string()))?
-                .unwrap_or_default();
-
-            Ok(to_json_binary(&locked_tokens)?)
+        QueryMsg::Config {} => {
+            let config = CONFIG.load(_deps.storage)?;
+            Ok(to_json_binary(&config)?)
         }
-    
     }
 }
 
@@ -99,9 +71,11 @@ pub fn execute(
         ExecuteMsg::LockLstAsset { asset} => {
 
             let user = info.sender.clone();
-            let mut locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
+
+            let mut locked_amount: Uint128 = LOCK_AMOUNT
                 .may_load(deps.storage, (&user, &asset.info.to_string()))?
                 .unwrap_or_default();
+
        
             // confirm that this asset was sent along with the message. We only support native assets.
             match &asset.info {
@@ -120,20 +94,11 @@ pub fn execute(
                 }
             }
 
-            // add another lock to the list of locks for the user.
-            let lock_info = LockInfo {
-                amount: asset.amount,
-                unlock_time: env.block.time.seconds() + 86400 * 7,
-            };
+             // add the amount to the locked amount
+            locked_amount = locked_amount + asset.amount;
 
-            locked_tokens.push(lock_info);
-
-            LOCKED_TOKENS.save(
-                deps.storage,
-                (&user, &asset.info.to_string()),
-                &locked_tokens,
-            )?;
-
+            // update locked amount
+            LOCK_AMOUNT.save(deps.storage, (&user, &asset.info.to_string()), &locked_amount)?;
             Ok(Response::default())
         }
 
@@ -154,51 +119,14 @@ pub fn execute(
                 min_lp_to_receive,
             )
         }
-        ExecuteMsg::DirectlyUnlockBaseLst { asset } => {
-            // check for the locks that have finished their lock period and unlock them.
-            let user = info.sender.clone();
-            let locked_tokens: Vec<LockInfo> = LOCKED_TOKENS
-                .may_load(deps.storage, (&user, &asset.info.to_string()))?
-                .unwrap_or_default();
 
-            let mut new_locked_tokens: Vec<LockInfo> = vec![];
-
-            let mut total_amount_to_unlock = Uint128::zero();
-            for lock in locked_tokens {
-                if lock.unlock_time <= env.block.time.seconds() {
-                    // unlock the tokens
-                    total_amount_to_unlock = total_amount_to_unlock + lock.amount;
-                } else {
-                    new_locked_tokens.push(lock);
-                }
-            }
-
-            LOCKED_TOKENS.save(
-                deps.storage,
-                (&user, &asset.info.to_string()),
-                &new_locked_tokens,
-            )?;
-
-            // send the unlocked tokens back to the user.
-            let msg = build_transfer_token_to_user_msg(
-                asset.info.clone(),
-                user,
-                total_amount_to_unlock,
-            )?;
-
-            Ok(Response::default().add_message(msg))
-        },
-        ExecuteMsg::UpdateConfig { base_lock_period, vault_addr } => {
+        ExecuteMsg::UpdateConfig { vault_addr } => {
             // validate that the message sender is the owner of the contract.
             if info.sender != CONFIG.load(deps.storage)?.owner {
                 return Err(ContractError::Unauthorized {});
             }
 
             let mut config = CONFIG.load(deps.storage)?;
-
-            if let Some(base_lock_period) = base_lock_period {
-                config.base_lock_period = base_lock_period;
-            }
 
             if let Some(vault_addr) = vault_addr {
                 config.vault_addr = vault_addr;
@@ -207,6 +135,7 @@ pub fn execute(
             CONFIG.save(deps.storage, &config)?;
             Ok(Response::default())
         },
+
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -221,12 +150,14 @@ pub fn execute(
             )
             .map_err(|e| e.into())
         },
+        
         ExecuteMsg::DropOwnershipProposal {} => {
             let config = CONFIG.load(deps.storage)?;
 
             drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL, CONTRACT_NAME)
                 .map_err(|e| e.into())
-        }
+        },
+
         ExecuteMsg::ClaimOwnership {} => {
             claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut v| {
@@ -283,16 +214,12 @@ fn join_pool_and_bond_using_locked_lst(
                 // else check if we need to unlock some amount for the user.
                 else {
                     let amount_to_unlock = total_amount_to_spend.checked_sub(amount_sent).unwrap();
-                    let token_locks = LOCKED_TOKENS
+
+                    let mut locked_amount = LOCK_AMOUNT
                         .may_load(deps.storage, (&info.sender, &asset.info.to_string()))?
                         .unwrap_or_default();
 
-                    // sum all the locked tokens and check if the user has enough balance to unlock.
-                    let total_locked_amount = token_locks
-                        .iter()
-                        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
-
-                    let total_spendable_amount = amount_sent + total_locked_amount;
+                    let total_spendable_amount = amount_sent + locked_amount;
 
                     // we can spend upto the total spendable amount for the user.
                     if total_amount_to_spend > total_spendable_amount {
@@ -303,41 +230,12 @@ fn join_pool_and_bond_using_locked_lst(
                         });
                     }
 
-                    // use from the newest to the oldest lock to unlock the tokens as much as needed
-                    let mut amount_to_unlock = amount_to_unlock;
+                    locked_amount = locked_amount.checked_sub(amount_to_unlock)?;
 
-                    // sort the locks in reverse order of unlock time.
-                    let mut token_locks = token_locks.clone();
-                    token_locks.sort_by(|a, b| b.unlock_time.cmp(&a.unlock_time));
-
-                    let mut new_token_locks: Vec<LockInfo> = vec![];
-
-                    for lock in token_locks.iter().rev() {
-                        if amount_to_unlock == Uint128::zero() {
-                            new_token_locks.push(lock.clone());
-                        }
-
-                        if lock.amount > amount_to_unlock {
-                            let remaining_amount = lock.amount.checked_sub(amount_to_unlock).unwrap();
-                            let new_lock = LockInfo {
-                                amount: remaining_amount,
-                                unlock_time: lock.unlock_time,
-                            };
-
-                            new_token_locks.push(new_lock);
-
-                            amount_to_unlock = Uint128::zero();
-                        } else {
-                            amount_to_unlock = amount_to_unlock.checked_sub(lock.amount).unwrap();
-                            
-                        }
-                    }
-
-                    // update the locked token amount for the user
-                    LOCKED_TOKENS.save(
+                    LOCK_AMOUNT.save(
                         deps.storage,
                         (&info.sender, &asset.info.to_string()),
-                        &new_token_locks,
+                        &locked_amount,
                     )?;
                 }
 

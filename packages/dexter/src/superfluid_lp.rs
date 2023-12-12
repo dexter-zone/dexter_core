@@ -21,7 +21,6 @@ pub struct LockInfo {
 
 #[cw_serde]
 pub struct Config {
-    pub base_lock_period: u64,
     pub vault_addr: Addr,
     pub owner: Addr,
 }
@@ -30,10 +29,7 @@ pub struct Config {
 #[cw_serde]
 pub enum ExecuteMsg {
 
-    /// Automatically starts a time-lock for the user for a defined period.
-    /// In that time period, the user can only join pool using the locked LST and not withdraw it.
-    /// After the completion of the time-lock, the user can withdraw the LST normally also.
-    /// This message can only be executed by the whitelisted LST issuance modules like lscosmos module on the Persistence chain.
+    /// Locks an LST asset for the user, which can only be used to join a pool on Dexter
     LockLstAsset {
         asset: Asset,
     },
@@ -48,14 +44,8 @@ pub enum ExecuteMsg {
         min_lp_to_receive: Option<Uint128>
     },
 
-    /// Available after the base lock period on the LST is over
-    DirectlyUnlockBaseLst {
-        asset: Asset
-    },
-
     /// Update config
     UpdateConfig {
-        base_lock_period: Option<u64>,
         vault_addr: Option<Addr>,
     },
 
@@ -84,18 +74,7 @@ pub enum QueryMsg {
         asset_info: AssetInfo
     },
     
-    /// Returns the amount of LST that is currently unlocked for the user and available to withdraw.
-    /// This is amount that has served the base lock period in this contract.
-    #[returns(Uint128)]
-    UnlockedAmount {
-        user: Addr,
-        asset_info: AssetInfo
-    },
-
-    #[returns(Vec<LockInfo>)]
-    TokenLocks {
-        user: Addr,
-        asset_info: AssetInfo
-    }
+    #[returns(Config)]
+    Config {}
 
 }
