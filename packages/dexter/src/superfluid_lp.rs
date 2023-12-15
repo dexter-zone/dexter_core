@@ -6,8 +6,8 @@ use crate::asset::{Asset, AssetInfo};
 #[cw_serde]
 pub struct InstantiateMsg {
     pub vault_addr: Addr,
-    /// lock period for any LST token that is locked for the user
-    pub base_lock_period: u64,
+    // allowed lockable tokens
+    pub allowed_lockable_tokens: Vec<AssetInfo>,
     /// owner of the contract
     pub owner: Addr,
 }
@@ -23,6 +23,7 @@ pub struct LockInfo {
 pub struct Config {
     pub vault_addr: Addr,
     pub owner: Addr,
+    pub allowed_lockable_tokens: Vec<AssetInfo>
 }
 
 
@@ -47,6 +48,11 @@ pub enum ExecuteMsg {
     /// Update config
     UpdateConfig {
         vault_addr: Option<Addr>,
+    },
+
+    // add a new token to the list of allowed lockable tokens
+    AddAllowedLockableToken {
+        asset_info: AssetInfo
     },
 
     /// Allows the owner to transfer ownership to a new address.

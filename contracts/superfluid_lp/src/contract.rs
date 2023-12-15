@@ -34,6 +34,7 @@ pub fn instantiate(
     let config = Config {
         vault_addr: msg.vault_addr,
         owner: msg.owner,
+        allowed_lockable_tokens: msg.allowed_lockable_tokens,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -72,10 +73,23 @@ pub fn execute(
 
             let user = info.sender.clone();
 
+            // validate that the asset is allowed to be locked.
+            let config = CONFIG.load(deps.storage)?;
+            let mut allowed = false;
+            for allowed_asset in config.allowed_lockable_tokens {
+                if allowed_asset == asset.info {
+                    allowed = true;
+                    break;
+                }
+            }
+
+            if !allowed {
+                return Err(ContractError::AssetNotAllowedToBeLocked);
+            }
+
             let mut locked_amount: Uint128 = LOCK_AMOUNT
                 .may_load(deps.storage, (&user, &asset.info.to_string()))?
                 .unwrap_or_default();
-
        
             // confirm that this asset was sent along with the message. We only support native assets.
             match &asset.info {
@@ -135,6 +149,28 @@ pub fn execute(
             CONFIG.save(deps.storage, &config)?;
             Ok(Response::default())
         },
+
+        ExecuteMsg::AddAllowedLockableToken { asset_info } => {
+            // validate that the message sender is the owner of the contract.
+            if info.sender != CONFIG.load(deps.storage)?.owner {
+                return Err(ContractError::Unauthorized {});
+            }
+
+            // validate that the token is native
+            match &asset_info {
+                AssetInfo::NativeToken { denom: _ } => {}
+                AssetInfo::Token { contract_addr: _ } => {
+                    return Err(ContractError::UnsupportedAssetType);
+                }
+            }
+
+            let mut config = CONFIG.load(deps.storage)?;
+
+            config.allowed_lockable_tokens.push(asset_info);
+
+            CONFIG.save(deps.storage, &config)?;
+            Ok(Response::default())
+        }
 
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;

@@ -173,9 +173,13 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr) {
         .unwrap();
 
     let superfluid_lp_instantiate_msg = dexter::superfluid_lp::InstantiateMsg {
-        base_lock_period: 7 * 24 * 60 * 60,
         vault_addr: vault_instance.clone(),
         owner: owner.clone(),
+        allowed_lockable_tokens: vec![
+            AssetInfo::NativeToken {
+                denom: "stk/uxprt".to_string(),
+            },
+        ],
     };
 
     let superfluid_lp_instance = app
@@ -310,10 +314,27 @@ fn test_superfluid_lp_locking() {
             }
         ],
     ).unwrap();
-    
 
-    // let lscomos_module_address =
-    //     Addr::unchecked("persistence15uvj9phxl275x2yggyp2q4kalvhaw85syqnacq");
+    let invalid_msg = dexter::superfluid_lp::ExecuteMsg::LockLstAsset {
+        asset: Asset {
+            info: AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            },
+            amount: Uint128::from(10000000u128),
+        },
+    };
+
+    // locking of uxprt should fail since it's not allowed
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            superfluid_lp_instance.clone(),
+            &invalid_msg,
+            &[],
+        );
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Only whitelisted assets can be locked");
 
     let msg = dexter::superfluid_lp::ExecuteMsg::LockLstAsset {
         asset: Asset {

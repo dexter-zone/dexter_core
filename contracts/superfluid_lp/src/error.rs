@@ -21,6 +21,9 @@ pub enum ContractError {
     #[error("Not implemented")]
     NotImplemented,
 
+    #[error("Only whitelisted assets can be locked")]
+    AssetNotAllowedToBeLocked,
+
 }
 
 impl From<OverflowError> for ContractError {
