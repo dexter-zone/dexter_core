@@ -43,7 +43,7 @@ Each contract exposes some functions which could be executed by one of the admin
 
 **Vault Owner**: Vault owner has most control over the protocol. It can add pool managers, update the vault config, or update the config of any of the existing pools or pool types. 
 
-All of the functions that the vault owner can execute be found [here](<LINK TO VAULT DOC>)
+All of the functions that the vault owner can execute be found [here](../contracts/vault#only-owner-executable)
 
 The parameters that can be configured are:
 
@@ -62,7 +62,7 @@ The parameters that can be configured are:
 
 **Pool Manager**: Pool manager can create new pools, or pause/unpause existing pools.
 
-All of the functions that the pool manager can execute be found [here](<LINK TO POOL MANAGER DOC>)
+All of the functions that the pool manager can execute be found [here](../contracts/vault#owner-and-manager-executable)
 
 ### Stable Pool
 
