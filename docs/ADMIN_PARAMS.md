@@ -84,7 +84,7 @@ Weighted pool doesn't currently have any configurable parameters.
 
 **Multistaking Owner**: Multistaking owner can create new reward schedules, or add/remove whitelisted tokens for rewards. 
 
-All of the functions that the multistaking owner can execute be found [here](<LINK TO MULTISTAKING DOC>)
+All of the functions that the multistaking owner can execute be found [here](../contracts/multi_staking#owner-executable)
 
 To summarize, the parameters that can be configured are:
 
