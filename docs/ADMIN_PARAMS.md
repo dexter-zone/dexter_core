@@ -102,7 +102,7 @@ To summarize, the parameters that can be configured are:
 
 **Keeper Owner**: Keeper owner can withdraw the funds set aside as part of the protocol treasury(30% of the swap fees)  that are generated from the Swaps.
 
-All of the functions that the keeper owner can execute can be found [here](<LINK TO KEEPER DOC>)
+All of the functions that the keeper owner can execute can be found [here](<LINK TO KEEPER DOC>)    
 
 
 

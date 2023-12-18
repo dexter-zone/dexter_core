@@ -41,9 +41,9 @@ Dexter's Stable-5-Pool implements the stableswap invariant for upto 5 assets in 
 
 ## Enums & Structs
 
-### `MathConfig` struct - This struct describes the main math configuration of the stable-pool.
+**MathConfig** : This struct describes the main math configuration of the stable-pool.
 
-```
+```rust
 struct MathConfig {
     // This is the current amplification used in the pool
     pub init_amp: u64,
@@ -58,29 +58,28 @@ struct MathConfig {
 }
 ```
 
-### `StablePoolUpdateParams` enum - This enum stores the options available to start and stop changing a stableswap pool's amplification. Used in the Execute::UpdateConfig function.
+**StablePoolUpdateParams** enum - This enum stores the options available to start and stop changing a stableswap pool's amplification. Used in the Execute::UpdateConfig function.
 
-```
+```rust
 enum StablePoolUpdateParams {
     StartChangingAmp { next_amp: u64, next_amp_time: u64 },
     StopChangingAmp {},
 }
 ```
 
-### `ResponseType` enum - This enum is used to describe if the math computations (joins/exits/swaps) will be successful or not
+**ResponseType** enum - This enum is used to describe if the math computations (joins/exits/swaps) will be successful or not
 
-```
+```rust
 enum ResponseType {
     Success {},
     Failure (String),
 }
 ```
 
-### `Config` struct - This struct describes the main control config of pool.
+**Config** struct - This struct describes the main control config of pool.
 
-```
+```rust
 struct Config {
-    /// ID of contract which is allowed to create pools of this type
     pub pool_id: Uint128,
     /// The address of the LP token associated with this pool
     pub lp_token_addr: Option<Addr>,
@@ -99,7 +98,7 @@ struct Config {
 
 ### `Trade` struct - This helper struct is used for swap operations
 
-```
+```rust
 struct Trade {
     /// The number of tokens to be sent by the user to the Vault
     pub amount_in: Uint128,
@@ -112,7 +111,7 @@ struct Trade {
 
 ### `AfterJoinResponse` struct - Helper struct for [`QueryMsg::OnJoinPool`]
 
-```
+```rust
 struct AfterJoinResponse {
     // Is a sorted list consisting of amount of info of tokens which will be provided by the user to the Vault as liquidity
     pub provided_assets: Vec<Asset>,
@@ -127,7 +126,7 @@ struct AfterJoinResponse {
 
 ### `AfterExitResponse` struct - Helper struct for [`QueryMsg::OnExitPool`]
 
-```
+```rust
 struct AfterExitResponse {
     /// Assets which will be transferred to the recipient against tokens being burnt
     pub assets_out: Vec<Asset>,
@@ -142,7 +141,7 @@ struct AfterExitResponse {
 
 ### `SwapResponse` struct - Helper struct for [`QueryMsg::OnSwap`]
 
-```
+```rust
 struct SwapResponse {
     ///  Is of type [`Trade`] which contains all params related with the trade
     pub trade_params: Trade,
@@ -155,7 +154,7 @@ struct SwapResponse {
 
 ### `CumulativePriceResponse` struct - Helper struct for [`QueryMsg::CumulativePrice`]
 
-```
+```rust
 struct CumulativePriceResponse {
     pub exchange_info: AssetExchangeRate,
     pub total_share: Uint128,
@@ -164,7 +163,7 @@ struct CumulativePriceResponse {
 
 ### `CumulativePricesResponse` struct - Helper struct for [`QueryMsg::CumulativePrices`]
 
-```
+```rust
 struct CumulativePricesResponse {
     pub exchange_info: Vec<AssetExchangeRate>,
     pub total_share: Uint128,
@@ -173,7 +172,7 @@ struct CumulativePricesResponse {
 
 ## Build schema and run unit-tests
 
-```
+```bash
 cargo schema
 cargo test
 ```
