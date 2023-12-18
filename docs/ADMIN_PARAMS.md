@@ -43,7 +43,7 @@ Each contract exposes some functions which could be executed by one of the admin
 
 **Vault Owner**: Vault owner has most control over the protocol. It can add pool managers, update the vault config, or update the config of any of the existing pools or pool types. 
 
-All of the functions that the vault owner can execute be found [here](../contracts/vault#only-owner-executable)
+All of the functions that the vault owner can execute can be found [here](../contracts/vault#only-owner-executable)
 
 The parameters that can be configured are:
 
@@ -62,7 +62,7 @@ The parameters that can be configured are:
 
 **Pool Manager**: Pool manager can create new pools, or pause/unpause existing pools.
 
-All of the functions that the pool manager can execute be found [here](../contracts/vault#owner-and-manager-executable)
+All of the functions that the pool manager can execute can be found [here](../contracts/vault#owner-and-manager-executable)
 
 ### Stable Pool
 
@@ -84,7 +84,7 @@ Weighted pool doesn't currently have any configurable parameters.
 
 **Multistaking Owner**: Multistaking owner can create new reward schedules, or add/remove whitelisted tokens for rewards. 
 
-All of the functions that the multistaking owner can execute be found [here](../contracts/multi_staking#owner-executable)
+All of the functions that the multistaking owner can execute can be found [here](../contracts/multi_staking#owner-executable)
 
 To summarize, the parameters that can be configured are:
 
@@ -102,7 +102,7 @@ To summarize, the parameters that can be configured are:
 
 **Keeper Owner**: Keeper owner can withdraw the funds set aside as part of the protocol treasury(30% of the swap fees)  that are generated from the Swaps.
 
-All of the functions that the keeper owner can execute be found [here](<LINK TO KEEPER DOC>)
+All of the functions that the keeper owner can execute can be found [here](<LINK TO KEEPER DOC>)
 
 
 
