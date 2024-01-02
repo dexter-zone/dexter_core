@@ -31,6 +31,7 @@ pub struct Config {
 pub enum ExecuteMsg {
 
     /// Locks an LST asset for the user, which can only be used to join a pool on Dexter
+    /// Kept this API to support CW20 LST tokens too which isn't an immediate usecase but might be useful in the future
     LockLstAsset {
         asset: Asset,
     },

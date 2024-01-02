@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::vec;
 
 use crate::error::ContractError;
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, LOCK_AMOUNT};
@@ -9,7 +10,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::Cw20ExecuteMsg;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::helper::{build_send_native_asset_msg, build_transfer_cw20_from_user_msg, propose_new_owner, claim_ownership, drop_ownership_proposal};
+use dexter::helper::{build_transfer_cw20_from_user_msg, propose_new_owner, claim_ownership, drop_ownership_proposal, build_transfer_token_to_user_msg};
 use dexter::superfluid_lp::{ExecuteMsg, InstantiateMsg, QueryMsg, Config};
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
@@ -30,6 +31,8 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    deps.api.addr_validate(&msg.vault_addr.to_string())?;
 
     let config = Config {
         vault_addr: msg.vault_addr,
@@ -94,13 +97,9 @@ pub fn execute(
             // confirm that this asset was sent along with the message. We only support native assets.
             match &asset.info {
                 AssetInfo::NativeToken { denom } => {
-                    for coin in info.funds.iter() {
-                        if coin.denom == *denom {
-                            // validate that the amount sent is exactly equal to the amount that is expected to be locked.
-                            if coin.amount != asset.amount {
-                                return Err(ContractError::InvalidAmount);
-                            }
-                        }
+                    let amount =  cw_utils::must_pay(&info, denom).map_err(|e| ContractError::PaymentError(e))?;
+                    if amount != asset.amount {
+                        return Err(ContractError::InvalidAmount);
                     }
                 }
                 AssetInfo::Token { contract_addr: _ } => {
@@ -166,6 +165,13 @@ pub fn execute(
 
             let mut config = CONFIG.load(deps.storage)?;
 
+            // validate that the token is not already in the list of allowed lockable tokens.
+            for allowed_asset in &config.allowed_lockable_tokens {
+                if allowed_asset == &asset_info {
+                    return Err(ContractError::AssetAlreadyAllowedToBeLocked);
+                }
+            }
+
             config.allowed_lockable_tokens.push(asset_info);
 
             CONFIG.save(deps.storage, &config)?;
@@ -226,6 +232,8 @@ fn join_pool_and_bond_using_locked_lst(
         .map(|asset| (asset.denom, asset.amount))
         .collect();
 
+    let mut unspent_sent_funds = funds_map.clone();
+
     let mut coins = vec![];
 
     // check if the user has enough balance to join the pool.
@@ -238,17 +246,20 @@ fn join_pool_and_bond_using_locked_lst(
                 
                 if amount_sent == total_amount_to_spend {
                     // do nothing
+                    unspent_sent_funds.remove(denom);
                 }
                 // if amount sent is already bigger than the amount to spend, then we don't need to unlock any tokens for the user.
                 // we can return any extra tokens back to the user.
                 else if amount_sent > total_amount_to_spend {
                     let extra_amount = amount_sent.checked_sub(total_amount_to_spend).unwrap();
-                    let msg =
-                        build_send_native_asset_msg(info.sender.clone(), &denom, extra_amount)?;
-                    msgs.push(msg);
+                    unspent_sent_funds.insert(denom.clone(), extra_amount);
                 }
                 // else check if we need to unlock some amount for the user.
                 else {
+
+                    // remove from the unspent funds map.
+                    unspent_sent_funds.remove(denom);
+
                     let amount_to_unlock = total_amount_to_spend.checked_sub(amount_sent).unwrap();
 
                     let mut locked_amount = LOCK_AMOUNT
@@ -295,7 +306,7 @@ fn join_pool_and_bond_using_locked_lst(
                 msgs.push(msg);
 
                 // Add another message to allow spending of the tokens from the current contract to the vault.
-                let msg = Cw20ExecuteMsg::DecreaseAllowance {
+                let msg = Cw20ExecuteMsg::IncreaseAllowance {
                     spender: vault_addr.clone(),
                     amount: asset.amount,
                     expires: None,
@@ -310,8 +321,19 @@ fn join_pool_and_bond_using_locked_lst(
                 msgs.push(wasm_msg);
             }
         }
-
     }
+
+    // return unspent funds back to the user.
+    for (denom, amount) in unspent_sent_funds {
+        let msg = build_transfer_token_to_user_msg(
+            AssetInfo::NativeToken { denom: denom.clone() },
+            info.sender.clone(),
+            amount,
+        )?;
+
+        msgs.push(msg);
+    }
+
     // create a message to join the pool.
     let join_pool_msg = VaultExecuteMsg::JoinPool {
         pool_id,

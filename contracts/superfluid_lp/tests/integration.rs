@@ -77,7 +77,7 @@ fn store_superfluid_lp_code(app: &mut App) -> u64 {
     app.store_code(superfluid_lp_contract)
 }
 
-pub fn create_lp_token(app: &mut App, code_id: u64, sender: Addr, token_name: String) -> Addr {
+pub fn create_cw20_token(app: &mut App, code_id: u64, sender: Addr, token_name: String) -> Addr {
     let lp_token_instantiate_msg = dexter::lp_token::InstantiateMsg {
         name: token_name,
         symbol: "abcde".to_string(),
@@ -211,12 +211,23 @@ fn test_superfluid_lp_locking() {
             denom: "uxprt".to_string(),
             amount: Uint128::from(100000000000u128),
         },
+        Coin {
+            denom: "ustake".to_string(),
+            amount: Uint128::from(100000000000u128),
+        }
     ];
 
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(owner.clone(), coins);
     let (multi_staking_instance, superfluid_lp_instance, vault_instance) =
         instantiate_contract(&mut app, &Addr::unchecked("owner"));
+
+    // create a CW20 token
+    let cw20_code_id = store_token_code(&mut app);
+
+    // let's assume that there is a CW20 token which is also an LST for XPRT, and let's have a 3 Pool with XPRT and LST as assets
+    let cw20_lst_addr = create_cw20_token(&mut app, cw20_code_id, owner.clone(), "Staked XPRT".to_string());
+    
 
     let create_pool_msg = dexter::vault::ExecuteMsg::CreatePoolInstance {
         pool_type: dexter::vault::PoolType::Weighted {},
@@ -226,7 +237,10 @@ fn test_superfluid_lp_locking() {
             },
             AssetInfo::NativeToken { 
                 denom: "stk/uxprt".to_string(),
-            }
+            },
+            AssetInfo::Token {
+                contract_addr: cw20_lst_addr.clone(),
+            },
         ],
         native_asset_precisions: vec![
             NativeAssetPrecisionInfo { 
@@ -249,14 +263,20 @@ fn test_superfluid_lp_locking() {
                         info: AssetInfo::NativeToken {
                             denom: "uxprt".to_string(),
                         },
-                        amount: Uint128::from(50u128),
+                        amount: Uint128::from(1u128),
                     },
                     Asset {
                         info: AssetInfo::NativeToken {
                             denom: "stk/uxprt".to_string(),
                         },
-                        amount: Uint128::from(50u128),
-                    }
+                        amount: Uint128::from(1u128),
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: cw20_lst_addr.clone(),
+                        },
+                        amount: Uint128::from(1u128),
+                    },
                 ],
                 exit_fee: None,
             }
@@ -299,6 +319,19 @@ fn test_superfluid_lp_locking() {
     let user = String::from("user");
     let user_addr = Addr::unchecked(user.clone());
 
+     // mint Cw20 tokens for the user
+     let mint_msg = cw20::Cw20ExecuteMsg::Mint {
+        recipient: user_addr.to_string(),
+        amount: Uint128::from(10000000u128),
+    };
+
+    app.execute_contract(
+        owner.clone(),
+        cw20_lst_addr.clone(),
+        &mint_msg,
+        &[],
+    ).unwrap();
+
     // send XPRT and stkXPRT to the user
     app.send_tokens(
         owner,
@@ -306,10 +339,14 @@ fn test_superfluid_lp_locking() {
         &[
             Coin {
                 denom: "uxprt".to_string(),
-                amount: Uint128::from(10000000u128),
+                amount: Uint128::from(20000000u128),
             },
             Coin {
                 denom: "stk/uxprt".to_string(),
+                amount: Uint128::from(10000000u128),
+            },
+            Coin {
+                denom: "ustake".to_string(),
                 amount: Uint128::from(10000000u128),
             }
         ],
@@ -325,6 +362,28 @@ fn test_superfluid_lp_locking() {
     };
 
     // locking of uxprt should fail since it's not allowed
+    let res = app
+        .execute_contract(
+            user_addr.clone(),
+            superfluid_lp_instance.clone(),
+            &invalid_msg,
+            &[],
+        );
+
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().root_cause().to_string(), "Only whitelisted assets can be locked");
+
+    // locking for CW20 staked XPRT should fail since it's not allowed
+
+    let invalid_msg = dexter::superfluid_lp::ExecuteMsg::LockLstAsset {
+        asset: Asset {
+            info: AssetInfo::Token {
+                contract_addr: cw20_lst_addr.clone(),
+            },
+            amount: Uint128::from(10000000u128),
+        },
+    };
+
     let res = app
         .execute_contract(
             user_addr.clone(),
@@ -387,12 +446,18 @@ fn test_superfluid_lp_locking() {
                     denom: "uxprt".to_string(),
                 },
                 amount: Uint128::from(10000000u128),
-            }
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: cw20_lst_addr.clone(),
+                },
+                amount: Uint128::from(10000000u128),
+            },
         ],
         min_lp_to_receive: None,
     };
 
-    app
+    let response = app
         .execute_contract(
             user_addr.clone(),
             superfluid_lp_instance.clone(),
@@ -402,11 +467,75 @@ fn test_superfluid_lp_locking() {
                 denom: "uxprt".to_string(),
                 amount: Uint128::from(10000000u128),
             }],
-        )
-        .unwrap();
+        );
+
+    // confirm error
+    assert!(response.is_err());
+    // error should be about the spending of CW20 tokens
+    assert_eq!(response.unwrap_err().root_cause().to_string(), "No allowance for this account");
+
+    // set allowance and try again
+    let allowance_msg = cw20::Cw20ExecuteMsg::IncreaseAllowance {
+        spender: superfluid_lp_instance.to_string(),
+        amount: Uint128::from(10000000u128),
+        expires: None,
+    };
+
+    app.execute_contract(
+        user_addr.clone(),
+        cw20_lst_addr.clone(),
+        &allowance_msg,
+        &[],
+    ).unwrap();
+
+    // query and store uxprt and ustable balances for the user
+    let uxprt_balance = app
+        .wrap()
+        .query_balance(user_addr.clone(), "uxprt".to_string()).unwrap();
+
+    let ustake_balance = app
+        .wrap()
+        .query_balance(user_addr.clone(), "ustake".to_string()).unwrap();
+
+    // try again
+    let response = app
+        .execute_contract(
+            user_addr.clone(),
+            superfluid_lp_instance.clone(),
+            &join_pool_msg,
+            // add funds to the message
+            &[
+                // send extra XPRT and make sure it returns the extra XPRT back
+                Coin {
+                    denom: "uxprt".to_string(),
+                    amount: Uint128::from(12000000u128),
+                },
+                // add an extra denom to the message, and make sure it returns the extra denom back
+                Coin {
+                    denom: "ustake".to_string(),
+                    amount: Uint128::from(10000000u128),
+                }
+            ],
+        );
+    
+    // confirm success
+    assert!(response.is_ok());
+
+    // validate no extra uxprt was spent
+    let uxprt_balance_after = app
+        .wrap()
+        .query_balance(user_addr.clone(), "uxprt".to_string()).unwrap();
+
+    assert_eq!(uxprt_balance_after.amount, uxprt_balance.amount - Uint128::from(10000000u128));
+
+    // validate no extra ustake was spent
+    let ustake_balance_after = app
+        .wrap()
+        .query_balance(user_addr.clone(), "ustake".to_string()).unwrap();
+
+    assert_eq!(ustake_balance_after.amount, ustake_balance.amount);
 
     // confirm LP tokens are minted for the user and bonded
-
     let query_msg = dexter::multi_staking::QueryMsg::BondedLpTokens {
         lp_token: lp_token_addr.clone(),
         user: user_addr.clone(),

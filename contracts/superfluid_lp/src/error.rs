@@ -1,4 +1,5 @@
 use cosmwasm_std::{ConversionOverflowError, OverflowError, StdError, Uint128};
+use cw_utils::PaymentError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -23,6 +24,12 @@ pub enum ContractError {
 
     #[error("Only whitelisted assets can be locked")]
     AssetNotAllowedToBeLocked,
+
+    #[error("Asset is already allowed to be locked")]
+    AssetAlreadyAllowedToBeLocked,
+
+    #[error("Payment error: {0}")]
+    PaymentError(PaymentError),
 
 }
 
