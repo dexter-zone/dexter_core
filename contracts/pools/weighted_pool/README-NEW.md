@@ -1,6 +1,8 @@
-# Dexter: Stableswap Pool
+# Dexter: Weighted Pool
 
-Dexter implements a generic version of Curve's stableswap invariant for upto 5 assets in the pool and implements compute calculations on liquidity provision / withdrawal and swaps.
+Dexter implements a Balancer inspired Weighted pool which support upto 8 assets in the pool and implements compute calculations on liquidity provision / withdrawal and swaps.
+
+Dexter support any custom weighted configuration like 50:50, 60:40, 70:30, 10:10:20:60 or any other combination of weights. The weights cannot be updated once the pool has been initialized.
 
 Dexter's contract architecture is unique in that it separates the ownership of the assets in the pool in the Vault contract. Pool contracts are only responsible for the math computes which dictate number of tokens to be transferred during swaps / liquidity provisioning events, and do not handle the token transfers themselves. 
 
@@ -8,16 +10,21 @@ Dexter's Vault queries the Pool contracts to compute how many tokens to transfer
 
 This separation simplifies pool contracts, since they no longer need to actively manage their assets; pools only need to calculate amounts for swaps, joins, and exits. New pool types, can be easily added which only implement the math computes and do not need to worry about the token transfer logic.
 
+Note - Dexter's weighted pool accepts an `exit_fee` parameter during pool initialization. The `exit_fee` is the % fee charged to the user when liquidity is withdrawn from the pool. 100% of the exit fee charged is distributed among the LPs of the Pool. `exit_fee` cannot be more than 1%.
+
+Currently, Dexter protocol does not use this parameter and would likely not use it in the future. 
 
 ## Contract State
 
 | Message      | Description                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------------- |
-| `CONFIG`     | Stores pool contract's core Configuration parameters in a [`Config`] struct. This is the base config that is same for all pool types. |
-| `TWAPINFO`   | Stores Twap prices for the tokens supported by the pool in a [`Twap`] struct                    |
-| `MATHCONFIG` | Stores custom configuration parameters related with the stableswap invariant like AMP parameter |
-| `STABLESWAP_CONFIG` | Stores additional configurations like scaling factors (for metastable pools) and the max allowed spread |
+| `CONFIG`     | Stores pool contract's core Configuration parameters in a [`Config`]() struct. This is the base config that is same for all pool types. |
+| `TWAPINFO`   | Stores Twap prices for the tokens supported by the pool in a [`Twap`]() struct                    |
+| `MATHCONFIG` | Stores custom global configuration parameters like `exit_fee` and greatest precision which aids in certain calculations |
+| `WEIGHTS` | Stores weights of all assets in the pool |
 | `PRECISIONS` | Stores precision of all assets in the pool. For CW20 tokens, it is fetched using the contract, and for native assets, it must be specified during pool creation |
+
+State related information can be found [here](../contracts/pools/weighted_pool/src/state.rs)
 
 ---
 
@@ -26,54 +33,8 @@ This separation simplifies pool contracts, since they no longer need to actively
 
 ### Update Config
 
-Executable only by Dexter Vault's owner. Updates the pool's math configuration with the specified parameters in the `params` variable encoded in base64. 
+Currently the Dexter weighted pool doesn't have any configurable parameters. This message is a placeholder for future updates (if any).
 
-Accepts the following commands in the `params` variable:
-
-- `StartChangingAmp` : Starts the process of changing the amplification factor of the pool. It takes following params:
-
-    - `next_amp` : The target amplification factor to reach at `next_amp_time`
-    - `next_amp_time` : The timestamp when the amplification factor should be `next_amp`. This should at least be equal to MIN_AMP_CHANGE_TIME which is currently hard-coded to 1 day.
-
-- `StopChangingAmp` : Stops the process of changing the amplification factor of the pool. It takes no params. It stops the amp at the current value.
-
-- `UpdateScalingFactor` : Updates the scaling factor of the asset in the pool. It takes following params:
-
-    - `asset_info` : The asset whose scaling factor is to be updated
-    - `scaling_factor` : The new scaling factor for the asset
-
-- `UpdateScalingFactorManager` : Updates the scaling factor manager of the pool. It takes following params:
-
-    - `manager` : The new scaling factor manager for the pool
-
-- `UpdateMaxAllowedSpread` : Updates the max allowed spread between the price of the asset and the price of the pool. If the spread is greater than this value, the swap will fail. It takes following params:
-    - `max_allowed_spread` : The new max allowed spread for the pool
-
-The relevant struct can be found [here](../contracts/pools/stable_pool/src/state.rs#L122)
-
-#### Request 
-
-Update message
-```json
-{
-    "start_changing_amp": {
-        "next_amp": 1000000000000000000,
-        "next_amp_time": 1629820800
-    }
-}
-```
-
-We base64 encode the above message and pass it as the `params` variable in the Execute::UpdateConfig message.
-
-Update execute message to contract goes like
-
-```json
-{
-    "update_config": {
-        "params": "<BASE64_ENCODED_MESSAGE>"
-    }
-}
-```
 
 ### Update Liquidity
 
@@ -97,10 +58,10 @@ Executable only by Dexter Vault. Updates locally stored asset balances state in 
             {
                 "info": {
                     "native_token": {
-                        "denom": "stk/uxprt"
+                        "denom": "stk/uatom"
                     }
                 },
-                "amount": "1000000000000"
+                "amount": "900000000000"
             }
         ]
     }
@@ -110,7 +71,6 @@ Executable only by Dexter Vault. Updates locally stored asset balances state in 
 ### Update Fee 
 
 Executable only by the Dexter Vault where it is triggerd by the Vault owner. Updates the fee for this particular pool. The fee is specified in basis points.
-
 
 #### Request
 
@@ -155,14 +115,14 @@ Returns the stored pool configuration
         {
             "info": {
                 "native_token": {
-                    "denom": "stk/uxprt"
+                    "denom": "stk/uatom"
                 }
             },
             "amount": "1000000000000"
         }
     ],
     "pool_type": {
-        "stableswap": {}
+        "weighted": {}
     },
     "fee_info": {
         "total_fee_bps": "1000"
@@ -218,7 +178,7 @@ Returns the pool ID of the pool
 Takes either the amounts of assets to be deposited or the amount of LP tokens to be minted for a join operation and returns the following:
 - The amount of assets to be deposited
 - Amount of LP tokens to be minted based on the current pool state
-- Fee to be charged. It mostly applies in a non balanced pools. The calculations is based on the Curve's stableswap invariant
+- Fee to be charged. It mostly applies when liquidity is being added in a ratio other than the pool ratio since it is equivalent to a swap and add in that scenario. The calculations is based on the Balancer's weighted pool calculations.
 
 **Additional note**: This request never fails. If the join operation is not possible, the response will contain the reason for failure in the `response` field.
 
@@ -239,10 +199,10 @@ Takes either the amounts of assets to be deposited or the amount of LP tokens to
             {
                 "info": {
                     "native_token": {
-                        "denom": "stk/uxprt"
+                        "denom": "stk/uatom"
                     }
                 },
-                "amount": "1000000000000"
+                "amount": "900000000000"
             }
         ]
     }
@@ -265,10 +225,10 @@ Takes either the amounts of assets to be deposited or the amount of LP tokens to
         {
             "info": {
                 "native_token": {
-                    "denom": "stk/uxprt"
+                    "denom": "stk/uatom"
                 }
             },
-            "amount": "1000000000000"
+            "amount": "900000000000"
         }
     ],
     "new_shares": "1000000000000",
@@ -296,7 +256,8 @@ Useful for estimating the amount of assets received after an exit operation. It 
 2. `ExactAssetsOut`: In this type of withdraw, user specifies the particular type of tokens that the user want to take out of the pool.
 The pool logic estimates the LP token to be burnt based on the current pool state. Since, the assets are returned exactly as specified by the user and not according to the pool ratio, we call this type of withdraw as imbalanced withdraw.
 
-Currently, we have disabled the imbalanced withdraws for the stableswap pool for pool stability reasons. It can be enabled using the chain governance.
+This type of exit is NOT SUPPORTED for the weighted pool.
+
 
 **Additional note**: This request never fails. If the exit operation is not possible, the response will contain the reason for failure in the `response` field.
 
@@ -306,26 +267,7 @@ Currently, we have disabled the imbalanced withdraws for the stableswap pool for
 {
     "on_exit_pool": {
         "exit_type": {
-            "exact_assets_out": {
-                "assets_out": [
-                    {
-                        "info": {
-                            "native_token": {
-                                "denom": "uxprt"
-                            }
-                        },
-                        "amount": "1000000000000"
-                    },
-                    {
-                        "info": {
-                            "native_token": {
-                                "denom": "stk/uxprt"
-                            }
-                        },
-                        "amount": "1000000000000"
-                    }
-                ]
-            }
+            "exact_lp_burn": "10000000"
         }
     }
 }
@@ -342,31 +284,22 @@ Currently, we have disabled the imbalanced withdraws for the stableswap pool for
                     "denom": "uxprt"
                 }
             },
-            "amount": "100000000"
+            "amount": "1000000000"
         },
         {
             "info": {
                 "native_token": {
-                    "denom": "stk/uxprt"
+                    "denom": "stk/uatom"
                 }
             },
-            "amount": "100000000"
+            "amount": "900000000"
         }
     ],
     "burn_shares": "10000000",
     "response": {
         "success": {}
     },
-    "fee": [
-        {
-            "info": {
-                "native_token": {
-                    "denom": "uxprt"
-                }
-            },
-            "amount": "1000000000"
-        }
-    ]
+    "fee": []
 }
 ```
 
@@ -382,9 +315,11 @@ Allows for a swap simulation. Takes following parameters and returns the expecte
 
 - `amount`:  The amount of `offer_asset` or `ask_asset` depending on the `swap_type` parameter
 
-- `max_spread`: The max spread between the price of the asset and the price of the pool. If the spread is greater than this value, the swap will fail. For the purpose of stableswap pool, the exchange rate for the spread calculation is 1 and for metastable pools, it is the current redemption rate of the asset in the LST protocol. For example, if the `max_spread` is set at 0.02, the swap will fail if pool is not able to provide a rate better than 0.98 for the current swap.
+- `max_spread`: The max spread between the price of the asset and the price of the pool. If the spread is greater than this value, the swap will fail. 
 
-- `belief_price`: The price at which the user wants to swap. If the pool is able to provide a better rate than this, the swap will succeed. For example, if the `belief_price` is set at 1.1, the swap will succeed if the pool is able to provide a rate better than 1.1 for the current swap.
+This parameter is NOT SUPPORTED for the weighted pool since there's no ideal tethered price for the assets in the pool.
+
+- `belief_price`:  This parameter is NOT SUPPORTED for the weighted pool.
 
 
 The expected swap response has the following fields. It contains the following fields:
@@ -392,7 +327,7 @@ The expected swap response has the following fields. It contains the following f
 - `trade` : Trade related infromaton, it has following fields
     - `amount_in` : The amount of `offer_asset` to be sent by the user
     - `amount_out` : The amount of `ask_asset` to be received by the user
-    - `spread` : The spread associated with the swap tx.
+    - `spread` : Ignored. Always 0 for weighted pool.
 
 - `response` : It has 2 types, `Success` or `Failure` to specify the context of the swap result. If `Success`, the swap will succeed. If `Failure`, the swap will fail.
 
@@ -410,13 +345,13 @@ The expected swap response has the following fields. It contains the following f
         },
         "ask_asset": {
             "native_token": {
-                "denom": "stk/uxprt"
+                "denom": "stk/uatom"
             }
         },
-        "swap_type": "GiveIn",
+        "swap_type": "GiveOut",
         "amount": "100000000",
-        "max_spread": "0.02",
-        "belief_price": "0.8"
+        "max_spread": null,
+        "belief_price": null
     }
 }
 ```
@@ -426,9 +361,9 @@ The expected swap response has the following fields. It contains the following f
 ```json
 {
     "trade": {
-        "amount_in": "100000000",
-        "amount_out": "79997000",
-        "spread": "0.01"
+        "amount_in": "923000000",
+        "amount_out": "100000000",
+        "spread": "0"
     },
     "response": {
         "success": {}
@@ -440,7 +375,7 @@ The expected swap response has the following fields. It contains the following f
                     "denom": "uxprt"
                 }
             },
-            "amount": "300000"
+            "amount": "2769000"
         }
     ]
 }
@@ -468,7 +403,7 @@ TWAP = (cumulative_price_2 - cumulative_price_1) / (block_time_2 - block_time_1)
         },
         "ask_asset": {
             "native_token": {
-                "denom": "stk/uxprt"
+                "denom": "stk/uatom"
             }
         }
     }
@@ -487,10 +422,10 @@ TWAP = (cumulative_price_2 - cumulative_price_1) / (block_time_2 - block_time_1)
         },
         "ask_info": {
             "native_token": {
-                "denom": "stk/uxprt"
+                "denom": "stk/uatom"
             }
         },
-        "rate": "0.8",
+        "rate": "0.12",
     }],
     "total_share": "1000000000000",
 }
@@ -523,10 +458,10 @@ Returns the cumulative prices of all the assets in the pool for all possible exc
         },
         "ask_info": {
             "native_token": {
-                "denom": "stk/uxprt"
+                "denom": "stk/uatom"
             }
         },
-        "rate": "0.8",
+        "rate": "0.12",
     }],
     "total_share": "1000000000000",
 }
