@@ -25,11 +25,17 @@ pub enum ContractError {
     #[error("Only whitelisted assets can be locked")]
     AssetNotAllowedToBeLocked,
 
+    #[error("Asset is not currently allowed")]
+    AssetNotInAllowedList,
+
     #[error("Asset is already allowed to be locked")]
     AssetAlreadyAllowedToBeLocked,
 
     #[error("Payment error: {0}")]
     PaymentError(PaymentError),
+
+    #[error("Duplicate denom")]
+    DuplicateDenom,
 
 }
 

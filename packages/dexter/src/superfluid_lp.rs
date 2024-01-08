@@ -56,6 +56,11 @@ pub enum ExecuteMsg {
         asset_info: AssetInfo
     },
 
+    // remove a token from the list of allowed lockable tokens
+    RemoveAllowedLockableToken {
+        asset_info: AssetInfo
+    },
+
     /// Allows the owner to transfer ownership to a new address.
     /// Ownership transfer is done in two steps:
     /// 1. The owner proposes a new owner.

@@ -32,7 +32,31 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
+    // validate vault address
     deps.api.addr_validate(&msg.vault_addr.to_string())?;
+
+    // validate owner address
+    deps.api.addr_validate(&msg.owner.to_string())?;
+
+    let mut all_denoms = vec![];
+    // validate that all assets are native tokens
+    for allowed_asset in &msg.allowed_lockable_tokens {
+        // validate that no token is a cw20 token.
+        match &allowed_asset {
+            AssetInfo::NativeToken { denom } => {
+                // check no duplicate denoms
+                if all_denoms.contains(denom) {
+                   // reject duplicate denoms
+                     return Err(ContractError::DuplicateDenom); 
+                }
+                all_denoms.push(denom.clone()); 
+            }
+            AssetInfo::Token { contract_addr: _ } => {
+                // we don't support cw20 tokens for now.
+                return Err(ContractError::UnsupportedAssetType)
+            }
+        }
+    }
 
     let config = Config {
         vault_addr: msg.vault_addr,
@@ -142,6 +166,8 @@ pub fn execute(
             let mut config = CONFIG.load(deps.storage)?;
 
             if let Some(vault_addr) = vault_addr {
+                // validate vault address
+                deps.api.addr_validate(&vault_addr.to_string())?;
                 config.vault_addr = vault_addr;
             }
 
@@ -173,6 +199,32 @@ pub fn execute(
             }
 
             config.allowed_lockable_tokens.push(asset_info);
+
+            CONFIG.save(deps.storage, &config)?;
+            Ok(Response::default())
+        }
+
+        ExecuteMsg::RemoveAllowedLockableToken { asset_info } => {
+            // validate that the message sender is the owner of the contract.
+            if info.sender != CONFIG.load(deps.storage)?.owner {
+                return Err(ContractError::Unauthorized {});
+            }
+
+            let mut config = CONFIG.load(deps.storage)?;
+
+            // validate that the token is in the list of allowed lockable tokens.
+            let mut found = false;
+            for (i, allowed_asset) in config.allowed_lockable_tokens.iter().enumerate() {
+                if allowed_asset == &asset_info {
+                    found = true;
+                    config.allowed_lockable_tokens.remove(i);
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(ContractError::AssetNotInAllowedList);
+            }
 
             CONFIG.save(deps.storage, &config)?;
             Ok(Response::default())
