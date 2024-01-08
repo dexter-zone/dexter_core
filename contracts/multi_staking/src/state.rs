@@ -4,12 +4,15 @@ use dexter::{
     helper::OwnershipProposal,
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, LpGlobalState,
-        RewardSchedule, TokenLock,
+        RewardSchedule, TokenLock, UnbondConfig,
     },
 };
 
 // Global config of the contract
 pub const CONFIG: Item<Config> = Item::new("config");
+
+// LP can have custom overridden unbonding config
+pub const LP_OVERRIDE_CONFIG: Map<Addr, UnbondConfig> = Map::new("lp_override_config");
 
 /// Ownership proposal in case of ownership transfer is initiated
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");

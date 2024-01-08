@@ -192,12 +192,16 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     // instante the multistaking contract
     let multi_staking_instantiate = dexter::multi_staking::InstantiateMsg {
         owner: Addr::unchecked(gov_admin_instance.clone()),
-        unlock_period: 86400u64,
         keeper_addr: Addr::unchecked(gov_admin_instance.clone()),
         minimum_reward_schedule_proposal_start_delay: 0,
-        instant_unbond_fee_bp: 500u64,
-        instant_unbond_min_fee_bp: 200u64,
-        fee_tier_interval: 86400u64,
+        unbond_config: dexter::multi_staking::UnbondConfig {
+            unlock_period: 86400u64,
+            instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
+                min_fee: 200u64,
+                max_fee: 5000u64,
+                fee_tier_interval: 86400u64,
+            },
+        },
     };
 
     let multi_staking_instance = wasm

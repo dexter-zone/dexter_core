@@ -6,7 +6,7 @@ use cosmwasm_std::{
     from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{cmp::min, collections::HashMap};
+use std::collections::HashMap;
 
 use dexter::{
     asset::AssetInfo,
@@ -17,7 +17,7 @@ use dexter::{
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, ConfigV1,
         CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,
-        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward, ConfigV2_1, ConfigV2_2,
+        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward, ConfigV2_1, ConfigV2_2, UnbondConfig, ConfigV3,
     },
 };
 
@@ -35,7 +35,7 @@ use crate::{
     state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
         CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
-        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS,
+        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS, LP_OVERRIDE_CONFIG,
     },
 };
 use crate::{
@@ -54,6 +54,8 @@ const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V2: &str = "2.0.0";
 const CONTRACT_VERSION_V2_1: &str = "2.1.0";
 const CONTRACT_VERSION_V2_2: &str = "2.2.0";
+const CONTRACT_VERSION_V3: &str = "3.0.0";
+
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -68,26 +70,27 @@ pub fn instantiate(
 ) -> ContractResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-        return Err(ContractError::InvalidInstantUnbondFee {
-            max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-            received: msg.instant_unbond_fee_bp,
-        });
-    }
+    // TODO: Add these back
+    // if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
+    //     return Err(ContractError::InvalidInstantUnbondFee {
+    //         max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
+    //         received: msg.instant_unbond_fee_bp,
+    //     });
+    // }
 
-    if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
-        return Err(ContractError::InvalidInstantUnbondMinFee {
-            max_allowed: msg.instant_unbond_fee_bp,
-            received: msg.instant_unbond_min_fee_bp,
-        });
-    }
+    // if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
+    //     return Err(ContractError::InvalidInstantUnbondMinFee {
+    //         max_allowed: msg.instant_unbond_fee_bp,
+    //         received: msg.instant_unbond_min_fee_bp,
+    //     });
+    // }
 
-    if msg.fee_tier_interval > msg.unlock_period {
-        return Err(ContractError::InvalidFeeTierInterval {
-            max_allowed: msg.unlock_period,
-            received: msg.fee_tier_interval,
-        });
-    }
+    // if msg.fee_tier_interval > msg.unlock_period {
+    //     return Err(ContractError::InvalidFeeTierInterval {
+    //         max_allowed: msg.unlock_period,
+    //         received: msg.fee_tier_interval,
+    //     });
+    // }
 
     // validate keeper address
     deps.api.addr_validate(&msg.keeper_addr.to_string())?;
@@ -96,19 +99,16 @@ pub fn instantiate(
         deps.storage,
         &Config {
             keeper: msg.keeper_addr,
-            unlock_period: msg.unlock_period,
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
-            instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp,
-            fee_tier_interval: msg.fee_tier_interval,
+            unbond_config: msg.unbond_config.clone(),
         },
     )?;
 
     Ok(Response::new().add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("owner", msg.owner.to_string())
-            .add_attribute("unlock_period", msg.unlock_period.to_string())
+            .add_attribute("unlock_period", msg.unbond_config.unlock_period.to_string())
             .add_attribute(
                 "minimum_reward_schedule_proposal_start_delay",
                 msg.minimum_reward_schedule_proposal_start_delay.to_string(),
@@ -126,19 +126,13 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig {
             keeper_addr,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
+            unbond_config
         } => update_config(
             deps,
             env,
             info,
             keeper_addr,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
+            unbond_config
         ),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
@@ -255,10 +249,7 @@ fn update_config(
     _env: Env,
     info: MessageInfo,
     keeper_addr: Option<Addr>,
-    unlock_period: Option<u64>,
-    instant_unbond_fee_bp: Option<u64>,
-    instant_unbond_min_fee_bp: Option<u64>,
-    fee_tier_interval: Option<u64>,
+    unbond_config: Option<UnbondConfig>,
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -274,70 +265,29 @@ fn update_config(
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
     }
 
-    if let Some(unlock_period) = unlock_period {
-        // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
-        if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
-            return Err(ContractError::InvalidFeeTierInterval {
-                max_allowed: unlock_period,
-                received: fee_tier_interval.unwrap(),
-            });
-        }
+    if let Some(unbond_config) = unbond_config {
+        // // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
+        // if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
+        //     return Err(ContractError::InvalidFeeTierInterval {
+        //         max_allowed: unlock_period,
+        //         received: fee_tier_interval.unwrap(),
+        //     });
+        // }
 
-        // reset the current fee tier interval to unlock period if it is greater than unlock period
-        if config.fee_tier_interval > unlock_period {
-            config.fee_tier_interval = unlock_period;
-            event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
-        }
+        // // reset the current fee tier interval to unlock period if it is greater than unlock period
+        // if config.fee_tier_interval > unlock_period {
+        //     config.fee_tier_interval = unlock_period;
+        //     event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
+        // }
 
-        config.unlock_period = unlock_period;
-        event = event.add_attribute("unlock_period", config.unlock_period.to_string());
+        // config.unlock_period = unlock_period;
+        // event = event.add_attribute("unlock_period", config.unlock_period.to_string());
+
+        // TODO: Validate unbond config before updating
+        event = event.add_attribute("unbond_config", serde_json_wasm::to_string(&unbond_config).unwrap());
+        config.unbond_config = unbond_config;
     }
 
-    if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
-        // validate max allowed instant unbond fee which is 10%
-        if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-            return Err(ContractError::InvalidInstantUnbondFee {
-                max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-                received: instant_unbond_fee_bp,
-            });
-        }
-        config.instant_unbond_fee_bp = instant_unbond_fee_bp;
-        event = event.add_attribute(
-            "instant_unbond_fee_bp",
-            config.instant_unbond_fee_bp.to_string(),
-        );
-    }
-
-    if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
-        // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
-        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP
-            || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp
-        {
-            return Err(ContractError::InvalidInstantUnbondMinFee {
-                max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
-                received: instant_unbond_min_fee_bp,
-            });
-        }
-
-        config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
-        event = event.add_attribute(
-            "instant_unbond_min_fee_bp",
-            config.instant_unbond_min_fee_bp.to_string(),
-        );
-    }
-
-    if let Some(fee_tier_interval) = fee_tier_interval {
-        // max allowed fee tier interval in equal to the unlock period.
-        if fee_tier_interval > config.unlock_period {
-            return Err(ContractError::InvalidFeeTierInterval {
-                max_allowed: config.unlock_period,
-                received: fee_tier_interval,
-            });
-        }
-
-        config.fee_tier_interval = fee_tier_interval;
-        event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
-    }
 
     CONFIG.save(deps.storage, &config)?;
 
@@ -986,6 +936,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             token_lock,
         } => {
             let config = CONFIG.load(deps.storage)?;
+            let lp_override_config = LP_OVERRIDE_CONFIG
+                .may_load(deps.storage, lp_token.clone())?;
+
+            let unbond_config = lp_override_config.unwrap_or(config.unbond_config);
+
             // validate if token lock actually exists
             let token_locks = USER_LP_TOKEN_LOCKS
                 .may_load(deps.storage, (&lp_token, &user))?
@@ -997,7 +952,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             }
 
             let (fee_bp, unlock_fee) =
-                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &config);
+                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &unbond_config);
 
             let instant_lp_unlock_fee = InstantLpUnlockFee {
                 time_until_lock_expiry: token_lock
@@ -1011,19 +966,22 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             to_json_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
         }
-        QueryMsg::InstantUnlockFeeTiers {} => {
+        QueryMsg::InstantUnlockFeeTiers {
+            lp_token
+        } => {
             let config = CONFIG.load(deps.storage)?;
-            let min_fee = config.instant_unbond_min_fee_bp;
-            let max_fee = config.instant_unbond_fee_bp;
+            let lp_override_config = LP_OVERRIDE_CONFIG
+                .may_load(deps.storage, lp_token)?;
 
-            let unlock_period = config.unlock_period;
             let fee_tiers = query_instant_unlock_fee_tiers(
-                config.fee_tier_interval,
-                unlock_period,
-                min_fee,
-                max_fee,
+                lp_override_config.unwrap_or(config.unbond_config),
             );
 
+            to_json_binary(&fee_tiers).map_err(ContractError::from)
+        }
+        QueryMsg::DefaultInstantUnlockFeeTiers {} => {
+            let config = CONFIG.load(deps.storage)?;
+            let fee_tiers = query_instant_unlock_fee_tiers(config.unbond_config);
             to_json_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::UnclaimedRewards {
@@ -1205,7 +1163,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
-        MigrateMsg::V3FromV1 {
+        MigrateMsg::V3_1FromV1 {
             keeper_addr,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
@@ -1250,17 +1208,21 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             let config = Config {
                 owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
-                unlock_period: config_v1.unlock_period,
                 keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                instant_unbond_fee_bp,
-                instant_unbond_min_fee_bp,
-                fee_tier_interval,
+                unbond_config: UnbondConfig { 
+                    unlock_period: config_v1.unlock_period, 
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                        min_fee: instant_unbond_min_fee_bp,
+                        max_fee: instant_unbond_fee_bp, 
+                        fee_tier_interval 
+                    }
+                }
             };
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
         },
-        MigrateMsg::V3FromV2 { keeper_addr } => {
+        MigrateMsg::V3_1FromV2 { keeper_addr } => {
             let contract_version = get_contract_version(deps.storage)?;
             // if version is v2 or v2.1, apply the changes.
             if contract_version.version == CONTRACT_VERSION_V2 || contract_version.version == CONTRACT_VERSION_V2_1 {
@@ -1268,11 +1230,15 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    unlock_period: config_v2.unlock_period,
                     keeper: keeper_addr,
-                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
-                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
-                    fee_tier_interval: config_v2.fee_tier_interval,
+                    unbond_config: UnbondConfig { 
+                        unlock_period: config_v2.unlock_period, 
+                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                            min_fee: config_v2.instant_unbond_min_fee_bp,
+                            max_fee: config_v2.instant_unbond_fee_bp, 
+                            fee_tier_interval: config_v2.fee_tier_interval 
+                        } 
+                    }
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1286,7 +1252,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             }
         }
 
-        MigrateMsg::V3FromV2_2 {} => {
+        MigrateMsg::V3_1FromV2_2 {} => {
             let contract_version = get_contract_version(deps.storage)?;
             // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V2_2 {
@@ -1294,11 +1260,15 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    unlock_period: config_v2.unlock_period,
                     keeper: config_v2.keeper,
-                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
-                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
-                    fee_tier_interval: config_v2.fee_tier_interval,
+                    unbond_config: UnbondConfig { 
+                        unlock_period: config_v2.unlock_period, 
+                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                            min_fee: config_v2.instant_unbond_min_fee_bp,
+                            max_fee: config_v2.instant_unbond_fee_bp, 
+                            fee_tier_interval: config_v2.fee_tier_interval 
+                        } 
+                    }
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1310,6 +1280,39 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 return Err(ContractError::InvalidContractVersionForUpgrade {
                     upgrade_version: CONTRACT_VERSION.to_string(),
                     expected: CONTRACT_VERSION_V2_2.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+        }
+
+        MigrateMsg::V3_1FromV3 {} => {
+            let contract_version = get_contract_version(deps.storage)?;
+            // if version if v2.2 apply the changes and return
+            if contract_version.version == CONTRACT_VERSION_V3 {
+                let config_v3: ConfigV3 = Item::new("config").load(deps.storage)?;
+                let config = Config {
+                    owner: config_v3.owner,
+                    allowed_lp_tokens: config_v3.allowed_lp_tokens,
+                    keeper: config_v3.keeper,
+                    unbond_config: UnbondConfig { 
+                        unlock_period: config_v3.unlock_period, 
+                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                            min_fee: config_v3.instant_unbond_min_fee_bp,
+                            max_fee: config_v3.instant_unbond_fee_bp, 
+                            fee_tier_interval: config_v3.fee_tier_interval 
+                        } 
+                    }
+                };
+
+                CONFIG.save(deps.storage, &config)?;
+
+                // set the contract version to v3
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+            } else {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V3.to_string(),
                     actual: contract_version.version,
                 });
             }

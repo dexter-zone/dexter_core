@@ -1,6 +1,6 @@
 use crate::{
     contract::{update_staking_rewards, ContractResult, CONTRACT_NAME},
-    state::USER_LP_TOKEN_LOCKS,
+    state::{LP_OVERRIDE_CONFIG, USER_LP_TOKEN_LOCKS},
 };
 use const_format::concatcp;
 use cosmwasm_std::{Addr, DepsMut, Env, Event, MessageInfo, Response, Uint128};
@@ -8,7 +8,7 @@ use cosmwasm_std::{Addr, DepsMut, Env, Event, MessageInfo, Response, Uint128};
 use dexter::{
     asset::AssetInfo,
     helper::build_transfer_token_to_user_msg,
-    multi_staking::{Config, TokenLock, MAX_USER_LP_TOKEN_LOCKS},
+    multi_staking::{Config, InstantUnbondConfig, TokenLock, MAX_USER_LP_TOKEN_LOCKS},
 };
 
 use dexter::helper::EventExt;
@@ -40,6 +40,20 @@ pub fn instant_unbond(
         .unwrap_or_default();
 
     let config: Config = CONFIG.load(deps.storage)?;
+    let lp_override_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token.clone())?;
+    let unbond_config = lp_override_config.unwrap_or(config.unbond_config);
+
+    // validate that ILPU is allowed
+
+    let instant_unbond_fee_bp = match unbond_config.instant_unbond_config {
+        InstantUnbondConfig::Disabled => return Err(ContractError::InstantUnbondDisabled),
+        InstantUnbondConfig::Enabled {
+            min_fee: _,
+            max_fee,
+            fee_tier_interval: _,
+        } => max_fee,
+    };
+
     let mut lp_global_state = LP_GLOBAL_STATE.load(deps.storage, &lp_token)?;
 
     let user_updated_bond_amount = current_bond_amount.checked_sub(amount).map_err(|_| {
@@ -74,7 +88,7 @@ pub fn instant_unbond(
     )?;
 
     // whole instant unbond fee is sent to the keeper as protocol treasury
-    let instant_unbond_fee = amount.multiply_ratio(config.instant_unbond_fee_bp, Uint128::from(10000u128));
+    let instant_unbond_fee = amount.multiply_ratio(instant_unbond_fee_bp, Uint128::from(10000u128));
 
     // Check if the keeper is available, if not, send the fee to the contract owner
     let fee_receiver = config.keeper;
@@ -101,7 +115,10 @@ pub fn instant_unbond(
         .add_attribute("total_bond_amount", lp_global_state.total_bond_amount)
         .add_attribute("user_updated_bond_amount", user_updated_bond_amount)
         .add_attribute("instant_unbond_fee", instant_unbond_fee)
-        .add_attribute("user_withdrawn_amount", amount.checked_sub(instant_unbond_fee)?);
+        .add_attribute(
+            "user_withdrawn_amount",
+            amount.checked_sub(instant_unbond_fee)?,
+        );
 
     response = response.add_event(event);
     Ok(response)
@@ -172,8 +189,11 @@ pub fn unbond(
     }
 
     let config = CONFIG.load(deps.storage)?;
+    let override_unbond_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token.clone())?;
 
-    let unlock_time = env.block.time.seconds() + config.unlock_period;
+    let unbond_config = override_unbond_config.unwrap_or(config.unbond_config);
+
+    let unlock_time = env.block.time.seconds() + unbond_config.unlock_period;
     unlocks.push(TokenLock {
         unlock_time,
         amount,

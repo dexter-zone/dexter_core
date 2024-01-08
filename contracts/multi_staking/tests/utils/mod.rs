@@ -5,7 +5,7 @@ use dexter::{
     asset::AssetInfo,
     multi_staking::{
         Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, QueryMsg, TokenLock,
-        TokenLockInfo, UnclaimedReward, UnlockFeeTier,
+        TokenLockInfo, UnclaimedReward, UnlockFeeTier, UnbondConfig, InstantUnbondConfig,
     },
 };
 
@@ -36,13 +36,17 @@ pub fn instantiate_multi_staking_contract(
 ) -> Addr {
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
-        unlock_period,
         keeper_addr,
         // 3 day delay
         minimum_reward_schedule_proposal_start_delay,
-        instant_unbond_fee_bp: instant_unbond_max_fee_bp,
-        instant_unbond_min_fee_bp,
-        fee_tier_interval,
+        unbond_config: UnbondConfig {
+            unlock_period,
+            instant_unbond_config: InstantUnbondConfig::Enabled {
+                min_fee: instant_unbond_min_fee_bp,
+                max_fee: instant_unbond_max_fee_bp,
+                fee_tier_interval,
+            },
+        },
     };
 
     let multi_staking_instance = app
@@ -268,21 +272,18 @@ pub fn create_reward_schedule(
     return reward_schedule_id;
 }
 
-pub fn update_fee_tier_interval(
+pub fn update_unbond_config(
     app: &mut App,
     admin_addr: &Addr,
     multistaking_contract: &Addr,
-    fee_tier_interval: u64,
+    unbond_config: UnbondConfig,
 ) -> anyhow::Result<AppResponse> {
     app.execute_contract(
         admin_addr.clone(),
         multistaking_contract.clone(),
         &ExecuteMsg::UpdateConfig {
             keeper_addr: None,
-            unlock_period: None,
-            instant_unbond_fee_bp: None,
-            instant_unbond_min_fee_bp: None,
-            fee_tier_interval: Some(fee_tier_interval),
+            unbond_config: Some(unbond_config),
         },
         &vec![],
     )
@@ -591,13 +592,31 @@ pub fn query_balance(app: &mut App, user_addr: &Addr) -> Vec<Coin> {
 
 pub fn query_instant_unlock_fee_tiers(
     app: &mut App,
+    lp_token: &Addr,
     multistaking_contract: &Addr,
 ) -> Vec<UnlockFeeTier> {
     let fee_tiers: Vec<UnlockFeeTier> = app
         .wrap()
         .query_wasm_smart(
             multistaking_contract.clone(),
-            &QueryMsg::InstantUnlockFeeTiers {},
+            &QueryMsg::InstantUnlockFeeTiers {
+                lp_token: lp_token.clone(),
+            },
+        )
+        .unwrap();
+
+    return fee_tiers;
+}
+
+pub fn query_default_instant_unlock_fee_tiers(
+    app: &mut App,
+    multistaking_contract: &Addr,
+) -> Vec<UnlockFeeTier> {
+    let fee_tiers: Vec<UnlockFeeTier> = app
+        .wrap()
+        .query_wasm_smart(
+            multistaking_contract.clone(),
+            &QueryMsg::DefaultInstantUnlockFeeTiers {},
         )
         .unwrap();
 

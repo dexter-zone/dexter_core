@@ -117,6 +117,9 @@ pub enum ContractError {
 
     #[error("No valid lock found from supplied input which can be unlocked")]
     NoValidLocks,
+
+    #[error("Instant unbond is disabled")]
+    InstantUnbondDisabled,
 }
 
 impl From<OverflowError> for ContractError {

@@ -1,12 +1,11 @@
 use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
-use dexter::asset::AssetInfo;
-use utils::update_fee_tier_interval;
+use dexter::{asset::AssetInfo, multi_staking::{UnbondConfig, InstantUnbondConfig}};
 
 use crate::utils::{
     assert_user_bonded_amount, assert_user_lp_token_balance, bond_lp_tokens,
     create_reward_schedule, instant_unbond_lp_tokens, instant_unlock_lp_tokens,
-    mint_lp_tokens_to_addr, mock_app, query_instant_lp_unlock_fee, query_instant_unlock_fee_tiers,
-    query_raw_token_locks, query_token_locks, setup_generic, unbond_lp_tokens, unlock_lp_tokens,
+    mint_lp_tokens_to_addr, mock_app, query_instant_lp_unlock_fee,
+    query_raw_token_locks, query_token_locks, setup_generic, unbond_lp_tokens, unlock_lp_tokens, update_unbond_config, query_default_instant_unlock_fee_tiers,
 };
 pub mod utils;
 
@@ -37,11 +36,11 @@ fn validate_fee_tier_logic() {
         600_000,
     );
 
-    // Update fee tier boundary to same time as unlock period
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_000).unwrap();
+    // // Update fee tier boundary to same time as unlock period
+    // update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_000).unwrap();
 
     // query fee tiers
-    let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
+    let fee_tiers = query_default_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
 
     // validate fee tiers. There should be 1 tier upto the unlock period boundary and max fee
     assert_eq!(fee_tiers.len(), 1);
@@ -51,7 +50,14 @@ fn validate_fee_tier_logic() {
 
     // update fee tier boundary higher than unlock period to make sure we have 1 tier still
     // Added checks to make sure following condition is invalid for update
-    let result = update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 600_001);
+    let result = update_unbond_config(&mut app, &admin_addr, &multi_staking_instance, UnbondConfig {
+        unlock_period: 600_000,
+        instant_unbond_config: InstantUnbondConfig::Enabled {
+            min_fee: 300,
+            max_fee: 500,
+            fee_tier_interval: 600_001,
+        },
+    });
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().root_cause().to_string(),
@@ -59,10 +65,17 @@ fn validate_fee_tier_logic() {
     );
 
     // update fee tier boundary to 100_000 seconds and validate that we have 6 tiers which are equalled spaced
-    update_fee_tier_interval(&mut app, &admin_addr, &multi_staking_instance, 100_000).unwrap();
+    update_unbond_config(&mut app, &admin_addr, &multi_staking_instance, UnbondConfig {
+        unlock_period: 600_000,
+        instant_unbond_config: InstantUnbondConfig::Enabled {
+            min_fee: 300,
+            max_fee: 500,
+            fee_tier_interval: 100_000,
+        },
+    }).unwrap();
 
     // query fee tiers
-    let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
+    let fee_tiers = query_default_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
 
     // validate fee tiers. There should be 6 tiers upto the unlock period boundary and max fee
     assert_eq!(fee_tiers.len(), 6);
@@ -385,7 +398,7 @@ fn test_instant_unbond_and_unlock() {
     assert_eq!(token_lock_info[1].unlock_time, 1_001_502_400);
 
     // fetch current fee tiers for unlock
-    let fee_tiers = query_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
+    let fee_tiers = query_default_instant_unlock_fee_tiers(&mut app, &multi_staking_instance);
 
     // validate fee tiers
     assert_eq!(fee_tiers.len(), 7);
