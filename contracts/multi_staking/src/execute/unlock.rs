@@ -59,7 +59,7 @@ pub fn instant_unlock(
 
     let current_block_time = env.block.time.seconds();
     for lock in valid_locks_to_be_unlocked.iter() {
-        let (_, unlock_fee) = calculate_unlock_fee(lock, current_block_time, &unbond_config);
+        let (_, unlock_fee) = calculate_unlock_fee(lock, current_block_time, &unbond_config)?;
         total_amount_to_be_unlocked += lock.amount.checked_sub(unlock_fee)?;
         total_fee_charged += unlock_fee;
     }

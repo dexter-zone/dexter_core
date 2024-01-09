@@ -1,9 +1,11 @@
 use cosmwasm_std::Decimal;
 use dexter::multi_staking::{UnlockFeeTier, InstantUnbondConfig, UnbondConfig};
 
+use crate::error::ContractError;
+
 pub fn query_instant_unlock_fee_tiers(
     config: UnbondConfig
-) -> Vec<UnlockFeeTier> {
+) -> Result<Vec<UnlockFeeTier>, ContractError> {
     // Fee tiers exist on day boundaries linearly interpolating the values from min_fee to max_fee
     let mut fee_tiers: Vec<UnlockFeeTier> = vec![];
 
@@ -12,7 +14,8 @@ pub fn query_instant_unlock_fee_tiers(
     // if the ILPU is disabled, throw error saying that unlock is not supported
     match config.instant_unbond_config {
         InstantUnbondConfig::Disabled => {
-            panic!("Instant unlock is not supported");
+            // panic!("Instant unlock is not supported");
+            Err(ContractError::InstantUnbondDisabled {})
         }
         InstantUnbondConfig::Enabled { min_fee, max_fee, fee_tier_interval } => {
             // if the unlock period is less than tier interval then there's only one tier equal to max fee
@@ -57,7 +60,7 @@ pub fn query_instant_unlock_fee_tiers(
                 }
             }
 
-            fee_tiers
+            Ok(fee_tiers)
         }
     }
 

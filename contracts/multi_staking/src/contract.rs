@@ -70,30 +70,9 @@ pub fn instantiate(
 ) -> ContractResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    // TODO: Add these back
-    // if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-    //     return Err(ContractError::InvalidInstantUnbondFee {
-    //         max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-    //         received: msg.instant_unbond_fee_bp,
-    //     });
-    // }
-
-    // if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
-    //     return Err(ContractError::InvalidInstantUnbondMinFee {
-    //         max_allowed: msg.instant_unbond_fee_bp,
-    //         received: msg.instant_unbond_min_fee_bp,
-    //     });
-    // }
-
-    // if msg.fee_tier_interval > msg.unlock_period {
-    //     return Err(ContractError::InvalidFeeTierInterval {
-    //         max_allowed: msg.unlock_period,
-    //         received: msg.fee_tier_interval,
-    //     });
-    // }
-
     // validate keeper address
     deps.api.addr_validate(&msg.keeper_addr.to_string())?;
+    msg.unbond_config.validate()?;
 
     CONFIG.save(
         deps.storage,
@@ -134,6 +113,8 @@ pub fn execute(
             keeper_addr,
             unbond_config
         ),
+        ExecuteMsg::SetCustomUnbondConfig { lp_token, unbond_config } => set_custom_unbond_config(deps, env, info, lp_token, unbond_config),
+        ExecuteMsg::UnsetCustomUnbondConfig { lp_token } => unset_custom_unbond_config(deps, env, info, lp_token),
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -266,30 +247,59 @@ fn update_config(
     }
 
     if let Some(unbond_config) = unbond_config {
-        // // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
-        // if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
-        //     return Err(ContractError::InvalidFeeTierInterval {
-        //         max_allowed: unlock_period,
-        //         received: fee_tier_interval.unwrap(),
-        //     });
-        // }
-
-        // // reset the current fee tier interval to unlock period if it is greater than unlock period
-        // if config.fee_tier_interval > unlock_period {
-        //     config.fee_tier_interval = unlock_period;
-        //     event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
-        // }
-
-        // config.unlock_period = unlock_period;
-        // event = event.add_attribute("unlock_period", config.unlock_period.to_string());
-
-        // TODO: Validate unbond config before updating
+        unbond_config.validate()?;
         event = event.add_attribute("unbond_config", serde_json_wasm::to_string(&unbond_config).unwrap());
         config.unbond_config = unbond_config;
     }
 
 
     CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new().add_event(event))
+}
+
+fn set_custom_unbond_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+    unbond_config: UnbondConfig,
+) -> ContractResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    // Verify that the message sender is the owner
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized);
+    }
+
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::set_custom_unbond_config"), &info);
+
+    unbond_config.validate()?;
+    LP_OVERRIDE_CONFIG.save(deps.storage, lp_token.clone(), &unbond_config)?;
+
+    event = event.add_attribute("lp_token", lp_token.to_string());
+    event = event.add_attribute("unbond_config", serde_json_wasm::to_string(&unbond_config).unwrap());
+
+    Ok(Response::new().add_event(event))
+}
+
+fn unset_custom_unbond_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+) -> ContractResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    // Verify that the message sender is the owner
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized);
+    }
+
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::unset_custom_unbond_config"), &info);
+
+    LP_OVERRIDE_CONFIG.remove(deps.storage, lp_token.clone());
+    event = event.add_attribute("lp_token", lp_token.to_string());
 
     Ok(Response::new().add_event(event))
 }
@@ -952,7 +962,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             }
 
             let (fee_bp, unlock_fee) =
-                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &unbond_config);
+                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &unbond_config)?;
 
             let instant_lp_unlock_fee = InstantLpUnlockFee {
                 time_until_lock_expiry: token_lock
@@ -975,13 +985,13 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             let fee_tiers = query_instant_unlock_fee_tiers(
                 lp_override_config.unwrap_or(config.unbond_config),
-            );
+            )?;
 
             to_json_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::DefaultInstantUnlockFeeTiers {} => {
             let config = CONFIG.load(deps.storage)?;
-            let fee_tiers = query_instant_unlock_fee_tiers(config.unbond_config);
+            let fee_tiers = query_instant_unlock_fee_tiers(config.unbond_config)?;
             to_json_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::UnclaimedRewards {

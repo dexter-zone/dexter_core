@@ -1,6 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
+use thiserror::Error;
 
 use crate::asset::AssetInfo;
 
@@ -132,6 +133,46 @@ pub struct UnbondConfig {
     pub unlock_period: u64,
     /// Status of instant unbonding
     pub instant_unbond_config: InstantUnbondConfig
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum UnbondConfigValidationError {
+
+    #[error("Min fee smaller than max fee is not allowed")]
+    InvalidMinFee { min_fee: u64, max_fee: u64 },
+
+    #[error("Max fee bigger than {MAX_INSTANT_UNBOND_FEE_BP} is not allowed")]
+    InvalidMaxFee { max_fee: u64 },
+
+    #[error("Invalid fee tier interval. Fee tier interval must be a non-zero value lesser than the unlock period")]
+    InvalidFeeTierInterval { fee_tier_interval: u64 },
+}
+
+impl UnbondConfig {
+    // validate the unbond config
+    pub fn validate(&self) -> Result<(), UnbondConfigValidationError> {
+        match self.instant_unbond_config {
+            InstantUnbondConfig::Disabled => Ok(()),
+            InstantUnbondConfig::Enabled { min_fee, max_fee, fee_tier_interval } => {
+                if min_fee > max_fee {
+                    Err(UnbondConfigValidationError::InvalidMinFee { 
+                        min_fee,
+                        max_fee,
+                     })
+                } else if max_fee > MAX_INSTANT_UNBOND_FEE_BP {
+                    Err(UnbondConfigValidationError::InvalidMaxFee {
+                        max_fee
+                    })
+                } else if fee_tier_interval == 0 || fee_tier_interval > self.unlock_period {
+                    Err(UnbondConfigValidationError::InvalidFeeTierInterval {
+                        fee_tier_interval,
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
 }
 
 /// config structure of contract version v2 and v2.1 . Used for migration.
@@ -321,6 +362,16 @@ pub enum ExecuteMsg {
     UpdateConfig {
         keeper_addr: Option<Addr>,
         unbond_config: Option<UnbondConfig>,
+    },
+    /// Add custom unbdond config for a given LP token
+    SetCustomUnbondConfig {
+        lp_token: Addr,
+        unbond_config: UnbondConfig,
+    },
+
+    /// Unset custom unbdond config for a given LP token
+    UnsetCustomUnbondConfig {
+        lp_token: Addr,
     },
     /// Creates a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.

@@ -1,4 +1,5 @@
 use cosmwasm_std::{OverflowError, StdError, Uint128};
+use dexter::multi_staking::UnbondConfigValidationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -118,12 +119,21 @@ pub enum ContractError {
     #[error("No valid lock found from supplied input which can be unlocked")]
     NoValidLocks,
 
-    #[error("Instant unbond is disabled")]
+    #[error("Instant unbond/unlock is disabled for this LP")]
     InstantUnbondDisabled,
+
+    #[error("Invalid unbond config. Error: {error}")]
+    InvalidUnbondConfig { error: UnbondConfigValidationError  },
 }
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
         StdError::from(o).into()
+    }
+}
+
+impl From<UnbondConfigValidationError> for ContractError {
+    fn from(error: UnbondConfigValidationError) -> Self {
+        ContractError::InvalidUnbondConfig { error }
     }
 }

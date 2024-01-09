@@ -1,7 +1,7 @@
 use cosmwasm_std::Uint128;
 use dexter::multi_staking::{InstantUnbondConfig, TokenLock, UnbondConfig};
 
-use crate::query::query_instant_unlock_fee_tiers;
+use crate::{query::query_instant_unlock_fee_tiers, error::ContractError};
 
 /// Find the difference between two lock vectors.
 /// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
@@ -57,24 +57,24 @@ pub fn calculate_unlock_fee(
     token_lock: &TokenLock,
     current_block_time: u64,
     unbond_config: &UnbondConfig,
-) -> (u64, Uint128) {
+) -> Result<(u64, Uint128), ContractError> {
     let lock_end_time = token_lock.unlock_time;
 
     if current_block_time >= lock_end_time {
-        return (0, Uint128::zero());
+        return Ok((0, Uint128::zero()));
     }
 
     // check if ILPU is enabled
     match unbond_config.instant_unbond_config {
         InstantUnbondConfig::Disabled => {
-            panic!("Instant unlock is not supported");
+            Err(ContractError::InstantUnbondDisabled {})
         }
         InstantUnbondConfig::Enabled {
             min_fee: _,
             max_fee,
             fee_tier_interval: _,
         } => {
-            let tiers = query_instant_unlock_fee_tiers(unbond_config.clone());
+            let tiers = query_instant_unlock_fee_tiers(unbond_config.clone())?;
 
             // find applicable tier based on second left to unlock
             let seconds_left_to_unlock = lock_end_time - current_block_time;
@@ -91,7 +91,7 @@ pub fn calculate_unlock_fee(
             }
 
             let fee = token_lock.amount.multiply_ratio(fee_bp, 10000u64);
-            (fee_bp, fee)
+            Ok((fee_bp, fee))
         }
     }
 }
