@@ -61,7 +61,7 @@ fn validate_fee_tier_logic() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().root_cause().to_string(),
-        "Invalid instant unlock fee tier interval. Max allowed: 600000 i.e. equal to unlock period, Received: 600001"
+        "Invalid unbond config. Error: Invalid fee tier interval. Fee tier interval must be a non-zero value lesser than the unlock period"
     );
 
     // update fee tier boundary to 100_000 seconds and validate that we have 6 tiers which are equalled spaced

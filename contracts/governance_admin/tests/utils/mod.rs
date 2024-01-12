@@ -198,7 +198,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
             unlock_period: 86400u64,
             instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
                 min_fee: 200u64,
-                max_fee: 5000u64,
+                max_fee: 500u64,
                 fee_tier_interval: 86400u64,
             },
         },
