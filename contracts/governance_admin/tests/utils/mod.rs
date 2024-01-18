@@ -189,7 +189,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         .data
         .address;
 
-    // instante the multistaking contract
+    // instantiate the multistaking contract
     let multi_staking_instantiate = dexter::multi_staking::InstantiateMsg {
         owner: Addr::unchecked(gov_admin_instance.clone()),
         keeper_addr: Addr::unchecked(gov_admin_instance.clone()),

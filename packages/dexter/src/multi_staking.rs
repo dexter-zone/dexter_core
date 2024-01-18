@@ -270,6 +270,11 @@ pub enum QueryMsg {
     /// Returns current config of the contract
     #[returns(Config)]
     Config {},
+    /// Returns current unbond config of a given LP token (or global)
+    #[returns(UnbondConfig)]
+    UnbondConfig {
+        lp_token: Option<Addr>
+    },
     /// Returns currently unclaimed rewards for a user for a give LP token
     /// If a future block time is provided, it will return the unclaimed rewards till that block time.
     #[returns(Vec<UnclaimedReward>)]

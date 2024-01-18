@@ -1166,6 +1166,23 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
         QueryMsg::Config {} => {
             let config = CONFIG.load(deps.storage)?;
             to_json_binary(&config).map_err(ContractError::from)
+        },
+        QueryMsg::UnbondConfig { lp_token } => {
+            let config = CONFIG.load(deps.storage)?;
+
+
+            let unbond_config = if let Some(lp_token) = lp_token {
+                // validate address
+                let lp_token = deps.api.addr_validate(lp_token.as_str())?;
+                let lp_override_config = LP_OVERRIDE_CONFIG
+                    .may_load(deps.storage, lp_token)?;
+
+                lp_override_config.unwrap_or(config.unbond_config)
+            } else {
+                config.unbond_config
+            };
+
+            to_json_binary(&unbond_config).map_err(ContractError::from)
         }
     }
 }

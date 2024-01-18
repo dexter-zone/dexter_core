@@ -107,6 +107,15 @@ fn test_instant_unbond_and_unlock() {
         &vec![],
     ).unwrap();
 
+    // query unbond config and validate
+    let query = QueryMsg::UnbondConfig { lp_token: Some(lp_token_addr_2.clone()) };
+    let res: UnbondConfig = app.wrap().query_wasm_smart(
+        multi_staking_instance.clone(),
+        &query,
+    ).unwrap();
+
+    assert_eq!(res, unbond_config);
+
     // query fee tiers and validate that we get error in the query
     let query = QueryMsg::InstantUnlockFeeTiers { lp_token: lp_token_addr_2.clone() };
     let res: Result<Vec<UnlockFeeTier>, _> = app.wrap().query_wasm_smart(
