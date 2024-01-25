@@ -1,422 +1,487 @@
-# DEXTER Protocol -::- Vault Contract
+# Dexter - Vault contract
 
-The Vault is the core of Dexter; it is a smart contract that holds and manages all tokens in each Dexter Pool. It is also the portal through which most Dexter operations (swaps/joins/exits) take place.
+Dexter vault contract is the core contract of the Dexter protocol. It handles all protocol liquidity and faciliates pool related operations like:
+- Join Pool
+- Exit Pool
+- Swap tokens using a specific pool
 
-## **Admin powers -**
+## Roles
 
-The Dexter’s Vault contract can be assigned an **admin** (multisig or a assembly contract) which has the following powers,
+**Owner**: owner is the admin of the contract. Owner term is used to distinguish it from the Cosmwasm contract-admin. Current owner role has following privileges:
+- Manage the Vault and Pool admin parameters
+- Create a pool
+- Pause the pool swap and join operations in case of an adverse event
 
-- Admin can call the **UpdateConfig()** function in the Vault contract to update any of the following parameters,
-  - **Fee_collector** - Address to which the fee collected by the vault is transferred
-  - **Generator_address** - Address of dexter generator contract, which supports bonding LP tokens for rewards. It can be set only once and cannot be changed.
-    - This is used to facilitate bonding the LP tokens with the generator in the same tx in which the user provides liquidity to the pool
-  - **Lp_token_code_id** - Code ID of the LP token contract which is used for initializing LP tokens for pools.
-- Admin can call the **UpdatePoolConfig()** function via which it can update the following parameters for that pool_type,
-  - **Disabling / Enabling new pool instances creation: Address in-charge of a particular pool type can disable or enable initialization for new instances**
-  - **Disable / Enable support with dexter generator:** Address in-charge of a particular pool type can disable or enable support by dexter generator, implying pools of that type will no longer be able to be supported by the generator for incentives
-  - **Update fee_info which will be applicable for new pool instances:** Address in-charge of a particular pool type can update the fee configuration to be used for new pool instances
-- **Add a new pool type -** Only admin can add a new pool type to dexter’s Vault via the **AddToRegistry()** function.
-- All the dexter pools are assigned the dexter’s admin as their admin when being initialized, implying they can be upgraded by the dexter admin.
+With the rollout of Chain governance based contol on Dexter, Dexter Governance admin assumes this role therefore all the above actions can be triggered by correct proposals on the Persistence chain.
 
-## **Functional Flows**
+**Manager**: Manager is a subordinate role to the contract owner to manage day-to-day functions. It overall holds less control over the protocol and it primarily exists to aid any actions that due to involvement of Governance, the owner might be slow to act on. It currently has following privileges:
+- Create a pool (if allowed by the owner)
+- Pause the pool swap and join operations
 
-### 1. **JoinPool - Execution Function**
+This role is currently owned by the [Dexter team multisig]()
 
-- Vault contract’s **JoinPool** fn is the only entry point for providing liquidity to any of the dexter’s supported pools.
-- If the pool is live on dexter generator for additional rewards, the user can choose to stake the newly minted LP tokens with the generator by providing **auto_stake = True**
-- Vault contract queries the specific pool contract to which liquidity is to be provided to get the following information,
-  - Sorted list of assets to be transferred from the user to the Vault as Pool Liquidity. This is provided by param **provided_assets**
-  - The number of LP tokens to be minted to the user / recipient. This is provided by param **new_shares**
-  - The response type :: Success or Failure. This is provided by param **response**
-  - Optional List assets (info and amounts) to be charged as fees to the user. This is provided by param **fee**
-- Only Stable-5-Pool and Weighted Pool charge fee when providing liquidity in an imbalanced manner. XYK and stableswap pools do not charge any fee
-- **Fee Calculations -**
+**User**: User is an individual that interacts with the Dexter Protocol to join a pool, exit from a pool or to perform a swap.
 
-- We assume that the asset balances provided in **provided_assets** params are the total number of tokens to be transferred to the Vault and the protocol and developer fee is yet to be deducted from this.
-- For the number of LP tokens to be minted, we assume that they are being minted proportional to **tokens_transferred_to_vault - total_fee** while we actually provide **tokens_transferred_to_vault - total_fee + lp_fee** as liquidity to the pool
 
-### 2. **ExitPool - Execution Function**
+## Supported state transition functions
 
-- Vault contract’s **ExitPool** fn is the only entry point for removing liquidity from any of the dexter’s supported pools.
-- Vault contract queries the specific pool contract from which liquidity is to be removed to get the following information
-  - Sorted list of assets to be transferred to the user from the Vault. This is provided by param **assets_out**
-  - The number of LP tokens to be burnt by the user. This is provided by param **burn_shares**
-  - The response type :: Success or Failure. This is provided by param **response**
-  - Optional List assets (info and amounts) to be charged. This is provided by param **fee**
-- Only Stable-5-Pool charges fee when withdrawing liquidity in an imbalanced manner.
-- Weighted Pool has an exit fee param and the fee is charged only in LP tokens and is not accrued towards anything.
-- XYK and stableswap pools do not charge any fee when withdrawing liquidity
+### Owner and manager executable
 
-**Fee Calculations -**
+#### 1. _**Update Pause Info**_
 
-- We assume that the asset balances provided in **assets_out** params are the total number of tokens to be transferred to the User and the protocol and developer fee are additional amounts to be transferred as fees
-- For the number of LP tokens to be burnt, we assume that they are burnt proportional to **assets_out + total_fee**
+Can be used to pause a pool's swap, join and imbalanced-withdraw operations. Normal withdraw operations are not affected by always enabled and cannot be paused by any means.
+Pause can happen on a Pool Type or a Pool ID level. If a pool type is paused, all pools of that type are paused. If a pool ID is paused, only that pool is paused.
 
-### 3. **Swap - Execution Function**
-
-- Vault contract’s **Swap** fn is the only entry point for swapping tokens via any of the dexter’s supported pools.
-- Vault contract queries the specific pool contract from which liquidity is to be routed to get the following information
-  - Number of tokens to be transferred to the user from the Vault and from Vault to the user, this is returned in **trade_params**
-  - The response type :: Success or Failure. This is provided by param **response**
-  - Optional asset (info and amount) to be charged as fee. This is provided by param **fee**
-
-**Fee Calculations -**
-
-- We assume that the asset out amount provided in **trade_params** are the total number of tokens to be transferred to the User and the protocol and developer fee are additional amounts to be transferred as fees and hence are to be additionally subtracted from the pool’s current liquidity balance
-- Pool Liquidity for the ask_asset is updated as following,
-
-**`new_pool_liquidity = old_pool_liquidity - return_amount - protocol_fee - dev_fee`**
-
-`where,`
-
-`old_pool_liquidity: Pool liquidity for ask asset before the swap`
-
-`new_pool_liquidity: Pool liquidity for ask asset after the swap`
-
-`return_amount: Number of ask tokens transferred to the user`
-
-`protocol_fee: protocol fee amount`
-
-`dev_fee; dev fee amount`
-
-- **Stable-5-Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
-- **Weighted Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
-- **XYK Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
-- **Stableswap Pool** returns the number of ask tokens to be transferred to the user and the fee charged in ask_token.
-
-## Contract State
-
-| Message              | Description                                                                                                    |
-| -------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `CONFIG`             | Stores Vault contract's core Configuration parameters in a [`Config`] struct                                   |
-| `REGISTERY`          | Stores configuration data associated with each [`PoolType`] supported by the Vault in a [`PoolConfig`] struct  |
-| `ACTIVE_POOLS`       | Stores current state of each Pool instance identified by its ID supported by the Vault in a [`PoolInfo`] struc |
-| `OWNERSHIP_PROPOSAL` | Ownership Proposal currently active in the Vault in a [`OwnershipProposal`] struc                              |
-| `TMP_POOL_INFO`      | Temporarily stores the PoolInfo of the Pool which is currently being created in a [`PoolInfo`] struc           |
-
----
-
-- **Separating Token Accounting and Pool Logic**
-
-  The Dexter's Vault architecture is inspired by the Balancer's Vault and similarly separates the token accounting and management from the pool logic. This separation simplifies pool contracts, since they no longer need to actively manage their assets; pools only need to calculate amounts for swaps, joins, and exits.
-  This architecture brings different pool designs under the same umbrella; the Vault is agnostic to pool math and can accommodate any system that satisfies a few requirements. Anyone who comes up with a novel idea for a trading system can make a custom pool plugged directly into Dexter's existing liquidity instead of needing to build their own Decentralized Exchange.
-
-- **Security**
-
-  It's crucial to note that the Vault is designed to keep pool balances strictly independent. Maintaining this independence protects from malicious or negligently designed tokens or custom pools from draining funds from any other pools.
-
-## Supported Execute Messages
-
-| Message                             | Description                                                                                                                                                                                                                                             |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ExecuteMsg::UpdateConfig`          | Executable only by `config.owner`. Facilitates updating `config.fee_collector`, `config.generator_address`, `config.lp_token_code_id` parameters.                                                                                                       |
-| `ExecuteMsg::UpdatePoolConfig`      | Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. Facilitates enabling / disabling new pool instances creation (`pool_config.is_disabled`) , and updating Fee (` pool_config.fee_info`) for new pool instances |
-| `ExecuteMsg::AddToRegistery`        | Adds a new pool with a new [`PoolType`] Key.                                                                                                                                                                                                            |
-| `ExecuteMsg::CreatePoolInstance`    | Creates a new pool with the specified parameters in the `asset_infos` variable.                                                                                                                                                                         |
-| `ExecuteMsg::JoinPool`              | Entry point for a user to Join a pool supported by the Vault. User can join by providing the pool id and either the number of assets to be provided or the LP tokens to be minted to the user (as defined by the Pool Contract).                        |
-| `ExecuteMsg::Swap`                  | Entry point for a swap tx between offer and ask assets. The swap request details are passed in [`SingleSwapRequest`] Type parameter.                                                                                                                    |
-| `ExecuteMsg::ProposeNewOwner`       | Creates a new request to change ownership. Only owner can execute it.                                                                                                                                                                                   |
-| `ExecuteMsg::DropOwnershipProposal` | ARemoves a request to change ownership. Only owner can execute it                                                                                                                                                                                       |
-| `ExecuteMsg::ClaimOwnership`        | New owner claims ownership. Only new proposed owner can execute it                                                                                                                                                                                      |
-
-## Supported Query Messages
-
-| Message                                  | Description                                                                                            |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `QueryMsg::Config()`                     | Returns the stored Vault Configuration settings in custom [`ConfigResponse`] structure                 |
-| `QueryMsg::QueryRegistry([`PoolType`])`  | Returns the provided [`PoolType`]'s Configuration settings in custom [`PoolConfigResponse`] structure  |
-| `QueryMsg::GetPoolById([`Uint128`])`     | Returns the current stored state of pool with the provided ID in custom [`PoolInfoResponse`] structure |
-| `QueryMsg::GetPoolByAddress([`String`])` | Returns the current stored state of the Pool in custom [`PoolInfoResponse`] structure                  |
-
-## Instantiate -::- InstantiateMsg
-
-The instantiation message takes in the token code ID (`lp_token_code_id`) for the token type used by Dexter for instantiating LP tokens against supported pool instances. It also takes in address of the `fee_collector` that collects fees for governance, the `owner` address which owns access to the admin priviledges on the Vault contract, the Generator contract address (`generator_address`) and the initial pool types supported by Dexter Vault which are then stored in the REGISTERY.
+**Request Example:**
 
 ```json
 {
-  "lp_token_code_id": 123,
-  "fee_collector": "persistence...",
-  "owner": "persistence...",
-  "generator_address": "persistence...",
-  "pool_configs": "Vec<PoolConfig>"
+  "update_pause_info": {
+    "update_type": {
+        "pool_id": "1",
+    },
+    "pause_info": {
+        "swap": false,
+        "join": true,
+        "imbalanced_withdraw": true
+    }
+  }
 }
 ```
 
-## Execute -::- ExecuteMsg
+#### 2. _**Create Pool Instance**_
 
-### `Receive(Cw20ReceiveMsg)` - Receives LP Tokens when removing Liquidity
+Used to create a pool instance. Pools of only the registered pool types can be created. Currently, Dexter supports following pool types:
+- Weighted
+- Stable
 
-### `UpdateConfig` - Updates contract variables & executable only by `config.owner`, namely the code ID of the token implementation used in dexter, the address that receives governance fees and the Generator contract address.
+Based on the pool type, this function can be configured by the owner to be either be executable by:
+1. Only them
+2. Them and the whitelisted manager address(es)
+3. Anyone
 
+In current Dexter configuration, we give this privilege to the manager role as well which is currently the [Dexter team multisig]().
+
+**Request Example:**
+
+```json
+{
+  "create_pool_instance": {
+    "pool_type": {
+        "weight": {}
+    },
+    "asset_infos": [
+        {
+            "native_token": {
+                "denom": "stk/uxprt"
+            }
+        },
+        {
+            "native_token": {
+                "denom": "uxprt"
+            }
+        }
+    ],
+    "native_asset_precisions": [
+        {
+            "denom": "stk/uxprt",
+            "precision": 6
+        },
+        {
+            "denom": "uxprt",
+            "precision": 6
+        }
+    ],
+    // Optional: Uses pool type's default config if not provided here
+    "fee_info": null,
+    // base64 encoded params to be passed to the pool contract on instantiation
+    "init_params": ""
+  }
+}
+```
+
+
+### Only owner executable
+
+#### 1. _**Update Config**_
+
+Used to update the Vault and Pool admin parameters. Currently, it can be used to update the following parameters:
+- LP Token Code ID. Ideally not used after the initial deployment.
+- Pool creation fee
+- Fee collector address
+- Auto stake implementation address i.e. the address of the contract that implements the auto stake interface. Currently, this is the [Dexter Multi-staking contract]()
+- Pause Info on protocol level i.e. pause all pools
+
+
+Example request
 ```json
 {
   "update_config": {
-    "lp_token_code_id": 123,
-    "fee_collector": "terra...",
-    "generator_address": "terra..."
+    "pool_creation_fee": "disabled",
+    "paused": {
+        "swap": false,
+        "join": true,
+        "imbalanced_withdraw": true
+    }
   }
 }
 ```
 
-### `UpdatePoolConfig` - Executable only by `pool_config.fee_info.developer_addr` or `config.owner` if its not set. Facilitates enabling / disabling new pool instances creation , and updating Fee for new pool instances
+#### 2. _**Add Address to Whitelist**_
 
+Add an address to the manager whitelist.
+
+Example request
 ```json
 {
-  "update_pool_config": {
-    "pool_type": "PoolType",
-    "is_disabled": "Option<bool>",
-    "new_fee_info": "Option<FeeInfo>"
+  "add_address_to_whitelist": {
+    "address": "persistence1..."
   }
 }
 ```
 
-### `AddToRegistery` - Executable only by `config.owner`. Adds a new pool with a new [`PoolType`] Key.
+#### 3. _**Remove Address from Whitelist**_
 
+Remove an address from the manager whitelist.
+
+Example request
 ```json
 {
-  "add_to_registery": {
-    "new_pool_config": "PoolConfig"
+  "remove_address_from_whitelist": {
+    "address": "persistence1..."
   }
 }
 ```
 
-### `CreatePoolInstance` - Creates a new pool with the specified parameters in the `asset_infos` variable.
+#### 4. _**Update Pool Type config**_
 
+Update the pool type config. Currently, it can be used to update the following parameters:
+-**Instantiation config**: Allow the specific pool type to instantiated by anyone or only the owner or the owner and the whitelisted manager address(es) or None.
+-**Fee Info**: Update the fee info for the specific pool type. This fee info is used when a pool of this type is created. It can be updated later on the pool instance level as well.
+-**Paused**: Updated pause config for the pools of this type.
+
+Example request
 ```json
 {
-  "CreatePoolInstance": {
-    "pool_type": "PoolType",
-    "asset_infos": "Vec<AssetInfo>",
-    "lp_token_name": "Option<String>",
-    "lp_token_symbol": "Option<String>",
-    "init_params": "Option<Binary>"
+  "update_pool_type_config": {
+    "pool_type": {
+        "weighted": {}
+    },
+    "allow_instantiation": "OnlyWhitelistedAddresses",
+    "new_fee_info": null,
+    "paused": null
   }
 }
 ```
 
-### `JoinPool` - Entry point for a user to Join a pool supported by the Vault. User needs to approve Vault contract for allowance on the CW20 tokens before calling the JoinPool Function
+#### 5. _**Update Pool Instance Config**_
 
+Update the pool instance config. Currently, it can be used to update the following parameters:
+-**Fee Info**: Update the fee info for the specific pool instance. This fee info is used when a pool of this type is created. It can be updated later on the pool instance level as well.
+-**Paused**: Updated pause config for the specific pool instance.
+
+Example request
 ```json
 {
-  "join_pool": {
-    "pool_id": "Uint128",
-    "recipient": "Option<String>",
-    "assets": " Option<Vec<Asset>>",
-    "lp_to_mint": "Option<Uint128>",
-    "slippage_tolerance": "Option<Decimal>",
-    "auto_stake": "Option<bool>"
+  "update_pool_instance_config": {
+    "pool_id": "1",
+    "fee_info": {
+        "total_fee_bps": 50,
+        "protocol_fee_percent": 30
+    },
+    "paused": null
   }
 }
 ```
+#### 6. _**Propose new owner**_
 
-### `Swap` - Entry point for a swap tx between offer and ask assets. User needs to approve Vault contract for allowance on the CW20 tokens before calling the Swap Function
+Propose a new owner for the contract. This is a two step process. First, the current owner proposes a new owner and then the new owner accepts the proposal. This is done to prevent a situation where the current owner proposes a new owner and then transfers the ownership to someone else without that address (person / entity) having the means to act as a new owner.
 
-```json
-{
-  "swap": {
-    "swap_request": "SingleSwapRequest",
-    "recipient": "Option<String>"
-  }
-}
-```
-
-### `ProposeNewOwner` - Entry point for a swap tx between offer and ask assets.
-
+Example request
 ```json
 {
   "propose_new_owner": {
-    "owner": "String",
-    "expires_in": "u64"
+    "new_owner": "persistence1...",
+    "expires_in": "1000"
   }
 }
 ```
 
-### `DropOwnershipProposal` - Entry point for a swap tx between offer and ask assets.
 
+#### 7. _**Drop ownership proposal**_
+
+Drop the ownership proposal if needed ideally to correct the course of action.
+
+Example request
 ```json
 {
   "drop_ownership_proposal": {}
 }
 ```
 
-### `ClaimOwnership` - Entry point for a swap tx between offer and ask assets.
+### User executable
 
+#### 1. _**Join Pool**_
+
+Join a pool. This can be done by sending the native tokens to the vault contract, or by allowing the CW20 tokens to be spent by the vault contract if they are a part of a pool.
+
+A user can specify following parameters:
+-**Pool ID**: ID of the pool to join
+-**Recipient**: Address to receive the LP tokens. Can be left empty to receive the LP tokens on the sender address.
+-**Assets**: Assets to join the pool with. This can be a mix of CW20 tokens and native tokens. It can also not be all the assets of the pool i.e. an imbalanced add. The specifics on how many LP tokens are minted is dependent on the pool type and specific join mechanism.
+-**Slippage Tolerance (min_lp_to_receive)**: Slippage tolerance for the join operation. This is used to calculate the maximum amount of LP tokens that can be minted for the given assets. If the slippage tolerance is not met, the join operation fails. Can be left empty for no slippage tolerance.
+-**Auto stake**: If the LP tokens should be auto staked or not. Requires the auto stake implementation to be set on the vault contract.
+
+Example request
 ```json
 {
-  "claim_ownership": {}
+  "join_pool": {
+    "pool_id": "1",
+    "assets": [
+        {
+            "amount": "1000000",
+            "info": {
+                "native_token": {
+                    "denom": "uxprt"
+                }
+            }
+        },
+        {
+            "amount": "1000000",
+            "info": {
+                "native_token": {
+                    "denom": "stk/uxprt"
+                }
+            }
+        }
+    ],
+    "min_lp_to_receive": null,
+    "auto_stake": true,
+    "recipient": null
+  }
 }
 ```
 
-## Execute -::- Cw20HookMsg
+#### 2. _**Swap**_
 
-### `ExitPool` - Withdrawing liquidity from the pool identified by `pool_id`
+Swap assets using a pool. This can be done by sending the native tokens to the vault contract, or by allowing the CW20 tokens to be spent by the vault contract if they are a part of a pool.
 
+Following parameters can be specified:
+-**Swap Request**: Swap request to be executed. Refer to the [swap request](#swap-request) section for more details.
+-**Recipient**: Address to receive the swapped assets. Can be left empty to receive the swapped assets on the sender address.
+-**Slippage Tolerance (min_receive)**: Slippage tolerance for the `GiveIn` swap operation. This is to control minimum expected amount of assets to be received. If the slippage tolerance is not met, the swap operation fails. Can be left empty for no slippage tolerance.
+-**Slippage Tolerance (max spend)**: Slippage tolerance for the `GiveOut` swap operation. This is to control maximum expected amount of assets to be spent. If the slippage tolerance is not met, the swap operation fails. Can be left empty for no slippage tolerance. Rest of the assets are returned to the sender address.
+
+Example request
+```json
+{
+  "swap": {
+    "swap_request": {
+        "pool_id": "1",
+        "asset_in": {
+            "native_token": {
+                "denom": "uxprt"
+            }
+        },
+        "asset_out": {
+            "native_token": {
+                "denom": "stk/uxprt"
+            }
+        },
+        "swap_type": {
+            "GiveIn": {}
+        },
+        "amount": "1000000",
+        "max_spread": null,
+        "belief_price": null
+    },
+    "min_receive": null,
+    "max_spend": null,
+    "recipient": null
+  }
+}
+```
+
+#### 3. _**Exit Pool**_
+
+Exiting a pool happens via a CW20 Send hook msg to transfer ownership of the LP tokens to the vault contract. The vault contract then burns the required LP tokens and sends the assets to the recipient address. If there are any extra LP tokens left, based on the exit type, they are sent back to the sender address.
+
+Parameters for this operation are:
+-**Pool ID**: ID of the pool to exit
+-**Recipient**: Address to receive the swapped assets. Can be left empty to receive the swapped assets on the sender address.
+-**Exit Type**: Type of exit to perform. Can be one of the following:
+    -**Exact LP Burn**: Burn the exact amount of LP tokens and send the assets to the recipient address. A user can specify the minimum amount of assets to receive as well to control the slippage tolerance. The assets received are in the pool ratio.
+    -**Exact Assets Out**: Burn the exact amount of assets specified and deduct the corresponding representative LP tokens from the user. Can be used for an imbalanced withdraw. Slippage tolerance is controlled by the user by specifying the maximum amount of LP tokens to burn. Rest of the LP tokens are sent back to the sender address.
+
+Example request
 ```json
 {
   "exit_pool": {
-    "pool_id": "Uint128",
-    "recipient": "Option<String>",
-    "assets": "Option<Vec<Asset>>",
-    "burn_amount": "Option<Uint128>"
+    "pool_id": "1",
+    "exit_type": {
+        "ExactLPBurn": {
+            "lp_to_burn": "1000000",
+            "min_asset_amounts": [
+                {
+                    "amount": "1000000",
+                    "info": {
+                        "native_token": {
+                            "denom": "uxprt"
+                        }
+                    }
+                },
+                {
+                    "amount": "1000000",
+                    "info": {
+                        "native_token": {
+                            "denom": "stk/uxprt"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "recipient": null
   }
 }
 ```
 
-## Query -::- QueryMsg
+## Supported Queries
 
-### `Config` -Config returns controls settings that specified in custom [`ConfigResponse`] structure
+### 1. _**Config**_
+
+Get the current config of the vault contract. This includes the following parameters:
+- **LP Token Code ID**: Code ID of the LP token contract. This is used to create new LP tokens for new pools. Ideally not updated post initial deployment
+- **Fee Collector Address**: Address of the contract which collects fees. Currently, the Dexter keeper contract
+- **Pool Creation Fee**: Fee in the specified denom for creating a new pool. This is used to prevent spamming of the pool creation feature.
+- **Auto-stake implementation**: Address of the contract which implements the auto-stake feature. Currently, the Dexter multistaking contract
+- **Whitelisted managers**: List of addresses which currently have the manager role
+- **Global Pause Info**: Pause configuration for the protocol. This is used to pause/unpause specific operations for the entire protocol. It overrides the pause configuration on the pool type and pool level i.e. if some operation is paused on a protocol level, it cannot be unpaused on a pool type or pool level.
+
+### 2. _**Query Registry**_
+
+Get pool type config present in the registry for a pool type that's registered on the vault contract. 
+
+#### Request
 
 ```json
 {
-  "config": {}
-}
-```
-
-### `QueryRigistery` -Config returns controls settings that specified in custom [`ConfigResponse`] structure
-
-```json
-{
-  "query_registery": {
-    "pool_type": "PoolType"
+  "query_registry": {
+    "pool_type": {
+        "weighted": {}
+    }
   }
 }
 ```
 
-### `GetPoolById` -Config returns controls settings that specified in custom [`ConfigResponse`] structure
+#### Response
+
+```json
+{
+  "code_id": "3",
+  "pool_type": {
+    "weighted": {}
+  },
+  "default_fee_info": {
+    "total_fee_bps": 30,
+    "protocol_fee_percent": 30
+  },
+  "allow_instantiation": "OnlyWhitelistedAddresses",
+  "paused": {
+    "swap": false,
+    "join": false,
+    "imbalanced_withdraw": true
+  }
+}
+```
+
+### 3. _**Get Pool by ID**_
+
+Get the pool config for a pool ID.
+
+#### Request
 
 ```json
 {
   "get_pool_by_id": {
-    "pool_id": "Uint128"
+    "pool_id": "1"
   }
 }
 ```
 
-### `GetPoolByAddress` -Config returns controls settings that specified in custom [`ConfigResponse`] structure
+#### Response
+
+```json
+{
+  "pool_id": "1",
+  "pool_type": {
+    "weighted": {}
+  },
+  "pool_addr": "persistence1...",
+  "lp_token_addr": "persistence1...",
+  "fee_info": {
+    "total_fee_bps": 30,
+    "protocol_fee_percent": 30
+  },
+  "assets": [
+    {
+      "amount": "1000000",
+      "info": {
+        "native_token": {
+          "denom": "uxprt"
+        }
+      }
+    },
+    {
+      "amount": "1000000",
+      "info": {
+        "native_token": {
+          "denom": "stk/uxprt"
+        }
+      }
+    }
+  ],
+  "paused": {
+    "swap": false,
+    "join": false,
+    "imbalanced_withdraw": true
+  }
+}
+  
+```
+
+### 4. _**Get Pool by Address**_
+
+Get the pool config for a pool address.
+
+#### Request
 
 ```json
 {
   "get_pool_by_address": {
-    "pool_addr": "String"
+    "pool_addr": "persistence1..."
   }
 }
 ```
 
-## Enums & Structs
+#### Response
 
-### `PoolType` enum - This enum describes the key for the different Pool types supported by Dexter
+same as above
 
-```
-enum PoolType {
-    Xyk {},
-    Stable2Pool {},
-    Stable3Pool {},
-    Weighted {},
-    Custom(String),
+### 5. _**Get Pool by LP Token Address**_
+
+Get the pool config for a LP token address.
+
+#### Request
+
+```json
+{
+  "get_pool_by_lp_token_address": {
+    "lp_token_addr": "persistence1..."
+  }
 }
 ```
 
-- New Pool Types can be added via using the PoolType::Custom(String) type.
+#### Response
 
-### `SwapType` enum - This enum describes available Swap types.
-
-```
-enum SwapType {
-    GiveIn {},
-    GiveOut {},
-    Custom(String),
-}
-```
-
-- New Pools can support custom swap types based on math compute logic they want to execute
-
-### `FeeInfo` struct - This struct describes the Fee configuration supported by a particular pool type.
-
-```
-struct FeeInfo {
-    swap_fee_dir: SwapType,
-    total_fee_bps: u16,
-    protocol_fee_percent: u16,
-    dev_fee_percent: u16,
-    developer_addr: Option<Addr>,
-}
-```
-
-### `Config` struct - This struct describes the main control config of Vault.
-
-```
-struct Config {
-    /// The Contract address that used for controls settings for factory, pools and tokenomics contracts
-    owner: Addr,
-    /// The Contract ID that is used for instantiating LP tokens for new pools
-    lp_token_code_id: u64,
-    /// The contract address to which protocol fees are sent
-    fee_collector: Option<Addr>,
-    /// The contract where users can stake LP tokens for 3rd party rewards. Used for `auto-stake` feature
-    generator_address: Option<Addr>,
-    /// The next pool ID to be used for creating new pools
-    next_pool_id: Uint128,
-}
-```
-
-### `PoolConfig` struct - This struct stores a pool type's configuration.
-
-```
-struct PoolConfig {
-    /// ID of contract which is used to create pools of this type
-    code_id: u64,
-    /// The pools type (provided in a [`PoolType`])
-    pool_type: PoolType,
-    fee_info: FeeInfo,
-    /// Whether a pool type is disabled or not. If it is disabled, new pools cannot be
-    /// created, but existing ones can still read the pool configuration
-    is_disabled: bool,
-    /// Setting this to true means that pools of this type will not be able
-    /// to get added to generator
-    is_generator_disabled: bool
-}
-```
-
-### `PoolInfo` struct - This struct stores a pool type's configuration.
-
-```
-struct PoolInfo {
-    /// ID of contract which is allowed to create pools of this type
-    pool_id: Uint128,
-    /// Address of the Pool Contract
-    pool_addr: Option<Addr>,
-    /// Address of the LP Token Contract
-    lp_token_addr: Option<Addr>,
-    /// Assets and their respective balances
-    assets: Vec<Asset>,
-    /// The pools type (provided in a [`PoolType`])
-    pool_type: PoolType,
-    /// The address to which the collected developer fee is transferred
-    developer_addr: Option<Addr>,
-}
-```
-
-### `SingleSwapRequest` struct - This struct stores a pool type's configuration.
-
-```
-struct SingleSwapRequest {
-    pool_id: Uint128,
-    asset_in: AssetInfo,
-    asset_out: AssetInfo,
-    swap_type: SwapType,
-    amount: Uint128,
-    max_spread: Option<Decimal>,
-    belief_price: Option<Decimal>,
-}
-```
-
-## Build schema and run unit-tests
-
-```
-cargo schema
-cargo test
-```
-
-## License
-
-TBD
+same as above
