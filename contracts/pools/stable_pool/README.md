@@ -413,7 +413,9 @@ The expected swap response has the following fields. It contains the following f
                 "denom": "stk/uxprt"
             }
         },
-        "swap_type": "GiveIn",
+        "swap_type": {
+            "give_in": {}
+        },
         "amount": "100000000",
         "max_spread": "0.02",
         "belief_price": "0.8"
