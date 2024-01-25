@@ -351,12 +351,12 @@ Example request
 ### 1. _**Config**_
 
 Get the current config of the vault contract. This includes the following parameters:
--**LP Token Code ID**: Code ID of the LP token contract. This is used to create new LP tokens for new pools. Ideally not updated post initial deployment
--**Fee Collector Address**: Address of the contract which collects fees. Currently, the Dexter keeper contract
--**Pool Creation Fee**: Fee in the specified denom for creating a new pool. This is used to prevent spamming of the pool creation feature.
--**Auto-stake implementation**: Address of the contract which implements the auto-stake feature. Currently, the Dexter multistaking contract
--**Whitelisted managers**: List of addresses which currently have the manager role
--**Global Pause Info**: Pause configuration for the protocol. This is used to pause/unpause specific operations for the entire protocol. It overrides the pause configuration on the pool type and pool level i.e. if some operation is paused on a protocol level, it cannot be unpaused on a pool type or pool level.
+- **LP Token Code ID**: Code ID of the LP token contract. This is used to create new LP tokens for new pools. Ideally not updated post initial deployment
+- **Fee Collector Address**: Address of the contract which collects fees. Currently, the Dexter keeper contract
+- **Pool Creation Fee**: Fee in the specified denom for creating a new pool. This is used to prevent spamming of the pool creation feature.
+- **Auto-stake implementation**: Address of the contract which implements the auto-stake feature. Currently, the Dexter multistaking contract
+- **Whitelisted managers**: List of addresses which currently have the manager role
+- **Global Pause Info**: Pause configuration for the protocol. This is used to pause/unpause specific operations for the entire protocol. It overrides the pause configuration on the pool type and pool level i.e. if some operation is paused on a protocol level, it cannot be unpaused on a pool type or pool level.
 
 ### 2. _**Query Registry**_
 
