@@ -1,12 +1,12 @@
 [package]
 name = "dexter"
-version = "1.0.0"
-authors = ["AstroTechLabs"]
+version = "1.1.0"
+authors = ["Persistence Labs"]
 edition = "2021"
-description = "DEX on Persistence tendermint chain"
-repository = "https://github.com/persistenceOne/dexter"
+description = "Dex optimized for liquid staked assets"
+repository = "https://github.com/dexter-zone/dexter_core"
+license = "MIT OR Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 # for quicker tests, cargo test --lib
