@@ -242,6 +242,8 @@ fn update_config(
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     if let Some(keeper_addr) = keeper_addr {
+        // validate
+        deps.api.addr_validate(&keeper_addr.to_string())?;
         config.keeper = keeper_addr.clone();
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
     }
@@ -1257,7 +1259,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    keeper: keeper_addr,
+                    keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                     unbond_config: UnbondConfig { 
                         unlock_period: config_v2.unlock_period, 
                         instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
