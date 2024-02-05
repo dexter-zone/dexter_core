@@ -3,7 +3,7 @@ use crate::{
     state::{LP_OVERRIDE_CONFIG, USER_LP_TOKEN_LOCKS},
 };
 use const_format::concatcp;
-use cosmwasm_std::{Addr, DepsMut, Env, Event, MessageInfo, Response, Uint128};
+use cosmwasm_std::{Addr, Decimal, DepsMut, Env, Event, MessageInfo, Response, Uint128};
 
 use dexter::{
     asset::AssetInfo,
@@ -88,7 +88,9 @@ pub fn instant_unbond(
     )?;
 
     // whole instant unbond fee is sent to the keeper as protocol treasury
-    let instant_unbond_fee = amount.multiply_ratio(instant_unbond_fee_bp, Uint128::from(10000u128));
+    let instant_unbond_fee = amount
+        .checked_mul_ceil(Decimal::from_ratio(instant_unbond_fee_bp, 10000u64))
+        .map_err(|err| ContractError::CheckedMultiplyFractionError(err))?;
 
     // Check if the keeper is available, if not, send the fee to the contract owner
     let fee_receiver = config.keeper;

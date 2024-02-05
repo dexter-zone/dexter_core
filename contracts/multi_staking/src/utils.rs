@@ -1,7 +1,7 @@
-use cosmwasm_std::Uint128;
+use cosmwasm_std::{Decimal, Uint128};
 use dexter::multi_staking::{InstantUnbondConfig, TokenLock, UnbondConfig};
 
-use crate::{query::query_instant_unlock_fee_tiers, error::ContractError};
+use crate::{error::ContractError, query::query_instant_unlock_fee_tiers};
 
 /// Find the difference between two lock vectors.
 /// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
@@ -66,9 +66,7 @@ pub fn calculate_unlock_fee(
 
     // check if ILPU is enabled
     match unbond_config.instant_unbond_config {
-        InstantUnbondConfig::Disabled => {
-            Err(ContractError::InstantUnbondDisabled {})
-        }
+        InstantUnbondConfig::Disabled => Err(ContractError::InstantUnbondDisabled {}),
         InstantUnbondConfig::Enabled {
             min_fee: _,
             max_fee,
@@ -90,7 +88,10 @@ pub fn calculate_unlock_fee(
                 }
             }
 
-            let fee = token_lock.amount.multiply_ratio(fee_bp, 10000u64);
+            let fee = token_lock
+                .amount
+                .checked_mul_ceil(Decimal::from_ratio(fee_bp, 10000u64))
+                .map_err(|err| ContractError::CheckedMultiplyFractionError(err))?;
             Ok((fee_bp, fee))
         }
     }

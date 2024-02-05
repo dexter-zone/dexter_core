@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError, Uint128};
+use cosmwasm_std::{CheckedMultiplyFractionError, OverflowError, StdError, Uint128};
 use dexter::multi_staking::UnbondConfigValidationError;
 use thiserror::Error;
 
@@ -6,6 +6,9 @@ use thiserror::Error;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("Checked multiply fraction error: {0}")]
+    CheckedMultiplyFractionError(CheckedMultiplyFractionError),
 
     #[error("Unauthorized")]
     Unauthorized,
@@ -123,7 +126,7 @@ pub enum ContractError {
     InstantUnbondDisabled,
 
     #[error("Invalid unbond config. Error: {error}")]
-    InvalidUnbondConfig { error: UnbondConfigValidationError  },
+    InvalidUnbondConfig { error: UnbondConfigValidationError },
 }
 
 impl From<OverflowError> for ContractError {
