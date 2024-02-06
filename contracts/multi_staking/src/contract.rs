@@ -143,10 +143,13 @@ pub fn execute(
                 None => info.sender.clone(),
             };
 
+            let sender = info.sender.clone();
+
             create_reward_schedule(
                 deps,
                 env,
                 info,
+                sender,
                 lp_token,
                 title,
                 start_block_time,
@@ -496,7 +499,8 @@ fn remove_lp_token(
 pub fn create_reward_schedule(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
+    sender: Addr,
     lp_token: Addr,
     title: String,
     start_block_time: u64,
@@ -520,9 +524,6 @@ pub fn create_reward_schedule(
             current_block_time: env.block.time.seconds(),
         });
     }
-
-    // still need to check as an LP token might have been removed after the reward schedule was proposed
-    check_if_lp_token_allowed(&config, &lp_token)?;
 
     let mut lp_global_state = LP_GLOBAL_STATE
         .may_load(deps.storage, &lp_token)?
@@ -564,7 +565,7 @@ pub fn create_reward_schedule(
     Ok(Response::new().add_event(
         Event::from_sender(
             concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
-            &info.sender,
+            &sender,
         )
         .add_attribute("creator", creator.to_string())
         .add_attribute("lp_token", lp_token.to_string())
@@ -611,7 +612,8 @@ pub fn receive_cw20(
         } => {
             // only owner can create reward schedule
             let config = CONFIG.load(deps.storage)?;
-            if cw20_msg.sender != config.owner {
+            let sender = deps.api.addr_validate(&cw20_msg.sender)?;
+            if sender != config.owner {
                 return Err(ContractError::Unauthorized);
             }
 
@@ -619,13 +621,14 @@ pub fn receive_cw20(
 
             let creator = match actual_creator {
                 Some(creator) => deps.api.addr_validate(&creator.to_string())?,
-                None => deps.api.addr_validate(&cw20_msg.sender)?,
+                None => sender.clone(),
             };
 
             create_reward_schedule(
                 deps,
                 env,
                 info,
+                sender,
                 lp_token,
                 title,
                 start_block_time,
@@ -1235,7 +1238,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
         MigrateMsg::V3_1FromV2 { keeper_addr } => {
             let contract_version = get_contract_version(deps.storage)?;
             // if version is v2 or v2.1, apply the changes.
-
             if contract_version.version == CONTRACT_VERSION_V2
                 || contract_version.version == CONTRACT_VERSION_V2_1
             {
@@ -1270,7 +1272,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
 
         MigrateMsg::V3_1FromV2_2 {} => {
             let contract_version = get_contract_version(deps.storage)?;
-            // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V2_2 {
                 let config_v2: ConfigV2_2 = Item::new("config").load(deps.storage)?;
                 let unbond_config = UnbondConfig {
@@ -1305,7 +1306,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
 
         MigrateMsg::V3_1FromV3 {} => {
             let contract_version = get_contract_version(deps.storage)?;
-            // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V3 {
                 let config_v3: ConfigV3 = Item::new("config").load(deps.storage)?;
                 let unbond_config = UnbondConfig {
