@@ -27,16 +27,15 @@ use cw_storage_plus::Item;
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP,
+    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS,
 };
 
 use crate::{
-    error::ContractError,
-    state::{
+    error::ContractError, state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
         CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
         OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS, LP_OVERRIDE_CONFIG,
-    },
+    }
 };
 use crate::{
     execute::{
@@ -1208,44 +1207,24 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 });
             }
 
-            // validate input for upgrade
-            if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-                return Err(ContractError::InvalidInstantUnbondFee {
-                    max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-                    received: instant_unbond_fee_bp,
-                });
-            }
-
-            if instant_unbond_min_fee_bp > instant_unbond_fee_bp {
-                return Err(ContractError::InvalidInstantUnbondMinFee {
-                    max_allowed: instant_unbond_fee_bp,
-                    received: instant_unbond_min_fee_bp,
-                });
-            }
-
             let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
 
-            // valiate fee tier interval
-            if fee_tier_interval > config_v1.unlock_period {
-                return Err(ContractError::InvalidFeeTierInterval {
-                    max_allowed: config_v1.unlock_period,
-                    received: fee_tier_interval,
-                });
-            }
+            let unbond_config = UnbondConfig { 
+                unlock_period: config_v1.unlock_period, 
+                instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                    min_fee: instant_unbond_min_fee_bp,
+                    max_fee: instant_unbond_fee_bp, 
+                    fee_tier_interval 
+                }
+            };
+            unbond_config.validate()?;
 
             // copy fields from v1 to v2
             let config = Config {
                 owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
                 keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                unbond_config: UnbondConfig { 
-                    unlock_period: config_v1.unlock_period, 
-                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
-                        min_fee: instant_unbond_min_fee_bp,
-                        max_fee: instant_unbond_fee_bp, 
-                        fee_tier_interval 
-                    }
-                }
+                unbond_config
             };
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -1254,20 +1233,24 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
         MigrateMsg::V3_1FromV2 { keeper_addr } => {
             let contract_version = get_contract_version(deps.storage)?;
             // if version is v2 or v2.1, apply the changes.
+            
             if contract_version.version == CONTRACT_VERSION_V2 || contract_version.version == CONTRACT_VERSION_V2_1 {
                 let config_v2: ConfigV2_1 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig { 
+                    unlock_period: config_v2.unlock_period, 
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                        min_fee: config_v2.instant_unbond_min_fee_bp,
+                        max_fee: config_v2.instant_unbond_fee_bp, 
+                        fee_tier_interval: config_v2.fee_tier_interval 
+                    } 
+                };
+                unbond_config.validate()?;
+
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
                     keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                    unbond_config: UnbondConfig { 
-                        unlock_period: config_v2.unlock_period, 
-                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
-                            min_fee: config_v2.instant_unbond_min_fee_bp,
-                            max_fee: config_v2.instant_unbond_fee_bp, 
-                            fee_tier_interval: config_v2.fee_tier_interval 
-                        } 
-                    }
+                    unbond_config
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1286,18 +1269,21 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V2_2 {
                 let config_v2: ConfigV2_2 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig { 
+                    unlock_period: config_v2.unlock_period, 
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                        min_fee: config_v2.instant_unbond_min_fee_bp,
+                        max_fee: config_v2.instant_unbond_fee_bp, 
+                        fee_tier_interval: config_v2.fee_tier_interval 
+                    } 
+                };
+                unbond_config.validate()?;
+
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
                     keeper: config_v2.keeper,
-                    unbond_config: UnbondConfig { 
-                        unlock_period: config_v2.unlock_period, 
-                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
-                            min_fee: config_v2.instant_unbond_min_fee_bp,
-                            max_fee: config_v2.instant_unbond_fee_bp, 
-                            fee_tier_interval: config_v2.fee_tier_interval 
-                        } 
-                    }
+                    unbond_config
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1319,18 +1305,21 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V3 {
                 let config_v3: ConfigV3 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig { 
+                    unlock_period: config_v3.unlock_period, 
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                        min_fee: config_v3.instant_unbond_min_fee_bp,
+                        max_fee: config_v3.instant_unbond_fee_bp, 
+                        fee_tier_interval: config_v3.fee_tier_interval 
+                    } 
+                };
+                unbond_config.validate()?;
+
                 let config = Config {
                     owner: config_v3.owner,
                     allowed_lp_tokens: config_v3.allowed_lp_tokens,
                     keeper: config_v3.keeper,
-                    unbond_config: UnbondConfig { 
-                        unlock_period: config_v3.unlock_period, 
-                        instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
-                            min_fee: config_v3.instant_unbond_min_fee_bp,
-                            max_fee: config_v3.instant_unbond_fee_bp, 
-                            fee_tier_interval: config_v3.fee_tier_interval 
-                        } 
-                    }
+                    unbond_config
                 };
 
                 CONFIG.save(deps.storage, &config)?;
