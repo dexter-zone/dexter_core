@@ -6,11 +6,7 @@ use dexter::{
 };
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token,
-    create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
-    mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
-    query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens,
-    unlock_lp_tokens, withdraw_unclaimed_rewards,
+    assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token, create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr, mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks, query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens, whitelist_cw20_token_for_rewards, withdraw_unclaimed_rewards
 };
 pub mod utils;
 
@@ -1007,6 +1003,31 @@ fn test_create_cw20_reward_schedule() {
     );
 
     // create a reward schedule
+    let result = create_reward_schedule(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &lp_token_addr,
+        "CW20 reward schedule".to_string(),
+        AssetInfo::Token {
+            contract_addr: cw20_token_addr.clone(),
+        },
+        Uint128::from(100_000_000u64),
+        1000_301_000,
+        1000_302_000,
+    );
+
+    assert!(result.is_err());
+
+    // whitelist cw20 token for rewards
+    whitelist_cw20_token_for_rewards(
+        &mut app,
+        &admin_addr,
+        &multi_staking_instance,
+        &cw20_token_addr,
+    );
+
+    // create again 
     let result = create_reward_schedule(
         &mut app,
         &admin_addr,

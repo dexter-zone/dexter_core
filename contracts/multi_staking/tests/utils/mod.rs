@@ -302,6 +302,23 @@ pub fn mint_lp_tokens_to_addr(
     .unwrap();
 }
 
+pub fn whitelist_cw20_token_for_rewards(
+    app: &mut App,
+    admin_addr: &Addr,
+    multistaking_contract: &Addr,
+    cw20_addr: &Addr,
+) {
+    app.execute_contract(
+        admin_addr.clone(),
+        multistaking_contract.clone(),
+        &ExecuteMsg::AllowRewardCw20Token {
+            addr: cw20_addr.clone(),
+        },
+        &vec![],
+    )
+    .unwrap();
+}
+
 pub fn mint_cw20_tokens_to_addr(
     app: &mut App,
     admin_addr: &Addr,
