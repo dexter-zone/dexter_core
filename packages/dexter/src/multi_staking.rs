@@ -105,6 +105,9 @@ pub struct Config {
     pub keeper: Addr,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
+    /// Allowed CW20 tokens for rewards. This is to control the abuse from a malicious CW20 token to create
+    ///  unnecessary reward schedules
+    pub allowed_reward_cw20_tokens: Vec<Addr>,
     /// Default unbond config
     pub unbond_config: UnbondConfig
 }
@@ -401,6 +404,14 @@ pub enum ExecuteMsg {
     /// Existing reward schedules for the LP token will still be valid.
     RemoveLpToken {
         lp_token: Addr,
+    },
+    /// Add reward CW20 token to the list of allowed reward tokens
+    AllowRewardCw20Token {
+        addr: Addr
+    },
+    /// Remove reward CW20 token from the list of allowed reward tokens
+    RemoveRewardCw20Token {
+        addr: Addr,
     },
     /// Allows the contract to receive CW20 tokens.
     /// The contract can receive CW20 tokens from LP tokens for staking and 

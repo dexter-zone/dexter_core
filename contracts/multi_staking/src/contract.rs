@@ -80,6 +80,7 @@ pub fn instantiate(
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
             unbond_config: msg.unbond_config.clone(),
+            allowed_reward_cw20_tokens: vec![],
         },
     )?;
 
@@ -187,6 +188,29 @@ pub fn execute(
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
         }
+        ExecuteMsg::AllowRewardCw20Token { addr } => {
+            let mut config = CONFIG.load(deps.storage)?;
+            if config.allowed_reward_cw20_tokens.contains(&addr) {
+                return Err(ContractError::Cw20TokenAlreadyAllowed);
+            }
+            config.allowed_reward_cw20_tokens.push(addr.clone());
+            CONFIG.save(deps.storage, &config)?;
+
+            Ok(Response::new().add_event(
+                Event::from_info(concatcp!(CONTRACT_NAME, "::allow_reward_cw20_token"), &info)
+                    .add_attribute("cw20_token", addr.to_string()),
+            ))
+        },
+        ExecuteMsg::RemoveRewardCw20Token { addr } => {
+            let mut config = CONFIG.load(deps.storage)?;
+            config.allowed_reward_cw20_tokens.retain(|x| x != &addr);
+            CONFIG.save(deps.storage, &config)?;
+
+            Ok(Response::new().add_event(
+                Event::from_info(concatcp!(CONTRACT_NAME, "::remove_reward_cw20_token"), &info)
+                    .add_attribute("cw20_token", addr.to_string()),
+            ))
+        },
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
             let response = propose_new_owner(
@@ -618,6 +642,11 @@ pub fn receive_cw20(
             }
 
             let token_addr = info.sender.clone();
+
+            // validate that the CW20 token is allowed for rewards
+            if !config.allowed_reward_cw20_tokens.contains(&token_addr) {
+                return Err(ContractError::Cw20TokenNotAllowed);
+            }
 
             let creator = match actual_creator {
                 Some(creator) => deps.api.addr_validate(&creator.to_string())?,
@@ -1230,6 +1259,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
                 keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                 unbond_config,
+                allowed_reward_cw20_tokens: vec![],
             };
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -1257,6 +1287,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
                     keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
                     unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1289,6 +1320,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
                     keeper: config_v2.keeper,
                     unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1323,6 +1355,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                     allowed_lp_tokens: config_v3.allowed_lp_tokens,
                     keeper: config_v3.keeper,
                     unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
                 };
 
                 CONFIG.save(deps.storage, &config)?;

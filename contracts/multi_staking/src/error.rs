@@ -118,6 +118,12 @@ pub enum ContractError {
 
     #[error("Invalid unbond config. Error: {error}")]
     InvalidUnbondConfig { error: UnbondConfigValidationError },
+
+    #[error("CW20 Token is already allowed as a reward asset")]
+    Cw20TokenAlreadyAllowed,
+
+    #[error("This CW20 Token is not allowed as a reward asset")]
+    Cw20TokenNotAllowed,
 }
 
 impl From<OverflowError> for ContractError {
