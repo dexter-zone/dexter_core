@@ -42,7 +42,6 @@ fn test_instant_unbond_and_unlock() {
         multi_staking_code_id,
         admin_addr.clone(),
         keeper_addr.clone(),
-        0u64,
         600u64,
         200u64,
         500u64,

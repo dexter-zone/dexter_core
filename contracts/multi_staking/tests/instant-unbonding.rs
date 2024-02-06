@@ -28,7 +28,6 @@ fn validate_fee_tier_logic() {
         &mut app,
         admin_addr.clone(),
         keeper_addr.clone(),
-        0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
         300,
@@ -133,7 +132,6 @@ fn test_instant_unbond_and_unlock() {
         &mut app,
         admin_addr.clone(),
         keeper_addr.clone(),
-        0,
         // 80 minutes less than 7 days. We should still have 7 tiers
         600_000,
         300,

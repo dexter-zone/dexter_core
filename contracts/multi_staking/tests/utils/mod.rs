@@ -28,7 +28,6 @@ pub fn instantiate_multi_staking_contract(
     code_id: u64,
     admin: Addr,
     keeper_addr: Addr,
-    minimum_reward_schedule_proposal_start_delay: u64,
     unlock_period: u64,
     instant_unbond_min_fee_bp: u64,
     instant_unbond_max_fee_bp: u64,
@@ -37,8 +36,6 @@ pub fn instantiate_multi_staking_contract(
     let instantiate_msg = InstantiateMsg {
         owner: admin.clone(),
         keeper_addr,
-        // 3 day delay
-        minimum_reward_schedule_proposal_start_delay,
         unbond_config: UnbondConfig {
             unlock_period,
             instant_unbond_config: InstantUnbondConfig::Enabled {
@@ -151,7 +148,6 @@ pub fn setup_generic(
     app: &mut App,
     admin_addr: Addr,
     keeper_addr: Addr,
-    minimum_reward_schedule_proposal_start_delay: u64,
     unlock_time: u64,
     unbond_fee_min_bp: u64,
     unbond_fee_max_bp: u64,
@@ -163,7 +159,6 @@ pub fn setup_generic(
         multi_staking_code_id,
         admin_addr.clone(),
         keeper_addr,
-        minimum_reward_schedule_proposal_start_delay,
         unlock_time,
         unbond_fee_min_bp,
         unbond_fee_max_bp,
@@ -200,7 +195,6 @@ pub fn setup(app: &mut App, admin_addr: Addr) -> (Addr, Addr) {
         app,
         admin_addr,
         keeper_addr,
-        3 * 24 * 60 * 60,
         // 7 days
         7 * 24 * 60 * 60,
         200,

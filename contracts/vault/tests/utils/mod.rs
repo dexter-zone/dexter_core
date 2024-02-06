@@ -138,7 +138,6 @@ pub fn initialize_multistaking_contract(
     let multistaking_init_msg = dexter::multi_staking::InstantiateMsg {
         owner: owner.clone(),
         keeper_addr: keeper.clone(),
-        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
         unbond_config: dexter::multi_staking::UnbondConfig {
             instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
                 min_fee: 200u64,

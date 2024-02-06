@@ -193,7 +193,6 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
     let multi_staking_instantiate = dexter::multi_staking::InstantiateMsg {
         owner: Addr::unchecked(gov_admin_instance.clone()),
         keeper_addr: Addr::unchecked(gov_admin_instance.clone()),
-        minimum_reward_schedule_proposal_start_delay: 0,
         unbond_config: dexter::multi_staking::UnbondConfig {
             unlock_period: 86400u64,
             instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {

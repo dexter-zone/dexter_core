@@ -20,7 +20,6 @@ pub const MAX_INSTANT_UNBOND_FEE_BP: u64 = 1000;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Addr,
-    pub minimum_reward_schedule_proposal_start_delay: u64,
     pub keeper_addr: Addr,
     pub unbond_config: UnbondConfig,
 }

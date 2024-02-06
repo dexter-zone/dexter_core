@@ -35,7 +35,6 @@ fn test_staking() {
         &mut app,
         admin_addr.clone(),
         keeper_addr,
-        3 * 24 * 60 * 60,
         1000,
         200,
         500,
