@@ -1,4 +1,4 @@
-use std::fmt::{Formatter, Display, self};
+use std::fmt::{self, Display, Formatter};
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, CosmosMsg, Uint128};
@@ -115,6 +115,10 @@ impl RewardSchedulesCreationRequestStatus {
             RewardSchedulesCreationRequestStatus::RequestFailedAndRefunded {
                 proposal_id, ..
             } => Some(*proposal_id),
+            RewardSchedulesCreationRequestStatus::RequestSuccessfulAndDepositRefunded {
+                proposal_id,
+                ..
+            } => Some(*proposal_id),
             _ => None,
         }
     }
@@ -174,10 +178,10 @@ impl Display for RefundReason {
             }
             RefundReason::ProposalRejectedFullRefund => {
                 write!(f, "ProposalRejectedFullRefund")
-            },
+            }
             RefundReason::ProposalVetoedRefundExceptDeposit => {
                 write!(f, "ProposalVetoedRefundExceptDeposit")
-            },
+            }
             RefundReason::ProposalFailedFullRefund => {
                 write!(f, "ProposalFailedFullRefund")
             }

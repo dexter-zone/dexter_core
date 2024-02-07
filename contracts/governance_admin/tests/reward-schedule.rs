@@ -584,6 +584,17 @@ impl<'a> RewardScheduleTestSuite<'a> {
                 refund_block_height: self.persistence.get_block_height() as u64,
             }
         );
+
+        // try claiming refund again, it should fail
+        let res = self.claim_refund(reward_schedule_request_id);
+        assert!(res.is_err());
+        let error = res.unwrap_err();
+        let expected_err = format!(
+            "execute error: failed to execute message; message index: 0: Funds already claimed for this request at block height: {}: execute wasm contract failed",
+            self.persistence.get_block_height() - 1,
+        );
+
+        assert_eq!(error.to_string(), expected_err);
     }
 
     fn allow_lp_token(&self) {
@@ -719,7 +730,10 @@ fn create_pool(gov_admin_test_setup: &GovAdminTestSetup, asset_infos: Vec<AssetI
         .execute(
             &gov_admin_test_setup.vault_instance.to_string(),
             &create_pool_msg,
-            &vec![],
+            &vec![
+                // Pool creation fee
+                Coin::new(10000000, "uxprt"),
+            ],
             &user,
         )
         .unwrap();
