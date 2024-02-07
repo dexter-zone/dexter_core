@@ -23,7 +23,7 @@ use cosmwasm_std::{
     entry_point, to_json_binary, Binary, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError,
     StdResult,
 };
-use cw2::set_contract_version;
+use cw2::{get_contract_version, set_contract_version};
 
 use dexter::governance_admin::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use dexter::helper::EventExt;
@@ -32,6 +32,7 @@ use dexter::helper::EventExt;
 pub const CONTRACT_NAME: &str = "dexter-governance-admin";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 pub type ContractResult<T> = Result<T, ContractError>;
 
@@ -155,10 +156,40 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V1_1 {}
+}
 
 // migrate handler
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {  
-    return Err(ContractError::MigrationNotSupported {});
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {  
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            let contract_version = get_contract_version(deps.storage)?;
+
+            // validate contract name
+            if contract_version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractUpgrade {
+                    expected_name: CONTRACT_NAME.to_string(),
+                    actual_name: contract_version.contract,
+                });
+            }
+
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+            let event = Event::new(concatcp!(CONTRACT_NAME, "::migrate"))
+                .add_attribute("from", CONTRACT_VERSION_V1)
+                .add_attribute("to", CONTRACT_VERSION);
+
+            Ok(Response::new().add_event(event))
+        }
+    }
 }
