@@ -719,7 +719,10 @@ fn create_pool(gov_admin_test_setup: &GovAdminTestSetup, asset_infos: Vec<AssetI
         .execute(
             &gov_admin_test_setup.vault_instance.to_string(),
             &create_pool_msg,
-            &vec![],
+            &vec![
+                // Pool creation fee
+                Coin::new(10000000, "uxprt"),
+            ],
             &user,
         )
         .unwrap();
