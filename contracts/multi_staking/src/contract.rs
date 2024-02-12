@@ -190,27 +190,41 @@ pub fn execute(
         }
         ExecuteMsg::AllowRewardCw20Token { addr } => {
             let mut config = CONFIG.load(deps.storage)?;
+            // Verify that the message sender is the owner
+            if info.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
             if config.allowed_reward_cw20_tokens.contains(&addr) {
                 return Err(ContractError::Cw20TokenAlreadyAllowed);
             }
-            config.allowed_reward_cw20_tokens.push(addr.clone());
+            config
+                .allowed_reward_cw20_tokens
+                .push(deps.api.addr_validate(&addr.to_string())?);
             CONFIG.save(deps.storage, &config)?;
 
             Ok(Response::new().add_event(
                 Event::from_info(concatcp!(CONTRACT_NAME, "::allow_reward_cw20_token"), &info)
                     .add_attribute("cw20_token", addr.to_string()),
             ))
-        },
+        }
         ExecuteMsg::RemoveRewardCw20Token { addr } => {
             let mut config = CONFIG.load(deps.storage)?;
+            // Verify that the message sender is the owner
+            if info.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
+
             config.allowed_reward_cw20_tokens.retain(|x| x != &addr);
             CONFIG.save(deps.storage, &config)?;
 
             Ok(Response::new().add_event(
-                Event::from_info(concatcp!(CONTRACT_NAME, "::remove_reward_cw20_token"), &info)
-                    .add_attribute("cw20_token", addr.to_string()),
+                Event::from_info(
+                    concatcp!(CONTRACT_NAME, "::remove_reward_cw20_token"),
+                    &info,
+                )
+                .add_attribute("cw20_token", addr.to_string()),
             ))
-        },
+        }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
             let response = propose_new_owner(
