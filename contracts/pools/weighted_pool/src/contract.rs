@@ -296,12 +296,48 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             max_spread,
             belief_price,
         )?),
+        QueryMsg::SpotPrice { offer_asset, ask_asset } => {
+            to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
+        }
         QueryMsg::CumulativePrice {
             offer_asset,
             ask_asset,
         } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
         QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
+}
+
+fn query_spot_price(
+    deps: Deps,
+    _env: Env,
+    offer_asset: AssetInfo,
+    ask_asset: AssetInfo,
+) -> StdResult<AssetExchangeRate> {
+    // let config: Config = CONFIG.load(deps.storage)?;
+    // let twap: Twap = TWAPINFO.load(deps.storage)?;
+
+    // let decimal_assets: Vec<DecimalAsset> =
+    //     transform_to_decimal_asset(deps.as_ref(), &config.assets);
+
+    // let offer_pool = decimal_assets
+    //     .iter()
+    //     .find(|a| a.info.equal(&offer_asset))
+    //     .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+
+    // let ask_pool = decimal_assets
+    //     .iter()
+    //     .find(|a| a.info.equal(&ask_asset))
+    //     .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+
+    // let spot_price = offer_pool.amount / ask_pool.amount;
+
+    // Ok(AssetExchangeRate {
+    //     rate: spot_price,
+    //     numerator: offer_pool.amount,
+    //     denominator: ask_pool.amount,
+    // })
+
+    panic!("Not implemented")
 }
 
 /// ## Description
