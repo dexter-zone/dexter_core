@@ -1,7 +1,7 @@
 use crate::approx_pow::calculate_pow;
 use crate::state::WeightedAsset;
-use cosmwasm_std::{Decimal, StdError, StdResult, Uint128};
-use dexter::helper::adjust_precision;
+use cosmwasm_std::{Decimal, Decimal256, StdError, StdResult, Uint128};
+use dexter::{asset::{Decimal256Ext, DecimalAsset}, helper::adjust_precision};
 
 // Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
 // solveConstantFunctionInvariant solves the constant function of an AMM
@@ -40,7 +40,23 @@ pub fn solve_constant_function_invariant(
     };
 
     let amount_y = token_balance_unknown_before.checked_mul(paranthetical)?;
-    return Ok(amount_y);
+    Ok(amount_y)
+}
+
+pub fn calc_spot_price(
+    from_asset: &DecimalAsset,
+    to_asset: &DecimalAsset,
+    from_weight: Uint128,
+    to_weight: Uint128,
+) -> StdResult<Decimal256> {
+    let numerator = from_asset.amount.checked_div(Decimal256::from_integer(from_weight))
+        .map_err(|e| StdError::generic_err(e.to_string()))?;
+
+    let denominator = to_asset.amount.checked_div(Decimal256::from_integer(to_weight))
+        .map_err(|e| StdError::generic_err(e.to_string()))?;
+
+    let spot_price = numerator.checked_div(denominator).unwrap();
+    Ok(spot_price)
 }
 
 /// ## Description - Inspired from Osmosis implementaton here - https://github.com/osmosis-labs/osmosis/blob/main/x/gamm/pool-models/balancer/amm.go#L116

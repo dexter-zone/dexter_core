@@ -8,12 +8,12 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, EventExt, select_pools};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, store_precisions, SwapResponse, Trade, update_fee, ExitType};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
 use crate::error::ContractError;
-use crate::math::get_normalized_weight;
+use crate::math::{calc_spot_price, get_normalized_weight};
 use crate::state::{get_precision, get_weight, store_weights, MathConfig, Twap, WeightedAsset, WeightedParams, CONFIG, MATHCONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{
     accumulate_prices, calc_single_asset_join, compute_offer_amount, compute_swap,
@@ -312,32 +312,49 @@ fn query_spot_price(
     _env: Env,
     offer_asset: AssetInfo,
     ask_asset: AssetInfo,
-) -> StdResult<AssetExchangeRate> {
-    // let config: Config = CONFIG.load(deps.storage)?;
-    // let twap: Twap = TWAPINFO.load(deps.storage)?;
+) -> StdResult<SpotPrice> {
+    let config: Config = CONFIG.load(deps.storage)?;
 
-    // let decimal_assets: Vec<DecimalAsset> =
-    //     transform_to_decimal_asset(deps.as_ref(), &config.assets);
+    let offer_asset_decimal = get_precision(deps.storage, &offer_asset)?;
+    let ask_asset_decimal = get_precision(deps.storage, &ask_asset)?;
 
-    // let offer_pool = decimal_assets
-    //     .iter()
-    //     .find(|a| a.info.equal(&offer_asset))
-    //     .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+    let pool_amount_offer_asset = config
+        .assets
+        .iter()
+        .find(|a| a.info.equal(&offer_asset))
+        .ok_or_else(|| StdError::generic_err("Asset not found"))?;
 
-    // let ask_pool = decimal_assets
-    //     .iter()
-    //     .find(|a| a.info.equal(&ask_asset))
-    //     .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+    let pool_amount_ask_asset = config
+        .assets
+        .iter()
+        .find(|a| a.info.equal(&ask_asset))
+        .ok_or_else(|| StdError::generic_err("Asset not found"))?;
 
-    // let spot_price = offer_pool.amount / ask_pool.amount;
+    let offer_decimal_asset = DecimalAsset {
+        info: offer_asset.clone(),
+        amount: Decimal256::with_precision(pool_amount_offer_asset.amount, offer_asset_decimal)?,
+    };
 
-    // Ok(AssetExchangeRate {
-    //     rate: spot_price,
-    //     numerator: offer_pool.amount,
-    //     denominator: ask_pool.amount,
-    // })
+    let ask_decimal_asset = DecimalAsset {
+        info: ask_asset.clone(),
+        amount: Decimal256::with_precision(pool_amount_offer_asset.amount, ask_asset_decimal)?,
+    };
 
-    panic!("Not implemented")
+    let spot_price = calc_spot_price(
+        &offer_decimal_asset,
+        &ask_decimal_asset,
+        pool_amount_offer_asset.amount,
+        pool_amount_ask_asset.amount,
+    )?;
+
+    let spot_price_with_fee = spot_price - spot_price * Decimal256::from_ratio(config.fee_info.total_fee_bps, 10000u128);
+
+    Ok(SpotPrice {
+        from: offer_asset,
+        to: ask_asset,
+        price: spot_price,
+        price_including_fee: spot_price_with_fee,
+    })
 }
 
 /// ## Description
