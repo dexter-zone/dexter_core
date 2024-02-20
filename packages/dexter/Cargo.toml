@@ -1,6 +1,6 @@
 [package]
 name = "dexter"
-version = "1.1.0"
+version = "1.2.0"
 authors = ["Persistence Labs"]
 edition = "2021"
 description = "Dex optimized for liquid staked assets"
