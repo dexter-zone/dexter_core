@@ -653,7 +653,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -662,7 +662,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -671,7 +671,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -680,7 +680,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -689,7 +689,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -698,7 +698,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(1000180000u128),
+                rate: Uint128::from(970173599820u128),
             },
         ],
         pool_twap_res.exchange_infos

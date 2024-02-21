@@ -1,7 +1,7 @@
 use crate::approx_pow::calculate_pow;
 use crate::state::WeightedAsset;
 use cosmwasm_std::{Decimal, Decimal256, StdError, StdResult, Uint128};
-use dexter::{asset::{Decimal256Ext, DecimalAsset}, helper::adjust_precision};
+use dexter::{asset::DecimalAsset, helper::{adjust_precision, decimal_to_decimal256}};
 
 // Referenced from Balancer Weighted pool implementation by  Osmosis here - https://github.com/osmosis-labs/osmosis/blob/47a2366c5eeee474de9e1cb4777fab0ccfbb9592/x/gamm/pool-models/balancer/amm.go#L94
 // solveConstantFunctionInvariant solves the constant function of an AMM
@@ -44,16 +44,28 @@ pub fn solve_constant_function_invariant(
 }
 
 pub fn calc_spot_price(
-    from_asset: &DecimalAsset,
-    to_asset: &DecimalAsset,
-    from_weight: Uint128,
-    to_weight: Uint128,
+    offer_asset_pool: &DecimalAsset,
+    ask_asset_pool: &DecimalAsset,
+    offer_asset_weight_weight: Decimal,
+    ask_asset_weight: Decimal,
 ) -> StdResult<Decimal256> {
-    let numerator = from_asset.amount.checked_div(Decimal256::from_integer(from_weight))
+    let offer_asset_weight_decimal_256 = decimal_to_decimal256(offer_asset_weight_weight)?;
+    let ask_asset_weight_decimal_256 = decimal_to_decimal256(ask_asset_weight)?;
+
+    println!(
+        "offer_asset_pool.amount: {}, offer_asset_weight_decimal_256: {}, ask_asset_pool.amount: {}, ask_asset_weight_decimal_256: {}",
+        offer_asset_pool.amount, offer_asset_weight_decimal_256, ask_asset_pool.amount, ask_asset_weight_decimal_256
+    );
+
+    let numerator = ask_asset_pool.amount.checked_div(ask_asset_weight_decimal_256)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
 
-    let denominator = to_asset.amount.checked_div(Decimal256::from_integer(to_weight))
+    let denominator = offer_asset_pool.amount.checked_div(offer_asset_weight_decimal_256)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
+
+    if denominator.is_zero() {
+        return Ok(Decimal256::zero());
+    }
 
     let spot_price = numerator.checked_div(denominator).unwrap();
     Ok(spot_price)

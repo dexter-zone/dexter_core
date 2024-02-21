@@ -337,14 +337,22 @@ fn query_spot_price(
 
     let ask_decimal_asset = DecimalAsset {
         info: ask_asset.clone(),
-        amount: Decimal256::with_precision(pool_amount_offer_asset.amount, ask_asset_decimal)?,
+        amount: Decimal256::with_precision(pool_amount_ask_asset.amount, ask_asset_decimal)?,
     };
+
+    println!(
+        "offer_decimal_asset: {:?}, ask_decimal_asset: {:?}",
+        offer_decimal_asset, ask_decimal_asset
+    );
+
+    let offer_weight = get_weight(deps.storage, &offer_asset)?; 
+    let ask_weight = get_weight(deps.storage, &ask_asset)?;
 
     let spot_price = calc_spot_price(
         &offer_decimal_asset,
         &ask_decimal_asset,
-        pool_amount_offer_asset.amount,
-        pool_amount_ask_asset.amount,
+        offer_weight,
+        ask_weight
     )?;
 
     let spot_price_with_fee = spot_price - spot_price * Decimal256::from_ratio(config.fee_info.total_fee_bps, 10000u128);
