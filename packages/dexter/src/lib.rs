@@ -10,6 +10,7 @@ pub mod querier;
 pub mod router;
 pub mod vault;
 pub mod constants;
+pub mod macros;
 
 #[allow(clippy::all)]
 mod uints {
