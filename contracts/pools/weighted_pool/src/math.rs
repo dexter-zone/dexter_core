@@ -52,11 +52,6 @@ pub fn calc_spot_price(
     let offer_asset_weight_decimal_256 = decimal_to_decimal256(offer_asset_weight_weight)?;
     let ask_asset_weight_decimal_256 = decimal_to_decimal256(ask_asset_weight)?;
 
-    println!(
-        "offer_asset_pool.amount: {}, offer_asset_weight_decimal_256: {}, ask_asset_pool.amount: {}, ask_asset_weight_decimal_256: {}",
-        offer_asset_pool.amount, offer_asset_weight_decimal_256, ask_asset_pool.amount, ask_asset_weight_decimal_256
-    );
-
     let numerator = ask_asset_pool.amount.checked_div(ask_asset_weight_decimal_256)
         .map_err(|e| StdError::generic_err(e.to_string()))?;
 
@@ -128,4 +123,132 @@ fn fee_ratio(normalized_weight: Decimal, swap_fee: Decimal) -> Decimal {
 /// * **total_weight** is the total weight of all assets.
 pub fn get_normalized_weight(weight: Uint128, total_weight: Uint128) -> Decimal {
     Decimal::from_ratio(weight, total_weight)
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use cosmwasm_std::{Decimal, Decimal256};
+    use dexter::{asset::{AssetInfo, DecimalAsset}, uint128_with_precision};
+
+    use super::calc_spot_price;
+
+    #[test]
+    fn test_spot_price() {
+
+        let offer_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test1".to_string()),
+        };
+        let ask_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test2".to_string()),
+        };
+
+        let offer_asset_weight = Decimal::from_str("0.5").unwrap();
+        let ask_asset_weight = Decimal::from_str("0.5").unwrap();
+
+        let spot_price = calc_spot_price(
+            &offer_asset_pool,
+            &ask_asset_pool,
+            offer_asset_weight,
+            ask_asset_weight,
+        ).unwrap();
+
+        assert_eq!(spot_price, Decimal256::from_str("1").unwrap());
+
+        // 1 asset liquidity is 50% of the other asset liquidity
+        let offer_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test1".to_string()),
+        };
+
+        let ask_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(500u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test2".to_string()),
+        };
+
+        let offer_asset_weight = Decimal::from_str("0.5").unwrap();
+        let ask_asset_weight = Decimal::from_str("0.5").unwrap();
+
+        let spot_price = calc_spot_price(
+            &offer_asset_pool,
+            &ask_asset_pool,
+            offer_asset_weight,
+            ask_asset_weight,
+        ).unwrap();
+
+        assert_eq!(spot_price, Decimal256::from_str("0.5").unwrap());
+
+        // same liuquidity but different weights
+        let offer_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test1".to_string()),
+        };
+
+        let ask_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test2".to_string()),
+        };
+
+        let offer_asset_weight = Decimal::from_str("0.1").unwrap();
+        let ask_asset_weight = Decimal::from_str("0.9").unwrap();
+
+        let spot_price = calc_spot_price(
+            &offer_asset_pool,
+            &ask_asset_pool,
+            offer_asset_weight,
+            ask_asset_weight,
+        ).unwrap();
+
+        assert_eq!(spot_price, Decimal256::from_str("0.111111111111111111").unwrap());
+
+        // different liquidity and different weights
+        let offer_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(1000u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test1".to_string()),
+        };
+
+        let ask_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(500u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test2".to_string()),
+        };
+
+        let offer_asset_weight = Decimal::from_str("0.1").unwrap();
+        let ask_asset_weight = Decimal::from_str("0.9").unwrap();
+
+        let spot_price = calc_spot_price(
+            &offer_asset_pool,
+            &ask_asset_pool,
+            offer_asset_weight,
+            ask_asset_weight,
+        ).unwrap();
+
+        assert_eq!(spot_price, Decimal256::from_str("0.055555555555555555").unwrap());
+
+        // 0 liquidity
+        let offer_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(0u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test1".to_string()),
+        };
+
+        let ask_asset_pool = DecimalAsset {
+            amount: Decimal256::from_atomics(uint128_with_precision!(500u128, 6), 6).unwrap(),
+            info: AssetInfo::native_token("test2".to_string()),
+        };
+
+        let offer_asset_weight = Decimal::from_str("0.1").unwrap();
+        let ask_asset_weight = Decimal::from_str("0.9").unwrap();
+
+        let spot_price = calc_spot_price(
+            &offer_asset_pool,
+            &ask_asset_pool,
+            offer_asset_weight,
+            ask_asset_weight,
+        ).unwrap();
+
+        assert_eq!(spot_price, Decimal256::from_str("0").unwrap());
+    }
 }
