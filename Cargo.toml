@@ -7,6 +7,7 @@ members = [
     "contracts/multi_staking",
     "contracts/router",
     "contracts/governance_admin",
+    "contracts/superfluid_lp",
     "packages/*"
 ]
 
