@@ -1,7 +1,7 @@
 [package]
 name = "dexter-superfluid-lp"
 version = "1.0.0"
-authors = ["pranjal@persistence.one"]
+authors = ["PersistenceLabs"]
 edition = "2021"
 description = "Superfluid LP contract to facilitate staked token -> LST -> LP 1-click conversion"
 license = "MIT"
