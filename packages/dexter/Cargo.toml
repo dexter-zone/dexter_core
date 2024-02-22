@@ -1,6 +1,6 @@
 [package]
 name = "dexter"
-version = "1.0.0"
+version = "1.2.0"
 authors = ["AstroTechLabs"]
 edition = "2021"
 description = "DEX on Persistence tendermint chain"
