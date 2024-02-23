@@ -1,3 +1,5 @@
+use std::ops::Div;
+
 use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Uint64};
 use dexter::asset::{AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::error::ContractError;
@@ -39,50 +41,44 @@ pub(crate) fn compute_d(
         return Ok(Decimal256::zero());
     }
 
-    // Sum of all the pools liquidity,  Eq - xp: [1242000000, 1542000000, 1456000000] = 4240000000
-    let sum_x = pools.iter().fold(Decimal256::zero(), |acc, x| acc + (*x));
+    let sum_x = pools.iter().fold(Uint256::zero(), |acc, x| acc + x.atomics());
 
     let n_coins = pools.len() as u8;
-
-    // ann = amp * n                Eq - 100 * 3 = 300
-    let ann = Decimal256::from_integer(amp.checked_mul(n_coins.into())?.u64() / AMP_PRECISION);
-    let n_coins = Uint64::from(n_coins);
+    let ann = Uint256::from(amp.u64().div(AMP_PRECISION) * n_coins as u64);
+    let n_coins = Uint256::from(n_coins as u64);
 
     // Initial D = sum_x, which is the sum of all the pools liquidity
     let mut d = sum_x;
-
-    // ann_sum_x = ann * sum_x
-    let ann_sum_x = ann * sum_x;
+    let ann_sum_x = ann.checked_mul(sum_x)?;
 
     // while abs(D - Dprev) > 1:
     for _ in 0..ITERATIONS {
-        // Start loop: D_P = D_P * D / (_x * N_COINS)
-        let d_p = pools
-            .iter()
-            .try_fold::<_, _, StdResult<_>>(d, |acc, pool| {
-                let denominator = pool.atomics().checked_mul(n_coins.into())?;
-                let print_calc_ = acc.checked_multiply_ratio(d, Decimal256::new(denominator));
-                print_calc_
-            })?;
+
+        let mut dp = d;
+        for (_, pool) in pools.iter().enumerate() {
+            let denominator = pool.atomics().checked_mul(n_coins.into())?;
+            let fraction = (d, denominator);
+            dp = dp.checked_mul_floor(fraction).unwrap();
+        }
 
         let d_prev = d;
+        
+        let numerator = (ann_sum_x + dp.checked_mul(n_coins).unwrap()).checked_mul(d)?;
+        let denominator = (ann - Uint256::one()).checked_mul(d)?
+            .checked_add(n_coins.checked_add(Uint256::one())?.checked_mul(dp)?)?;
 
-        d = (ann_sum_x + d_p * Decimal256::from_integer(n_coins.u64())) * d
-            / ((ann - Decimal256::one()) * d
-                + (Decimal256::from_integer(n_coins.u64()) + Decimal256::one()) * d_p);
+        d = numerator.checked_div(denominator)?;
 
         if d >= d_prev {
-            if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
-            {
-                return Ok(d);
+            if d - d_prev <= Uint256::from(1u8) {
+                return Ok(Decimal256::from_atomics(d, Decimal256::DECIMAL_PLACES).unwrap());
             }
-        } else if d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
-        {
-            return Ok(d);
+        } else if d_prev - d <= Uint256::from(1u8) {
+            return Ok(Decimal256::from_atomics(d, Decimal256::DECIMAL_PLACES).unwrap());
         }
     }
 
-    Ok(d)
+    Ok(Decimal256::from_atomics(d, Decimal256::DECIMAL_PLACES).unwrap())
 }
 
 /// ## Description
@@ -109,12 +105,12 @@ pub(crate) fn calc_y(
 
     let n_coins = Uint64::from(pools.len() as u8);
     let ann = Uint256::from(amp.checked_mul(n_coins)?.u64() / AMP_PRECISION);
-    let mut sum = Decimal256::zero();
+    let mut sum = Uint256::zero();
     let pool_values = pools.iter().map(|asset| asset.amount).collect_vec();
 
     // d is computed with the largest precision possible i.e Decimal256::DECIMAL_PLACES i.e 18
-    let d = compute_d(amp, &pool_values)?
-        .to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
+    let d = compute_d(amp, &pool_values)?.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
+    // println!("d: {:?}", d);
 
     let mut c = d;
 
@@ -132,27 +128,31 @@ pub(crate) fn calc_y(
                 pool_amount.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)? * Uint256::from(n_coins),
             )
             .map_err(|_| StdError::generic_err("CheckedMultiplyRatioError"))?;
-        sum += pool_amount;
+        sum += pool_amount.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
     }
 
     let c = c * d / (ann * Uint256::from(n_coins));
-    let sum = sum.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
+    // let sum = sum.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
 
     let b = sum + d / ann;
 
     let mut y = d;
+    // println!("y: {}", y);
 
     let d = y;
 
     for _ in 0..ITERATIONS {
         let y_prev = y;
         y = (y * y + c) / (y + y + b - d);
+        // println!("iter: {}, y_new: {}", iter, y);
 
         if y >= y_prev {
             if y - y_prev <= Uint256::from(1u8) {
                 // We need to scale the value from the MAX_PRECISION to the precision of the asset
                 // We do this by dividing the value by the ratio of the two precisions
                 let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
+                // println!("decimal_difference: {}", decimal_difference);
+
                 let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
                 let y = y.checked_div(precision_ratio)?;
                 
@@ -162,6 +162,8 @@ pub(crate) fn calc_y(
             // We need to scale the value from the MAX_PRECISION to the precision of the asset
             // We do this by dividing the value by the ratio of the two precisions
             let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
+            // println!("decimal_difference: {}", decimal_difference);
+
             let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
             let y = y.checked_div(precision_ratio)?;
             return Ok(y.try_into()?);
@@ -174,6 +176,7 @@ pub(crate) fn calc_y(
 
 #[cfg(test)]
 mod tests {
+    
     use super::*;
     use dexter::asset::native_asset;
     use sim::StableSwapModel;

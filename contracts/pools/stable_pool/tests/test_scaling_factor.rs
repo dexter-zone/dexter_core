@@ -963,7 +963,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         pool_addr.clone(),
         pool_id,
         assets_msg.clone(),
-        Uint128::from(5_072_169_964_407_537_367_290_383u128),
+        Uint128::from(5_072_169_964_407_537_367_258_707u128),
     );
 
     // Swap 1 ustatom for uatom
@@ -1071,7 +1071,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         pool_id,
         lp_token_addr.clone(),
         vec![Asset::new(atom_asset.clone(), Uint128::from(100_000_000_000u128))],
-        Uint128::from(100_206_787_474_015_742_826_455u128),
+        Uint128::from(100_206_787_474_015_742_838_214u128),
         Some(vec![
             // Asset::new(wrapped_atom_asset.clone(), Uint128::from(18_684_894u128)),
             Asset::new(wrapped_atom_asset.clone(), Uint128::from(18_682_739u128)),

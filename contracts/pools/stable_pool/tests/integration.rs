@@ -764,7 +764,7 @@ fn test_query_on_join_pool() {
         )
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
-    assert_eq!(Uint128::from(217_995_261_723_832u128), join_pool_query_res.new_shares);
+    assert_eq!(Uint128::from(217_995_261_723_840u128), join_pool_query_res.new_shares);
 
     // Execute AddLiquidity via the Vault contract
     let msg = VaultExecuteMsg::JoinPool {
@@ -806,7 +806,7 @@ fn test_query_on_join_pool() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(217_995_261_723_832u128), recepient_bal_res.balance);
+    assert_eq!(Uint128::from(217_995_261_723_840u128), recepient_bal_res.balance);
 
     let vault_bal_res: BalanceResponse = app
         .wrap()
@@ -950,7 +950,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(3686487023559690549804u128),
+        Uint128::from(3686487023559696294465u128),
         join_pool_query_res.new_shares
     );
 
@@ -1015,7 +1015,7 @@ fn test_query_on_join_pool() {
         .unwrap();
     assert_eq!(ResponseType::Success {}, join_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1416837573911030650529u128),
+        Uint128::from(1416837573911032858392u128),
         join_pool_query_res.new_shares
     );
 }
@@ -1433,7 +1433,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(479_662_097_799_569_595_469u128),
+        Uint128::from(479_662_097_799_569_595_515u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
@@ -1538,7 +1538,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1734283090619359785410u128),
+        Uint128::from(1734283090619359785679u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
@@ -1645,7 +1645,7 @@ fn test_on_exit_pool() {
     );
     assert_eq!(ResponseType::Success {}, exit_pool_query_res.response);
     assert_eq!(
-        Uint128::from(1_976_713_420_765_243_272_086u128),
+        Uint128::from(1_976_713_420_765_243_272_248u128),
         exit_pool_query_res.burn_shares
     );
     assert_eq!(
