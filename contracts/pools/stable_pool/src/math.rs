@@ -1,6 +1,7 @@
 use cosmwasm_std::{Decimal256, StdError, StdResult, Uint128, Uint256, Uint64};
 use dexter::asset::{AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::error::ContractError;
+use dexter::pool::{FeeStructs, SpotPrice};
 use itertools::Itertools;
 
 /// The maximum number of calculation steps for Newton's method.
@@ -31,10 +32,7 @@ pub const AMP_PRECISION: u64 = 100;
 /// * **amp** is an object of type [`Uint64`].
 /// * **pools** is a vector with values of type [`Decimal256`].
 /// * **greatest_precision** object of type [`u8`].
-pub(crate) fn compute_d(
-    amp: Uint64,
-    pools: &[Decimal256],
-) -> StdResult<Decimal256> {
+pub(crate) fn compute_d(amp: Uint64, pools: &[Decimal256]) -> StdResult<Decimal256> {
     if pools.iter().any(|pool| pool.is_zero()) {
         return Ok(Decimal256::zero());
     }
@@ -72,11 +70,13 @@ pub(crate) fn compute_d(
                 + (Decimal256::from_integer(n_coins.u64()) + Decimal256::one()) * d_p);
 
         if d >= d_prev {
-            if d - d_prev <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
+            if d - d_prev
+                <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
             {
                 return Ok(d);
             }
-        } else if d_prev - d <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
+        } else if d_prev - d
+            <= Decimal256::with_precision(Uint64::from(1u8), Decimal256::DECIMAL_PLACES)?
         {
             return Ok(d);
         }
@@ -98,13 +98,15 @@ pub(crate) fn calc_y(
     to: &AssetInfo,
     new_amount: Decimal256,
     pools: &[DecimalAsset],
-    amp_: u64,
+    amp: u64,
     output_precision: u8,
 ) -> StdResult<Uint128> {
-    let amp = Uint64::from(amp_);
+    let amp = Uint64::from(amp);
 
     if from_asset.info.equal(to) {
-        return Err(StdError::generic_err(ContractError::SameAssets {}.to_string()));
+        return Err(StdError::generic_err(
+            ContractError::SameAssets {}.to_string(),
+        ));
     }
 
     let n_coins = Uint64::from(pools.len() as u8);
@@ -113,8 +115,7 @@ pub(crate) fn calc_y(
     let pool_values = pools.iter().map(|asset| asset.amount).collect_vec();
 
     // d is computed with the largest precision possible i.e Decimal256::DECIMAL_PLACES i.e 18
-    let d = compute_d(amp, &pool_values)?
-        .to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
+    let d = compute_d(amp, &pool_values)?.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
 
     let mut c = d;
 
@@ -129,7 +130,8 @@ pub(crate) fn calc_y(
         c = c
             .checked_multiply_ratio(
                 d,
-                pool_amount.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)? * Uint256::from(n_coins),
+                pool_amount.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?
+                    * Uint256::from(n_coins),
             )
             .map_err(|_| StdError::generic_err("CheckedMultiplyRatioError"))?;
         sum += pool_amount;
@@ -155,7 +157,7 @@ pub(crate) fn calc_y(
                 let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
                 let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
                 let y = y.checked_div(precision_ratio)?;
-                
+
                 return Ok(y.try_into()?);
             }
         } else if y_prev - y <= Uint256::from(1u8) {
@@ -172,11 +174,211 @@ pub(crate) fn calc_y(
     Err(StdError::generic_err("y is not converging"))
 }
 
+pub(crate) fn calc_spot_price(
+    from: &AssetInfo,
+    to: &AssetInfo,
+    pools: &[DecimalAsset],
+    fee: FeeStructs,
+    amp: u64,
+) -> StdResult<SpotPrice> {
+    // first we figure out the amount of the from asset in the pool
+    let from_asset = pools.iter().find(|asset| asset.info.eq(from)).unwrap();
+    let to_asset = pools.iter().find(|asset| asset.info.eq(to)).unwrap();
+
+    // now, since it's really hard to find the price derivative of the stableswap invariant, we'll just use the
+    // approximation as the price of a very very small trade. This is the same as the spot price.
+    // We will define a very small trade as 0.001% of the pool liquidity
+    // For most 6 decimal precision assets, even 1 unit = 1e6, so 0.001% = 1e6 / 1e5 = 1e = 10 units which is still 
+    // a decent small trade size for having a good approximation without running into decimal precision issues.
+    // Also, since we always use 18 decimal precision in our calculations, we actually have decent precision in our
+    // calculations for having a very accurate spot price.
+    let from_asset_small_trade_amount = from_asset.amount.checked_mul(Decimal256::from_ratio(
+        Uint256::from(1u128),
+        Uint256::from(100000u128),
+    ))?;
+    let fee_on_trade = from_asset_small_trade_amount.checked_mul(Decimal256::from_ratio(
+        fee.total_fee_bps,
+        Uint256::from(10000u128),
+    ))?;
+
+    let from_asset_small_trade_amount_after_fee =
+        from_asset_small_trade_amount.checked_sub(fee_on_trade)?;
+
+    let new_from_asset = from_asset
+        .amount
+        .checked_add(from_asset_small_trade_amount)?;
+    let new_from_asset_after_fee_deduction = from_asset
+        .amount
+        .checked_add(from_asset_small_trade_amount_after_fee)?;
+
+    let y = calc_y(
+        from_asset,
+        to,
+        new_from_asset,
+        pools,
+        amp,
+        Decimal256::DECIMAL_PLACES as u8,
+    )?;
+
+    let y_including_fee = calc_y(
+        from_asset,
+        to,
+        new_from_asset_after_fee_deduction,
+        pools,
+        amp,
+        Decimal256::DECIMAL_PLACES as u8,
+    )?;
+
+    let y_price_decimal = Decimal256::with_precision(y, Decimal256::DECIMAL_PLACES)?;
+    let y_price_including_fee_decimal =
+        Decimal256::with_precision(y_including_fee, Decimal256::DECIMAL_PLACES)?;
+
+    let y_diff = to_asset.amount.checked_sub(y_price_decimal)?;
+    let y_diff_including_fee = to_asset.amount.checked_sub(y_price_including_fee_decimal)?;
+
+    let spot_price = y_diff.checked_div(from_asset_small_trade_amount).unwrap();
+    let spot_price_with_fee = y_diff_including_fee
+        .checked_div(from_asset_small_trade_amount)
+        .unwrap();
+
+    let spot_price = SpotPrice {
+        from: from.clone(),
+        to: to.clone(),
+        price: spot_price,
+        price_including_fee: spot_price_with_fee,
+    };
+
+    Ok(spot_price)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
-    use dexter::asset::native_asset;
+    use dexter::{asset::{native_asset, Asset}, uint128_with_precision};
     use sim::StableSwapModel;
+
+    fn decimal_asset_pools_with_precision(pools: Vec<Asset>, precision: u8) -> Vec<DecimalAsset> {
+        pools
+            .iter()
+            .map(|pool| pool.to_decimal_asset(precision).unwrap())
+            .collect::<Vec<DecimalAsset>>()
+    }
+
+    #[test]
+    fn test_spot_price() {
+
+        let amp = 100u64;
+        let amp_final = amp * AMP_PRECISION;
+
+        let fee = FeeStructs {
+            total_fee_bps: 30,
+        };
+
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(100_000u128, 6)),
+            native_asset("test2".to_string(), uint128_with_precision!(100_000u128, 6)),
+            native_asset("test3".to_string(), uint128_with_precision!(100_000u128, 6)),
+        ];
+
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.999999900990108804").unwrap());
+
+        // test opposite direction
+        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.999999900990108804").unwrap());
+
+
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(1000u128, 6)),
+            native_asset("test2".to_string(), uint128_with_precision!(1000u128, 6)),
+            native_asset("test3".to_string(), uint128_with_precision!(1000u128, 6)),
+        ];
+
+  
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9999999009901089").unwrap());
+        
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(1u128, 6)),
+            native_asset("test2".to_string(), uint128_with_precision!(1u128, 6)),
+            native_asset("test3".to_string(), uint128_with_precision!(1u128, 6)),
+        ];
+
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9999999009902").unwrap());
+        
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(1u128, 6)),
+            // 1/5th the liquidity of test1 for test2. Let's see the effect of this on the spot price.
+            native_asset("test2".to_string(), Uint128::from(200000u128)),
+        ];
+            
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9594664670086").unwrap());
+
+        // test opposite direction
+        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("1.0422433526755").unwrap());
+
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(1u128, 6)),
+            // 1/10th the liquidity of test1 for test2. Let's see the effect of this on the spot price.
+            native_asset("test2".to_string(), Uint128::from(100000u128)),
+        ];
+        
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.8748087775978").unwrap());
+
+        // test opposite direction
+        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        let spot_price = spot_price.unwrap();
+        assert_eq!(spot_price.clone().price, Decimal256::from_str("1.143093026548").unwrap());
+        assert_eq!(spot_price.price_including_fee, Decimal256::from_str("1.139663751743").unwrap());
+
+
+        // let's try even smaller pools
+        let pools = vec![
+            native_asset("test1".to_string(), Uint128::from(10u128)),
+            native_asset("test2".to_string(), Uint128::from(10u128)),
+        ];
+
+
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.99999991").unwrap());
+
+
+        // let's try even smaller pools
+        let pools = vec![
+            native_asset("test1".to_string(), uint128_with_precision!(1u64, 12)),
+            native_asset("test2".to_string(), uint128_with_precision!(1u64, 12)),
+        ];
+
+        let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 18);
+
+        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        assert_eq!(spot_price.is_ok(), true);
+        // simulation breaks at this value. 
+        // with integer invariant calculation, we must be able to go below this value.
+        assert_eq!(spot_price.unwrap().price, Decimal256::from_str("1").unwrap());
+
+    }
 
     #[test]
     fn test_compute_d() {

@@ -11,10 +11,10 @@ use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
-use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use crate::math::{compute_d, calc_spot_price, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee, store_precisions};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade, DEFAULT_SPREAD};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools, EventExt};
@@ -524,6 +524,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
         } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
+        QueryMsg::SpotPrice { offer_asset, ask_asset } => {
+            to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
+        }
         QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
 }
@@ -1135,6 +1138,30 @@ pub fn query_cumulative_price(
     };
 
     Ok(resp)
+}
+
+pub fn query_spot_price(
+    deps: Deps,
+    env: Env,
+    offer_asset_info: AssetInfo,
+    ask_asset_info: AssetInfo,
+) -> StdResult<SpotPrice> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
+    let fee = config.fee_info;
+    let amp = compute_current_amp(&math_config, &env)?;
+
+    let spot_price = calc_spot_price(
+        &offer_asset_info,
+        &ask_asset_info,
+        &decimal_assets,
+        fee,
+        amp,
+    )?;
+
+    Ok(spot_price)
 }
 
 /// ## Description

@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
 use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdError, StdResult, Storage, Uint128, Uint256};
-use dexter::asset::{Asset, DecimalAsset};
-use dexter::helper::{adjust_precision, decimal2decimal256, select_pools};
-use dexter::pool::{ResponseType};
+use dexter::asset::{Asset, Decimal256Ext, DecimalAsset};
+use dexter::helper::{adjust_precision, decimal256_to_decimal, decimal_to_decimal256, select_pools};
+use dexter::pool::ResponseType;
 
 use crate::error::ContractError;
-use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant};
+use crate::math::{calc_minted_shares_given_single_asset_in, solve_constant_function_invariant, calc_spot_price};
 use crate::state::{get_precision, get_weight, Twap, WeightedAsset};
 use dexter::vault::FEE_PRECISION;
 
@@ -93,10 +93,10 @@ pub(crate) fn compute_offer_amount(
     let token_precision = get_precision(storage, &offer_pool.info)?;
 
     let one_minus_commission = Decimal256::one()
-        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
+        - decimal_to_decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
-    let ask_asset_amount = Decimal::from_str(&ask_asset.amount.clone().to_string())?;
+    let ask_asset_amount = decimal256_to_decimal(ask_asset.amount)?;
 
     // Ask pool balance after swap
     let pool_post_swap_out_balance =
@@ -162,28 +162,23 @@ pub fn accumulate_prices(
 
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
-        let offer_asset = DecimalAsset {
-            info: from.clone(),
-            amount: Decimal256::one(),
-        };
-
         let from_weight = get_weight(deps.storage, from)?;
         let to_weight = get_weight(deps.storage, to)?;
 
         // retrieve the offer and ask asset pool's latest balances
         let (offer_pool, ask_pool) = select_pools(from, to, pools).unwrap();
 
-        // Compute the current price of ask asset in base asset
-        let (return_amount, _) = compute_swap(
-            deps.storage,
-            &env,
-            &offer_asset,
-            &offer_pool,
-            from_weight,
-            &ask_pool,
-            to_weight,
-        )?;
+        let spot_price = calc_spot_price(&offer_pool, &ask_pool, from_weight, to_weight)?;
 
+        let ask_asset_precision = get_precision(deps.storage, &ask_pool.info)?;
+        // we need to convert above decimal to Uint128 according to the precision of the ask asset
+        let return_amount = spot_price.to_uint128_with_precision(ask_asset_precision)?;
+
+        println!();
+        println!("weight -> from: {}, to: {}", from_weight, to_weight);
+        println!("offer_pool -> amount: {:?}, info: {:?}", offer_pool.amount, offer_pool.info);
+        println!("ask_pool -> amount: {:?}, info: {:?}", ask_pool.amount, ask_pool.info);
+        println!("return_amount: {}", return_amount);
         // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }

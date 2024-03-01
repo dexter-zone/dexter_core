@@ -1,12 +1,12 @@
 use cosmwasm_std::{Decimal, Decimal256, Deps, Env, StdResult, Storage, Uint128};
 
 use dexter::asset::{Decimal256Ext, DecimalAsset};
-use dexter::helper::{select_pools, decimal2decimal256};
+use dexter::helper::decimal_to_decimal256;
 use dexter::vault::FEE_PRECISION;
 
 use crate::error::ContractError;
-use crate::math::calc_y;
-use crate::state::{MathConfig, STABLESWAP_CONFIG};
+use crate::math::{calc_spot_price, calc_y};
+use crate::state::{MathConfig, CONFIG};
 use crate::state::{get_precision, Twap};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -76,7 +76,7 @@ pub(crate) fn compute_offer_amount(
     let offer_precision = get_precision(storage, &offer_pool.info)?;
 
     let one_minus_commission = Decimal256::one()
-        - decimal2decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
+        - decimal_to_decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     // New offer pool amount here is returned with the greatest precision.
@@ -169,9 +169,8 @@ pub fn accumulate_prices(
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
-    let stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
-    let scaling_factors = stableswap_config.scaling_factors();
-
+   let config = CONFIG.load(deps.storage)?;
+   
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
     if block_time <= twap.block_time_last {
@@ -182,28 +181,18 @@ pub fn accumulate_prices(
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         
-        let offer_asset_scaling_factor = scaling_factors.get(&from).cloned().unwrap_or(Decimal256::one());
-        let ask_asset_scaling_factor = scaling_factors.get(&to).cloned().unwrap_or(Decimal256::one());
+        let amp = compute_current_amp(&math_config, &env)?;
 
-        let offer_asset = DecimalAsset {
-            info: from.clone(),
-            amount: Decimal256::one(),
-        };
-
-        // Offer asset scaled by the scaling factor
-        let offer_asset_scaled = offer_asset.with_scaling_factor(offer_asset_scaling_factor)?;
-
-        let (offer_pool, ask_pool) = select_pools(from, to, pools).unwrap();
-        let return_amount = compute_swap(
-            deps.storage,
-            &env,
-            &math_config,
-            &offer_asset_scaled,
-            &offer_pool,
-            &ask_pool,
-            pools,
-            ask_asset_scaling_factor,
+        let spot_price = calc_spot_price(
+            from, 
+            to,
+            pools, 
+            config.fee_info.clone(),
+            amp
         )?;
+
+        let ask_asset_precision = get_precision(deps.storage, &to)?;
+        let return_amount = spot_price.price_including_fee.to_uint128_with_precision(ask_asset_precision)?;
 
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
