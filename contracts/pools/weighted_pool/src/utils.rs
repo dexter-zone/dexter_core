@@ -174,12 +174,6 @@ pub fn accumulate_prices(
         // we need to convert above decimal to Uint128 according to the precision of the ask asset
         let return_amount = spot_price.to_uint128_with_precision(ask_asset_precision)?;
 
-        println!();
-        println!("weight -> from: {}, to: {}", from_weight, to_weight);
-        println!("offer_pool -> amount: {:?}, info: {:?}", offer_pool.amount, offer_pool.info);
-        println!("ask_pool -> amount: {:?}, info: {:?}", ask_pool.amount, ask_pool.info);
-        println!("return_amount: {}", return_amount);
-        // accumulate the price
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
 

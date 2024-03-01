@@ -6,7 +6,7 @@ use dexter::vault::FEE_PRECISION;
 
 use crate::error::ContractError;
 use crate::math::{calc_spot_price, calc_y};
-use crate::state::{MathConfig, CONFIG};
+use crate::state::{MathConfig, CONFIG, STABLESWAP_CONFIG};
 use crate::state::{get_precision, Twap};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -191,32 +191,53 @@ pub fn accumulate_prices(
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
-   let config = CONFIG.load(deps.storage)?;
+
+    let config = CONFIG.load(deps.storage)?;
+    let stable_swap_config = STABLESWAP_CONFIG.load(deps.storage)?;
    
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
+    println!("block_time: {}", block_time);
+
     if block_time <= twap.block_time_last {
+        println!("block_time <= twap.block_time_last. hence returning Ok");
         return Ok(());
     }
     let time_elapsed = Uint128::from(block_time - twap.block_time_last);
 
+    println!("\nCurrent twap cp: {:?}", twap.cumulative_prices);
+    println!("pools :{:?}", pools);
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         
         let amp = compute_current_amp(&math_config, &env)?;
+        let from_asset_scaling_factor = stable_swap_config
+            .get_scaling_factor_for(&from)
+            .unwrap_or(Decimal256::one());
+
+        let to_asset_scaling_factor = stable_swap_config
+            .get_scaling_factor_for(&to)
+            .unwrap_or(Decimal256::one());
 
         let spot_price = calc_spot_price(
             from, 
             to,
+            &from_asset_scaling_factor,
+            &to_asset_scaling_factor,
             pools, 
             config.fee_info.clone(),
             amp
         )?;
+        // ).unwrap();
 
         let ask_asset_precision = get_precision(deps.storage, &to)?;
-        let return_amount = spot_price.price_including_fee.to_uint128_with_precision(ask_asset_precision)?;
-
+        let return_amount = spot_price.price.to_uint128_with_precision(ask_asset_precision)?;
+        
+        println!("value before: {}", value);
+        println!("time_elapsed: {}", time_elapsed);
+        println!("spot price: {:?}", spot_price);
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
+        println!("value after: {}", value);
     }
 
     // Update last block time.
