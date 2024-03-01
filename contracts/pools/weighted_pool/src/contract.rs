@@ -340,11 +340,6 @@ fn query_spot_price(
         amount: Decimal256::with_precision(pool_amount_ask_asset.amount, ask_asset_decimal)?,
     };
 
-    println!(
-        "offer_decimal_asset: {:?}, ask_decimal_asset: {:?}",
-        offer_decimal_asset, ask_decimal_asset
-    );
-
     let offer_weight = get_weight(deps.storage, &offer_asset)?; 
     let ask_weight = get_weight(deps.storage, &ask_asset)?;
 

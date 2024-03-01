@@ -653,7 +653,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -662,7 +662,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -671,7 +671,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -680,7 +680,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -689,7 +689,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -698,7 +698,7 @@ fn test_query_on_join_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(970173599820u128),
+                rate: Uint128::from(89999910u128),
             },
         ],
         pool_twap_res.exchange_infos
@@ -1091,6 +1091,7 @@ fn test_on_exit_pool() {
         auto_stake: None,
         assets: Some(assets_msg.clone()),
     };
+
     app.execute_contract(
         alice_address.clone(),
         token_instance0.clone(),
@@ -1323,7 +1324,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::NativeToken {
@@ -1332,7 +1333,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1341,7 +1342,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string()
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1350,7 +1351,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance1.clone(),
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1359,7 +1360,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::NativeToken {
                     denom: "axlusd".to_string()
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             },
             AssetExchangeRate {
                 offer_info: AssetInfo::Token {
@@ -1368,7 +1369,7 @@ fn test_on_exit_pool() {
                 ask_info: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                rate: Uint128::from(999999991900u128),
+                rate: Uint128::from(89999910u128),
             }
         ],
         pool_twap_res.exchange_infos

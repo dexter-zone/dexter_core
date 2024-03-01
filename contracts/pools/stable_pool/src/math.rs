@@ -176,6 +176,8 @@ pub(crate) fn calc_y(
 pub(crate) fn calc_spot_price(
     from: &AssetInfo,
     to: &AssetInfo,
+    from_asset_scaling_factor: &Decimal256,
+    to_asset_scaling_factor: &Decimal256,
     pools: &[DecimalAsset],
     fee: FeeStructs,
     amp: u64,
@@ -183,6 +185,17 @@ pub(crate) fn calc_spot_price(
     // first we figure out the amount of the from asset in the pool
     let from_asset = pools.iter().find(|asset| asset.info.eq(from)).unwrap();
     let to_asset = pools.iter().find(|asset| asset.info.eq(to)).unwrap();
+
+    // if from asset amount is zero, then return 0 as the spot price
+    // this is becasuse ideally both will be zero if the pool is empty, but we'll just check for from_asset
+    if from_asset.amount.is_zero() {
+        return Ok(SpotPrice {
+            from: from.clone(),
+            to: to.clone(),
+            price: Decimal256::zero(),
+            price_including_fee: Decimal256::zero(),
+        });
+    }
 
     // now, since it's really hard to find the price derivative of the stableswap invariant, we'll just use the
     // approximation as the price of a very very small trade. This is the same as the spot price.
@@ -235,9 +248,19 @@ pub(crate) fn calc_spot_price(
     let y_diff = to_asset.amount.checked_sub(y_price_decimal)?;
     let y_diff_including_fee = to_asset.amount.checked_sub(y_price_including_fee_decimal)?;
 
-    let spot_price = y_diff.checked_div(from_asset_small_trade_amount).unwrap();
-    let spot_price_with_fee = y_diff_including_fee
-        .checked_div(from_asset_small_trade_amount)
+    let y_diff_unscaled = y_diff.without_scaling_factor(*to_asset_scaling_factor)?;
+
+    let y_diff_including_fee_scaled = y_diff_including_fee.without_scaling_factor(*to_asset_scaling_factor)?;
+
+    let from_asset_small_trade_amount_unscaled =
+        from_asset_small_trade_amount.without_scaling_factor(*from_asset_scaling_factor)?;
+
+    let spot_price = y_diff_unscaled
+        .checked_div(from_asset_small_trade_amount_unscaled)
+        .unwrap();
+
+    let spot_price_with_fee = y_diff_including_fee_scaled
+        .checked_div(from_asset_small_trade_amount_unscaled)
         .unwrap();
 
     let spot_price = SpotPrice {
@@ -282,12 +305,28 @@ mod tests {
         ];
 
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.999999900990108804").unwrap());
 
         // test opposite direction
-        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.999999900990108804").unwrap());
 
@@ -300,7 +339,15 @@ mod tests {
 
   
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9999999009901089").unwrap());
         
@@ -311,7 +358,15 @@ mod tests {
         ];
 
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9999999009902").unwrap());
         
@@ -322,12 +377,28 @@ mod tests {
         ];
             
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.9594664670086").unwrap());
 
         // test opposite direction
-        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[1].info,
+            &pools[0].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("1.0422433526755").unwrap());
 
@@ -338,14 +409,31 @@ mod tests {
         ];
         
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.8748087775978").unwrap());
 
         // test opposite direction
-        let spot_price = calc_spot_price(&pools[1].info,&pools[0].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[1].info,
+            &pools[0].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         let spot_price = spot_price.unwrap();
+        
         assert_eq!(spot_price.clone().price, Decimal256::from_str("1.143093026548").unwrap());
         assert_eq!(spot_price.price_including_fee, Decimal256::from_str("1.139663751743").unwrap());
 
@@ -358,7 +446,15 @@ mod tests {
 
 
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 6);
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         assert_eq!(spot_price.unwrap().price, Decimal256::from_str("0.99999991").unwrap());
 
@@ -371,7 +467,15 @@ mod tests {
 
         let pools_decimal = decimal_asset_pools_with_precision(pools.clone(), 18);
 
-        let spot_price = calc_spot_price(&pools[0].info,&pools[1].info, &pools_decimal, fee.clone(), amp_final);
+        let spot_price = calc_spot_price(
+            &pools[0].info,
+            &pools[1].info, 
+            &Decimal256::from_str("1").unwrap(),
+            &Decimal256::from_str("1").unwrap(),
+            &pools_decimal, 
+            fee.clone(), 
+            amp_final
+        );
         assert_eq!(spot_price.is_ok(), true);
         // simulation breaks at this value. 
         // with integer invariant calculation, we must be able to go below this value.

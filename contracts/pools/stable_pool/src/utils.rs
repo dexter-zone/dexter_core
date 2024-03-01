@@ -6,7 +6,7 @@ use dexter::vault::FEE_PRECISION;
 
 use crate::error::ContractError;
 use crate::math::{calc_spot_price, calc_y};
-use crate::state::{MathConfig, CONFIG};
+use crate::state::{MathConfig, CONFIG, STABLESWAP_CONFIG};
 use crate::state::{get_precision, Twap};
 
 // --------x--------x--------x--------x--------x--------x--------x--------x---------
@@ -169,10 +169,15 @@ pub fn accumulate_prices(
     twap: &mut Twap,
     pools: &[DecimalAsset],
 ) -> Result<(), ContractError> {
-   let config = CONFIG.load(deps.storage)?;
+
+    let config = CONFIG.load(deps.storage)?;
+    let stable_swap_config = STABLESWAP_CONFIG.load(deps.storage)?;
    
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
+
+    // no need to update if the block time is less than the last block time
+    // as multiplier is 0 in that case
     if block_time <= twap.block_time_last {
         return Ok(());
     }
@@ -182,18 +187,28 @@ pub fn accumulate_prices(
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         
         let amp = compute_current_amp(&math_config, &env)?;
+        let from_asset_scaling_factor = stable_swap_config
+            .get_scaling_factor_for(&from)
+            .unwrap_or(Decimal256::one());
+
+        let to_asset_scaling_factor = stable_swap_config
+            .get_scaling_factor_for(&to)
+            .unwrap_or(Decimal256::one());
 
         let spot_price = calc_spot_price(
             from, 
             to,
+            &from_asset_scaling_factor,
+            &to_asset_scaling_factor,
             pools, 
             config.fee_info.clone(),
             amp
         )?;
+        // ).unwrap();
 
         let ask_asset_precision = get_precision(deps.storage, &to)?;
-        let return_amount = spot_price.price_including_fee.to_uint128_with_precision(ask_asset_precision)?;
-
+        let return_amount = spot_price.price.to_uint128_with_precision(ask_asset_precision)?;
+        
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
     }
 
