@@ -241,8 +241,6 @@ pub fn execute(
             update_fee(deps, env, info, total_fee_bps, CONFIG, CONTRACT_NAME).map_err(|e| e.into())
         }
         ExecuteMsg::UpdateLiquidity { assets } => {
-            println!("\n Update liquidity called, sender: {}", info.sender);
-            println!("Assets: {:?}", assets);
             execute_update_liquidity(deps, env, info, assets)
         }
     }
@@ -417,8 +415,6 @@ pub fn execute_update_liquidity(
     let decimal_assets: Vec<DecimalAsset> =
         transform_to_scaled_decimal_asset(deps.as_ref(), config.assets.clone())?;
 
-    println!("Decimal assets: {:?}", decimal_assets);
-
     // Accumulate prices for the assets in the pool
     let res = accumulate_prices(
         deps.as_ref(),
@@ -428,13 +424,13 @@ pub fn execute_update_liquidity(
         &decimal_assets,
     );
 
-    println!("Accumulate prices result: {:?}", res);
-
     if res.is_ok()
     // TWAP computation can fail in certain edge cases (when pool is empty for eg), for which you need
     // to allow tx to be successful rather than failing the tx. Accumulated prices can be used to
     // calculate TWAP oracle prices later and letting the tx be successful even when price accumulation
     // fails doesn't cause any issues.
+    // UPDATE: We have now handled the edge case of pool join operation so this should ideally never fail.
+    // But we keep this check here for safety, so the pool operations don't fail because of this
     {
         TWAPINFO.save(deps.storage, &twap)?;
     }

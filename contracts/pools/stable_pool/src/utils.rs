@@ -197,16 +197,14 @@ pub fn accumulate_prices(
    
     // Calculate time elapsed since last price update.
     let block_time = env.block.time.seconds();
-    println!("block_time: {}", block_time);
 
+    // no need to update if the block time is less than the last block time
+    // as multiplier is 0 in that case
     if block_time <= twap.block_time_last {
-        println!("block_time <= twap.block_time_last. hence returning Ok");
         return Ok(());
     }
     let time_elapsed = Uint128::from(block_time - twap.block_time_last);
 
-    println!("\nCurrent twap cp: {:?}", twap.cumulative_prices);
-    println!("pools :{:?}", pools);
     // Iterate over all asset pairs in the pool and accumulate prices.
     for (from, to, value) in twap.cumulative_prices.iter_mut() {
         
@@ -233,11 +231,7 @@ pub fn accumulate_prices(
         let ask_asset_precision = get_precision(deps.storage, &to)?;
         let return_amount = spot_price.price.to_uint128_with_precision(ask_asset_precision)?;
         
-        println!("value before: {}", value);
-        println!("time_elapsed: {}", time_elapsed);
-        println!("spot price: {:?}", spot_price);
         *value = value.wrapping_add(time_elapsed.checked_mul(return_amount)?);
-        println!("value after: {}", value);
     }
 
     // Update last block time.

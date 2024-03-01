@@ -189,9 +189,6 @@ pub(crate) fn calc_spot_price(
 
     // if from asset amount is zero, then return 0 as the spot price
     // this is becasuse ideally both will be zero if the pool is empty, but we'll just check for from_asset
-
-    println!("\n\nfrom asset: {:?} to_asset: {:?}", from_asset, to_asset);
-
     if from_asset.amount.is_zero() {
         return Ok(SpotPrice {
             from: from.clone(),

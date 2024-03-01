@@ -1046,8 +1046,6 @@ fn test_on_exit_pool() {
     )
     .unwrap();
 
-    println!("\n\nCreating pool");
-
     let (vault_instance, pool_addr, lp_token_addr, token_instance0, token_instance1, _) =
         instantiate_contracts_instance(&mut app, &owner);
     mint_some_tokens(
@@ -1118,7 +1116,6 @@ fn test_on_exit_pool() {
     )
     .unwrap();
 
-    println!("\n\nJoining pool");
     app.execute_contract(
         alice_address.clone(),
         vault_instance.clone(),
