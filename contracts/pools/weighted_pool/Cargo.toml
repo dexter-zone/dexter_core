@@ -24,7 +24,7 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 integer-sqrt = "0.1.5"
-dexter = { path = "../../../packages/dexter", default-features = false }
+dexter = { version = "1.3.0", path = "../../../packages/dexter", default-features = false }
 cw2 = "1.0.1"
 cw20 = "1.0.1"
 cosmwasm-std = "1.5.0"
@@ -39,6 +39,6 @@ const_format = "0.2.30"
 
 [dev-dependencies]
 cw-multi-test = "0.16.2"
-dexter-vault = {path = "../../vault"}
-lp-token = {path = "../../lp_token"}
+dexter-vault = { version = "1.0.0", path = "../../vault"}
+lp-token = { version = "1.0.0", path = "../../lp_token"}
 proptest = "0.10.1"

@@ -24,7 +24,7 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 integer-sqrt = "0.1.5"
-dexter = { path = "../../../packages/dexter", default-features = false }
+dexter = { version = "1.3.0", path = "../../../packages/dexter", default-features = false }
 cw2 = "1.0.1"
 cw20 = "1.0.1"
 cosmwasm-std = "1.5.0"
@@ -43,5 +43,5 @@ anyhow = "1.0"
 sim = { git = "https://github.com/dexter-zone/stableswap_simulations.git", rev = "d40f0e77f6b21cccdd8415f6f36db31f76be2f3f", package = "sim" }
 lp-token = {path = "../../lp_token"}
 cw-multi-test = "0.16.2"
-dexter-vault = {path = "../../vault"}
+dexter-vault = { version = "1.0.0", path = "../../vault"}
 proptest = "0.10.1"
