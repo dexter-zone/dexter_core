@@ -57,6 +57,18 @@ pub enum ContractError {
 
     #[error("Pair type mismatch. Check factory pair configs")]
     PoolTypeMismatch {},
+
+    #[error("Invalid contract version for upgrade. Expected version: {expected_version} Found: {current_version}")]
+    InvalidContractVersion { 
+        current_version: String,
+        expected_version: String,
+    },
+
+    #[error("Invalid contract name for upgrade. Expected name: {expected_name} Found: {contract_name}")]
+    InvalidContractName { 
+        contract_name: String,
+        expected_name: String,
+    },
 }
 
 impl From<OverflowError> for ContractError {

@@ -61,18 +61,18 @@ fn store_token_code(app: &mut App) -> u64 {
 
 fn store_stable5_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
@@ -252,7 +252,7 @@ fn initialize_stable_5_pool(
             denom: denom1.clone(),
             precision: 6u8,
         }],
-        init_params: Some(to_json_binary(&stable_pool::state::StablePoolParams {
+        init_params: Some(to_json_binary(&dexter_stable_pool::state::StablePoolParams {
             amp: 10u64,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
@@ -360,7 +360,7 @@ fn initialize_weighted_pool(
             }
         ],
         init_params: Some(
-            to_json_binary(&weighted_pool::state::WeightedParams {
+            to_json_binary(&dexter_weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,
                 exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })

@@ -10,8 +10,8 @@ use dexter::vault::{
     SwapType,
 };
 
-use stable_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
+use dexter_stable_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use dexter_stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
 
 use crate::utils::*;
 pub mod utils;

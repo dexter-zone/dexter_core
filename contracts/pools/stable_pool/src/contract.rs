@@ -1,10 +1,9 @@
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
+    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64
 };
-use cw2::set_contract_version;
+use cw2::{get_contract_version, set_contract_version};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -25,11 +24,14 @@ use dexter::vault::{SwapType, FEE_PRECISION};
 const CONTRACT_NAME: &str = "dexter-stable-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 /// Maximum number of assets supported by the pool
 const MAX_ASSETS: usize = 5;
 /// Minimum number of assets supported by the pool
 const MIN_ASSETS: usize = 2;
+
+type ContractResult<T> = Result<T, ContractError>;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -1624,4 +1626,30 @@ pub fn transform_to_scaled_decimal_asset(
             asset.to_scaled_decimal_asset(precision, scaling_factor)
         })
         .collect::<StdResult<Vec<DecimalAsset>>>()
+}
+
+// migrate msg
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            // fetch current version to ensure it's v1
+            let version = get_contract_version(_deps.storage)?;
+            if version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersion {
+                    expected_version: CONTRACT_VERSION_V1.to_string(),
+                    current_version: version.version,
+                });
+            }
+
+            if version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractName {
+                    expected_name: CONTRACT_NAME.to_string(),
+                    contract_name: version.contract,
+                });
+            }
+
+            Ok(Response::default())
+        }
+    }
 }

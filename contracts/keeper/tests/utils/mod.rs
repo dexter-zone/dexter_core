@@ -11,7 +11,7 @@ use dexter::vault::{
 };
 
 use dexter::keeper::InstantiateMsg as KeeperInstantiateMsg;
-use weighted_pool::state::WeightedParams;
+use dexter_weighted_pool::state::WeightedParams;
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -183,9 +183,9 @@ pub fn instantiate_contracts(
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }

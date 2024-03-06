@@ -52,9 +52,9 @@ fn store_vault_code(app: &mut App) -> u64 {
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
     let weighted_pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(weighted_pool_contract)
 }
@@ -257,7 +257,7 @@ fn test_superfluid_lp_locking() {
             protocol_fee_percent: 30,
         }),
         init_params: to_json_binary(
-            &weighted_pool::state::WeightedParams {
+            &dexter_weighted_pool::state::WeightedParams {
                 weights: vec![
                     Asset {
                         info: AssetInfo::NativeToken {

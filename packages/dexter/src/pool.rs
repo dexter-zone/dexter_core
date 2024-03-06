@@ -206,7 +206,13 @@ pub enum ExitType {
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    // migrates to v1.1 of the contract
+    // This introduces following changes to the contracts:
+    // Weighted Pool: Spot Price API, updates to Cumulative Price functions
+    // Stable Pool: Spot Price API, updates to Cumulative Price functions, migration to Integer based invariant math, removal of max spread checks
+    V1_1 {}
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------

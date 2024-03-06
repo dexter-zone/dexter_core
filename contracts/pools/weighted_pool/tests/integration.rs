@@ -12,7 +12,7 @@ use dexter::vault::{
     PoolTypeConfig, PoolInfo, PoolInfoResponse, PoolType, QueryMsg as VaultQueryMsg, SingleSwapRequest,
     SwapType, PoolCreationFee,
 };
-use weighted_pool::state::{MathConfig, WeightedAsset, WeightedParams};
+use dexter_weighted_pool::state::{MathConfig, WeightedAsset, WeightedParams};
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -42,9 +42,9 @@ fn store_vault_code(app: &mut App) -> u64 {
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }

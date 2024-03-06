@@ -16,7 +16,7 @@ use dexter::vault::{Cw20HookMsg, ExecuteMsg, FeeInfo, PoolInfoResponse, QueryMsg
 use itertools::Itertools;
 use dexter::vault;
 
-use stable_pool::state::AssetScalingFactor;
+use dexter_stable_pool::state::AssetScalingFactor;
 
 pub mod utils;
 

@@ -33,7 +33,7 @@ cw-utils = "1.0.3"
 cw-multi-test = "0.16.2"
 dexter-vault = { path = "../vault"}
 dexter-multi-staking = { path = "../multi_staking"}
-stable-pool = { path = "../pools/stable_pool" }
-weighted-pool = { path = "../pools/weighted_pool"}
+dexter-stable-pool = { path = "../pools/stable_pool" }
+dexter-weighted-pool = { path = "../pools/weighted_pool"}
 lp-token = { path = "../lp_token"}
 cw20 = "1.0.1"

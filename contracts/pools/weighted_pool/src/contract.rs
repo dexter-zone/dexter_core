@@ -5,7 +5,7 @@ use cosmwasm_std::{
     MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
-use cw2::set_contract_version;
+use cw2::{get_contract_version, set_contract_version};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, EventExt, select_pools};
 use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade};
@@ -27,6 +27,7 @@ use cosmwasm_std::Event;
 const CONTRACT_NAME: &str = "dexter-weighted-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 /// Number of LP tokens to mint when liquidity is provided for the first time to the pool.
 /// This does not include the token decimals.
@@ -35,6 +36,8 @@ const INIT_LP_TOKENS: u128 = 100;
 const MAX_ASSETS: usize = 8;
 /// Minimum number of assets supported by the pool
 const MIN_ASSETS: usize = 2;
+
+type ContractResult<T> = Result<T, ContractError>;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -1002,7 +1005,28 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **_deps** is the object of type [`DepsMut`].
 /// * **_env** is the object of type [`Env`].
 /// * **_msg** is the object of type [`MigrateMsg`].
+// migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    Ok(Response::default())
+pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            // fetch current version to ensure it's v1
+            let version = get_contract_version(_deps.storage)?;
+            if version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersion {
+                    expected_version: CONTRACT_VERSION_V1.to_string(),
+                    current_version: version.version,
+                });
+            }
+
+            if version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractName {
+                    expected_name: CONTRACT_NAME.to_string(),
+                    contract_name: version.contract,
+                });
+            }
+
+            Ok(Response::default())
+        }
+    }
 }

@@ -1,9 +1,9 @@
 [package]
-name = "stable-pool"
-version = "1.0.0"
-authors = ["AstroTechLabs"]
+name = "dexter-stable-pool"
+version = "1.1.0"
+authors = ["Persistence Labs"]
 edition = "2021"
-description = "A Dexter DEX pool implementing the stable 3-pool AMM type"
+description = "A Dexter DEX pool implementing the stableswap and metastable AMM models"
 license = "MIT"
 
 exclude = [
