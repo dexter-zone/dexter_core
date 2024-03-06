@@ -39,10 +39,10 @@ cosmwasm-schema = "1.5.0"
 const_format = "0.2.30"
 
 [dev-dependencies]
-dexter-stable-pool = { version = "1.1.0", path = "../pools/stable_pool" }
-dexter-weighted-pool = { version = "1.1.0", path = "../pools/weighted_pool"}
-lp-token = { version = "1.0.0", path = "../lp_token"}
-dexter-multi-staking = { version = "3.0.0", path = "../multi_staking"}
+dexter-stable-pool = { path = "../pools/stable_pool" }
+dexter-weighted-pool = { path = "../pools/weighted_pool"}
+lp-token = { path = "../lp_token"}
+dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.16.2"
 cw20 = "1.0.1"
