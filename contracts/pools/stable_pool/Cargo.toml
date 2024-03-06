@@ -43,5 +43,5 @@ anyhow = "1.0"
 sim = { git = "https://github.com/dexter-zone/stableswap_simulations.git", rev = "d40f0e77f6b21cccdd8415f6f36db31f76be2f3f", package = "sim" }
 lp-token = {path = "../../lp_token"}
 cw-multi-test = "0.16.2"
-dexter-vault = { version = "1.0.0", path = "../../vault"}
+dexter-vault = { path = "../../vault"}
 proptest = "0.10.1"
