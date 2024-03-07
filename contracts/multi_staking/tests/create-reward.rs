@@ -208,7 +208,7 @@ fn test_reward_schedule_queries() {
     let (multi_staking_instance, lp_token_addr) = setup(&mut app, admin_addr.clone());
 
     // Allow another LP token in the multi staking contract
-    let lp_token1_addr = Addr::unchecked("lp-token-1");
+    let lp_token1_addr = Addr::unchecked("dexter-lp-token-1");
     app.execute_contract(
         admin_addr.clone(),
         multi_staking_instance.clone(),

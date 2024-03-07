@@ -108,9 +108,9 @@ pub fn create_dummy_cw20_token(app: &mut App, admin: &Addr, code_id: u64) -> Add
 
 pub fn store_lp_token_contract(app: &mut App) -> u64 {
     let lp_token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     let code_id = app.store_code(lp_token_contract);
     return code_id;

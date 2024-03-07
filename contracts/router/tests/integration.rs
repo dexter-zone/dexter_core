@@ -52,9 +52,9 @@ fn store_vault_code(app: &mut App) -> u64 {
 
 fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     app.store_code(token_contract)
 }

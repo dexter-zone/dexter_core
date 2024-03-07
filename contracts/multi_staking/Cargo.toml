@@ -30,7 +30,7 @@ const_format = "0.2.30"
 
 [dev-dependencies]
 cosmwasm-schema = "1.5.0"
-lp-token = {path = "../lp_token"}
+dexter-lp-token = {path = "../lp_token"}
 cw-multi-test = "0.16.2"
 cw20-base = "1.0.1"
 anyhow = "1.0.68"

@@ -41,7 +41,7 @@ const_format = "0.2.30"
 [dev-dependencies]
 dexter-stable-pool = { path = "../pools/stable_pool" }
 dexter-weighted-pool = { path = "../pools/weighted_pool"}
-lp-token = { path = "../lp_token"}
+dexter-lp-token = { path = "../lp_token"}
 dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.16.2"
