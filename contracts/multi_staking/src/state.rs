@@ -57,7 +57,6 @@ pub const ASSET_LP_REWARD_STATE: Map<(&str, &Addr), AssetRewardState> =
 /// being rewarded for the LP token.
 pub const LP_GLOBAL_STATE: Map<&Addr, LpGlobalState> = Map::new("lp_global_state");
 
-
 pub fn next_reward_schedule_id(store: &mut dyn Storage) -> StdResult<u64> {
     let id: u64 = REWARD_SCHEDULE_ID_COUNT
         .may_load(store)?

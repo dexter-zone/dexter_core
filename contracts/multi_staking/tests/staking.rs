@@ -6,7 +6,11 @@ use dexter::{
 };
 
 use crate::utils::{
-    assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token, create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr, mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks, query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens, unlock_lp_tokens, whitelist_cw20_token_for_rewards, withdraw_unclaimed_rewards
+    assert_user_lp_token_balance, bond_lp_tokens, claim_creator_rewards, create_dummy_cw20_token,
+    create_reward_schedule, disallow_lp_token, mint_cw20_tokens_to_addr, mint_lp_tokens_to_addr,
+    mock_app, query_balance, query_bonded_lp_tokens, query_cw20_balance, query_token_locks,
+    query_unclaimed_rewards, setup, setup_generic, store_cw20_contract, unbond_lp_tokens,
+    unlock_lp_tokens, whitelist_cw20_token_for_rewards, withdraw_unclaimed_rewards,
 };
 pub mod utils;
 
@@ -1027,7 +1031,7 @@ fn test_create_cw20_reward_schedule() {
         &cw20_token_addr,
     );
 
-    // create again 
+    // create again
     let result = create_reward_schedule(
         &mut app,
         &admin_addr,

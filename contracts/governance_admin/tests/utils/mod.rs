@@ -3,13 +3,13 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 
-use cosmwasm_std::{to_json_binary, Addr, Coin, CosmosMsg, Event, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, Coin, CosmosMsg, Empty, Event, Uint128, WasmMsg};
 use cw20::MinterResponse;
+use dexter::asset::{Asset, AssetInfo};
 use dexter::constants::GOV_MODULE_ADDRESS;
 use dexter::vault::FeeInfo;
 
 use dexter::vault::{PauseInfo, PoolCreationFee, PoolType, PoolTypeConfig};
-
 
 use persistence_std::types::cosmos::bank::v1beta1::QueryBalanceRequest;
 use persistence_std::types::cosmos::gov::v1::{
@@ -84,6 +84,45 @@ pub struct GovAdminTestSetup {
     pub cw20_token_2: Addr,
 }
 
+#[allow(dead_code)]
+impl GovAdminTestSetup {
+    pub fn increase_cw20_allowance(
+        &self,
+        token: &Addr,
+        spender: &Addr,
+        amount: Uint128,
+        signer: &SigningAccount,
+    ) {
+        let increase_msg = cw20_base::msg::ExecuteMsg::IncreaseAllowance {
+            spender: spender.to_string(),
+            amount,
+            expires: None,
+        };
+
+        let wasm = Wasm::new(&self.persistence_test_app);
+        wasm.execute(&token.to_string(), &increase_msg, &vec![], &signer)
+            .unwrap();
+    }
+
+    pub fn decrease_cw20_allowance(
+        &self,
+        token: &Addr,
+        spender: &Addr,
+        amount: Uint128,
+        signer: &SigningAccount,
+    ) {
+        let decrease_msg = cw20_base::msg::ExecuteMsg::DecreaseAllowance {
+            spender: spender.to_string(),
+            amount,
+            expires: None,
+        };
+
+        let wasm = Wasm::new(&self.persistence_test_app);
+        wasm.execute(&token.to_string(), &decrease_msg, &vec![], &signer)
+            .unwrap();
+    }
+}
+
 impl Display for GovAdminTestSetup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -104,6 +143,82 @@ impl Display for GovAdminTestSetup {
             self.cw20_token_2
         )
     }
+}
+
+pub fn gov_execute_msg(
+    app: &PersistenceTestApp,
+    user: &SigningAccount,
+    gov_admin_instance: &String,
+    msg: CosmosMsg,
+) {
+    let execute_msg = dexter::governance_admin::ExecuteMsg::ExecuteMsgs { msgs: vec![msg] };
+
+    let wasm_msg = MsgExecuteContract {
+        sender: GOV_MODULE_ADDRESS.to_owned(),
+        contract: gov_admin_instance.to_string(),
+        msg: to_json_binary(&execute_msg).unwrap().0,
+        funds: vec![],
+    };
+
+    let msg_submit_proposal = MsgSubmitProposal {
+        messages: vec![wasm_msg.to_any()],
+        initial_deposit: vec![persistence_std::types::cosmos::base::v1beta1::Coin {
+            denom: "uxprt".to_string(),
+            amount: Uint128::new(1000000000).to_string(),
+        }],
+        proposer: user.address().to_string(),
+        metadata: "WASM EXECUTR".to_string(),
+        title: "WASM EXECUTE".to_string(),
+        summary: "WASM EXECUTE".to_string(),
+    };
+
+    let gov = Gov::new(app);
+
+    let proposal_id = gov
+        .submit_proposal(msg_submit_proposal, user)
+        .unwrap()
+        .data
+        .proposal_id;
+
+    // vote as the validator
+    let validator_signing_account = app.get_first_validator_signing_account().unwrap();
+    gov.vote(
+        MsgVote {
+            proposal_id,
+            voter: validator_signing_account.address(),
+            option: VoteOption::Yes as i32,
+            metadata: "pass kardo bhai".to_string(),
+        },
+        &validator_signing_account,
+    )
+    .unwrap();
+
+    // make time pass
+    // wait for the proposal to pass
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest {
+            proposal_id: proposal_id,
+        })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // find the proposal voting end time and increase chain time to that
+    let proposal_end_time = proposal.voting_end_time.unwrap();
+    let proposal_start_time = proposal.voting_start_time.unwrap();
+
+    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
+
+    app.increase_time(difference_seconds as u64);
+
+    let proposal = gov
+        .query_proposal(&QueryProposalRequest { proposal_id })
+        .unwrap()
+        .proposal
+        .unwrap();
+
+    // validate that the proposal has passed
+    assert_eq!(proposal.status, ProposalStatus::Passed as i32);
 }
 
 pub fn setup_test_contracts() -> GovAdminTestSetup {
@@ -245,7 +360,14 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         pool_configs: pool_configs,
         lp_token_code_id: Some(lp_token_code_id),
         fee_collector: None,
-        pool_creation_fee: PoolCreationFee::default(),
+        pool_creation_fee: PoolCreationFee::Enabled {
+            fee: Asset {
+                amount: Uint128::new(10000000),
+                info: AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+            },
+        },
         auto_stake_impl: dexter::vault::AutoStakeImpl::Multistaking {
             contract_addr: Addr::unchecked(multi_staking_instance.clone()),
         },
@@ -292,91 +414,13 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         paused: None,
     };
 
-    let msg_update_keeper_in_vault = dexter::governance_admin::ExecuteMsg::ExecuteMsgs {
-        msgs: vec![CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: vault_instance.clone(),
-            msg: to_json_binary(&vault_update_keeper_msg).unwrap(),
-            funds: vec![],
-        })],
-    };
-
-    let wasm_msg = MsgExecuteContract {
-        sender: GOV_MODULE_ADDRESS.to_owned(),
-        contract: gov_admin_instance.to_string(),
-        msg: to_json_binary(&msg_update_keeper_in_vault).unwrap().0,
+    let cosmos_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: vault_instance.clone(),
+        msg: to_json_binary(&vault_update_keeper_msg).unwrap(),
         funds: vec![],
-    };
+    });
 
-    let msg_submit_proposal = MsgSubmitProposal {
-        messages: vec![wasm_msg.to_any()],
-        initial_deposit: vec![persistence_std::types::cosmos::base::v1beta1::Coin {
-            denom: "uxprt".to_string(),
-            amount: Uint128::new(1000000000).to_string(),
-        }],
-        proposer: user.address().to_string(),
-        metadata: "Update vault config".to_string(),
-        title: "Update vault config".to_string(),
-        summary: "EMPTY".to_string(),
-    };
-
-    let gov = Gov::new(&persistence_test_app);
-    let proposal_id = gov
-        .submit_proposal(msg_submit_proposal, user)
-        .unwrap()
-        .data
-        .proposal_id;
-
-    // vote as the validator
-    let validator_signing_account = persistence_test_app
-        .get_first_validator_signing_account()
-        .unwrap();
-    gov.vote(
-        MsgVote {
-            proposal_id,
-            voter: validator_signing_account.address(),
-            option: VoteOption::Yes as i32,
-            metadata: "pass kardo bhai".to_string(),
-        },
-        &validator_signing_account,
-    )
-    .unwrap();
-
-    // make time pass
-    // wait for the proposal to pass
-    let proposal = gov
-        .query_proposal(&QueryProposalRequest {
-            proposal_id: proposal_id,
-        })
-        .unwrap()
-        .proposal
-        .unwrap();
-
-    // find the proposal voting end time and increase chain time to that
-    let proposal_end_time = proposal.voting_end_time.unwrap();
-    let proposal_start_time = proposal.voting_start_time.unwrap();
-
-    let difference_seconds = proposal_end_time.seconds - proposal_start_time.seconds;
-
-    persistence_test_app.increase_time(difference_seconds as u64);
-    // query proposal again
-    // let proposal = gov.query_proposal(&QueryProposalRequest {
-    //     proposal_id,
-    // }).unwrap().proposal.unwrap();
-
-    // query vault config
-    // let vault_config: ConfigResponse = wasm
-    //     .query(
-    //         &vault_instance,
-    //         &dexter::vault::QueryMsg::Config {},
-    //     )
-    //     .unwrap();
-
-    // wasm.execute(
-    //     &vault_instance.clone(),
-    //     &vault_update_keeper_msg,
-    //     &[],
-    //     &admin,
-    // ).unwrap();
+    gov_execute_msg(&persistence_test_app, user, &gov_admin_instance, cosmos_msg);
 
     // create 2 CW20 tokens
     let cw20_test_token_1_address = wasm

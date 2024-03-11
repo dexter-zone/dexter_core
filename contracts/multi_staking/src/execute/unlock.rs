@@ -1,7 +1,8 @@
 use crate::{
     contract::{ContractResult, CONTRACT_NAME},
-    state::{USER_LP_TOKEN_LOCKS, LP_OVERRIDE_CONFIG},
-    utils::{calculate_unlock_fee, find_lock_difference}, error::ContractError,
+    error::ContractError,
+    state::{LP_OVERRIDE_CONFIG, USER_LP_TOKEN_LOCKS},
+    utils::{calculate_unlock_fee, find_lock_difference},
 };
 use const_format::concatcp;
 use cosmwasm_std::{

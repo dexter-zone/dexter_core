@@ -1,10 +1,12 @@
+use crate::add_wasm_execute_msg;
 use crate::contract::{ContractResult, CONTRACT_NAME};
 use crate::state::POOL_CREATION_REQUEST_DATA;
-use crate::add_wasm_execute_msg;
 use const_format::concatcp;
 
-use cosmwasm_std::{to_json_binary, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
+use cosmwasm_std::{to_json_binary, Coin, CosmosMsg, DepsMut, Env, Event, MessageInfo, Response};
 
+use dexter::asset::AssetInfo;
+use dexter::governance_admin::FundsCategory;
 use dexter::helper::EventExt;
 use dexter::vault::ExecuteMsg as VaultExecuteMsg;
 
@@ -32,8 +34,35 @@ pub fn execute_resume_create_pool(
         asset_infos: pool_creation_request.asset_info.clone(),
     };
 
+    let user_funds = pool_creation_request_data.user_deposits_detailed;
+    let mut pool_creation_funds: Vec<Coin> = vec![];
+
+    for fund in user_funds {
+        if let FundsCategory::PoolCreationFee = fund.category {
+            for asset in fund.assets {
+                match asset.info {
+                    AssetInfo::NativeToken { denom } => {
+                        pool_creation_funds.push(Coin::new(asset.amount.u128(), denom));
+                    }
+                    AssetInfo::Token { contract_addr } => {
+                        add_wasm_execute_msg!(
+                            messages,
+                            contract_addr,
+                            cw20::Cw20ExecuteMsg::IncreaseAllowance {
+                                spender: vault_addr.to_string(),
+                                amount: asset.amount,
+                                expires: Some(cw20::Expiration::AtHeight(env.block.height + 1)),
+                            },
+                            vec![]
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // add the message to the list of messages
-    add_wasm_execute_msg!(messages, vault_addr, create_pool_msg, vec![]);
+    add_wasm_execute_msg!(messages, vault_addr, create_pool_msg, pool_creation_funds);
 
     // add a message to return callback to the contract post proposal creation so we can find the
     // pool id of the pool we just created. This can be just found by querying the latest pool id from the vault

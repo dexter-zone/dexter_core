@@ -4,8 +4,8 @@ use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
 use dexter::{
     asset::AssetInfo,
     multi_staking::{
-        Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg, QueryMsg, TokenLock,
-        TokenLockInfo, UnclaimedReward, UnlockFeeTier, UnbondConfig, InstantUnbondConfig,
+        Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantUnbondConfig, InstantiateMsg, QueryMsg,
+        TokenLock, TokenLockInfo, UnbondConfig, UnclaimedReward, UnlockFeeTier,
     },
 };
 
