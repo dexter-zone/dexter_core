@@ -1,52 +1,25 @@
 {
   "contract_name": "dexter-multi-staking",
-  "contract_version": "3.0.0",
+  "contract_version": "3.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "InstantiateMsg",
     "type": "object",
     "required": [
-      "fee_tier_interval",
-      "instant_unbond_fee_bp",
-      "instant_unbond_min_fee_bp",
       "keeper_addr",
-      "minimum_reward_schedule_proposal_start_delay",
       "owner",
-      "unlock_period"
+      "unbond_config"
     ],
     "properties": {
-      "fee_tier_interval": {
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
-      },
-      "instant_unbond_fee_bp": {
-        "description": "value between 0 and 1000 (0% to 10%) are allowed",
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
-      },
-      "instant_unbond_min_fee_bp": {
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
-      },
       "keeper_addr": {
         "$ref": "#/definitions/Addr"
-      },
-      "minimum_reward_schedule_proposal_start_delay": {
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
       },
       "owner": {
         "$ref": "#/definitions/Addr"
       },
-      "unlock_period": {
-        "type": "integer",
-        "format": "uint64",
-        "minimum": 0.0
+      "unbond_config": {
+        "$ref": "#/definitions/UnbondConfig"
       }
     },
     "additionalProperties": false,
@@ -54,6 +27,78 @@
       "Addr": {
         "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
         "type": "string"
+      },
+      "InstantUnbondConfig": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "disabled"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "object",
+                "required": [
+                  "fee_tier_interval",
+                  "max_fee",
+                  "min_fee"
+                ],
+                "properties": {
+                  "fee_tier_interval": {
+                    "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "max_fee": {
+                    "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "min_fee": {
+                    "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "UnbondConfig": {
+        "type": "object",
+        "required": [
+          "instant_unbond_config",
+          "unlock_period"
+        ],
+        "properties": {
+          "instant_unbond_config": {
+            "description": "Status of instant unbonding",
+            "allOf": [
+              {
+                "$ref": "#/definitions/InstantUnbondConfig"
+              }
+            ]
+          },
+          "unlock_period": {
+            "description": "Unlocking period in seconds This is the minimum time that must pass before a user can withdraw their staked tokens and rewards after they have called the unbond function",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -71,30 +116,6 @@
           "update_config": {
             "type": "object",
             "properties": {
-              "fee_tier_interval": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "instant_unbond_fee_bp": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "instant_unbond_min_fee_bp": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
-              },
               "keeper_addr": {
                 "anyOf": [
                   {
@@ -105,13 +126,63 @@
                   }
                 ]
               },
-              "unlock_period": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
+              "unbond_config": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/UnbondConfig"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Add custom unbdond config for a given LP token",
+        "type": "object",
+        "required": [
+          "set_custom_unbond_config"
+        ],
+        "properties": {
+          "set_custom_unbond_config": {
+            "type": "object",
+            "required": [
+              "lp_token",
+              "unbond_config"
+            ],
+            "properties": {
+              "lp_token": {
+                "$ref": "#/definitions/Addr"
+              },
+              "unbond_config": {
+                "$ref": "#/definitions/UnbondConfig"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Unset custom unbdond config for a given LP token",
+        "type": "object",
+        "required": [
+          "unset_custom_unbond_config"
+        ],
+        "properties": {
+          "unset_custom_unbond_config": {
+            "type": "object",
+            "required": [
+              "lp_token"
+            ],
+            "properties": {
+              "lp_token": {
+                "$ref": "#/definitions/Addr"
               }
             },
             "additionalProperties": false
@@ -204,6 +275,50 @@
             ],
             "properties": {
               "lp_token": {
+                "$ref": "#/definitions/Addr"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Add reward CW20 token to the list of allowed reward tokens",
+        "type": "object",
+        "required": [
+          "allow_reward_cw20_token"
+        ],
+        "properties": {
+          "allow_reward_cw20_token": {
+            "type": "object",
+            "required": [
+              "addr"
+            ],
+            "properties": {
+              "addr": {
+                "$ref": "#/definitions/Addr"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Remove reward CW20 token from the list of allowed reward tokens",
+        "type": "object",
+        "required": [
+          "remove_reward_cw20_token"
+        ],
+        "properties": {
+          "remove_reward_cw20_token": {
+            "type": "object",
+            "required": [
+              "addr"
+            ],
+            "properties": {
+              "addr": {
                 "$ref": "#/definitions/Addr"
               }
             },
@@ -494,6 +609,54 @@
         },
         "additionalProperties": false
       },
+      "InstantUnbondConfig": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "disabled"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "object",
+                "required": [
+                  "fee_tier_interval",
+                  "max_fee",
+                  "min_fee"
+                ],
+                "properties": {
+                  "fee_tier_interval": {
+                    "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "max_fee": {
+                    "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "min_fee": {
+                    "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "TokenLock": {
         "type": "object",
         "required": [
@@ -515,6 +678,30 @@
       "Uint128": {
         "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
         "type": "string"
+      },
+      "UnbondConfig": {
+        "type": "object",
+        "required": [
+          "instant_unbond_config",
+          "unlock_period"
+        ],
+        "properties": {
+          "instant_unbond_config": {
+            "description": "Status of instant unbonding",
+            "allOf": [
+              {
+                "$ref": "#/definitions/InstantUnbondConfig"
+              }
+            ]
+          },
+          "unlock_period": {
+            "description": "Unlocking period in seconds This is the minimum time that must pass before a user can withdraw their staked tokens and rewards after they have called the unbond function",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -531,6 +718,32 @@
         "properties": {
           "config": {
             "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Returns current unbond config of a given LP token (or global)",
+        "type": "object",
+        "required": [
+          "unbond_config"
+        ],
+        "properties": {
+          "unbond_config": {
+            "type": "object",
+            "properties": {
+              "lp_token": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Addr"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
             "additionalProperties": false
           }
         },
@@ -693,6 +906,27 @@
         ],
         "properties": {
           "instant_unlock_fee_tiers": {
+            "type": "object",
+            "required": [
+              "lp_token"
+            ],
+            "properties": {
+              "lp_token": {
+                "$ref": "#/definitions/Addr"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "default_instant_unlock_fee_tiers"
+        ],
+        "properties": {
+          "default_instant_unlock_fee_tiers": {
             "type": "object",
             "additionalProperties": false
           }
@@ -917,47 +1151,13 @@
     "title": "MigrateMsg",
     "oneOf": [
       {
-        "type": "object",
-        "required": [
-          "v3_from_v2"
-        ],
-        "properties": {
-          "v3_from_v2": {
-            "type": "object",
-            "required": [
-              "keeper_addr"
-            ],
-            "properties": {
-              "keeper_addr": {
-                "$ref": "#/definitions/Addr"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
-        "type": "object",
-        "required": [
-          "v3_from_v2_2"
-        ],
-        "properties": {
-          "v3_from_v2_2": {
-            "type": "object",
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
         "description": "Removes the reward schedule proposal start delay config param Instant unbonding fee and keeper address are added",
         "type": "object",
         "required": [
-          "v3_from_v1"
+          "v3_1_from_v1"
         ],
         "properties": {
-          "v3_from_v1": {
+          "v3_1_from_v1": {
             "type": "object",
             "required": [
               "fee_tier_interval",
@@ -985,6 +1185,53 @@
                 "$ref": "#/definitions/Addr"
               }
             },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "v3_1_from_v2"
+        ],
+        "properties": {
+          "v3_1_from_v2": {
+            "type": "object",
+            "required": [
+              "keeper_addr"
+            ],
+            "properties": {
+              "keeper_addr": {
+                "$ref": "#/definitions/Addr"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "v3_1_from_v2_2"
+        ],
+        "properties": {
+          "v3_1_from_v2_2": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "v3_1_from_v3"
+        ],
+        "properties": {
+          "v3_1_from_v3": {
+            "type": "object",
             "additionalProperties": false
           }
         },
@@ -1026,12 +1273,10 @@
       "type": "object",
       "required": [
         "allowed_lp_tokens",
-        "fee_tier_interval",
-        "instant_unbond_fee_bp",
-        "instant_unbond_min_fee_bp",
+        "allowed_reward_cw20_tokens",
         "keeper",
         "owner",
-        "unlock_period"
+        "unbond_config"
       ],
       "properties": {
         "allowed_lp_tokens": {
@@ -1041,23 +1286,12 @@
             "$ref": "#/definitions/Addr"
           }
         },
-        "fee_tier_interval": {
-          "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "instant_unbond_fee_bp": {
-          "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "instant_unbond_min_fee_bp": {
-          "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+        "allowed_reward_cw20_tokens": {
+          "description": "Allowed CW20 tokens for rewards. This is to control the abuse from a malicious CW20 token to create unnecessary reward schedules",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Addr"
+          }
         },
         "keeper": {
           "description": "Keeper address that acts as treasury of the Dexter protocol. All the fees are sent to this address.",
@@ -1075,11 +1309,13 @@
             }
           ]
         },
-        "unlock_period": {
-          "description": "Unlocking period in seconds This is the minimum time that must pass before a user can withdraw their staked tokens and rewards after they have called the unbond function",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+        "unbond_config": {
+          "description": "Default unbond config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UnbondConfig"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -1087,6 +1323,78 @@
         "Addr": {
           "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
           "type": "string"
+        },
+        "InstantUnbondConfig": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "disabled"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "enabled"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "object",
+                  "required": [
+                    "fee_tier_interval",
+                    "max_fee",
+                    "min_fee"
+                  ],
+                  "properties": {
+                    "fee_tier_interval": {
+                      "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    "max_fee": {
+                      "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    "min_fee": {
+                      "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "UnbondConfig": {
+          "type": "object",
+          "required": [
+            "instant_unbond_config",
+            "unlock_period"
+          ],
+          "properties": {
+            "instant_unbond_config": {
+              "description": "Status of instant unbonding",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/InstantUnbondConfig"
+                }
+              ]
+            },
+            "unlock_period": {
+              "description": "Unlocking period in seconds This is the minimum time that must pass before a user can withdraw their staked tokens and rewards after they have called the unbond function",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
         }
       }
     },
@@ -1117,6 +1425,42 @@
         "Uint128": {
           "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
           "type": "string"
+        }
+      }
+    },
+    "default_instant_unlock_fee_tiers": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Array_of_UnlockFeeTier",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/UnlockFeeTier"
+      },
+      "definitions": {
+        "UnlockFeeTier": {
+          "type": "object",
+          "required": [
+            "seconds_till_unlock_end",
+            "seconds_till_unlock_start",
+            "unlock_fee_bp"
+          ],
+          "properties": {
+            "seconds_till_unlock_end": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "seconds_till_unlock_start": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "unlock_fee_bp": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
         }
       }
     },
@@ -1508,6 +1852,82 @@
         "Uint128": {
           "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
           "type": "string"
+        }
+      }
+    },
+    "unbond_config": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UnbondConfig",
+      "type": "object",
+      "required": [
+        "instant_unbond_config",
+        "unlock_period"
+      ],
+      "properties": {
+        "instant_unbond_config": {
+          "description": "Status of instant unbonding",
+          "allOf": [
+            {
+              "$ref": "#/definitions/InstantUnbondConfig"
+            }
+          ]
+        },
+        "unlock_period": {
+          "description": "Unlocking period in seconds This is the minimum time that must pass before a user can withdraw their staked tokens and rewards after they have called the unbond function",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "InstantUnbondConfig": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "disabled"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "enabled"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "object",
+                  "required": [
+                    "fee_tier_interval",
+                    "max_fee",
+                    "min_fee"
+                  ],
+                  "properties": {
+                    "fee_tier_interval": {
+                      "description": "This is the interval period in seconds on which we will have fee tier boundaries.",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    "max_fee": {
+                      "description": "Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee value between 0 and 1000 (0% to 10%) are allowed",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    "min_fee": {
+                      "description": "This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future. Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.",
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         }
       }
     },
