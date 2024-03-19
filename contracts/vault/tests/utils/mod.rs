@@ -269,7 +269,6 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
          }).unwrap()),
         fee_info: Some(FeeInfo {
             total_fee_bps: 1_000u16,
@@ -314,7 +313,6 @@ pub fn initialize_stable_5_pool_2_asset(
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };
@@ -389,7 +387,6 @@ pub fn initialize_stable_5_pool(
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };

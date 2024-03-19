@@ -148,7 +148,6 @@ pub fn instantiate_contract_generic(
                 scaling_factors,
                 supports_scaling_factors_update: false,
                 scaling_factor_manager: None,
-                max_allowed_spread: Decimal::from_ratio(50u128, 100u128),
             })
             .unwrap(),
         ),

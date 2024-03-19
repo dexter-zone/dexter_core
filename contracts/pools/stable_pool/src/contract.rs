@@ -4,13 +4,14 @@ use cosmwasm_std::{
     entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64
 };
 use cw2::{get_contract_version, set_contract_version};
+use cw_storage_plus::Item;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::vec;
 
 use crate::error::ContractError;
 use crate::math::{compute_d, calc_spot_price, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
+use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, StableSwapConfigV1, Twap, CONFIG, MATHCONFIG, PRECISIONS, STABLESWAP_CONFIG, TWAPINFO};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
 use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade};
 
@@ -106,11 +107,6 @@ pub fn instantiate(
             .addr_validate(&params.scaling_factor_manager.clone().unwrap().to_string())?;
     }
 
-    // validate max allowed spread
-    if !(params.max_allowed_spread > Decimal::zero() && params.max_allowed_spread < Decimal::one()) {
-        return Err(ContractError::InvalidMaxAllowedSpread);
-    }
-
     // store precisions for assets in storage
     let greatest_precision = store_precisions(
         deps.branch(),
@@ -169,8 +165,7 @@ pub fn instantiate(
     let stableswap_config = StableSwapConfig {
         scaling_factor_manager: params.scaling_factor_manager.clone(),
         supports_scaling_factors_update: params.supports_scaling_factors_update,
-        scaling_factors: params.scaling_factors.clone(),
-        max_allowed_spread: params.max_allowed_spread,
+        scaling_factors: params.scaling_factors.clone()
     };
 
     // Store config, MathConfig and twap in storage
@@ -358,38 +353,6 @@ fn update_scaling_factor_manager(
     ))
 }
 
-/// Updates the max allowed spread of the pool.
-/// Only vault owner can execute this function.
-fn update_max_allowed_spread(
-    deps: DepsMut,
-    info: MessageInfo,
-    max_allowed_spread: Decimal,
-) -> Result<Response, ContractError> {
-    let config: Config = CONFIG.load(deps.storage)?;
-    let vault_config = query_vault_config(&deps.querier, config.vault_addr.clone().to_string())?;
-    let mut stableswap_config = STABLESWAP_CONFIG.load(deps.storage)?;
-
-    // Access Check :: Only Vault's Owner can execute this function
-    if info.sender != vault_config.owner && info.sender != config.vault_addr {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Max allowed spread should be between 0 and 1 not inclusive i.e 0 < max_allowed_spread < 1
-    if !(max_allowed_spread > Decimal::zero() && max_allowed_spread < Decimal::one()) {
-        return Err(ContractError::InvalidMaxAllowedSpread);
-    }
-
-    // Update config
-    stableswap_config.max_allowed_spread = max_allowed_spread;
-    STABLESWAP_CONFIG.save(deps.storage, &stableswap_config)?;
-
-    // Emit an event
-    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config::update_max_allowed_spread"), &info)
-        .add_attribute("max_allowed_spread", max_allowed_spread.to_string());
-
-    Ok(Response::new().add_event(event))
-}
-
 /// ## Description
 /// Admin Access by Vault :: Callable only by Dexter::Vault --> Updates locally stored asset balances state. Operation --> Updates locally stored [`Asset`] state
 ///                          Returns an [`ContractError`] on failure, otherwise returns the [`Response`] with the specified attributes if the operation was successful.
@@ -482,9 +445,6 @@ pub fn update_config(
         StablePoolUpdateParams::UpdateScalingFactorManager { manager } => {
             update_scaling_factor_manager(deps, info, manager)
         }
-        StablePoolUpdateParams::UpdateMaxAllowedSpread { max_allowed_spread } => {
-            update_max_allowed_spread(deps, info, max_allowed_spread)
-        }
     }
 }
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------
@@ -557,7 +517,6 @@ pub fn query_config(deps: Deps, env: Env) -> StdResult<ConfigResponse> {
         math_params: Some(to_json_binary(&math_config).unwrap()),
         additional_params: Some(
             to_json_binary(&StablePoolParams {
-                max_allowed_spread: stable_swap_config.max_allowed_spread,
                 amp: cur_amp.checked_div(AMP_PRECISION).unwrap(),
                 scaling_factors: stable_swap_config.scaling_factors,
                 scaling_factor_manager: stable_swap_config.scaling_factor_manager,
@@ -1566,11 +1525,11 @@ pub fn transform_to_scaled_decimal_asset(
 
 // migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+pub fn migrate_msg(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V1_1 {} => {
             // fetch current version to ensure it's v1
-            let version = get_contract_version(_deps.storage)?;
+            let version = get_contract_version(deps.storage)?;
             if version.version != CONTRACT_VERSION_V1 {
                 return Err(ContractError::InvalidContractVersion {
                     expected_version: CONTRACT_VERSION_V1.to_string(),
@@ -1584,6 +1543,18 @@ pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult
                     contract_name: version.contract,
                 });
             }
+
+            // fix the stableswap config
+            let stableswap_config: StableSwapConfigV1 =  Item::new("stableswap_config").load(deps.storage)?;
+
+            // remove the max_allowed_spread field
+            let stableswap_config_new: StableSwapConfig = StableSwapConfig {
+                supports_scaling_factors_update: stableswap_config.supports_scaling_factors_update,
+                scaling_factors: stableswap_config.scaling_factors,
+                scaling_factor_manager: stableswap_config.scaling_factor_manager
+            };
+
+            STABLESWAP_CONFIG.save(deps.storage, &stableswap_config_new)?;
 
             Ok(Response::default())
         }
