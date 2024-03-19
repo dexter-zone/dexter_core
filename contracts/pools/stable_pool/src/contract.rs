@@ -1,19 +1,18 @@
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64
+    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64
 };
 use cw2::{get_contract_version, set_contract_version};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
 use crate::math::{compute_d, calc_spot_price, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade, DEFAULT_SPREAD};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools, EventExt};
@@ -525,7 +524,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -1483,68 +1481,6 @@ fn imbalanced_withdraw(
     })
 }
 
-/// ## Description
-/// Returns a [`ContractError`] on failure.
-/// If `belief_price` and `max_spread` are both specified, we compute a new spread, otherwise we just use the swap spread to check `max_spread`.
-///
-/// ## Params
-/// * **belief_price** is an object of type [`Option<Decimal>`]. This is the belief price used in the swap.
-/// * **max_spread** is an object of type [`Option<Decimal>`]. This is the max spread allowed so that the swap can be executed successfuly.
-/// * **offer_amount** is an object of type [`Uint128`]. This is the amount of assets to swap.
-/// * **return_amount** is an object of type [`Uint128`]. This is the amount of assets to receive from the swap.
-/// * **spread_amount** is an object of type [`Uint128`]. This is the spread used in the swap.
-pub fn assert_max_spread(
-    max_allowed_spread: Decimal,
-    belief_price: Option<Decimal>,
-    max_spread: Option<Decimal>,
-    offer_amount: Uint128,
-    return_amount: Uint128,
-    spread_amount: Uint128,
-) -> ResponseType {
-    let default_spread = Decimal::from_str(DEFAULT_SPREAD).unwrap();
-
-    let max_spread = max_spread.unwrap_or(default_spread);
-    if max_spread.gt(&max_allowed_spread) {
-        return ResponseType::Failure((ContractError::AllowedSpreadAssertion {}).to_string());
-    }
-    let calc_spread = Decimal::from_ratio(spread_amount, return_amount + spread_amount);
-
-    if let Some(belief_price) = belief_price {
-        let expected_return = offer_amount
-            * belief_price
-                .inv()
-                .ok_or_else(|| {
-                    ResponseType::Failure(
-                        (ContractError::Std(StdError::generic_err(
-                            "Invalid belief_price. Check the input values.",
-                        )))
-                        .to_string(),
-                    )
-                })
-                .unwrap();
-
-        let spread_amount = expected_return.saturating_sub(return_amount);
-        let calc_spread = Decimal::from_ratio(spread_amount, expected_return);
-
-        if return_amount < expected_return && calc_spread > max_spread {
-            return ResponseType::Failure(
-                (ContractError::MaxSpreadAssertion {
-                    spread_amount: calc_spread,
-                })
-                .to_string(),
-            );
-        }
-    } else if calc_spread > max_spread {
-        return ResponseType::Failure(
-            (ContractError::MaxSpreadAssertion {
-                spread_amount: calc_spread,
-            })
-            .to_string(),
-        );
-    }
-
-    ResponseType::Success {}
-}
 
 // --------x--------x--------x--------x--------x--------x--------
 // --------x--------x AMP COMPUTE Functions   x--------x---------

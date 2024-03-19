@@ -244,7 +244,9 @@ pub struct SingleSwapRequest {
     pub asset_out: AssetInfo,
     pub swap_type: SwapType,
     pub amount: Uint128,
+    #[deprecated = "Use min_received in the swap execution message instead for slippage control"]
     pub max_spread: Option<Decimal>,
+    #[deprecated = "Use min_received in the swap execution message instead for slippage control"]
     pub belief_price: Option<Decimal>,
 }
 

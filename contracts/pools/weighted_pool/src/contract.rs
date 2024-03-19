@@ -287,8 +287,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
+            max_spread: _,
+            belief_price: _,
         } => to_json_binary(&query_on_swap(
             deps,
             env,
@@ -296,8 +296,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
         )?),
         QueryMsg::SpotPrice { offer_asset, ask_asset } => {
             to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
@@ -753,9 +751,7 @@ pub fn query_on_swap(
     swap_type: SwapType,
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
-    amount: Uint128,
-    _max_spread: Option<Decimal>,
-    _belief_price: Option<Decimal>,
+    amount: Uint128
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
