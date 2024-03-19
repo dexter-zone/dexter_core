@@ -282,7 +282,7 @@ fn update_scaling_factor(
         return Err(ContractError::UnsupportedAsset);
     }
 
-    if !(scaling_factor > Decimal256::zero()) {
+    if scaling_factor == Decimal256::zero() {
         return Err(ContractError::InvalidScalingFactor);
     }
 
