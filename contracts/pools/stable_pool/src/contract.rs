@@ -88,7 +88,7 @@ pub fn instantiate(
 
     // validate that scaling factor is greater than 0 for all the assets
     for asset_scaling_factor in &params.scaling_factors {
-        if !(asset_scaling_factor.scaling_factor > Decimal256::zero()) {
+        if asset_scaling_factor.scaling_factor == Decimal256::zero() {
             return Err(ContractError::InvalidScalingFactor);
         }
     }
