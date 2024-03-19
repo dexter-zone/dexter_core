@@ -1897,7 +1897,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(5u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1966,7 +1966,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(5341176u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -2015,7 +2015,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(1949253782u128)
     );
     assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
         info: AssetInfo::NativeToken {
@@ -2058,7 +2058,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(11552_075912u128)
     );
     assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
         info: native_asset_info("axlusd".to_string()),

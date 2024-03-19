@@ -377,7 +377,7 @@ fn test_swap() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_017_336_487u128),
-        Uint128::from(0u128),
+        Uint128::from(10_451u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -405,7 +405,7 @@ fn test_swap() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(982_978_603u128),
-        Uint128::from(0u128),
+        Uint128::from(30_273u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -533,7 +533,7 @@ fn test_swap_different_precision() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_017_336_487u128),
-        Uint128::from(0u128),
+        Uint128::from(10_451u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -561,7 +561,7 @@ fn test_swap_different_precision() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(982_978_603_388u128),
-        Uint128::from(0u128),
+        Uint128::from(30_273u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -755,7 +755,7 @@ fn test_swap_different_lsd_assets() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(976_643_026u128),
-        Uint128::from(0u128),
+        Uint128::from(10_033u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -805,7 +805,7 @@ fn test_swap_different_lsd_assets() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_023_936_467_628u128),
-        Uint128::from(0u128),
+        Uint128::from(30_685u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -984,7 +984,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         atom_asset.clone(),
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_038_125u128),
-        Uint128::from(0u128),
+        Uint128::from(416u128),
         Asset {
             info: statom_asset.clone(),
             amount: Uint128::from(3_000u128),
@@ -1009,7 +1009,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         qatom_asset.clone(),
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(10_277_441_665_935_813u128),
-        Uint128::from(0u128),
+        Uint128::from(4_120_834_064_186u128),
         Asset {
             info: statom_asset.clone(),
             amount: Uint128::from(30_000_000u128),

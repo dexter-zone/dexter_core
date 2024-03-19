@@ -977,7 +977,7 @@ pub fn query_on_swap(
 
     let offer_asset: Asset;
     let ask_asset: Asset;
-    let calc_amount: Uint128;
+    let (calc_amount, spread_amount): (Uint128, Uint128);
     let total_fee: Uint128;
 
     let ask_asset_scaling_factor = scaling_factors
@@ -1008,7 +1008,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            calc_amount = match compute_swap(
+            (calc_amount, spread_amount) = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1045,7 +1045,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(ask_precision, ask_asset_scaling_factor)?;
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, total_fee) = match compute_offer_amount(
+            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1088,7 +1088,7 @@ pub fn query_on_swap(
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
-            spread: Uint128::zero(),
+            spread: spread_amount,
         },
         response: ResponseType::Success {},
         fee: Some(Asset {
