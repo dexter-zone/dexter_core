@@ -1,10 +1,14 @@
-use cosmwasm_std::{OverflowError, StdError, Uint128};
+use cosmwasm_std::{CheckedMultiplyFractionError, OverflowError, StdError, Uint128};
+use dexter::multi_staking::UnbondConfigValidationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("Checked multiply fraction error: {0}")]
+    CheckedMultiplyFractionError(CheckedMultiplyFractionError),
 
     #[error("Unauthorized")]
     Unauthorized,
@@ -96,15 +100,6 @@ pub enum ContractError {
     #[error("Token lock doesn't exist")]
     TokenLockNotFound,
 
-    #[error("Invalid instant unbond fee. Max allowed: {max_allowed}, Received: {received}")]
-    InvalidInstantUnbondFee { max_allowed: u64, received: u64 },
-
-    #[error("Invalid instant unbond min fee. Max allowed: {max_allowed}, Received: {received}")]
-    InvalidInstantUnbondMinFee { max_allowed: u64, received: u64 },
-
-    #[error("Invalid instant unlock fee tier interval. Max allowed: {max_allowed} i.e. equal to unlock period, Received: {received}")]
-    InvalidFeeTierInterval { max_allowed: u64, received: u64 },
-
     #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
     InvalidContractVersionForUpgrade {
         upgrade_version: String,
@@ -117,10 +112,28 @@ pub enum ContractError {
 
     #[error("No valid lock found from supplied input which can be unlocked")]
     NoValidLocks,
+
+    #[error("Instant unbond/unlock is disabled for this LP")]
+    InstantUnbondDisabled,
+
+    #[error("Invalid unbond config. Error: {error}")]
+    InvalidUnbondConfig { error: UnbondConfigValidationError },
+
+    #[error("CW20 Token is already allowed as a reward asset")]
+    Cw20TokenAlreadyAllowed,
+
+    #[error("This CW20 Token is not allowed as a reward asset")]
+    Cw20TokenNotAllowed,
 }
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
         StdError::from(o).into()
+    }
+}
+
+impl From<UnbondConfigValidationError> for ContractError {
+    fn from(error: UnbondConfigValidationError) -> Self {
+        ContractError::InvalidUnbondConfig { error }
     }
 }

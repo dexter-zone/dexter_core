@@ -105,6 +105,19 @@ pub enum ContractError {
 
     #[error("Migration is not supported for v1 of the contract")]
     MigrationNotSupported {},
+
+    #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
+    InvalidContractVersionForUpgrade {
+        upgrade_version: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("This upgrade is meant for a contract named {expected_name} but the actual contract name is {actual_name}")]
+    InvalidContractUpgrade {
+        expected_name: String,
+        actual_name: String,
+    },
 }
 
 impl From<OverflowError> for ContractError {
