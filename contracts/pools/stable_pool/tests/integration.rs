@@ -1,4 +1,4 @@
-use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 
@@ -1770,8 +1770,6 @@ fn test_swap() {
                     denom: "axlusd".to_string(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1793,8 +1791,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1845,8 +1841,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1914,8 +1908,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(7846_00000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1958,8 +1950,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(30000_000000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 100u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -2002,8 +1992,6 @@ fn test_swap() {
                     contract_addr: token_instance1.clone(),
                 },
                 amount: Uint128::from(50000_000000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -2043,8 +2031,6 @@ fn test_swap() {
                 contract_addr: token_instance0.clone(),
             },
             amount: Uint128::from(1000u128),
-            max_spread: None,
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,
@@ -2144,8 +2130,6 @@ fn test_swap() {
                 denom: "axlusd".to_string(),
             },
             amount: Uint128::from(1000u128),
-            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,

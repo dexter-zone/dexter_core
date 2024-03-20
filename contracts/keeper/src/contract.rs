@@ -342,9 +342,7 @@ fn swap_asset(
             asset_in: offer_asset.info.clone(),
             asset_out: ask_asset_info.clone(),
             swap_type: dexter::vault::SwapType::GiveIn {},
-            amount: offer_asset.amount,
-            max_spread: None,
-            belief_price: None,
+            amount: offer_asset.amount
         },
         recipient: Some(env.contract.address.to_string()),
         min_receive,

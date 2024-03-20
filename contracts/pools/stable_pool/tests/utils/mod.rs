@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_json_binary, Addr, Coin, Decimal, Decimal256, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_json_binary, Addr, Coin, Decimal256, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
@@ -529,7 +529,6 @@ pub fn perform_and_test_swap_give_in(
     pool_id: Uint128,
     asset_in: Asset,
     asset_out: AssetInfo,
-    max_spread: Option<Decimal>,
     expected_asset_out: Uint128,
     expected_spread: Uint128,
     expected_fee: Asset,
@@ -539,8 +538,6 @@ pub fn perform_and_test_swap_give_in(
         offer_asset: asset_in.info.clone(),
         ask_asset: asset_out.clone(),
         amount: asset_in.amount,
-        max_spread,
-        belief_price: None,
     };
 
     let swap_query_res: SwapResponse = app
@@ -586,8 +583,6 @@ pub fn perform_and_test_swap_give_in(
             asset_in: asset_in.info,
             asset_out,
             amount: asset_in.amount,
-            max_spread,
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,
@@ -607,7 +602,6 @@ pub fn perform_and_test_swap_give_out(
     pool_id: Uint128,
     asset_out: Asset,
     asset_in: AssetInfo,
-    max_spread: Option<Decimal>,
     expected_asset_in: Uint128,
     expected_spread: Uint128,
     expected_fee: Asset,
@@ -617,8 +611,6 @@ pub fn perform_and_test_swap_give_out(
         offer_asset: asset_in.clone(),
         ask_asset: asset_out.info.clone(),
         amount: asset_out.amount,
-        max_spread,
-        belief_price: None,
     };
 
     let swap_query_res: SwapResponse = app
@@ -664,8 +656,6 @@ pub fn perform_and_test_swap_give_out(
             asset_in,
             asset_out: asset_out.info,
             amount: asset_out.amount,
-            max_spread,
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,

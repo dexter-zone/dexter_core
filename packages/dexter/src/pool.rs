@@ -4,7 +4,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
-use cosmwasm_std::{Addr, Binary, Decimal, Decimal256, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal256, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::{Item, Map};
 use crate::helper::EventExt;
@@ -168,11 +168,7 @@ pub enum QueryMsg {
         swap_type: SwapType,
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
-        amount: Uint128,
-        #[deprecated(note = "use min_received for slippage protection")]
-        max_spread: Option<Decimal>,
-        #[deprecated(note = "use min_received for slippage protection")]
-        belief_price: Option<Decimal>,
+        amount: Uint128
     },
     /// ## Description - Returns the spot price of the asset in a [`SpotPrice`] object.
     #[returns(SpotPrice)]

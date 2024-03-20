@@ -1652,9 +1652,7 @@ pub fn execute_swap(
                 swap_type: swap_request.swap_type.clone(),
                 offer_asset: swap_request.asset_in.clone(),
                 ask_asset: swap_request.asset_out.clone(),
-                amount: swap_request.amount,
-                max_spread: swap_request.max_spread,
-                belief_price: swap_request.belief_price,
+                amount: swap_request.amount
             })?,
         }))?;
 
@@ -1689,12 +1687,8 @@ pub fn execute_swap(
         .add_attribute("asset_in", serde_json_wasm::to_string(&offer_asset).unwrap())
         .add_attribute("asset_out", serde_json_wasm::to_string(&ask_asset).unwrap())
         .add_attribute("swap_type", swap_request.swap_type.to_string());
-    if swap_request.max_spread.is_some() {
-        event = event.add_attribute("max_spread", swap_request.max_spread.unwrap().to_string());
-    }
-    if swap_request.belief_price.is_some() {
-        event = event.add_attribute("belief_price", swap_request.belief_price.unwrap().to_string());
-    }
+   
+   
     event = event.add_attribute("recipient", recipient.to_string());
     if min_receive.is_some() {
         event = event.add_attribute("min_receive", min_receive.unwrap().to_string());
@@ -1957,11 +1951,10 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
             for pool_type_config in updated_pool_type_configs {
                 REGISTRY.save(deps.storage, pool_type_config.pool_type.to_string(), &pool_type_config)?;
             }
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
         }
     }
-
-
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     
     Ok(Response::new()
         .add_attribute("previous_contract_name", &contract_version.contract)

@@ -1659,9 +1659,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1682,9 +1680,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1727,9 +1723,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1771,9 +1765,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1_000_000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1_000_000u128)
             },
         )
         .unwrap();
@@ -1812,9 +1804,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000_000_000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1000_000_000u128)
             },
         )
         .unwrap();
@@ -1867,9 +1857,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1909,9 +1897,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(100_000_000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(100_000_000u128)
             }
         )
         .unwrap();
@@ -1944,9 +1930,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
-            amount: Uint128::from(1000u128),
-            max_spread: None,
-            belief_price: None,
+            amount: Uint128::from(1000u128)
         },
         recipient: None,
         min_receive: None,
@@ -1979,9 +1963,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
-            amount: Uint128::from(1000u128),
-            max_spread: None,
-            belief_price: None,
+            amount: Uint128::from(1000u128)
         },
         recipient: None,
         min_receive: None,

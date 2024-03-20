@@ -475,8 +475,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread: _,
-            belief_price: _,
         } => to_json_binary(&query_on_swap(
             deps,
             env,
