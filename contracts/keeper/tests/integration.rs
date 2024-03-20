@@ -25,9 +25,9 @@ fn instantiate_contracts(router: &mut App, owner: Addr, keeper_admin: Addr) -> (
     let vault_code_id = router.store_code(vault_contract);
 
     let stable5_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     let stable5_code_id = router.store_code(stable5_contract);
 

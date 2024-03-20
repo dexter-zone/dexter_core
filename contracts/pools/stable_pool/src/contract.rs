@@ -1,20 +1,19 @@
 use const_format::concatcp;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env,
-    Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64,
+    entry_point, from_json, to_json_binary, Addr, Binary, Decimal, Decimal256, Deps, DepsMut, Env, Event, Fraction, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64
 };
-use cw2::set_contract_version;
+use cw2::{get_contract_version, set_contract_version};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
-use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use crate::math::{compute_d, calc_spot_price, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee, store_precisions};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade, DEFAULT_SPREAD};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools, EventExt};
@@ -25,11 +24,14 @@ use dexter::vault::{SwapType, FEE_PRECISION};
 const CONTRACT_NAME: &str = "dexter-stable-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 /// Maximum number of assets supported by the pool
 const MAX_ASSETS: usize = 5;
 /// Minimum number of assets supported by the pool
 const MIN_ASSETS: usize = 2;
+
+type ContractResult<T> = Result<T, ContractError>;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -240,7 +242,9 @@ pub fn execute(
         ExecuteMsg::UpdateFee { total_fee_bps } => {
             update_fee(deps, env, info, total_fee_bps, CONFIG, CONTRACT_NAME).map_err(|e| e.into())
         }
-        ExecuteMsg::UpdateLiquidity { assets } => execute_update_liquidity(deps, env, info, assets),
+        ExecuteMsg::UpdateLiquidity { assets } => {
+            execute_update_liquidity(deps, env, info, assets)
+        }
     }
 }
 
@@ -414,18 +418,21 @@ pub fn execute_update_liquidity(
         transform_to_scaled_decimal_asset(deps.as_ref(), config.assets.clone())?;
 
     // Accumulate prices for the assets in the pool
-    if accumulate_prices(
+    let res = accumulate_prices(
         deps.as_ref(),
         env.clone(),
         math_config,
         &mut twap,
         &decimal_assets,
-    )
-    .is_ok()
+    );
+
+    if res.is_ok()
     // TWAP computation can fail in certain edge cases (when pool is empty for eg), for which you need
     // to allow tx to be successful rather than failing the tx. Accumulated prices can be used to
     // calculate TWAP oracle prices later and letting the tx be successful even when price accumulation
     // fails doesn't cause any issues.
+    // UPDATE: We have now handled the edge case of pool join operation so this should ideally never fail.
+    // But we keep this check here for safety, so the pool operations don't fail because of this
     {
         TWAPINFO.save(deps.storage, &twap)?;
     }
@@ -509,8 +516,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
+            max_spread: _,
+            belief_price: _,
         } => to_json_binary(&query_on_swap(
             deps,
             env,
@@ -518,13 +525,15 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
+            
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
             ask_asset,
         } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
+        QueryMsg::SpotPrice { offer_asset, ask_asset } => {
+            to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
+        }
         QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
 }
@@ -934,8 +943,6 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
-    max_spread: Option<Decimal>,
-    belief_price: Option<Decimal>,
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -970,7 +977,7 @@ pub fn query_on_swap(
 
     let offer_asset: Asset;
     let ask_asset: Asset;
-    let (calc_amount, spread_amount): (Uint128, Uint128);
+    let calc_amount: Uint128;
     let total_fee: Uint128;
 
     let ask_asset_scaling_factor = scaling_factors
@@ -1001,7 +1008,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (calc_amount, spread_amount) = match compute_swap(
+            calc_amount = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1038,7 +1045,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(ask_precision, ask_asset_scaling_factor)?;
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
+            (calc_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1077,24 +1084,11 @@ pub fn query_on_swap(
         ));
     }
 
-    // Check the max spread limit (if it was specified)
-    let spread_check = assert_max_spread(
-        stableswap_config.max_allowed_spread,
-        belief_price,
-        max_spread,
-        offer_asset.amount - total_fee,
-        ask_asset.amount,
-        spread_amount,
-    );
-    if !spread_check.is_success() {
-        return Ok(return_swap_failure(spread_check.to_string()));
-    }
-
     Ok(SwapResponse {
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
-            spread: spread_amount,
+            spread: Uint128::zero(),
         },
         response: ResponseType::Success {},
         fee: Some(Asset {
@@ -1151,6 +1145,38 @@ pub fn query_cumulative_price(
     };
 
     Ok(resp)
+}
+
+pub fn query_spot_price(
+    deps: Deps,
+    env: Env,
+    offer_asset_info: AssetInfo,
+    ask_asset_info: AssetInfo,
+) -> StdResult<SpotPrice> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let stableswap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
+
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
+    let fee = config.fee_info;
+    let amp = compute_current_amp(&math_config, &env)?;
+
+    let offer_asset_scaling_factor = stableswap_config.get_scaling_factor_for(&offer_asset_info)
+        .unwrap_or(Decimal256::one());
+    let ask_asset_scaling_factor = stableswap_config.get_scaling_factor_for(&ask_asset_info)
+        .unwrap_or(Decimal256::one());
+
+    let spot_price = calc_spot_price(
+        &offer_asset_info,
+        &ask_asset_info,
+        &offer_asset_scaling_factor,
+        &ask_asset_scaling_factor,
+        &decimal_assets,
+        fee,
+        amp,
+    )?;
+
+    Ok(spot_price)
 }
 
 /// ## Description
@@ -1600,4 +1626,30 @@ pub fn transform_to_scaled_decimal_asset(
             asset.to_scaled_decimal_asset(precision, scaling_factor)
         })
         .collect::<StdResult<Vec<DecimalAsset>>>()
+}
+
+// migrate msg
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            // fetch current version to ensure it's v1
+            let version = get_contract_version(_deps.storage)?;
+            if version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersion {
+                    expected_version: CONTRACT_VERSION_V1.to_string(),
+                    current_version: version.version,
+                });
+            }
+
+            if version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractName {
+                    expected_name: CONTRACT_NAME.to_string(),
+                    contract_name: version.contract,
+                });
+            }
+
+            Ok(Response::default())
+        }
+    }
 }

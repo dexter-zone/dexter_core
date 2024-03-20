@@ -4,7 +4,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
-use cosmwasm_std::{Addr, Binary, Decimal, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal, Decimal256, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::{Item, Map};
 use crate::helper::EventExt;
@@ -169,8 +169,16 @@ pub enum QueryMsg {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
         amount: Uint128,
+        // DEPRECATED: not used in any pool type. use min received for slippage protection
         max_spread: Option<Decimal>,
+        // DEPRECATED: not used in any pool type. use min received for slippage protection
         belief_price: Option<Decimal>,
+    },
+    /// ## Description - Returns the spot price of the asset in a [`SpotPrice`] object.
+    #[returns(SpotPrice)]
+    SpotPrice {
+        offer_asset: AssetInfo,
+        ask_asset: AssetInfo,
     },
     /// ## Description - Returns information about the cumulative price of the asset in a [`CumulativePriceResponse`] object.
     #[returns(CumulativePriceResponse)]
@@ -198,7 +206,13 @@ pub enum ExitType {
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    // migrates to v1.1 of the contract
+    // This introduces following changes to the contracts:
+    // Weighted Pool: Spot Price API, updates to Cumulative Price functions
+    // Stable Pool: Spot Price API, updates to Cumulative Price functions, migration to Integer based invariant math, removal of max spread checks
+    V1_1 {}
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------
@@ -279,6 +293,14 @@ pub struct CumulativePriceResponse {
 pub struct CumulativePricesResponse {
     pub exchange_infos: Vec<AssetExchangeRate>,
     pub total_share: Uint128,
+}
+
+#[cw_serde]
+pub struct SpotPrice {
+    pub from: AssetInfo,
+    pub to: AssetInfo,
+    pub price: Decimal256,
+    pub price_including_fee: Decimal256
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------

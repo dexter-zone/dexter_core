@@ -11,7 +11,7 @@ use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 
 use dexter::pool::ConfigResponse;
 use dexter::vault::{ExecuteMsg, PoolInfo, PoolType, QueryMsg};
-use stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
+use dexter_stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
 
 use crate::utils::{instantiate_contract, mock_app, store_token_code};
 

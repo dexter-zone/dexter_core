@@ -5,15 +5,15 @@ use cosmwasm_std::{
     MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
-use cw2::set_contract_version;
+use cw2::{get_contract_version, set_contract_version};
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, EventExt, select_pools};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, store_precisions, SwapResponse, Trade, update_fee, ExitType};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade};
 use dexter::querier::{query_supply, query_token_precision};
 use dexter::vault::SwapType;
 
 use crate::error::ContractError;
-use crate::math::get_normalized_weight;
+use crate::math::{calc_spot_price, get_normalized_weight};
 use crate::state::{get_precision, get_weight, store_weights, MathConfig, Twap, WeightedAsset, WeightedParams, CONFIG, MATHCONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{
     accumulate_prices, calc_single_asset_join, compute_offer_amount, compute_swap,
@@ -27,6 +27,7 @@ use cosmwasm_std::Event;
 const CONTRACT_NAME: &str = "dexter-weighted-pool";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 /// Number of LP tokens to mint when liquidity is provided for the first time to the pool.
 /// This does not include the token decimals.
@@ -35,6 +36,8 @@ const INIT_LP_TOKENS: u128 = 100;
 const MAX_ASSETS: usize = 8;
 /// Minimum number of assets supported by the pool
 const MIN_ASSETS: usize = 2;
+
+type ContractResult<T> = Result<T, ContractError>;
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -296,12 +299,68 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             max_spread,
             belief_price,
         )?),
+        QueryMsg::SpotPrice { offer_asset, ask_asset } => {
+            to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
+        }
         QueryMsg::CumulativePrice {
             offer_asset,
             ask_asset,
         } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
         QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
+}
+
+fn query_spot_price(
+    deps: Deps,
+    _env: Env,
+    offer_asset: AssetInfo,
+    ask_asset: AssetInfo,
+) -> StdResult<SpotPrice> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    let offer_asset_decimal = get_precision(deps.storage, &offer_asset)?;
+    let ask_asset_decimal = get_precision(deps.storage, &ask_asset)?;
+
+    let pool_amount_offer_asset = config
+        .assets
+        .iter()
+        .find(|a| a.info.equal(&offer_asset))
+        .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+
+    let pool_amount_ask_asset = config
+        .assets
+        .iter()
+        .find(|a| a.info.equal(&ask_asset))
+        .ok_or_else(|| StdError::generic_err("Asset not found"))?;
+
+    let offer_decimal_asset = DecimalAsset {
+        info: offer_asset.clone(),
+        amount: Decimal256::with_precision(pool_amount_offer_asset.amount, offer_asset_decimal)?,
+    };
+
+    let ask_decimal_asset = DecimalAsset {
+        info: ask_asset.clone(),
+        amount: Decimal256::with_precision(pool_amount_ask_asset.amount, ask_asset_decimal)?,
+    };
+
+    let offer_weight = get_weight(deps.storage, &offer_asset)?; 
+    let ask_weight = get_weight(deps.storage, &ask_asset)?;
+
+    let spot_price = calc_spot_price(
+        &offer_decimal_asset,
+        &ask_decimal_asset,
+        offer_weight,
+        ask_weight
+    )?;
+
+    let spot_price_with_fee = spot_price - spot_price * Decimal256::from_ratio(config.fee_info.total_fee_bps, 10000u128);
+
+    Ok(SpotPrice {
+        from: offer_asset,
+        to: ask_asset,
+        price: spot_price,
+        price_including_fee: spot_price_with_fee,
+    })
 }
 
 /// ## Description
@@ -946,7 +1005,28 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **_deps** is the object of type [`DepsMut`].
 /// * **_env** is the object of type [`Env`].
 /// * **_msg** is the object of type [`MigrateMsg`].
+// migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    Ok(Response::default())
+pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            // fetch current version to ensure it's v1
+            let version = get_contract_version(_deps.storage)?;
+            if version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersion {
+                    expected_version: CONTRACT_VERSION_V1.to_string(),
+                    current_version: version.version,
+                });
+            }
+
+            if version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractName {
+                    expected_name: CONTRACT_NAME.to_string(),
+                    contract_name: version.contract,
+                });
+            }
+
+            Ok(Response::default())
+        }
+    }
 }

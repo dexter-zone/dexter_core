@@ -11,7 +11,7 @@ use dexter::{
 use persistence_std::types::cosmos::gov::v1::VoteOption;
 use persistence_test_tube::{Account, Module, PersistenceTestApp, SigningAccount, Wasm};
 use utils::GovAdminTestSetup;
-use weighted_pool::state::WeightedParams;
+use dexter_weighted_pool::state::WeightedParams;
 
 use crate::utils::gov_execute_msg;
 

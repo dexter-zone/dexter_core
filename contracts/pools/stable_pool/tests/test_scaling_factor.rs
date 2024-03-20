@@ -16,7 +16,7 @@ use dexter::vault::{Cw20HookMsg, ExecuteMsg, FeeInfo, PoolInfoResponse, QueryMsg
 use itertools::Itertools;
 use dexter::vault;
 
-use stable_pool::state::AssetScalingFactor;
+use dexter_stable_pool::state::AssetScalingFactor;
 
 pub mod utils;
 
@@ -377,7 +377,7 @@ fn test_swap() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_017_336_487u128),
-        Uint128::from(10_451u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -405,7 +405,7 @@ fn test_swap() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(982_978_603u128),
-        Uint128::from(30_273u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -533,7 +533,7 @@ fn test_swap_different_precision() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_017_336_487u128),
-        Uint128::from(10_451u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -561,7 +561,7 @@ fn test_swap_different_precision() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(982_978_603_388u128),
-        Uint128::from(30_273u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -682,12 +682,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_020_833_322_000u64),
+                rate: Uint128::from(1_020_833_232_000u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(979_592_000u64),
+                rate: Uint128::from(979_591_000u64),
             },
         ],
     );
@@ -726,12 +726,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_122_916_674_800u64),
+                rate: Uint128::from(1_122_916_575_800u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(1_077_551_100u64),
+                rate: Uint128::from(1_077_550_100u64),
             },
         ],
     );
@@ -755,7 +755,7 @@ fn test_swap_different_lsd_assets() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(976_643_026u128),
-        Uint128::from(10_033u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -776,12 +776,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_327_087_498_600u64),
+                rate: Uint128::from(1_327_087_381_400u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(1_273_465_300u64),
+                rate: Uint128::from(1_273_464_300u64),
             },
         ],
     );
@@ -805,7 +805,7 @@ fn test_swap_different_lsd_assets() {
         },
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_023_936_467_628u128),
-        Uint128::from(30_685u128),
+        Uint128::from(0u128),
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "ustkatom".to_string(),
@@ -963,7 +963,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         pool_addr.clone(),
         pool_id,
         assets_msg.clone(),
-        Uint128::from(5_072_169_964_407_537_367_290_383u128),
+        Uint128::from(5_072_169_964_407_537_367_258_707u128),
     );
 
     // Swap 1 ustatom for uatom
@@ -984,7 +984,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         atom_asset.clone(),
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(1_038_125u128),
-        Uint128::from(416u128),
+        Uint128::from(0u128),
         Asset {
             info: statom_asset.clone(),
             amount: Uint128::from(3_000u128),
@@ -1009,7 +1009,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         qatom_asset.clone(),
         Some(Decimal::from_ratio(20u64, 100u64)),
         Uint128::from(10_277_441_665_935_813u128),
-        Uint128::from(4_120_834_064_186u128),
+        Uint128::from(0u128),
         Asset {
             info: statom_asset.clone(),
             amount: Uint128::from(30_000_000u128),
@@ -1071,7 +1071,7 @@ fn test_5_asset_lsd_pool_with_different_precisions() {
         pool_id,
         lp_token_addr.clone(),
         vec![Asset::new(atom_asset.clone(), Uint128::from(100_000_000_000u128))],
-        Uint128::from(100_206_787_474_015_742_826_455u128),
+        Uint128::from(100_206_787_474_015_742_838_214u128),
         Some(vec![
             // Asset::new(wrapped_atom_asset.clone(), Uint128::from(18_684_894u128)),
             Asset::new(wrapped_atom_asset.clone(), Uint128::from(18_682_739u128)),

@@ -315,10 +315,22 @@ pub fn get_share_in_assets(pools: Vec<Asset>, amount: Uint128, total_share: Uint
 
 /// ## Description
 /// Converts [`Decimal`] to [`Decimal256`].
-pub fn decimal2decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
+pub fn decimal_to_decimal256(dec_value: Decimal) -> StdResult<Decimal256> {
     Decimal256::from_atomics(dec_value.atomics(), dec_value.decimal_places()).map_err(|_| {
         StdError::generic_err(format!(
             "Failed to convert Decimal {} to Decimal256",
+            dec_value
+        ))
+    })
+}
+
+pub fn decimal256_to_decimal(dec_value: Decimal256) -> StdResult<Decimal> {
+    let value: Uint128 = dec_value.atomics().try_into()
+        .map_err(|_| StdError::generic_err(format!("Failed to convert Decimal256 {} to Decimal", dec_value)))?;
+
+    Decimal::from_atomics(value, dec_value.decimal_places()).map_err(|_| {
+        StdError::generic_err(format!(
+            "Failed to convert Decimal256 {} to Decimal",
             dec_value
         ))
     })

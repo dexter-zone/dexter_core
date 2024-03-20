@@ -22,7 +22,7 @@ use cw20::Cw20ExecuteMsg;
 use dexter::pool::ExitType::ExactLpBurn;
 use dexter::vault;
 use itertools::Itertools;
-use stable_pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
+use dexter_stable_pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -52,18 +52,18 @@ pub fn store_vault_code(app: &mut App) -> u64 {
 
 pub fn store_stable_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
 
 pub fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     app.store_code(token_contract)
 }
