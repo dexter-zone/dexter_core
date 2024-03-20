@@ -16,6 +16,7 @@ use dexter::vault::{self, SingleSwapRequest, SwapType};
 const CONTRACT_NAME: &str = "dexter-router";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x      Instantiate Contract : Execute function     x----------------
@@ -219,9 +220,7 @@ pub fn execute_multihop_swap(
         asset_out: first_hop.asset_out.clone(),
         swap_type: SwapType::GiveIn {},
         // Amount provided is the amount to be used for the first hop
-        amount: offer_amount,
-        max_spread: first_hop.max_spread,
-        belief_price: first_hop.belief_price,
+        amount: offer_amount
     };
 
     // Need to send native tokens if the offer asset is native token
@@ -369,8 +368,6 @@ pub fn continue_hop_swap(
             swap_type: SwapType::GiveIn {},
             // Amount returned from prev hop is to be used for the next hop
             amount: amount_returned_prev_hop,
-            max_spread: next_hop.max_spread,
-            belief_price: next_hop.belief_price,
         };
 
         // Need to send native tokens if the offer asset is native token
@@ -521,8 +518,6 @@ fn query_simulate_multihop(
                             offer_asset: next_token_in.clone(),
                             ask_asset: hop.asset_out.clone(),
                             amount: next_amount_in.clone(),
-                            max_spread: hop.max_spread,
-                            belief_price: hop.belief_price,
                         })?,
                     }))?;
 
@@ -590,8 +585,6 @@ fn query_simulate_multihop(
                             offer_asset: hop.asset_in.clone(),
                             ask_asset: hop.asset_out.clone(),
                             amount: prev_amount_out.clone(),
-                            max_spread: hop.max_spread,
-                            belief_price: hop.belief_price,
                         })?,
                     }))?;
 
@@ -650,9 +643,32 @@ fn query_simulate_multihop(
 /// ## Params
 /// * **_msg** is the object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
     let contract_version = get_contract_version(deps.storage)?;
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    // validate contract name
+    if contract_version.contract != CONTRACT_NAME {
+        return Err(ContractError::InvalidContractNameForMigration {
+            expected: CONTRACT_NAME.to_string(),
+            actual: contract_version.contract.to_string(),
+        });
+    }
+
+    match msg {
+        MigrateMsg::V1_1 {} => {
+            // validate that the current contarct version is V1
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade { 
+                    upgrade_version: CONTRACT_VERSION_V1.to_string(),
+                    expected: CONTRACT_VERSION_V1.to_string(),
+                    actual: contract_version.version.to_string(),
+                 });
+            }
+
+            // No state migration required for this contract
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        }
+    }
 
     Ok(Response::new()
         .add_attribute("previous_contract_name", &contract_version.contract)

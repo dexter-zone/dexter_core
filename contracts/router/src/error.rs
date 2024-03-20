@@ -8,6 +8,16 @@ pub enum ContractError {
 
     #[error("Error: {0}", msg)]
     InvalidMultihopSwapRequest { msg: String },
+
+    #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
+    InvalidContractVersionForUpgrade {
+        upgrade_version: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("Invalid contract name for migration. Expected: {expected}, Actual: {actual}")]
+    InvalidContractNameForMigration { expected: String, actual: String },
 }
 
 impl From<OverflowError> for ContractError {

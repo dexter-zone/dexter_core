@@ -51,22 +51,27 @@ pub(crate) fn compute_swap(
     // delta balanceOut is positive(tokens inside the pool decreases)
     
     let return_amount = solve_constant_function_invariant(
-        Decimal::from_str(&offer_pool.amount.to_string())?,
-        Decimal::from_str(&pool_post_swap_in_balance.to_string())?,
+        decimal256_to_decimal(offer_pool.amount)?,
+        decimal256_to_decimal(pool_post_swap_in_balance)?,
         offer_weight,
-        Decimal::from_str(&ask_pool.amount.to_string())?,
+        decimal256_to_decimal(ask_pool.amount)?,
         ask_weight,
     )?;
 
+    
+    let return_amount_decimal_256 = decimal_to_decimal256(return_amount)?;
     // adjust return amount to correct precision
-    let return_amount = adjust_precision(
-        return_amount.atomics(),
-        return_amount.decimal_places() as u8,
-        token_precision,
-    )?;
+    let return_amount_u128 = return_amount_decimal_256.to_uint128_with_precision(token_precision)?;
 
-    // difference in return amount compared to "ideal" swap.
-    Ok((return_amount, Uint128::zero()))
+
+    let spot_price_before_swap = calc_spot_price(&offer_pool, &ask_pool, offer_weight, ask_weight)?;
+    let ideal_received_amount_without_price_impact = spot_price_before_swap.checked_mul(offer_asset.amount)?;
+
+    // spread amount is the difference of the actual received amount and the ideal received amount without price impact
+    let spread_amount = ideal_received_amount_without_price_impact.to_uint128_with_precision(token_precision)?
+        .checked_sub(return_amount_u128)?;
+
+    Ok((return_amount_u128, spread_amount))
 }
 
 /// ## Description
@@ -97,6 +102,7 @@ pub(crate) fn compute_offer_amount(
     let inv_one_minus_commission = Decimal256::one() / one_minus_commission;
 
     let ask_asset_amount = decimal256_to_decimal(ask_asset.amount)?;
+    let ask_asset_precision = get_precision(storage, &ask_pool.info)?;
 
     // Ask pool balance after swap
     let pool_post_swap_out_balance =
@@ -122,16 +128,24 @@ pub(crate) fn compute_offer_amount(
         offer_weight,
     )?; 
     // adjust return amount to correct precision
-    let real_offer = adjust_precision(
+    let real_offer_u128 = adjust_precision(
         real_offer.atomics(),
         real_offer.decimal_places() as u8,
         token_precision,
     )?;
 
-    let offer_amount_including_fee = (Uint256::from(real_offer) * inv_one_minus_commission).try_into()?;
-    let total_fee = offer_amount_including_fee - real_offer;
+    let offer_amount_including_fee = (Uint256::from(real_offer_u128) * inv_one_minus_commission).try_into()?;
+    let total_fee = offer_amount_including_fee - real_offer_u128;
 
-    Ok((offer_amount_including_fee, Uint128::zero(), total_fee))
+    let spot_price_before_swap = calc_spot_price(&offer_pool, &ask_pool, offer_weight, ask_weight)?;
+    let real_offer_decimal_256 = decimal_to_decimal256(real_offer)?;
+    let ideal_received_amount_without_price_impact = spot_price_before_swap.checked_mul(real_offer_decimal_256)?;
+
+    // spread amount is the difference of the actual received amount and the ideal received amount without price impact
+    let spread_amount = ideal_received_amount_without_price_impact.to_uint128_with_precision(token_precision)?
+        .checked_sub(ask_asset.amount.to_uint128_with_precision(ask_asset_precision)?)?;
+
+    Ok((offer_amount_including_fee, spread_amount, total_fee))
 }
 
 // --------x--------x--------x--------x--------x--------x--------

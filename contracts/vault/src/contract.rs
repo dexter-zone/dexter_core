@@ -29,6 +29,8 @@ use dexter::pool;
 const CONTRACT_NAME: &str = "dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_VERSION_V1: &str = "1.0.0";
+
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_LP_REPLY_ID: u64 = 1;
 const INSTANTIATE_POOL_REPLY_ID: u64 = 2;
@@ -1650,9 +1652,7 @@ pub fn execute_swap(
                 swap_type: swap_request.swap_type.clone(),
                 offer_asset: swap_request.asset_in.clone(),
                 ask_asset: swap_request.asset_out.clone(),
-                amount: swap_request.amount,
-                max_spread: swap_request.max_spread,
-                belief_price: swap_request.belief_price,
+                amount: swap_request.amount
             })?,
         }))?;
 
@@ -1687,12 +1687,8 @@ pub fn execute_swap(
         .add_attribute("asset_in", serde_json_wasm::to_string(&offer_asset).unwrap())
         .add_attribute("asset_out", serde_json_wasm::to_string(&ask_asset).unwrap())
         .add_attribute("swap_type", swap_request.swap_type.to_string());
-    if swap_request.max_spread.is_some() {
-        event = event.add_attribute("max_spread", swap_request.max_spread.unwrap().to_string());
-    }
-    if swap_request.belief_price.is_some() {
-        event = event.add_attribute("belief_price", swap_request.belief_price.unwrap().to_string());
-    }
+   
+   
     event = event.add_attribute("recipient", recipient.to_string());
     if min_receive.is_some() {
         event = event.add_attribute("min_receive", min_receive.unwrap().to_string());
@@ -1928,10 +1924,38 @@ pub fn query_pool_by_lp_token_addr(deps: Deps, lp_token_addr: String) -> StdResu
 /// ## Params
 /// * **_msg** is the object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
     let contract_version = get_contract_version(deps.storage)?;
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    
+    match msg {
+        MigrateMsg::V1_1 { updated_pool_type_configs } => {
+            // validate contract name
+            if contract_version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractNameForMigration { 
+                    expected: CONTRACT_NAME.to_string(),
+                    actual: contract_version.contract,
+                 });
+            }
 
+            // validate that current version is v1.0
+            if contract_version.version != CONTRACT_VERSION_V1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade { 
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1.to_string(),
+                    actual: contract_version.version,
+                 });
+            }
+
+            // update pool type configs to new values. This makes sure we instantiate new pools with the new configs particularly the 
+            // Code ID for each pool type which has been updated to a new value with the new version of the pool contracts
+            for pool_type_config in updated_pool_type_configs {
+                REGISTRY.save(deps.storage, pool_type_config.pool_type.to_string(), &pool_type_config)?;
+            }
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        }
+    }
+    
     Ok(Response::new()
         .add_attribute("previous_contract_name", &contract_version.contract)
         .add_attribute("previous_contract_version", &contract_version.version)

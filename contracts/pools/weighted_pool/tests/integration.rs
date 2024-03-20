@@ -1659,9 +1659,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::NativeToken {
                     denom: "xprt".to_string(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1682,9 +1680,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1727,9 +1723,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1743,14 +1737,93 @@ fn test_swap() {
         Uint128::from(1177u128)
     );
     assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(0u128)
+    );
+    assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
         AssetInfo::NativeToken {
             denom: "xprt".to_string(),
         }
     );
+
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(30u128)
+    );
+
+    // test with a large quantity to see the spread
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1_000_000u128)
+            },
+        )
+        .unwrap();
+
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000000u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1_177_472u128)
+    );
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(24u128)
+    );
+
+    assert_eq!(
+        swap_offer_asset_res.fee.clone().unwrap().info,
+        AssetInfo::NativeToken {
+            denom: "xprt".to_string(),
+        }
+    );
+
+    // let's try with an even larger quantity to see the spread
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveIn {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(1000_000_000u128)
+            },
+        )
+        .unwrap();
+
+
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(1000_000_000u128)
+    );
+
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(1153_558_568u128)
+    );
+
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(23_938_383u128)
     );
 
     // SwapType::GiveOut {},  XPRT --> Token0
@@ -1784,9 +1857,7 @@ fn test_swap() {
                 ask_asset: AssetInfo::Token {
                     contract_addr: token_instance0.clone(),
                 },
-                amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
-                belief_price: None,
+                amount: Uint128::from(1000u128)
             },
         )
         .unwrap();
@@ -1807,6 +1878,46 @@ fn test_swap() {
         swap_offer_asset_res.fee.clone().unwrap().amount,
         Uint128::from(25u128)
     );
+    println!("swap_offer_asset_res: {:?}", swap_offer_asset_res);
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread.clone(),
+        Uint128::from(0u128)
+    );
+
+    // let's try with a large quantity to see the spread
+    let swap_offer_asset_res: SwapResponse = app
+        .wrap()
+        .query_wasm_smart(
+            pool_addr.clone(),
+            &QueryMsg::OnSwap {
+                swap_type: SwapType::GiveOut {},
+                offer_asset: AssetInfo::NativeToken {
+                    denom: "xprt".to_string(),
+                },
+                ask_asset: AssetInfo::Token {
+                    contract_addr: token_instance0.clone(),
+                },
+                amount: Uint128::from(100_000_000u128)
+            }
+        )
+        .unwrap();
+
+    assert_eq!(swap_offer_asset_res.response, ResponseType::Success {});
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_out,
+        Uint128::from(100_000_000u128)
+    );
+
+    assert_eq!(
+        swap_offer_asset_res.trade_params.amount_in,
+        Uint128::from(85_075_844u128)
+    );
+
+    assert_eq!(
+        swap_offer_asset_res.trade_params.spread,
+        Uint128::from(176_547u128)
+    );
+
 
     // ----- Execute GiveIn Swap----- //
     let swap_msg = VaultExecuteMsg::Swap {
@@ -1819,9 +1930,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
-            amount: Uint128::from(1000u128),
-            max_spread: None,
-            belief_price: None,
+            amount: Uint128::from(1000u128)
         },
         recipient: None,
         min_receive: None,
@@ -1854,9 +1963,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance0.clone(),
             },
-            amount: Uint128::from(1000u128),
-            max_spread: None,
-            belief_price: None,
+            amount: Uint128::from(1000u128)
         },
         recipient: None,
         min_receive: None,

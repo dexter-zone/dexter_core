@@ -244,8 +244,6 @@ pub struct SingleSwapRequest {
     pub asset_out: AssetInfo,
     pub swap_type: SwapType,
     pub amount: Uint128,
-    pub max_spread: Option<Decimal>,
-    pub belief_price: Option<Decimal>,
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -449,7 +447,12 @@ pub enum QueryMsg {
 
 /// ## Description -  This struct describes a migration message.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+
+    V1_1 {
+        updated_pool_type_configs: Vec<PoolTypeConfig>,
+    }
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------

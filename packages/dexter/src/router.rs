@@ -2,7 +2,7 @@ use crate::asset::{Asset, AssetInfo};
 use crate::pool::ResponseType;
 use crate::vault::SwapType;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, Decimal, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, StdResult, Uint128, WasmMsg};
 
 pub const MAX_SWAP_OPERATIONS: usize = 50;
 
@@ -27,8 +27,6 @@ pub struct HopSwapRequest {
     pub asset_in: AssetInfo,
     ///  The ask asset
     pub asset_out: AssetInfo,
-    pub max_spread: Option<Decimal>,
-    pub belief_price: Option<Decimal>,
 }
 
 /// This structure describes the execute messages available in the contract.
@@ -108,7 +106,9 @@ pub struct SimulatedTrade {
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    V1_1 {}
+}
 
 pub fn return_swap_sim_failure(
     suc_swaps: Vec<SimulatedTrade>,

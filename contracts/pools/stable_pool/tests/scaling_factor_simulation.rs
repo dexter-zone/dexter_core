@@ -118,14 +118,11 @@ impl StableSwapSimulation {
     }
 
     fn perform_swap(&mut self) -> Result<(Uint128, Uint128, Uint128)> {
-        let max_spread = Some(Decimal::from_ratio(50u128, 100u128));
         let swap_query_msg = PoolQueryMsg::OnSwap { 
             swap_type: SwapType::GiveIn {}, 
             offer_asset: self.swap_in_asset.clone(), 
             ask_asset: self.swap_out_asset.clone(),
             amount: self.swap_in_amount,
-            max_spread: max_spread.clone(),
-            belief_price: None
         };
 
         let swap_response: SwapResponse = self.app.wrap().query_wasm_smart(&self.pool, &swap_query_msg).unwrap();
@@ -142,8 +139,6 @@ impl StableSwapSimulation {
                 asset_in: self.swap_in_asset.clone(),
                 asset_out: self.swap_out_asset.clone(),
                 amount: self.swap_in_amount,
-                max_spread: max_spread.clone(),
-                belief_price: None,
             },
             recipient: None,
             min_receive: None,

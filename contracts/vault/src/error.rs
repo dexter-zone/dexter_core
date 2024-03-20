@@ -170,6 +170,16 @@ pub enum ContractError {
 
     #[error("Imbalanced exit is paused. Normal exit for a pool is always allowed")]
     ImbalancedExitPaused,
+
+    #[error("Invalid contract version for upgrade {upgrade_version}. Expected: {expected}, Actual: {actual}")]
+    InvalidContractVersionForUpgrade {
+        upgrade_version: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("Invalid contract name for migration. Expected: {expected}, Actual: {actual}")]
+    InvalidContractNameForMigration { expected: String, actual: String },
 }
 
 impl From<OverflowError> for ContractError {

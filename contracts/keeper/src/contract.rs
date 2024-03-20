@@ -4,7 +4,7 @@ use crate::state::{CONFIG, OWNERSHIP_PROPOSAL};
 
 use const_format::concatcp;
 use cosmwasm_std::{
-    entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
+    entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
@@ -269,14 +269,22 @@ fn exit_lp_tokens(
         config.vault_address,
         lp_token_address.clone(),
         amount,
-        min_assets_received,
+        min_assets_received.clone(),
     )?;
 
-    Ok(Response::new().add_message(tranfer_msg).add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::exit_lp_tokens"), &info)
-            .add_attribute("lp_token_address", lp_token_address.to_string())
-            .add_attribute("amount", amount.to_string()),
-    ))
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::exit_lp_tokens"), &info)
+        .add_attribute("lp_token_address", lp_token_address.to_string())
+        .add_attribute("amount", amount.to_string());
+
+    if let Some(min_assets_received) = min_assets_received {
+        event = event.add_attribute(
+            "min_assets_received",
+            serde_json_wasm::to_string(&min_assets_received).unwrap(),
+        );
+    }
+
+    let response = Response::new().add_message(tranfer_msg).add_event(event);
+    Ok(response)
 }
 
 /// Swaps the specified amount of the specified asset for another asset using the Dexter protocol.
@@ -334,9 +342,7 @@ fn swap_asset(
             asset_in: offer_asset.info.clone(),
             asset_out: ask_asset_info.clone(),
             swap_type: dexter::vault::SwapType::GiveIn {},
-            amount: offer_asset.amount,
-            max_spread: Some(Decimal::from_ratio(5u128, 100u128)),
-            belief_price: None,
+            amount: offer_asset.amount
         },
         recipient: Some(env.contract.address.to_string()),
         min_receive,
@@ -351,13 +357,17 @@ fn swap_asset(
 
     msgs.push(cosmos_msg);
 
-    Ok(Response::new().add_messages(msgs).add_event(
-        Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
-            .add_attribute("pool_id", pool_id.to_string())
-            .add_attribute("offer_asset", offer_asset.to_string())
-            .add_attribute("ask_asset_info", ask_asset_info.to_string())
-            .add_attribute("min_receive", min_receive.unwrap_or_default().to_string()),
-    ))
+    let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::swap_asset"), &info)
+        .add_attribute("pool_id", pool_id.to_string())
+        .add_attribute("offer_asset", serde_json_wasm::to_string(&offer_asset).unwrap())
+        .add_attribute("ask_asset_info", serde_json_wasm::to_string(&ask_asset_info).unwrap());
+
+    if let Some(min_receive) = min_receive {
+        event = event.add_attribute("min_receive", min_receive.to_string());
+    }
+
+    let response = Response::new().add_messages(msgs).add_event(event);
+    Ok(response)
 }
 
 // ----------------x----------------x---------------------x-----------------------x----------------x----------------

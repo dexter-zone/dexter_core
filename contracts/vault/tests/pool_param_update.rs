@@ -3,7 +3,7 @@ pub mod utils;
 
 use std::vec;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary, Decimal, from_json};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary, from_json};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
@@ -101,10 +101,9 @@ fn update_pool_params() {
         native_asset_precisions: vec![],
         init_params: Some(to_json_binary(&StablePoolParams {
             amp: 100u64,
-            scaling_factor_manager: None,
-            supports_scaling_factors_update: false,
+            scaling_factor_manager: Some(Addr::unchecked("manager1".to_string())),
+            supports_scaling_factors_update: true,
             scaling_factors: vec![],
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };
@@ -159,11 +158,11 @@ fn update_pool_params() {
 
     let pool_addr = Addr::unchecked("contract4".to_string());
 
-    // Let's update the pool params: max_allowed_spread
+    // Let's update the pool params: scaling factor manager
     let msg = ExecuteMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
-        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
-            max_allowed_spread: Decimal::from_ratio(10u64, 100u64)
+        params: to_json_binary(&StablePoolUpdateParams::UpdateScalingFactorManager {
+            manager: Addr::unchecked("manager2".to_string()),
         }).unwrap(),
     };
 
@@ -187,13 +186,13 @@ fn update_pool_params() {
 
     // unmarshal the pool params
     let pool_params: StablePoolParams = from_json(&pool_res.additional_params.unwrap()).unwrap();
-    assert_eq!(Decimal::from_ratio(10u64, 100u64), pool_params.max_allowed_spread);
+    assert_eq!(Addr::unchecked("manager2".to_string()), pool_params.scaling_factor_manager.unwrap());
 
     // Try to update the pool params with a non owner
     let msg = ExecuteMsg::UpdatePoolParams {
         pool_id: Uint128::from(1u128),
-        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread { 
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
+        params: to_json_binary(&StablePoolUpdateParams::UpdateScalingFactorManager { 
+            manager: Addr::unchecked("manager3".to_string())
         }).unwrap(),
     };
 

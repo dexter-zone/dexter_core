@@ -1,6 +1,6 @@
 pub mod utils;
 
-use cosmwasm_std::{Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
@@ -281,9 +281,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
             },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
+            amount: Uint128::from(252_000000u128)
         },
         recipient: None,
         min_receive: None,
@@ -470,9 +468,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
             },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
+            amount: Uint128::from(252_000000u128)
         },
         recipient: None,
         min_receive: None,
@@ -586,9 +582,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
             },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
+            amount: Uint128::from(252_000000u128)
         },
         recipient: None,
         min_receive: None,
@@ -629,9 +623,7 @@ fn test_swap() {
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
             },
-            amount: Uint128::from(252_000000u128),
-            max_spread: Some(Decimal::percent(50)),
-            belief_price: None,
+            amount: Uint128::from(252_000000u128)
         },
         recipient: None,
         min_receive: None,
