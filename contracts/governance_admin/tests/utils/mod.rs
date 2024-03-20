@@ -56,8 +56,6 @@ fn move_compiled_contract_to_artifacts() {
         ])
         .output()
         .unwrap();
-
-    // println!("output: {:?}", output);
 }
 
 fn read_wasm_byte_code_at_path(path: &str) -> Vec<u8> {

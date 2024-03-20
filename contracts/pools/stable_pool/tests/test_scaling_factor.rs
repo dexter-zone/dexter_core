@@ -682,12 +682,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_020_833_322_000u64),
+                rate: Uint128::from(1_020_833_232_000u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(979_592_000u64),
+                rate: Uint128::from(979_591_000u64),
             },
         ],
     );
@@ -726,12 +726,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_122_916_674_800u64),
+                rate: Uint128::from(1_122_916_575_800u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(1_077_551_100u64),
+                rate: Uint128::from(1_077_550_100u64),
             },
         ],
     );
@@ -776,12 +776,12 @@ fn test_swap_different_lsd_assets() {
             AssetExchangeRate {
                 offer_info: st_atom_asset.clone(),
                 ask_info: stk_atom_asset.clone(),
-                rate: Uint128::from(1_327_087_498_600u64),
+                rate: Uint128::from(1_327_087_381_400u64),
             },
             AssetExchangeRate {
                 offer_info: stk_atom_asset.clone(),
                 ask_info: st_atom_asset.clone(),
-                rate: Uint128::from(1_273_465_300u64),
+                rate: Uint128::from(1_273_464_300u64),
             },
         ],
     );

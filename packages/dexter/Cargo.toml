@@ -6,7 +6,6 @@ edition = "2021"
 description = "Dex optimized for liquid staked assets"
 repository = "https://github.com/dexter-zone/dexter_core"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 # for quicker tests, cargo test --lib
