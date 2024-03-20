@@ -6,7 +6,7 @@ use cosmwasm_std::{
     from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut, Env, Event,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
-use std::{cmp::min, collections::HashMap};
+use std::collections::HashMap;
 
 use dexter::{
     asset::AssetInfo,
@@ -15,9 +15,9 @@ use dexter::{
         propose_new_owner,
     },
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, ConfigV1,
+        AssetRewardState, AssetStakerInfo, Config, ConfigV1, ConfigV2_1, ConfigV2_2, ConfigV3,
         CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,
-        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnclaimedReward, ConfigV2_1, ConfigV2_2,
+        MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnbondConfig, UnclaimedReward,
     },
 };
 
@@ -26,16 +26,15 @@ use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
 use cw_storage_plus::Item;
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
-use dexter::multi_staking::{
-    RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS, MAX_INSTANT_UNBOND_FEE_BP,
-};
+use dexter::multi_staking::{RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS};
 
 use crate::{
     error::ContractError,
     state::{
         next_reward_schedule_id, ASSET_LP_REWARD_STATE, ASSET_STAKER_INFO, CONFIG,
-        CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_TOKEN_ASSET_REWARD_SCHEDULE,
-        OWNERSHIP_PROPOSAL, REWARD_SCHEDULES, USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS,
+        CREATOR_CLAIMABLE_REWARD, LP_GLOBAL_STATE, LP_OVERRIDE_CONFIG,
+        LP_TOKEN_ASSET_REWARD_SCHEDULE, OWNERSHIP_PROPOSAL, REWARD_SCHEDULES,
+        USER_BONDED_LP_TOKENS, USER_LP_TOKEN_LOCKS,
     },
 };
 use crate::{
@@ -54,6 +53,8 @@ const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V2: &str = "2.0.0";
 const CONTRACT_VERSION_V2_1: &str = "2.1.0";
 const CONTRACT_VERSION_V2_2: &str = "2.2.0";
+const CONTRACT_VERSION_V3: &str = "3.0.0";
+
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -68,50 +69,28 @@ pub fn instantiate(
 ) -> ContractResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    if msg.instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-        return Err(ContractError::InvalidInstantUnbondFee {
-            max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-            received: msg.instant_unbond_fee_bp,
-        });
-    }
-
-    if msg.instant_unbond_min_fee_bp > msg.instant_unbond_fee_bp {
-        return Err(ContractError::InvalidInstantUnbondMinFee {
-            max_allowed: msg.instant_unbond_fee_bp,
-            received: msg.instant_unbond_min_fee_bp,
-        });
-    }
-
-    if msg.fee_tier_interval > msg.unlock_period {
-        return Err(ContractError::InvalidFeeTierInterval {
-            max_allowed: msg.unlock_period,
-            received: msg.fee_tier_interval,
-        });
-    }
-
     // validate keeper address
     deps.api.addr_validate(&msg.keeper_addr.to_string())?;
+    msg.unbond_config.validate()?;
 
     CONFIG.save(
         deps.storage,
         &Config {
-            keeper: msg.keeper_addr,
-            unlock_period: msg.unlock_period,
+            keeper: msg.keeper_addr.clone(),
             owner: deps.api.addr_validate(msg.owner.as_str())?,
             allowed_lp_tokens: vec![],
-            instant_unbond_fee_bp: msg.instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp: msg.instant_unbond_min_fee_bp,
-            fee_tier_interval: msg.fee_tier_interval,
+            unbond_config: msg.unbond_config.clone(),
+            allowed_reward_cw20_tokens: vec![],
         },
     )?;
 
     Ok(Response::new().add_event(
         Event::from_info(concatcp!(CONTRACT_NAME, "::instantiate"), &info)
             .add_attribute("owner", msg.owner.to_string())
-            .add_attribute("unlock_period", msg.unlock_period.to_string())
+            .add_attribute("keeper", msg.keeper_addr.to_string())
             .add_attribute(
-                "minimum_reward_schedule_proposal_start_delay",
-                msg.minimum_reward_schedule_proposal_start_delay.to_string(),
+                "unbond_config",
+                serde_json_wasm::to_string(&msg.unbond_config).unwrap(),
             ),
     ))
 }
@@ -126,20 +105,15 @@ pub fn execute(
     match msg {
         ExecuteMsg::UpdateConfig {
             keeper_addr,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
-        } => update_config(
-            deps,
-            env,
-            info,
-            keeper_addr,
-            unlock_period,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
-        ),
+            unbond_config,
+        } => update_config(deps, env, info, keeper_addr, unbond_config),
+        ExecuteMsg::SetCustomUnbondConfig {
+            lp_token,
+            unbond_config,
+        } => set_custom_unbond_config(deps, env, info, lp_token, unbond_config),
+        ExecuteMsg::UnsetCustomUnbondConfig { lp_token } => {
+            unset_custom_unbond_config(deps, env, info, lp_token)
+        }
         ExecuteMsg::AllowLpToken { lp_token } => allow_lp_token(deps, env, info, lp_token),
         ExecuteMsg::RemoveLpToken { lp_token } => remove_lp_token(deps, info, &lp_token),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -170,10 +144,13 @@ pub fn execute(
                 None => info.sender.clone(),
             };
 
+            let sender = info.sender.clone();
+
             create_reward_schedule(
                 deps,
                 env,
                 info,
+                sender,
                 lp_token,
                 title,
                 start_block_time,
@@ -210,6 +187,43 @@ pub fn execute(
         ExecuteMsg::Withdraw { lp_token } => withdraw(deps, env, info, lp_token),
         ExecuteMsg::ClaimUnallocatedReward { reward_schedule_id } => {
             claim_unallocated_reward(deps, env, info, reward_schedule_id)
+        }
+        ExecuteMsg::AllowRewardCw20Token { addr } => {
+            let mut config = CONFIG.load(deps.storage)?;
+            // Verify that the message sender is the owner
+            if info.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
+            if config.allowed_reward_cw20_tokens.contains(&addr) {
+                return Err(ContractError::Cw20TokenAlreadyAllowed);
+            }
+            config
+                .allowed_reward_cw20_tokens
+                .push(deps.api.addr_validate(&addr.to_string())?);
+            CONFIG.save(deps.storage, &config)?;
+
+            Ok(Response::new().add_event(
+                Event::from_info(concatcp!(CONTRACT_NAME, "::allow_reward_cw20_token"), &info)
+                    .add_attribute("cw20_token", addr.to_string()),
+            ))
+        }
+        ExecuteMsg::RemoveRewardCw20Token { addr } => {
+            let mut config = CONFIG.load(deps.storage)?;
+            // Verify that the message sender is the owner
+            if info.sender != config.owner {
+                return Err(ContractError::Unauthorized);
+            }
+
+            config.allowed_reward_cw20_tokens.retain(|x| x != &addr);
+            CONFIG.save(deps.storage, &config)?;
+
+            Ok(Response::new().add_event(
+                Event::from_info(
+                    concatcp!(CONTRACT_NAME, "::remove_reward_cw20_token"),
+                    &info,
+                )
+                .add_attribute("cw20_token", addr.to_string()),
+            ))
         }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config = CONFIG.load(deps.storage)?;
@@ -255,10 +269,7 @@ fn update_config(
     _env: Env,
     info: MessageInfo,
     keeper_addr: Option<Addr>,
-    unlock_period: Option<u64>,
-    instant_unbond_fee_bp: Option<u64>,
-    instant_unbond_min_fee_bp: Option<u64>,
-    fee_tier_interval: Option<u64>,
+    unbond_config: Option<UnbondConfig>,
 ) -> ContractResult<Response> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -270,76 +281,77 @@ fn update_config(
     let mut event = Event::from_info(concatcp!(CONTRACT_NAME, "::update_config"), &info);
 
     if let Some(keeper_addr) = keeper_addr {
+        // validate
+        deps.api.addr_validate(&keeper_addr.to_string())?;
         config.keeper = keeper_addr.clone();
         event = event.add_attribute("keeper_addr", keeper_addr.to_string());
     }
 
-    if let Some(unlock_period) = unlock_period {
-        // validate if unlock period is greater than the fee tier interval, then reset the fee tier interval to unlock period as well
-        if fee_tier_interval.is_some() && fee_tier_interval.unwrap() > unlock_period {
-            return Err(ContractError::InvalidFeeTierInterval {
-                max_allowed: unlock_period,
-                received: fee_tier_interval.unwrap(),
-            });
-        }
-
-        // reset the current fee tier interval to unlock period if it is greater than unlock period
-        if config.fee_tier_interval > unlock_period {
-            config.fee_tier_interval = unlock_period;
-            event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
-        }
-
-        config.unlock_period = unlock_period;
-        event = event.add_attribute("unlock_period", config.unlock_period.to_string());
-    }
-
-    if let Some(instant_unbond_fee_bp) = instant_unbond_fee_bp {
-        // validate max allowed instant unbond fee which is 10%
-        if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-            return Err(ContractError::InvalidInstantUnbondFee {
-                max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-                received: instant_unbond_fee_bp,
-            });
-        }
-        config.instant_unbond_fee_bp = instant_unbond_fee_bp;
+    if let Some(unbond_config) = unbond_config {
+        unbond_config.validate()?;
         event = event.add_attribute(
-            "instant_unbond_fee_bp",
-            config.instant_unbond_fee_bp.to_string(),
+            "unbond_config",
+            serde_json_wasm::to_string(&unbond_config).unwrap(),
         );
-    }
-
-    if let Some(instant_unbond_min_fee_bp) = instant_unbond_min_fee_bp {
-        // validate min allowed instant unbond fee max value which is 10% and lesser than the instant unbond fee
-        if instant_unbond_min_fee_bp > MAX_INSTANT_UNBOND_FEE_BP
-            || instant_unbond_min_fee_bp > config.instant_unbond_fee_bp
-        {
-            return Err(ContractError::InvalidInstantUnbondMinFee {
-                max_allowed: min(config.instant_unbond_fee_bp, MAX_INSTANT_UNBOND_FEE_BP),
-                received: instant_unbond_min_fee_bp,
-            });
-        }
-
-        config.instant_unbond_min_fee_bp = instant_unbond_min_fee_bp;
-        event = event.add_attribute(
-            "instant_unbond_min_fee_bp",
-            config.instant_unbond_min_fee_bp.to_string(),
-        );
-    }
-
-    if let Some(fee_tier_interval) = fee_tier_interval {
-        // max allowed fee tier interval in equal to the unlock period.
-        if fee_tier_interval > config.unlock_period {
-            return Err(ContractError::InvalidFeeTierInterval {
-                max_allowed: config.unlock_period,
-                received: fee_tier_interval,
-            });
-        }
-
-        config.fee_tier_interval = fee_tier_interval;
-        event = event.add_attribute("fee_tier_interval", config.fee_tier_interval.to_string());
+        config.unbond_config = unbond_config;
     }
 
     CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new().add_event(event))
+}
+
+fn set_custom_unbond_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+    unbond_config: UnbondConfig,
+) -> ContractResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    // Verify that the message sender is the owner
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized);
+    }
+
+    let mut event = Event::from_info(
+        concatcp!(CONTRACT_NAME, "::set_custom_unbond_config"),
+        &info,
+    );
+
+    unbond_config.validate()?;
+    LP_OVERRIDE_CONFIG.save(deps.storage, lp_token.clone(), &unbond_config)?;
+
+    event = event.add_attribute("lp_token", lp_token.to_string());
+    event = event.add_attribute(
+        "unbond_config",
+        serde_json_wasm::to_string(&unbond_config).unwrap(),
+    );
+
+    Ok(Response::new().add_event(event))
+}
+
+fn unset_custom_unbond_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    lp_token: Addr,
+) -> ContractResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+
+    // Verify that the message sender is the owner
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized);
+    }
+
+    let mut event = Event::from_info(
+        concatcp!(CONTRACT_NAME, "::unset_custom_unbond_config"),
+        &info,
+    );
+
+    LP_OVERRIDE_CONFIG.remove(deps.storage, lp_token.clone());
+    event = event.add_attribute("lp_token", lp_token.to_string());
 
     Ok(Response::new().add_event(event))
 }
@@ -525,7 +537,8 @@ fn remove_lp_token(
 pub fn create_reward_schedule(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
+    sender: Addr,
     lp_token: Addr,
     title: String,
     start_block_time: u64,
@@ -543,16 +556,12 @@ pub fn create_reward_schedule(
             end_block_time,
         });
     }
-    if start_block_time <= env.block.time.seconds()
-    {
+    if start_block_time <= env.block.time.seconds() {
         return Err(ContractError::InvalidStartBlockTime {
             start_block_time,
             current_block_time: env.block.time.seconds(),
         });
     }
-
-    // still need to check as an LP token might have been removed after the reward schedule was proposed
-    check_if_lp_token_allowed(&config, &lp_token)?;
 
     let mut lp_global_state = LP_GLOBAL_STATE
         .may_load(deps.storage, &lp_token)?
@@ -594,7 +603,7 @@ pub fn create_reward_schedule(
     Ok(Response::new().add_event(
         Event::from_sender(
             concatcp!(CONTRACT_NAME, "::create_reward_schedule"),
-            &info.sender,
+            &sender,
         )
         .add_attribute("creator", creator.to_string())
         .add_attribute("lp_token", lp_token.to_string())
@@ -641,21 +650,28 @@ pub fn receive_cw20(
         } => {
             // only owner can create reward schedule
             let config = CONFIG.load(deps.storage)?;
-            if cw20_msg.sender != config.owner {
+            let sender = deps.api.addr_validate(&cw20_msg.sender)?;
+            if sender != config.owner {
                 return Err(ContractError::Unauthorized);
             }
 
             let token_addr = info.sender.clone();
 
+            // validate that the CW20 token is allowed for rewards
+            if !config.allowed_reward_cw20_tokens.contains(&token_addr) {
+                return Err(ContractError::Cw20TokenNotAllowed);
+            }
+
             let creator = match actual_creator {
                 Some(creator) => deps.api.addr_validate(&creator.to_string())?,
-                None => deps.api.addr_validate(&cw20_msg.sender)?,
+                None => sender.clone(),
             };
 
             create_reward_schedule(
                 deps,
                 env,
                 info,
+                sender,
                 lp_token,
                 title,
                 start_block_time,
@@ -986,6 +1002,10 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             token_lock,
         } => {
             let config = CONFIG.load(deps.storage)?;
+            let lp_override_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token.clone())?;
+
+            let unbond_config = lp_override_config.unwrap_or(config.unbond_config);
+
             // validate if token lock actually exists
             let token_locks = USER_LP_TOKEN_LOCKS
                 .may_load(deps.storage, (&lp_token, &user))?
@@ -997,7 +1017,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             }
 
             let (fee_bp, unlock_fee) =
-                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &config);
+                calculate_unlock_fee(&token_lock, env.block.time.seconds(), &unbond_config)?;
 
             let instant_lp_unlock_fee = InstantLpUnlockFee {
                 time_until_lock_expiry: token_lock
@@ -1011,19 +1031,18 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
             to_json_binary(&instant_lp_unlock_fee).map_err(ContractError::from)
         }
-        QueryMsg::InstantUnlockFeeTiers {} => {
+        QueryMsg::InstantUnlockFeeTiers { lp_token } => {
             let config = CONFIG.load(deps.storage)?;
-            let min_fee = config.instant_unbond_min_fee_bp;
-            let max_fee = config.instant_unbond_fee_bp;
+            let lp_override_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token)?;
 
-            let unlock_period = config.unlock_period;
-            let fee_tiers = query_instant_unlock_fee_tiers(
-                config.fee_tier_interval,
-                unlock_period,
-                min_fee,
-                max_fee,
-            );
+            let fee_tiers =
+                query_instant_unlock_fee_tiers(lp_override_config.unwrap_or(config.unbond_config))?;
 
+            to_json_binary(&fee_tiers).map_err(ContractError::from)
+        }
+        QueryMsg::DefaultInstantUnlockFeeTiers {} => {
+            let config = CONFIG.load(deps.storage)?;
+            let fee_tiers = query_instant_unlock_fee_tiers(config.unbond_config)?;
             to_json_binary(&fee_tiers).map_err(ContractError::from)
         }
         QueryMsg::UnclaimedRewards {
@@ -1199,17 +1218,32 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
             let config = CONFIG.load(deps.storage)?;
             to_json_binary(&config).map_err(ContractError::from)
         }
+        QueryMsg::UnbondConfig { lp_token } => {
+            let config = CONFIG.load(deps.storage)?;
+
+            let unbond_config = if let Some(lp_token) = lp_token {
+                // validate address
+                let lp_token = deps.api.addr_validate(lp_token.as_str())?;
+                let lp_override_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token)?;
+
+                lp_override_config.unwrap_or(config.unbond_config)
+            } else {
+                config.unbond_config
+            };
+
+            to_json_binary(&unbond_config).map_err(ContractError::from)
+        }
     }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
-        MigrateMsg::V3FromV1 {
+        MigrateMsg::V3_1FromV1 {
             keeper_addr,
             instant_unbond_fee_bp,
             instant_unbond_min_fee_bp,
-            fee_tier_interval
+            fee_tier_interval,
         } => {
             // verify if we are running on V1 right now
             let contract_version = get_contract_version(deps.storage)?;
@@ -1221,58 +1255,53 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
                 });
             }
 
-            // validate input for upgrade
-            if instant_unbond_fee_bp > MAX_INSTANT_UNBOND_FEE_BP {
-                return Err(ContractError::InvalidInstantUnbondFee {
-                    max_allowed: MAX_INSTANT_UNBOND_FEE_BP,
-                    received: instant_unbond_fee_bp,
-                });
-            }
-
-            if instant_unbond_min_fee_bp > instant_unbond_fee_bp {
-                return Err(ContractError::InvalidInstantUnbondMinFee {
-                    max_allowed: instant_unbond_fee_bp,
-                    received: instant_unbond_min_fee_bp,
-                });
-            }
-
             let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
 
-            // valiate fee tier interval
-            if fee_tier_interval > config_v1.unlock_period {
-                return Err(ContractError::InvalidFeeTierInterval {
-                    max_allowed: config_v1.unlock_period,
-                    received: fee_tier_interval,
-                });
-            }
+            let unbond_config = UnbondConfig {
+                unlock_period: config_v1.unlock_period,
+                instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
+                    min_fee: instant_unbond_min_fee_bp,
+                    max_fee: instant_unbond_fee_bp,
+                    fee_tier_interval,
+                },
+            };
+            unbond_config.validate()?;
 
             // copy fields from v1 to v2
             let config = Config {
                 owner: config_v1.owner,
                 allowed_lp_tokens: config_v1.allowed_lp_tokens,
-                unlock_period: config_v1.unlock_period,
                 keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                instant_unbond_fee_bp,
-                instant_unbond_min_fee_bp,
-                fee_tier_interval,
+                unbond_config,
+                allowed_reward_cw20_tokens: vec![],
             };
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             CONFIG.save(deps.storage, &config)?;
-        },
-        MigrateMsg::V3FromV2 { keeper_addr } => {
+        }
+        MigrateMsg::V3_1FromV2 { keeper_addr } => {
             let contract_version = get_contract_version(deps.storage)?;
             // if version is v2 or v2.1, apply the changes.
-            if contract_version.version == CONTRACT_VERSION_V2 || contract_version.version == CONTRACT_VERSION_V2_1 {
+            if contract_version.version == CONTRACT_VERSION_V2
+                || contract_version.version == CONTRACT_VERSION_V2_1
+            {
                 let config_v2: ConfigV2_1 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig {
+                    unlock_period: config_v2.unlock_period,
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
+                        min_fee: config_v2.instant_unbond_min_fee_bp,
+                        max_fee: config_v2.instant_unbond_fee_bp,
+                        fee_tier_interval: config_v2.fee_tier_interval,
+                    },
+                };
+                unbond_config.validate()?;
+
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    unlock_period: config_v2.unlock_period,
-                    keeper: keeper_addr,
-                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
-                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
-                    fee_tier_interval: config_v2.fee_tier_interval,
+                    keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
+                    unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
                 };
 
                 CONFIG.save(deps.storage, &config)?;
@@ -1286,30 +1315,71 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             }
         }
 
-        MigrateMsg::V3FromV2_2 {} => {
+        MigrateMsg::V3_1FromV2_2 {} => {
             let contract_version = get_contract_version(deps.storage)?;
-            // if version if v2.2 apply the changes and return
             if contract_version.version == CONTRACT_VERSION_V2_2 {
                 let config_v2: ConfigV2_2 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig {
+                    unlock_period: config_v2.unlock_period,
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
+                        min_fee: config_v2.instant_unbond_min_fee_bp,
+                        max_fee: config_v2.instant_unbond_fee_bp,
+                        fee_tier_interval: config_v2.fee_tier_interval,
+                    },
+                };
+                unbond_config.validate()?;
+
                 let config = Config {
                     owner: config_v2.owner,
                     allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    unlock_period: config_v2.unlock_period,
                     keeper: config_v2.keeper,
-                    instant_unbond_fee_bp: config_v2.instant_unbond_fee_bp,
-                    instant_unbond_min_fee_bp: config_v2.instant_unbond_min_fee_bp,
-                    fee_tier_interval: config_v2.fee_tier_interval,
+                    unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
                 };
 
                 CONFIG.save(deps.storage, &config)?;
 
                 // set the contract version to v3
                 set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
             } else {
                 return Err(ContractError::InvalidContractVersionForUpgrade {
                     upgrade_version: CONTRACT_VERSION.to_string(),
                     expected: CONTRACT_VERSION_V2_2.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+        }
+
+        MigrateMsg::V3_1FromV3 {} => {
+            let contract_version = get_contract_version(deps.storage)?;
+            if contract_version.version == CONTRACT_VERSION_V3 {
+                let config_v3: ConfigV3 = Item::new("config").load(deps.storage)?;
+                let unbond_config = UnbondConfig {
+                    unlock_period: config_v3.unlock_period,
+                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
+                        min_fee: config_v3.instant_unbond_min_fee_bp,
+                        max_fee: config_v3.instant_unbond_fee_bp,
+                        fee_tier_interval: config_v3.fee_tier_interval,
+                    },
+                };
+                unbond_config.validate()?;
+
+                let config = Config {
+                    owner: config_v3.owner,
+                    allowed_lp_tokens: config_v3.allowed_lp_tokens,
+                    keeper: config_v3.keeper,
+                    unbond_config,
+                    allowed_reward_cw20_tokens: vec![],
+                };
+
+                CONFIG.save(deps.storage, &config)?;
+
+                // set the contract version to v3
+                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+            } else {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V3.to_string(),
                     actual: contract_version.version,
                 });
             }
