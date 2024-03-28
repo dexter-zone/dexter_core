@@ -1001,7 +1001,7 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **_msg** is the object of type [`MigrateMsg`].
 // migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+pub fn migrate(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V1_1 {} => {
             // fetch current version to ensure it's v1

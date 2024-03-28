@@ -1480,21 +1480,6 @@ fn compute_current_amp(math_config: &MathConfig, env: &Env) -> StdResult<u64> {
 }
 
 // --------x--------x--------x--------x--------x--------x---
-// --------x--------x Migrate Function   x--------x---------
-// --------x--------x--------x--------x--------x--------x---
-
-/// ## Description
-/// Used for migration of contract. Returns the default object of type [`Response`].
-/// ## Params
-/// * **_deps** is the object of type [`DepsMut`].
-/// * **_env** is the object of type [`Env`].
-/// * **_msg** is the object of type [`MigrateMsg`].
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    Ok(Response::default())
-}
-
-// --------x--------x--------x--------x--------x--------x---
 // --------x--------x Helper Functions   x--------x---------
 // --------x--------x--------x--------x--------x--------x---
 
@@ -1523,7 +1508,7 @@ pub fn transform_to_scaled_decimal_asset(
 
 // migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate_msg(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V1_1 {} => {
             // fetch current version to ensure it's v1
