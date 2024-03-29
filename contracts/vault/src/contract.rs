@@ -1949,6 +1949,14 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
             // update pool type configs to new values. This makes sure we instantiate new pools with the new configs particularly the 
             // Code ID for each pool type which has been updated to a new value with the new version of the pool contracts
             for pool_type_config in updated_pool_type_configs {
+                 // Check if code id is valid
+                if pool_type_config.code_id == 0 {
+                    return Err(ContractError::InvalidCodeId {});
+                }
+                // validate fee bps limits
+                if !pool_type_config.default_fee_info.valid_fee_info() {
+                    return Err(ContractError::InvalidFeeInfo {});
+                }
                 REGISTRY.save(deps.storage, pool_type_config.pool_type.to_string(), &pool_type_config)?;
             }
 
