@@ -3,6 +3,7 @@ use cosmwasm_std::{Addr, Coin, Timestamp, Uint128, to_json_binary};
 use cw20::MinterResponse;
 use cw_multi_test::{App, ContractWrapper, Executor};
 use dexter::asset::{Asset, AssetInfo};
+use dexter::multi_staking::UnbondConfig;
 use dexter::vault::{FeeInfo, PauseInfo, PoolCreationFee, PoolTypeConfig, NativeAssetPrecisionInfo};
 
 const EPOCH_START: u64 = 1_000_000;
@@ -118,12 +119,15 @@ fn instantiate_contract(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr) {
     // instantiate multistaking contract
     let msg = dexter::multi_staking::InstantiateMsg {
         owner: owner.clone(),
-        unlock_period: 1000,
-        minimum_reward_schedule_proposal_start_delay: 3 * 24 * 60 * 60,
         keeper_addr: keeper_addr.clone(),
-        instant_unbond_fee_bp: 500,
-        instant_unbond_min_fee_bp: 200,
-        fee_tier_interval: 1000,
+        unbond_config: UnbondConfig {
+            unlock_period: 1000,
+            instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled { 
+                min_fee: 200,
+                max_fee: 500,
+                fee_tier_interval: 1000
+            }
+        },
     };
 
     let multi_staking_instance = app

@@ -1,6 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Decimal, Uint128};
 use cw20::Cw20ReceiveMsg;
+use thiserror::Error;
 
 use crate::asset::AssetInfo;
 
@@ -19,31 +20,28 @@ pub const MAX_INSTANT_UNBOND_FEE_BP: u64 = 1000;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Addr,
-    pub unlock_period: u64,
-    pub minimum_reward_schedule_proposal_start_delay: u64,
     pub keeper_addr: Addr,
-    /// value between 0 and 1000 (0% to 10%) are allowed
-    pub instant_unbond_fee_bp: u64,
-    pub instant_unbond_min_fee_bp: u64,
-    pub fee_tier_interval: u64
+    pub unbond_config: UnbondConfig,
 }
 
 #[cw_serde]
 pub enum MigrateMsg {
-    // Removes the reward schedule proposal start delay config param.
-    // This migration is supported from version v2.0, v2.1 and v2.2
-    V3FromV2 {
-        keeper_addr: Addr
-    },
-    V3FromV2_2 {},
+
     /// Removes the reward schedule proposal start delay config param
     /// Instant unbonding fee and keeper address are added
-    V3FromV1 {
+    V3_1FromV1 {
         keeper_addr: Addr,
         instant_unbond_fee_bp: u64,
         instant_unbond_min_fee_bp: u64,
         fee_tier_interval: u64
-    }
+    },
+    // Removes the reward schedule proposal start delay config param.
+    // This migration is supported from version v2.0, v2.1 and v2.2
+    V3_1FromV2 {
+        keeper_addr: Addr
+    },
+    V3_1FromV2_2 {},
+    V3_1FromV3 {},
 }
 
 #[cw_serde]
@@ -107,18 +105,76 @@ pub struct Config {
     pub keeper: Addr,
     /// LP Token addresses for which reward schedules can be added
     pub allowed_lp_tokens: Vec<Addr>,
+    /// Allowed CW20 tokens for rewards. This is to control the abuse from a malicious CW20 token to create
+    ///  unnecessary reward schedules
+    pub allowed_reward_cw20_tokens: Vec<Addr>,
+    /// Default unbond config
+    pub unbond_config: UnbondConfig
+}
+
+#[cw_serde]
+pub enum InstantUnbondConfig {
+    Disabled,
+    Enabled {
+        /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
+        /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
+        min_fee: u64,
+        /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
+        /// value between 0 and 1000 (0% to 10%) are allowed
+        max_fee: u64,
+        /// This is the interval period in seconds on which we will have fee tier boundaries.
+        fee_tier_interval: u64,
+    }
+}
+
+#[cw_serde]
+pub struct UnbondConfig {
     /// Unlocking period in seconds
     /// This is the minimum time that must pass before a user can withdraw their staked tokens and rewards
     /// after they have called the unbond function
     pub unlock_period: u64,
-    /// Instant LP unbonding fee. This is the percentage of the LP tokens that will be deducted as fee
-    /// value between 0 and 1000 (0% to 10%) are allowed
-    pub instant_unbond_fee_bp: u64,
-    /// This is the interval period in seconds on which we will have fee tier boundaries.
-    pub fee_tier_interval: u64,
-    /// This is the minimum fee charged for instant LP unlock when the unlock time is less than fee interval in future.
-    /// Fee in between the unlock duration and fee tier intervals will be linearly interpolated at fee tier interval boundaries.
-    pub instant_unbond_min_fee_bp: u64,
+    /// Status of instant unbonding
+    pub instant_unbond_config: InstantUnbondConfig
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum UnbondConfigValidationError {
+
+    #[error("Min fee smaller than max fee is not allowed")]
+    InvalidMinFee { min_fee: u64, max_fee: u64 },
+
+    #[error("Max fee bigger than {MAX_INSTANT_UNBOND_FEE_BP} is not allowed")]
+    InvalidMaxFee { max_fee: u64 },
+
+    #[error("Invalid fee tier interval. Fee tier interval must be a non-zero value lesser than the unlock period")]
+    InvalidFeeTierInterval { fee_tier_interval: u64 },
+}
+
+impl UnbondConfig {
+    // validate the unbond config
+    pub fn validate(&self) -> Result<(), UnbondConfigValidationError> {
+        match self.instant_unbond_config {
+            InstantUnbondConfig::Disabled => Ok(()),
+            InstantUnbondConfig::Enabled { min_fee, max_fee, fee_tier_interval } => {
+                if min_fee > max_fee {
+                    Err(UnbondConfigValidationError::InvalidMinFee { 
+                        min_fee,
+                        max_fee,
+                     })
+                } else if max_fee > MAX_INSTANT_UNBOND_FEE_BP {
+                    Err(UnbondConfigValidationError::InvalidMaxFee {
+                        max_fee
+                    })
+                } else if fee_tier_interval == 0 || fee_tier_interval > self.unlock_period {
+                    Err(UnbondConfigValidationError::InvalidFeeTierInterval {
+                        fee_tier_interval,
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
 }
 
 /// config structure of contract version v2 and v2.1 . Used for migration.
@@ -142,6 +198,18 @@ pub struct ConfigV2_2 {
     pub allowed_lp_tokens: Vec<Addr>,
     pub unlock_period: u64,
     pub minimum_reward_schedule_proposal_start_delay: u64,
+    pub instant_unbond_fee_bp: u64,
+    pub fee_tier_interval: u64,
+    pub instant_unbond_min_fee_bp: u64,
+}
+
+/// config structure of contract version v2.2 . Used for migration.
+#[cw_serde]
+pub struct ConfigV3 {
+    pub owner: Addr,
+    pub keeper: Addr,
+    pub allowed_lp_tokens: Vec<Addr>,
+    pub unlock_period: u64,
     pub instant_unbond_fee_bp: u64,
     pub fee_tier_interval: u64,
     pub instant_unbond_min_fee_bp: u64,
@@ -204,6 +272,11 @@ pub enum QueryMsg {
     /// Returns current config of the contract
     #[returns(Config)]
     Config {},
+    /// Returns current unbond config of a given LP token (or global)
+    #[returns(UnbondConfig)]
+    UnbondConfig {
+        lp_token: Option<Addr>
+    },
     /// Returns currently unclaimed rewards for a user for a give LP token
     /// If a future block time is provided, it will return the unclaimed rewards till that block time.
     #[returns(Vec<UnclaimedReward>)]
@@ -243,7 +316,11 @@ pub enum QueryMsg {
         token_lock: TokenLock
     },
     #[returns(Vec<UnlockFeeTier>)]
-    InstantUnlockFeeTiers {},
+    InstantUnlockFeeTiers {
+        lp_token: Addr
+    },
+    #[returns(Vec<UnlockFeeTier>)]
+    DefaultInstantUnlockFeeTiers {},
     /// Returns the LP tokens which are whitelisted for rewards
     #[returns(Vec<Addr>)]
     AllowedLPTokensForReward {},
@@ -291,10 +368,17 @@ pub enum ExecuteMsg {
     /// Allows an admin to update config params
     UpdateConfig {
         keeper_addr: Option<Addr>,
-        unlock_period: Option<u64>,
-        instant_unbond_fee_bp: Option<u64>,
-        instant_unbond_min_fee_bp: Option<u64>,
-        fee_tier_interval: Option<u64>,
+        unbond_config: Option<UnbondConfig>,
+    },
+    /// Add custom unbdond config for a given LP token
+    SetCustomUnbondConfig {
+        lp_token: Addr,
+        unbond_config: UnbondConfig,
+    },
+
+    /// Unset custom unbdond config for a given LP token
+    UnsetCustomUnbondConfig {
+        lp_token: Addr,
     },
     /// Creates a new reward schedule for rewarding LP token holders a specific asset.
     /// Asset is distributed linearly over the duration of the reward schedule.
@@ -320,6 +404,14 @@ pub enum ExecuteMsg {
     /// Existing reward schedules for the LP token will still be valid.
     RemoveLpToken {
         lp_token: Addr,
+    },
+    /// Add reward CW20 token to the list of allowed reward tokens
+    AllowRewardCw20Token {
+        addr: Addr
+    },
+    /// Remove reward CW20 token from the list of allowed reward tokens
+    RemoveRewardCw20Token {
+        addr: Addr,
     },
     /// Allows the contract to receive CW20 tokens.
     /// The contract can receive CW20 tokens from LP tokens for staking and 
