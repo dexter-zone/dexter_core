@@ -1538,6 +1538,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             };
 
             STABLESWAP_CONFIG.save(deps.storage, &stableswap_config_new)?;
+            set_contract_version(deps.storage, CONTRACT_VERSION, CONTRACT_NAME)?;
 
             Ok(Response::default())
         }
