@@ -1,6 +1,6 @@
 {
   "contract_name": "dexter-router",
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -183,10 +183,6 @@
           }
         ]
       },
-      "Decimal": {
-        "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
-        "type": "string"
-      },
       "HopSwapRequest": {
         "description": "This enum describes a swap operation.",
         "type": "object",
@@ -209,26 +205,6 @@
             "allOf": [
               {
                 "$ref": "#/definitions/AssetInfo"
-              }
-            ]
-          },
-          "belief_price": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Decimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "max_spread": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Decimal"
-              },
-              {
-                "type": "null"
               }
             ]
           },
@@ -355,10 +331,6 @@
           }
         ]
       },
-      "Decimal": {
-        "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
-        "type": "string"
-      },
       "HopSwapRequest": {
         "description": "This enum describes a swap operation.",
         "type": "object",
@@ -381,26 +353,6 @@
             "allOf": [
               {
                 "$ref": "#/definitions/AssetInfo"
-              }
-            ]
-          },
-          "belief_price": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Decimal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "max_spread": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Decimal"
-              },
-              {
-                "type": "null"
               }
             ]
           },
@@ -469,8 +421,21 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "MigrateMsg",
     "description": "This structure describes a migration message. We currently take no arguments for migrations.",
-    "type": "object",
-    "additionalProperties": false
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "v1_1"
+        ],
+        "properties": {
+          "v1_1": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ]
   },
   "sudo": null,
   "responses": {
