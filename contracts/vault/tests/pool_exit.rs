@@ -403,7 +403,7 @@ fn test_exit_pool() {
         )
         .unwrap();
     assert_eq!(
-        Uint128::from(394669089467585656459u128),
+        Uint128::from(394669089467585656489u128),
         cur_user_lp_balance.balance - new_user_lp_balance.balance
     );
 
@@ -669,7 +669,7 @@ fn test_exit_pool() {
                         amount: Uint128::from(257_000000u128),
                     },
                 ],
-                max_lp_to_burn: Some(Uint128::from(404_374980_780408_081409u128)),
+                max_lp_to_burn: Some(Uint128::from(404_374_980_780_408_081_342u128)),
             },
         })
             .unwrap(),
@@ -679,5 +679,5 @@ fn test_exit_pool() {
         stable5_lp_token_addr.clone(),
         &exit_msg,
         &[]
-    ).unwrap_err().root_cause().to_string(), "MaxLpToBurnError - burn amount 404374980780408081410 is more than maximum LP to burn 404374980780408081409 allowed by the user");
+    ).unwrap_err().root_cause().to_string(), "MaxLpToBurnError - burn amount 404374980780408081343 is more than maximum LP to burn 404374980780408081342 allowed by the user");
 }

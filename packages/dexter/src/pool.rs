@@ -169,7 +169,9 @@ pub enum QueryMsg {
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
         amount: Uint128,
+        // DEPRECATED: not used in any pool type. use min received for slippage protection
         max_spread: Option<Decimal>,
+        // DEPRECATED: not used in any pool type. use min received for slippage protection
         belief_price: Option<Decimal>,
     },
     /// ## Description - Returns the spot price of the asset in a [`SpotPrice`] object.

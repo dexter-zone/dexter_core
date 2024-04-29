@@ -31,7 +31,7 @@ pub(crate) fn compute_swap(
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
     ask_asset_scaling_factor: Decimal256,
-) -> StdResult<(Uint128, Uint128)> {
+) -> StdResult<Uint128> {
     // get ask asset precision
     let ask_asset_precision = get_precision(storage, &ask_pool.info)?;
     
@@ -49,19 +49,7 @@ pub(crate) fn compute_swap(
         .without_scaling_factor(ask_asset_scaling_factor)?
         .to_uint128_with_precision(ask_asset_precision)?;
 
-    let offer_asset_amount = offer_asset
-        .amount
-        .to_uint128_with_precision(ask_asset_precision)?;
-
-    // We consider swap rate 1:1 in stable swap thus any difference is considered as spread.
-    let spread_amount = offer_asset_amount.saturating_sub(return_amount);
-
-    // Spread amount must be scaled by the scaling factor of the ask asset to get the actual spread amount in the ask asset terms.
-    let spread_amount_without_scaling_factor = Decimal256::with_precision(spread_amount, ask_asset_precision as u32)?
-        .without_scaling_factor(ask_asset_scaling_factor)?
-        .to_uint128_with_precision(ask_asset_precision)?;
-
-    Ok((return_amount_without_scaling_factor, spread_amount_without_scaling_factor))
+    Ok(return_amount_without_scaling_factor)
 }
 
 /// ## Description
@@ -82,11 +70,10 @@ pub(crate) fn compute_offer_amount(
     ask_pool: &DecimalAsset,
     pools: &[DecimalAsset],
     commission_rate: u16,
-    ask_asset_scaling_factor: Decimal256,
+    _ask_asset_scaling_factor: Decimal256,
     offer_asset_scaling_factor: Decimal256,
-) -> StdResult<(Uint128, Uint128, Uint128)> {
+) -> StdResult<(Uint128, Uint128)> {
     let offer_precision = get_precision(storage, &offer_pool.info)?;
-    let ask_precision = get_precision(storage, &ask_asset.info)?;
 
     let one_minus_commission = Decimal256::one()
         - decimal_to_decimal256(Decimal::from_ratio(commission_rate, FEE_PRECISION))?;
@@ -121,16 +108,7 @@ pub(crate) fn compute_offer_amount(
     let fee = offer_amount_including_fee - offer_amount_without_scaling_factor;
     let fee_uint128 = fee.to_uint128_with_precision(offer_precision)?;
 
-    // We assume the assets should stay in a 1:1 ratio, so the true exchange rate is 1. Any exchange rate < 1 could be considered the spread
-    let ask_asset_with_scaling_factor_gp = ask_asset.amount.to_uint128_with_precision(Decimal256::DECIMAL_PLACES)?;
-    let offer_amount_with_scaling_factor_excluding_fee_gp = offer_amount_with_scaling_factor_gp;
-    let spread_amount_gp = offer_amount_with_scaling_factor_excluding_fee_gp.saturating_sub(ask_asset_with_scaling_factor_gp);
-
-    let spread_amount_without_scaling_factor = Decimal256::with_precision(spread_amount_gp, Decimal256::DECIMAL_PLACES as u32)?
-        .without_scaling_factor(ask_asset_scaling_factor)?
-        .to_uint128_with_precision(ask_precision)?;
-
-    Ok((offer_amount_including_fee_uint128, spread_amount_without_scaling_factor, fee_uint128))
+    Ok((offer_amount_including_fee_uint128, fee_uint128))
 }
 
 // --------x--------x--------x--------x--------x--------x--------
@@ -226,7 +204,6 @@ pub fn accumulate_prices(
             config.fee_info.clone(),
             amp
         )?;
-        // ).unwrap();
 
         let ask_asset_precision = get_precision(deps.storage, &to)?;
         let return_amount = spot_price.price.to_uint128_with_precision(ask_asset_precision)?;
