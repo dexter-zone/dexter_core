@@ -287,8 +287,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
         } => to_json_binary(&query_on_swap(
             deps,
             env,
@@ -296,8 +294,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
         )?),
         QueryMsg::SpotPrice { offer_asset, ask_asset } => {
             to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
@@ -753,9 +749,7 @@ pub fn query_on_swap(
     swap_type: SwapType,
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
-    amount: Uint128,
-    _max_spread: Option<Decimal>,
-    _belief_price: Option<Decimal>,
+    amount: Uint128
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -1007,11 +1001,11 @@ pub fn query_cumulative_prices(deps: Deps, env: Env) -> StdResult<CumulativePric
 /// * **_msg** is the object of type [`MigrateMsg`].
 // migrate msg
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
     match msg {
         MigrateMsg::V1_1 {} => {
             // fetch current version to ensure it's v1
-            let version = get_contract_version(_deps.storage)?;
+            let version = get_contract_version(deps.storage)?;
             if version.version != CONTRACT_VERSION_V1 {
                 return Err(ContractError::InvalidContractVersion {
                     expected_version: CONTRACT_VERSION_V1.to_string(),
@@ -1026,6 +1020,7 @@ pub fn migrate_msg(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult
                 });
             }
 
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
             Ok(Response::default())
         }
     }
