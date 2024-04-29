@@ -11,10 +11,10 @@ use std::str::FromStr;
 use std::vec;
 
 use crate::error::ContractError;
-use crate::math::{compute_d, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use crate::math::{compute_d, calc_spot_price, AMP_PRECISION, MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
 use crate::state::{get_precision, AssetScalingFactor, MathConfig, StablePoolParams, StablePoolUpdateParams, StableSwapConfig, Twap, CONFIG, MATHCONFIG, STABLESWAP_CONFIG, TWAPINFO, PRECISIONS};
 use crate::utils::{accumulate_prices, compute_offer_amount, compute_swap};
-use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SwapResponse, Trade, DEFAULT_SPREAD, update_fee, store_precisions};
+use dexter::pool::{return_exit_failure, return_join_failure, return_swap_failure, store_precisions, update_fee, AfterExitResponse, AfterJoinResponse, Config, ConfigResponse, CumulativePriceResponse, CumulativePricesResponse, ExecuteMsg, ExitType, FeeResponse, InstantiateMsg, MigrateMsg, QueryMsg, ResponseType, SpotPrice, SwapResponse, Trade, DEFAULT_SPREAD};
 
 use dexter::asset::{Asset, AssetExchangeRate, AssetInfo, Decimal256Ext, DecimalAsset};
 use dexter::helper::{calculate_underlying_fees, get_share_in_assets, select_pools, EventExt};
@@ -240,7 +240,9 @@ pub fn execute(
         ExecuteMsg::UpdateFee { total_fee_bps } => {
             update_fee(deps, env, info, total_fee_bps, CONFIG, CONTRACT_NAME).map_err(|e| e.into())
         }
-        ExecuteMsg::UpdateLiquidity { assets } => execute_update_liquidity(deps, env, info, assets),
+        ExecuteMsg::UpdateLiquidity { assets } => {
+            execute_update_liquidity(deps, env, info, assets)
+        }
     }
 }
 
@@ -414,18 +416,21 @@ pub fn execute_update_liquidity(
         transform_to_scaled_decimal_asset(deps.as_ref(), config.assets.clone())?;
 
     // Accumulate prices for the assets in the pool
-    if accumulate_prices(
+    let res = accumulate_prices(
         deps.as_ref(),
         env.clone(),
         math_config,
         &mut twap,
         &decimal_assets,
-    )
-    .is_ok()
+    );
+
+    if res.is_ok()
     // TWAP computation can fail in certain edge cases (when pool is empty for eg), for which you need
     // to allow tx to be successful rather than failing the tx. Accumulated prices can be used to
     // calculate TWAP oracle prices later and letting the tx be successful even when price accumulation
     // fails doesn't cause any issues.
+    // UPDATE: We have now handled the edge case of pool join operation so this should ideally never fail.
+    // But we keep this check here for safety, so the pool operations don't fail because of this
     {
         TWAPINFO.save(deps.storage, &twap)?;
     }
@@ -524,6 +529,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
         } => to_json_binary(&query_cumulative_price(deps, env, offer_asset, ask_asset)?),
+        QueryMsg::SpotPrice { offer_asset, ask_asset } => {
+            to_json_binary(&query_spot_price(deps, env, offer_asset, ask_asset)?)
+        }
         QueryMsg::CumulativePrices {} => to_json_binary(&query_cumulative_prices(deps, env)?),
     }
 }
@@ -1135,6 +1143,38 @@ pub fn query_cumulative_price(
     };
 
     Ok(resp)
+}
+
+pub fn query_spot_price(
+    deps: Deps,
+    env: Env,
+    offer_asset_info: AssetInfo,
+    ask_asset_info: AssetInfo,
+) -> StdResult<SpotPrice> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let math_config: MathConfig = MATHCONFIG.load(deps.storage)?;
+    let stableswap_config: StableSwapConfig = STABLESWAP_CONFIG.load(deps.storage)?;
+
+    let decimal_assets: Vec<DecimalAsset> = transform_to_scaled_decimal_asset(deps, config.assets)?;
+    let fee = config.fee_info;
+    let amp = compute_current_amp(&math_config, &env)?;
+
+    let offer_asset_scaling_factor = stableswap_config.get_scaling_factor_for(&offer_asset_info)
+        .unwrap_or(Decimal256::one());
+    let ask_asset_scaling_factor = stableswap_config.get_scaling_factor_for(&ask_asset_info)
+        .unwrap_or(Decimal256::one());
+
+    let spot_price = calc_spot_price(
+        &offer_asset_info,
+        &ask_asset_info,
+        &offer_asset_scaling_factor,
+        &ask_asset_scaling_factor,
+        &decimal_assets,
+        fee,
+        amp,
+    )?;
+
+    Ok(spot_price)
 }
 
 /// ## Description
