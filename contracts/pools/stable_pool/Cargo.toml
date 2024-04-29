@@ -1,9 +1,9 @@
 [package]
-name = "stable-pool"
-version = "1.0.0"
-authors = ["AstroTechLabs"]
+name = "dexter-stable-pool"
+version = "1.1.1"
+authors = ["Persistence Labs"]
 edition = "2021"
-description = "A Dexter DEX pool implementing the stable 3-pool AMM type"
+description = "A Dexter DEX pool implementing the stableswap and metastable AMM models"
 license = "MIT"
 
 exclude = [
@@ -24,10 +24,10 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 integer-sqrt = "0.1.5"
-dexter = { path = "../../../packages/dexter", default-features = false }
+dexter = { version = "1.4.0", path = "../../../packages/dexter", default-features = false }
 cw2 = "1.0.1"
 cw20 = "1.0.1"
-cosmwasm-std = "1.5.0"
+cosmwasm-std = "1.5.4"
 cw-storage-plus = "1.0.1"
 schemars = "0.8.11"
 serde = { version = "1.0.152", default-features = false, features = ["derive"] }
@@ -41,7 +41,7 @@ const_format = "0.2.30"
 [dev-dependencies]
 anyhow = "1.0"
 sim = { git = "https://github.com/dexter-zone/stableswap_simulations.git", rev = "d40f0e77f6b21cccdd8415f6f36db31f76be2f3f", package = "sim" }
-lp-token = {path = "../../lp_token"}
+dexter-lp-token = {path = "../../lp_token"}
 cw-multi-test = "0.16.2"
-dexter-vault = {path = "../../vault"}
+dexter-vault = { path = "../../vault"}
 proptest = "0.10.1"

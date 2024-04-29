@@ -3,6 +3,9 @@ name = "dexter-multi-staking"
 version = "3.1.0"
 authors = ["Persistence Labs"]
 edition = "2021"
+description = "Dexter Multi-Staking Contract: allows to stake LP tokens and earn rewards in multiple tokens"
+repository = "https://github.com/dexter-zone/dexter_core"
+license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -15,11 +18,11 @@ library = []
 [dependencies]
 cw2 = "1.0.1"
 cw20 = "1.0.1"
-cosmwasm-std = "1.5.0"
+cosmwasm-std = "1.5.4"
 cw-storage-plus = "1.0.1"
 schemars = "0.8.11"
 serde = { version = "1.0.152", default-features = false, features = ["derive"] }
-dexter = { path = "../../packages/dexter", default-features = false }
+dexter = { version = "1.4.0", path = "../../packages/dexter", default-features = false }
 thiserror = "1.0.38"
 cosmwasm-schema = "1.5.0"
 serde-json-wasm = "0.5.0"
@@ -27,7 +30,7 @@ const_format = "0.2.30"
 
 [dev-dependencies]
 cosmwasm-schema = "1.5.0"
-lp-token = {path = "../lp_token"}
+dexter-lp-token = {path = "../lp_token"}
 cw-multi-test = "0.16.2"
 cw20-base = "1.0.1"
 anyhow = "1.0.68"

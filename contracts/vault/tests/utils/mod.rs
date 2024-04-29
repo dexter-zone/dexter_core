@@ -9,7 +9,7 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PoolInfoResponse, PoolType,
     PoolTypeConfig, QueryMsg, PoolCreationFee, PauseInfo, NativeAssetPrecisionInfo,
 };
-use stable_pool::state::StablePoolParams;
+use dexter_stable_pool::state::StablePoolParams;
 
 const EPOCH_START: u64 = 1_000_000;
 
@@ -39,27 +39,27 @@ pub fn store_vault_code(app: &mut App) -> u64 {
 
 pub fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     app.store_code(token_contract)
 }
 
 pub fn store_stable5_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
 
 pub fn store_weighted_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
@@ -272,7 +272,6 @@ pub fn dummy_pool_creation_msg(asset_infos: &[AssetInfo]) -> ExecuteMsg {
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
          }).unwrap()),
         fee_info: Some(FeeInfo {
             total_fee_bps: 1_000u16,
@@ -317,7 +316,6 @@ pub fn initialize_stable_5_pool_2_asset(
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };
@@ -392,7 +390,6 @@ pub fn initialize_stable_5_pool(
             scaling_factor_manager: None,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
-            max_allowed_spread: Decimal::from_ratio(50u64, 100u64)
         }).unwrap()),
         fee_info: None,
     };
@@ -494,7 +491,7 @@ pub fn initialize_weighted_pool(
                 precision: 6u8,
             },],
         init_params: Some(
-            to_json_binary(&weighted_pool::state::WeightedParams {
+            to_json_binary(&dexter_weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,
                 exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })

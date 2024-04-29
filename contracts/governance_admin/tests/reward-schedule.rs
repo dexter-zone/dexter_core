@@ -22,7 +22,7 @@ use persistence_test_tube::{
     Account, ExecuteResponse, Gov, Module, PersistenceTestApp, RunnerError, SigningAccount, Wasm,
 };
 use utils::GovAdminTestSetup;
-use weighted_pool::state::WeightedParams;
+use dexter_weighted_pool::state::WeightedParams;
 
 mod utils;
 

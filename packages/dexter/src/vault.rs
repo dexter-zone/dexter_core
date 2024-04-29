@@ -244,8 +244,6 @@ pub struct SingleSwapRequest {
     pub asset_out: AssetInfo,
     pub swap_type: SwapType,
     pub amount: Uint128,
-    pub max_spread: Option<Decimal>,
-    pub belief_price: Option<Decimal>,
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
@@ -436,6 +434,9 @@ pub enum QueryMsg {
     /// Return PoolConfig
     #[returns(PoolTypeConfigResponse)]
     QueryRegistry { pool_type: PoolType },
+    /// Returns the info of all the pools matching the given pagination params
+    #[returns(Vec<PoolInfoResponse>)]
+    Pools { start_after: Option<Uint128>, limit: Option<u32> },
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
     GetPoolById { pool_id: Uint128 },
@@ -449,7 +450,12 @@ pub enum QueryMsg {
 
 /// ## Description -  This struct describes a migration message.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+
+    V1_1 {
+        updated_pool_type_configs: Vec<PoolTypeConfig>,
+    }
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x    Response Types      x----------------x----------------x--------

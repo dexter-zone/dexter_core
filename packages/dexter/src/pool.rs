@@ -4,7 +4,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use crate::asset::{Asset, AssetExchangeRate, AssetInfo};
 
 use crate::vault::{PoolType, SwapType, NativeAssetPrecisionInfo};
-use cosmwasm_std::{Addr, Binary, Decimal, Decimal256, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal256, DepsMut, Env, Event, MessageInfo, Response, StdError, StdResult, Uint128};
 use std::fmt::{Display, Formatter, Result};
 use cw_storage_plus::{Item, Map};
 use crate::helper::EventExt;
@@ -168,11 +168,7 @@ pub enum QueryMsg {
         swap_type: SwapType,
         offer_asset: AssetInfo,
         ask_asset: AssetInfo,
-        amount: Uint128,
-        // DEPRECATED: not used in any pool type. use min received for slippage protection
-        max_spread: Option<Decimal>,
-        // DEPRECATED: not used in any pool type. use min received for slippage protection
-        belief_price: Option<Decimal>,
+        amount: Uint128
     },
     /// ## Description - Returns the spot price of the asset in a [`SpotPrice`] object.
     #[returns(SpotPrice)]
@@ -206,7 +202,13 @@ pub enum ExitType {
 /// This struct describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct MigrateMsg {}
+pub enum MigrateMsg {
+    // migrates to v1.1 of the contract
+    // This introduces following changes to the contracts:
+    // Weighted Pool: Spot Price API, updates to Cumulative Price functions
+    // Stable Pool: Spot Price API, updates to Cumulative Price functions, migration to Integer based invariant math, removal of max spread checks
+    V1_1 {}
+}
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
 // ----------------x----------------x     Response Types       x----------------x----------------x------

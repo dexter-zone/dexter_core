@@ -1,6 +1,6 @@
 pub mod utils;
 
-use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary, Decimal};
+use cosmwasm_std::{attr, coin, Addr, Coin, Uint128, to_json_binary};
 use cw20::MinterResponse;
 use cw_multi_test::Executor;
 use dexter::asset::AssetInfo;
@@ -10,7 +10,7 @@ use dexter::vault::{
     ConfigResponse, ExecuteMsg, FeeInfo, InstantiateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfoResponse,
     PoolType, PoolTypeConfig, QueryMsg, PoolCreationFee, AutoStakeImpl, PauseInfoUpdateType,
 };
-use stable_pool::state::StablePoolParams;
+use dexter_stable_pool::state::StablePoolParams;
 
 use crate::utils::{initialize_3_tokens, initialize_stable_5_pool_2_asset, instantiate_contract, mock_app, store_stable5_pool_code, store_token_code, store_vault_code, store_weighted_pool_code};
 
@@ -531,7 +531,6 @@ fn test_pool_config_update() {
             supports_scaling_factors_update: false,
             scaling_factor_manager: None,
             scaling_factors: vec![],
-            max_allowed_spread: Decimal::from_ratio(50u128, 100u128),
         }).unwrap()),
         fee_info: None,
     };

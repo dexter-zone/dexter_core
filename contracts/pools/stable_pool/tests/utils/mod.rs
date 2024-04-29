@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cosmwasm_std::testing::mock_env;
-use cosmwasm_std::{attr, to_json_binary, Addr, Coin, Decimal, Decimal256, Timestamp, Uint128};
+use cosmwasm_std::{attr, to_json_binary, Addr, Coin, Decimal256, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 
@@ -22,7 +22,7 @@ use cw20::Cw20ExecuteMsg;
 use dexter::pool::ExitType::ExactLpBurn;
 use dexter::vault;
 use itertools::Itertools;
-use stable_pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
+use dexter_stable_pool::state::{AssetScalingFactor, MathConfig, StablePoolParams};
 
 pub const EPOCH_START: u64 = 1_000_000;
 
@@ -52,18 +52,18 @@ pub fn store_vault_code(app: &mut App) -> u64 {
 
 pub fn store_stable_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
 
 pub fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     app.store_code(token_contract)
 }
@@ -148,7 +148,6 @@ pub fn instantiate_contract_generic(
                 scaling_factors,
                 supports_scaling_factors_update: false,
                 scaling_factor_manager: None,
-                max_allowed_spread: Decimal::from_ratio(50u128, 100u128),
             })
             .unwrap(),
         ),
@@ -530,7 +529,6 @@ pub fn perform_and_test_swap_give_in(
     pool_id: Uint128,
     asset_in: Asset,
     asset_out: AssetInfo,
-    max_spread: Option<Decimal>,
     expected_asset_out: Uint128,
     expected_spread: Uint128,
     expected_fee: Asset,
@@ -540,8 +538,6 @@ pub fn perform_and_test_swap_give_in(
         offer_asset: asset_in.info.clone(),
         ask_asset: asset_out.clone(),
         amount: asset_in.amount,
-        max_spread,
-        belief_price: None,
     };
 
     let swap_query_res: SwapResponse = app
@@ -587,8 +583,6 @@ pub fn perform_and_test_swap_give_in(
             asset_in: asset_in.info,
             asset_out,
             amount: asset_in.amount,
-            max_spread,
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,
@@ -608,7 +602,6 @@ pub fn perform_and_test_swap_give_out(
     pool_id: Uint128,
     asset_out: Asset,
     asset_in: AssetInfo,
-    max_spread: Option<Decimal>,
     expected_asset_in: Uint128,
     expected_spread: Uint128,
     expected_fee: Asset,
@@ -618,8 +611,6 @@ pub fn perform_and_test_swap_give_out(
         offer_asset: asset_in.clone(),
         ask_asset: asset_out.info.clone(),
         amount: asset_out.amount,
-        max_spread,
-        belief_price: None,
     };
 
     let swap_query_res: SwapResponse = app
@@ -665,8 +656,6 @@ pub fn perform_and_test_swap_give_out(
             asset_in,
             asset_out: asset_out.info,
             amount: asset_out.amount,
-            max_spread,
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,

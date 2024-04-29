@@ -110,7 +110,6 @@ pub(crate) fn calc_y(
 
     // d is computed with the largest precision possible i.e Decimal256::DECIMAL_PLACES i.e 18
     let d = compute_d(amp, &pool_values)?.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
-
     let mut c = d;
 
     for pool in pools {
@@ -132,27 +131,20 @@ pub(crate) fn calc_y(
     }
 
     let c = c * d / (ann * Uint256::from(n_coins));
-    // let sum = sum.to_uint256_with_precision(Decimal256::DECIMAL_PLACES)?;
-
     let b = sum + d / ann;
 
     let mut y = d;
-    // println!("y: {}", y);
-
     let d = y;
 
     for _ in 0..ITERATIONS {
         let y_prev = y;
         y = (y * y + c) / (y + y + b - d);
-        // println!("iter: {}, y_new: {}", iter, y);
 
         if y >= y_prev {
             if y - y_prev <= Uint256::from(1u8) {
                 // We need to scale the value from the MAX_PRECISION to the precision of the asset
                 // We do this by dividing the value by the ratio of the two precisions
                 let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
-                // println!("decimal_difference: {}", decimal_difference);
-
                 let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
                 let y = y.checked_div(precision_ratio)?;
 
@@ -162,8 +154,6 @@ pub(crate) fn calc_y(
             // We need to scale the value from the MAX_PRECISION to the precision of the asset
             // We do this by dividing the value by the ratio of the two precisions
             let decimal_difference = Decimal256::DECIMAL_PLACES - output_precision as u32; // this is safe because ask_asset_precision is always <= 18
-            // println!("decimal_difference: {}", decimal_difference);
-
             let precision_ratio = Uint256::from(10u8).pow(decimal_difference as u32);
             let y = y.checked_div(precision_ratio)?;
             return Ok(y.try_into()?);
@@ -276,8 +266,8 @@ pub(crate) fn calc_spot_price(
 
 #[cfg(test)]
 mod tests {
+    
     use std::str::FromStr;
-
     use super::*;
     use dexter::{asset::{native_asset, Asset}, uint128_with_precision};
     use sim::StableSwapModel;

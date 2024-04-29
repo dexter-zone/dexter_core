@@ -1,9 +1,9 @@
 [package]
 name = "dexter-vault"
-version = "1.0.0"
-authors = ["AstroTechLabs"]
+version = "1.1.0"
+authors = ["Persistence Labs"]
 edition = "2021"
-description = "Persistence DEX Factory contract - entry point to create new pools. Maintains directory for all pools"
+description = "Dexter Factory contract - entry point to create new pools. Maintains directory for all pools"
 license = "MIT"
 
 exclude = [
@@ -24,8 +24,8 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-dexter = { path = "../../packages/dexter", default-features = false }
-cosmwasm-std = "1.5.0"
+dexter = { version = "1.4.0", path = "../../packages/dexter", default-features = false }
+cosmwasm-std = "1.5.4"
 cw-storage-plus = "1.0.1"
 cw2 = "1.0.1"
 cw20 = "1.0.1"
@@ -39,9 +39,9 @@ cosmwasm-schema = "1.5.0"
 const_format = "0.2.30"
 
 [dev-dependencies]
-stable-pool = { path = "../pools/stable_pool" }
-weighted-pool = { path = "../pools/weighted_pool"}
-lp-token = { path = "../lp_token"}
+dexter-stable-pool = { path = "../pools/stable_pool" }
+dexter-weighted-pool = { path = "../pools/weighted_pool"}
+dexter-lp-token = { path = "../lp_token"}
 dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.16.2"

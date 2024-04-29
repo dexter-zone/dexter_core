@@ -1,4 +1,4 @@
-use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Decimal, Timestamp, Uint128};
+use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 
@@ -10,8 +10,8 @@ use dexter::vault::{
     SwapType,
 };
 
-use stable_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
-use stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
+use dexter_stable_pool::math::{MAX_AMP, MAX_AMP_CHANGE, MIN_AMP_CHANGING_TIME};
+use dexter_stable_pool::state::{StablePoolParams, StablePoolUpdateParams};
 
 use crate::utils::*;
 pub mod utils;
@@ -298,42 +298,6 @@ fn test_update_config() {
 
     let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
     assert_eq!(params.amp, 20u64);
-
-    // Change max allowed spread limits for trades
-    let msg = ExecuteMsg::UpdateConfig {
-        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
-                max_allowed_spread: Decimal::percent(90),
-            })
-            .unwrap(),
-    };
-
-    app.execute_contract(owner.clone(), pool_addr.clone(), &msg, &[]).unwrap();
-    
-    // validate max allowed spread change
-    let res: ConfigResponse = app
-        .wrap()
-        .query_wasm_smart(pool_addr.clone(), &QueryMsg::Config {})
-        .unwrap();
-
-    let params: StablePoolParams = from_json(&res.additional_params.unwrap()).unwrap();
-    assert_eq!(params.max_allowed_spread, Decimal::percent(90));
-
-    // try updating max spread to an invalid value
-    let msg = ExecuteMsg::UpdateConfig {
-        params: to_json_binary(&StablePoolUpdateParams::UpdateMaxAllowedSpread {
-                max_allowed_spread: Decimal::percent(100),
-            })
-            .unwrap(),
-    };
-
-    let resp = app
-        .execute_contract(owner.clone(), pool_addr.clone(), &msg, &[])
-        .unwrap_err();
-
-    assert_eq!(
-        resp.root_cause().to_string(),
-        "Invalid max allowed spread. Max allowed spread should be positive non-zero value less than 1"
-    );
 
 }
 
@@ -1806,8 +1770,6 @@ fn test_swap() {
                     denom: "axlusd".to_string(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1829,8 +1791,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: None,
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1881,8 +1841,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(1000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 10u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1897,7 +1855,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(5u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1950,8 +1908,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(7846_00000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 10u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -1966,7 +1922,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(5341176u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1994,8 +1950,6 @@ fn test_swap() {
                     contract_addr: token_instance0.clone(),
                 },
                 amount: Uint128::from(30000_000000u128),
-                max_spread: Some(Decimal::from_ratio(1u128, 100u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -2015,7 +1969,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(1949253782u128)
     );
     assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
         info: AssetInfo::NativeToken {
@@ -2038,8 +1992,6 @@ fn test_swap() {
                     contract_addr: token_instance1.clone(),
                 },
                 amount: Uint128::from(50000_000000u128),
-                max_spread: Some(Decimal::from_ratio(2u128, 100u128)),
-                belief_price: None,
             },
         )
         .unwrap();
@@ -2058,7 +2010,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(0u128)
+        Uint128::from(11552_075912u128)
     );
     assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
         info: native_asset_info("axlusd".to_string()),
@@ -2079,8 +2031,6 @@ fn test_swap() {
                 contract_addr: token_instance0.clone(),
             },
             amount: Uint128::from(1000u128),
-            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,
@@ -2180,8 +2130,6 @@ fn test_swap() {
                 denom: "axlusd".to_string(),
             },
             amount: Uint128::from(1000u128),
-            max_spread: Some(Decimal::from_ratio(20u128, 100u128)),
-            belief_price: None,
         },
         recipient: None,
         min_receive: None,

@@ -1,7 +1,7 @@
 [package]
-name = "lp-token"
+name = "dexter-lp-token"
 version = "1.0.0"
-authors = ["Astroport"]
+authors = ["Persistence Labs"]
 edition = "2021"
 description = "Expanded implementation of a CW-20 compliant token for post intialization"
 license = "MIT"
@@ -18,10 +18,10 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-dexter = { path = "../../packages/dexter", default-features = false }
+dexter = { version = "1.4.0", path = "../../packages/dexter", default-features = false }
 cw2 = "1.0.1"
 cw20 = "1.0.1"
 cw20-base = { version = "1.0.1", features = ["library"] }
-cosmwasm-std = "1.5.0"
+cosmwasm-std = "1.5.4"
 snafu = "0.7.4"
 cosmwasm-schema = "1.5.0"

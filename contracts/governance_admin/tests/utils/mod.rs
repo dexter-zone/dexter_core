@@ -244,12 +244,12 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         read_wasm_byte_code_at_path("artifacts/dexter_governance_admin-aarch64.wasm");
     let vault_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_vault-aarch64.wasm");
     let keeper_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_keeper-aarch64.wasm");
-    let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/stable_pool-aarch64.wasm");
+    let stable_pool_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_stable_pool-aarch64.wasm");
     let weighted_pool_wasm_code =
-        read_wasm_byte_code_at_path("artifacts/weighted_pool-aarch64.wasm");
+        read_wasm_byte_code_at_path("artifacts/dexter_weighted_pool-aarch64.wasm");
     let multi_staking_wasm_code =
         read_wasm_byte_code_at_path("artifacts/dexter_multi_staking-aarch64.wasm");
-    let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/lp_token-aarch64.wasm");
+    let lp_token_wasm_code = read_wasm_byte_code_at_path("artifacts/dexter_lp_token-aarch64.wasm");
 
     let gov_admin_code_id = wasm
         .store_code(&gov_admin_wasm_code, None, &user)

@@ -1,7 +1,7 @@
 [package]
 name = "dexter-router"
-version = "1.0.0"
-authors = ["buidl@astrotechlabs.com"]
+version = "1.1.0"
+authors = ["Persistence Labs"]
 edition = "2021"
 description = "A router contract - provides multi-step operations to facilitate single sign operation"
 license = "MIT"
@@ -14,11 +14,11 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 
 [dependencies]
-dexter = { path = "../../packages/dexter", default-features = false }
+dexter = { version = "1.4.0", path = "../../packages/dexter", default-features = false }
 cw20 = "1.0.1"
 cw2 = "1.0.1"
 cw20-base = { version = "1.0.1", features = ["library"] }
-cosmwasm-std = "1.5.0"
+cosmwasm-std = "1.5.4"
 cw-storage-plus = "1.0.1"
 schemars = "0.8.11"
 thiserror = "1.0.38"
@@ -31,7 +31,7 @@ const_format = "0.2.30"
 # we only need to enable this if we use integration tests
 cw-multi-test = "0.16.2"
 dexter-vault = { path = "../vault"}
-stable-pool = { path = "../pools/stable_pool" }
-weighted-pool = { path = "../pools/weighted_pool"}
-lp-token = { path = "../lp_token"}
+dexter-stable-pool = { path = "../pools/stable_pool" }
+dexter-weighted-pool = { path = "../pools/weighted_pool"}
+dexter-lp-token = { path = "../lp_token"}
 cw20 = "1.0.1"

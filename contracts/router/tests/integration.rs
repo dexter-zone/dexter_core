@@ -52,27 +52,27 @@ fn store_vault_code(app: &mut App) -> u64 {
 
 fn store_token_code(app: &mut App) -> u64 {
     let token_contract = Box::new(ContractWrapper::new_with_empty(
-        lp_token::contract::execute,
-        lp_token::contract::instantiate,
-        lp_token::contract::query,
+        dexter_lp_token::contract::execute,
+        dexter_lp_token::contract::instantiate,
+        dexter_lp_token::contract::query,
     ));
     app.store_code(token_contract)
 }
 
 fn store_stable5_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        stable_pool::contract::execute,
-        stable_pool::contract::instantiate,
-        stable_pool::contract::query,
+        dexter_stable_pool::contract::execute,
+        dexter_stable_pool::contract::instantiate,
+        dexter_stable_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
 
 fn store_weighted_pool_code(app: &mut App) -> u64 {
     let pool_contract = Box::new(ContractWrapper::new_with_empty(
-        weighted_pool::contract::execute,
-        weighted_pool::contract::instantiate,
-        weighted_pool::contract::query,
+        dexter_weighted_pool::contract::execute,
+        dexter_weighted_pool::contract::instantiate,
+        dexter_weighted_pool::contract::query,
     ));
     app.store_code(pool_contract)
 }
@@ -252,12 +252,11 @@ fn initialize_stable_5_pool(
             denom: denom1.clone(),
             precision: 6u8,
         }],
-        init_params: Some(to_json_binary(&stable_pool::state::StablePoolParams {
+        init_params: Some(to_json_binary(&dexter_stable_pool::state::StablePoolParams {
             amp: 10u64,
             scaling_factors: vec![],
             supports_scaling_factors_update: false,
             scaling_factor_manager: None,
-            max_allowed_spread: Decimal::from_ratio(50u128, 100u128)
         }).unwrap()),
         fee_info: None,
     };
@@ -360,7 +359,7 @@ fn initialize_weighted_pool(
             }
         ],
         init_params: Some(
-            to_json_binary(&weighted_pool::state::WeightedParams {
+            to_json_binary(&dexter_weighted_pool::state::WeightedParams {
                 weights: asset_infos_with_weights,
                 exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
             })
@@ -789,9 +788,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance1.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
         HopSwapRequest {
             pool_id: Uint128::from(weighted_pool_id),
@@ -800,9 +797,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
         HopSwapRequest {
             pool_id: Uint128::from(stable5_pool_id),
@@ -811,9 +806,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::NativeToken {
                 denom: denom0.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
         HopSwapRequest {
             pool_id: Uint128::from(weighted_pool_id),
@@ -822,9 +815,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance1.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
     ]
     .to_vec();
@@ -1055,9 +1046,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::NativeToken {
                 denom: denom0.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
         HopSwapRequest {
             pool_id: Uint128::from(weighted_pool_id),
@@ -1066,9 +1055,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance2.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
         HopSwapRequest {
             pool_id: Uint128::from(stable5_pool_id),
@@ -1077,9 +1064,7 @@ fn test_router_functionality() {
             },
             asset_out: AssetInfo::Token {
                 contract_addr: token_instance3.clone(),
-            },
-            max_spread: None,
-            belief_price: None,
+            }
         },
     ]
     .to_vec();
