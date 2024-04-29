@@ -1,7 +1,7 @@
-use cosmwasm_std::Uint128;
-use dexter::multi_staking::{Config, TokenLock};
+use cosmwasm_std::{Decimal, Uint128};
+use dexter::multi_staking::{InstantUnbondConfig, TokenLock, UnbondConfig};
 
-use crate::query::query_instant_unlock_fee_tiers;
+use crate::{error::ContractError, query::query_instant_unlock_fee_tiers};
 
 /// Find the difference between two lock vectors.
 /// This must take into account that same looking lock can coexist, for example, there can be 2 locks for unlocking
@@ -56,39 +56,43 @@ pub fn find_lock_difference(
 pub fn calculate_unlock_fee(
     token_lock: &TokenLock,
     current_block_time: u64,
-    config: &Config,
-) -> (u64, Uint128) {
+    unbond_config: &UnbondConfig,
+) -> Result<(u64, Uint128), ContractError> {
     let lock_end_time = token_lock.unlock_time;
 
     if current_block_time >= lock_end_time {
-        return (0, Uint128::zero());
+        return Ok((0, Uint128::zero()));
     }
 
-    // This is the bounds of the fee calculation linear interpolation at tier_interval granularity.
-    let min_fee_bp = config.instant_unbond_min_fee_bp;
-    let max_fee_bp = config.instant_unbond_fee_bp;
+    // check if ILPU is enabled
+    match unbond_config.instant_unbond_config {
+        InstantUnbondConfig::Disabled => Err(ContractError::InstantUnbondDisabled {}),
+        InstantUnbondConfig::Enabled {
+            min_fee: _,
+            max_fee,
+            fee_tier_interval: _,
+        } => {
+            let tiers = query_instant_unlock_fee_tiers(unbond_config.clone())?;
 
-    let tiers = query_instant_unlock_fee_tiers(
-        config.fee_tier_interval,
-        config.unlock_period,
-        min_fee_bp,
-        max_fee_bp,
-    );
+            // find applicable tier based on second left to unlock
+            let seconds_left_to_unlock = lock_end_time - current_block_time;
 
-    // find applicable tier based on second left to unlock
-    let seconds_left_to_unlock = lock_end_time - current_block_time;
+            let mut fee_bp = max_fee;
+            for tier in tiers {
+                // the tier is applicable if the seconds fall in tiers range, end non-inclusive
+                if seconds_left_to_unlock >= tier.seconds_till_unlock_start
+                    && seconds_left_to_unlock < tier.seconds_till_unlock_end
+                {
+                    fee_bp = tier.unlock_fee_bp;
+                    break;
+                }
+            }
 
-    let mut fee_bp = max_fee_bp;
-    for tier in tiers {
-        // the tier is applicable if the seconds fall in tiers range, end non-inclusive
-        if seconds_left_to_unlock >= tier.seconds_till_unlock_start
-            && seconds_left_to_unlock < tier.seconds_till_unlock_end
-        {
-            fee_bp = tier.unlock_fee_bp;
-            break;
+            let fee = token_lock
+                .amount
+                .checked_mul_ceil(Decimal::from_ratio(fee_bp, 10000u64))
+                .map_err(|err| ContractError::CheckedMultiplyFractionError(err))?;
+            Ok((fee_bp, fee))
         }
     }
-
-    let fee = token_lock.amount.multiply_ratio(fee_bp, 10000u64);
-    (fee_bp, fee)
 }
