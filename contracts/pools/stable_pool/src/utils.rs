@@ -227,7 +227,6 @@ pub fn accumulate_prices(
             config.fee_info.clone(),
             amp
         )?;
-        // ).unwrap();
 
         let ask_asset_precision = get_precision(deps.storage, &to)?;
         let return_amount = spot_price.price.to_uint128_with_precision(ask_asset_precision)?;
