@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
-cosmwasm-std = "1.5.0"
+cosmwasm-std = "1.5.4"
 cw2 = "1.0.1"
 cw20 = "1.0.1"
 cw-storage-plus = { version = "1.0.1", features = ["iterator"] }
