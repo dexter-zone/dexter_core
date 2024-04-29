@@ -509,8 +509,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
+            max_spread: _,
+            belief_price: _,
         } => to_json_binary(&query_on_swap(
             deps,
             env,
@@ -518,8 +518,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             offer_asset,
             ask_asset,
             amount,
-            max_spread,
-            belief_price,
+            
         )?),
         QueryMsg::CumulativePrice {
             offer_asset,
@@ -934,8 +933,6 @@ pub fn query_on_swap(
     offer_asset_info: AssetInfo,
     ask_asset_info: AssetInfo,
     amount: Uint128,
-    max_spread: Option<Decimal>,
-    belief_price: Option<Decimal>,
 ) -> StdResult<SwapResponse> {
     // Load the config and math config from the storage
     let config: Config = CONFIG.load(deps.storage)?;
@@ -970,7 +967,7 @@ pub fn query_on_swap(
 
     let offer_asset: Asset;
     let ask_asset: Asset;
-    let (calc_amount, spread_amount): (Uint128, Uint128);
+    let calc_amount: Uint128;
     let total_fee: Uint128;
 
     let ask_asset_scaling_factor = scaling_factors
@@ -1001,7 +998,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(offer_precision, offer_asset_scaling_factor)?;
 
             // Calculate the number of ask_asset tokens to be transferred to the recipient from the Vault contract
-            (calc_amount, spread_amount) = match compute_swap(
+            calc_amount = match compute_swap(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1038,7 +1035,7 @@ pub fn query_on_swap(
             .to_scaled_decimal_asset(ask_precision, ask_asset_scaling_factor)?;
 
             // Calculate the number of offer_asset tokens to be transferred from the trader from the Vault contract
-            (calc_amount, spread_amount, total_fee) = match compute_offer_amount(
+            (calc_amount, total_fee) = match compute_offer_amount(
                 deps.storage,
                 &env,
                 &math_config,
@@ -1077,24 +1074,11 @@ pub fn query_on_swap(
         ));
     }
 
-    // Check the max spread limit (if it was specified)
-    let spread_check = assert_max_spread(
-        stableswap_config.max_allowed_spread,
-        belief_price,
-        max_spread,
-        offer_asset.amount - total_fee,
-        ask_asset.amount,
-        spread_amount,
-    );
-    if !spread_check.is_success() {
-        return Ok(return_swap_failure(spread_check.to_string()));
-    }
-
     Ok(SwapResponse {
         trade_params: Trade {
             amount_in: offer_asset.amount,
             amount_out: ask_asset.amount,
-            spread: spread_amount,
+            spread: Uint128::zero(),
         },
         response: ResponseType::Success {},
         fee: Some(Asset {

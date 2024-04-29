@@ -2,7 +2,7 @@ use cosmwasm_std::{from_json, to_json_binary, Addr, Coin, Decimal, Timestamp, Ui
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::Executor;
 
-use dexter::asset::{Asset, AssetExchangeRate, AssetInfo};
+use dexter::asset::{native_asset_info, Asset, AssetExchangeRate, AssetInfo};
 use dexter::pool::{AfterExitResponse, AfterJoinResponse, ConfigResponse, CumulativePricesResponse, ExecuteMsg, ExitType, QueryMsg, ResponseType, SwapResponse};
 use dexter::vault;
 use dexter::vault::{
@@ -1896,7 +1896,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(5u128)
+        Uint128::from(0u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1965,7 +1965,7 @@ fn test_swap() {
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
-        Uint128::from(5341176u128)
+        Uint128::from(0u128)
     );
     assert_eq!(
         swap_offer_asset_res.fee.clone().unwrap().info,
@@ -1998,25 +1998,30 @@ fn test_swap() {
             },
         )
         .unwrap();
+
+    // Success: since the max_spread field is ignored
     assert_eq!(
         swap_offer_asset_res.response,
-        ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.066984666048109965".to_string()
-        )
+        ResponseType::Success {}
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(0u128)
+        Uint128::from(30000_000000u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_out,
-        Uint128::from(0u128)
+        Uint128::from(27150_746218u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(swap_offer_asset_res.fee.clone(), None);
+    assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
+        info: AssetInfo::NativeToken {
+            denom: "axlusd".to_string()
+        },
+        amount: Uint128::from(900_000000u128)
+    }));
 
     // SwapType::GiveOut {},
     let swap_offer_asset_res: SwapResponse = app
@@ -2037,26 +2042,27 @@ fn test_swap() {
             },
         )
         .unwrap();
+    // Success: since we removed the check
     assert_eq!(
         swap_offer_asset_res.response,
-        ResponseType::Failure(
-            "error : Operation exceeds max spread limit. Current spread = 0.187679712517183249"
-                .to_string()
-        )
+        ResponseType::Success {  }
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_in,
-        Uint128::from(0u128)
+        Uint128::from(63455_748363u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.amount_out,
-        Uint128::from(0u128)
+        Uint128::from(50000_000000u128)
     );
     assert_eq!(
         swap_offer_asset_res.trade_params.spread,
         Uint128::from(0u128)
     );
-    assert_eq!(swap_offer_asset_res.fee.clone(), None);
+    assert_eq!(swap_offer_asset_res.fee.clone(), Some(Asset {
+        info: native_asset_info("axlusd".to_string()),
+        amount: Uint128::from(1903_672450u128)
+    }));
 
     //// -----x----- Check #3 :: EXECUTE Success :::  -----x----- ////
 
