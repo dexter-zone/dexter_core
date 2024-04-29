@@ -1,7 +1,8 @@
 use crate::{
     contract::{ContractResult, CONTRACT_NAME},
-    state::USER_LP_TOKEN_LOCKS,
-    utils::{calculate_unlock_fee, find_lock_difference}, error::ContractError,
+    error::ContractError,
+    state::{LP_OVERRIDE_CONFIG, USER_LP_TOKEN_LOCKS},
+    utils::{calculate_unlock_fee, find_lock_difference},
 };
 use const_format::concatcp;
 use cosmwasm_std::{
@@ -26,6 +27,9 @@ pub fn instant_unlock(
     token_locks: Vec<TokenLock>,
 ) -> ContractResult<Response> {
     let config = CONFIG.load(deps.storage)?;
+    let lp_override_config = LP_OVERRIDE_CONFIG.may_load(deps.storage, lp_token.clone())?;
+    let unbond_config = lp_override_config.unwrap_or(config.unbond_config);
+
     let user = info.sender.clone();
     let locks = USER_LP_TOKEN_LOCKS
         .may_load(deps.storage, (&lp_token, &user))?
@@ -56,7 +60,7 @@ pub fn instant_unlock(
 
     let current_block_time = env.block.time.seconds();
     for lock in valid_locks_to_be_unlocked.iter() {
-        let (_, unlock_fee) = calculate_unlock_fee(lock, current_block_time, &config);
+        let (_, unlock_fee) = calculate_unlock_fee(lock, current_block_time, &unbond_config)?;
         total_amount_to_be_unlocked += lock.amount.checked_sub(unlock_fee)?;
         total_fee_charged += unlock_fee;
     }

@@ -4,12 +4,15 @@ use dexter::{
     helper::OwnershipProposal,
     multi_staking::{
         AssetRewardState, AssetStakerInfo, Config, CreatorClaimableRewardState, LpGlobalState,
-        RewardSchedule, TokenLock,
+        RewardSchedule, TokenLock, UnbondConfig,
     },
 };
 
 // Global config of the contract
 pub const CONFIG: Item<Config> = Item::new("config");
+
+// LP can have custom overridden unbonding config
+pub const LP_OVERRIDE_CONFIG: Map<Addr, UnbondConfig> = Map::new("lp_override_config");
 
 /// Ownership proposal in case of ownership transfer is initiated
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
@@ -53,7 +56,6 @@ pub const ASSET_LP_REWARD_STATE: Map<(&str, &Addr), AssetRewardState> =
 /// It tracks total bonded amount of the LP token across all users and also the assets that are currently
 /// being rewarded for the LP token.
 pub const LP_GLOBAL_STATE: Map<&Addr, LpGlobalState> = Map::new("lp_global_state");
-
 
 pub fn next_reward_schedule_id(store: &mut dyn Storage) -> StdResult<u64> {
     let id: u64 = REWARD_SCHEDULE_ID_COUNT
