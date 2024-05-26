@@ -15,7 +15,7 @@ use dexter::{
         propose_new_owner,
     },
     multi_staking::{
-        AssetRewardState, AssetStakerInfo, Config, ConfigV1, ConfigV2_1, ConfigV2_2, ConfigV3,
+        AssetRewardState, AssetStakerInfo, Config,
         CreatorClaimableRewardState, Cw20HookMsg, ExecuteMsg, InstantLpUnlockFee, InstantiateMsg,
         MigrateMsg, QueryMsg, RewardSchedule, TokenLockInfo, UnbondConfig, UnclaimedReward,
     },
@@ -23,7 +23,6 @@ use dexter::{
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg};
-use cw_storage_plus::Item;
 use dexter::asset::Asset;
 use dexter::helper::EventExt;
 use dexter::multi_staking::{RewardScheduleResponse, MAX_ALLOWED_LP_TOKENS};
@@ -48,12 +47,7 @@ use crate::{
 
 /// Contract name that is used for migration.
 pub const CONTRACT_NAME: &str = "dexter-multi-staking";
-
-const CONTRACT_VERSION_V1: &str = "1.0.0";
-const CONTRACT_VERSION_V2: &str = "2.0.0";
-const CONTRACT_VERSION_V2_1: &str = "2.1.0";
-const CONTRACT_VERSION_V2_2: &str = "2.2.0";
-const CONTRACT_VERSION_V3: &str = "3.0.0";
+const CONTRACT_VERSION_V3_1: &str = "3.1.0";
 
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -1238,153 +1232,52 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> ContractResult<Binary> {
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Response> {
+
+    let mut event = Event::new(concatcp!(CONTRACT_NAME, "::migrate"));
+
     match msg {
-        MigrateMsg::V3_1FromV1 {
-            keeper_addr,
-            instant_unbond_fee_bp,
-            instant_unbond_min_fee_bp,
-            fee_tier_interval,
-        } => {
-            // verify if we are running on V1 right now
+        MigrateMsg::V3_1_1FromV3_1 {} => {
             let contract_version = get_contract_version(deps.storage)?;
-            if contract_version.version != CONTRACT_VERSION_V1 {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V1.to_string(),
-                    actual: contract_version.version,
+            
+            // validate contract name
+            if contract_version.contract != CONTRACT_NAME.to_string() {
+                return Err(ContractError::InvalidContractName { 
+                    contract_name: contract_version.contract,
+                    expected_name: CONTRACT_NAME.to_string()
                 });
             }
 
-            let config_v1: ConfigV1 = Item::new("config").load(deps.storage)?;
+            // validate current version
+            if contract_version.version != CONTRACT_VERSION_V3_1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade { 
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V3_1.to_string(),
+                    actual: contract_version.version, 
+                });
+            }
 
-            let unbond_config = UnbondConfig {
-                unlock_period: config_v1.unlock_period,
-                instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
-                    min_fee: instant_unbond_min_fee_bp,
-                    max_fee: instant_unbond_fee_bp,
-                    fee_tier_interval,
-                },
-            };
-            unbond_config.validate()?;
+            // fix the override unbond config that belongs to the stkXPRT-XPRT pool that was set in the proposal 95
+            // The unbonding period was set to 1 day rather than the Dexter standard of 7 days for all pools
+            let lp_token_stkxprt_xprt = deps.api.addr_validate("persistence1llh07xn7pcst3jqm0xpsucf90lzugfskkkhk8a3u2yznqmse4l5sfzv7qa")?;
+            let current_custom_unbond_config = LP_OVERRIDE_CONFIG.load(deps.storage, lp_token_stkxprt_xprt.clone())?;
+            let default_unbond_config = CONFIG.load(deps.storage)?.unbond_config;
 
-            // copy fields from v1 to v2
-            let config = Config {
-                owner: config_v1.owner,
-                allowed_lp_tokens: config_v1.allowed_lp_tokens,
-                keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                unbond_config,
-                allowed_reward_cw20_tokens: vec![],
+            let new_unbond_config = UnbondConfig { 
+                // set unlock period which is same as all the other pools i.e. 7 days
+                unlock_period: default_unbond_config.unlock_period, 
+                // keep the rest of the unbond config same as older config
+                instant_unbond_config: current_custom_unbond_config.instant_unbond_config
             };
 
-            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-            CONFIG.save(deps.storage, &config)?;
-        }
-        MigrateMsg::V3_1FromV2 { keeper_addr } => {
-            let contract_version = get_contract_version(deps.storage)?;
-            // if version is v2 or v2.1, apply the changes.
-            if contract_version.version == CONTRACT_VERSION_V2
-                || contract_version.version == CONTRACT_VERSION_V2_1
-            {
-                let config_v2: ConfigV2_1 = Item::new("config").load(deps.storage)?;
-                let unbond_config = UnbondConfig {
-                    unlock_period: config_v2.unlock_period,
-                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
-                        min_fee: config_v2.instant_unbond_min_fee_bp,
-                        max_fee: config_v2.instant_unbond_fee_bp,
-                        fee_tier_interval: config_v2.fee_tier_interval,
-                    },
-                };
-                unbond_config.validate()?;
+            new_unbond_config.validate()?;
+            LP_OVERRIDE_CONFIG.save(deps.storage, lp_token_stkxprt_xprt.clone(), &new_unbond_config)?;
 
-                let config = Config {
-                    owner: config_v2.owner,
-                    allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    keeper: deps.api.addr_validate(&keeper_addr.to_string())?,
-                    unbond_config,
-                    allowed_reward_cw20_tokens: vec![],
-                };
-
-                CONFIG.save(deps.storage, &config)?;
-                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-            } else {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V2.to_string(),
-                    actual: contract_version.version,
-                });
-            }
-        }
-
-        MigrateMsg::V3_1FromV2_2 {} => {
-            let contract_version = get_contract_version(deps.storage)?;
-            if contract_version.version == CONTRACT_VERSION_V2_2 {
-                let config_v2: ConfigV2_2 = Item::new("config").load(deps.storage)?;
-                let unbond_config = UnbondConfig {
-                    unlock_period: config_v2.unlock_period,
-                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
-                        min_fee: config_v2.instant_unbond_min_fee_bp,
-                        max_fee: config_v2.instant_unbond_fee_bp,
-                        fee_tier_interval: config_v2.fee_tier_interval,
-                    },
-                };
-                unbond_config.validate()?;
-
-                let config = Config {
-                    owner: config_v2.owner,
-                    allowed_lp_tokens: config_v2.allowed_lp_tokens,
-                    keeper: config_v2.keeper,
-                    unbond_config,
-                    allowed_reward_cw20_tokens: vec![],
-                };
-
-                CONFIG.save(deps.storage, &config)?;
-
-                // set the contract version to v3
-                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-            } else {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V2_2.to_string(),
-                    actual: contract_version.version,
-                });
-            }
-        }
-
-        MigrateMsg::V3_1FromV3 {} => {
-            let contract_version = get_contract_version(deps.storage)?;
-            if contract_version.version == CONTRACT_VERSION_V3 {
-                let config_v3: ConfigV3 = Item::new("config").load(deps.storage)?;
-                let unbond_config = UnbondConfig {
-                    unlock_period: config_v3.unlock_period,
-                    instant_unbond_config: dexter::multi_staking::InstantUnbondConfig::Enabled {
-                        min_fee: config_v3.instant_unbond_min_fee_bp,
-                        max_fee: config_v3.instant_unbond_fee_bp,
-                        fee_tier_interval: config_v3.fee_tier_interval,
-                    },
-                };
-                unbond_config.validate()?;
-
-                let config = Config {
-                    owner: config_v3.owner,
-                    allowed_lp_tokens: config_v3.allowed_lp_tokens,
-                    keeper: config_v3.keeper,
-                    unbond_config,
-                    allowed_reward_cw20_tokens: vec![],
-                };
-
-                CONFIG.save(deps.storage, &config)?;
-
-                // set the contract version to v3
-                set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-            } else {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V3.to_string(),
-                    actual: contract_version.version,
-                });
-            }
+            event = event.add_attribute("lp_token", lp_token_stkxprt_xprt.to_string());
+            event = event.add_attribute("unbond_config", serde_json_wasm::to_string(&new_unbond_config).unwrap());
+            event = event.add_attribute("new_version", CONTRACT_VERSION.to_string());
+            event = event.add_attribute("old_version", CONTRACT_VERSION_V3_1.to_string());
         }
     }
 
-    Ok(Response::default())
+    Ok(Response::new().add_event(event))
 }

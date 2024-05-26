@@ -27,21 +27,8 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum MigrateMsg {
 
-    /// Removes the reward schedule proposal start delay config param
-    /// Instant unbonding fee and keeper address are added
-    V3_1FromV1 {
-        keeper_addr: Addr,
-        instant_unbond_fee_bp: u64,
-        instant_unbond_min_fee_bp: u64,
-        fee_tier_interval: u64
-    },
-    // Removes the reward schedule proposal start delay config param.
-    // This migration is supported from version v2.0, v2.1 and v2.2
-    V3_1FromV2 {
-        keeper_addr: Addr
-    },
-    V3_1FromV2_2 {},
-    V3_1FromV3 {},
+    /// Apples the Cosmwasm security patch and fixes the unbonding period for the stkXPRT-XPRT Pool's LP
+    V3_1_1FromV3_1 {}
 }
 
 #[cw_serde]
