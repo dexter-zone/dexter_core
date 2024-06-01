@@ -1272,6 +1272,8 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> ContractResult<Resp
             new_unbond_config.validate()?;
             LP_OVERRIDE_CONFIG.save(deps.storage, lp_token_stkxprt_xprt.clone(), &new_unbond_config)?;
 
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
             event = event.add_attribute("lp_token", lp_token_stkxprt_xprt.to_string());
             event = event.add_attribute("unbond_config", serde_json_wasm::to_string(&new_unbond_config).unwrap());
             event = event.add_attribute("new_version", CONTRACT_VERSION.to_string());
