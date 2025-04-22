@@ -1,0 +1,17 @@
+{
+  "propose": {
+    "title": "Whitelist LP Token in MultiStaking",
+    "description": "Allow the LP token in the Dexter MultiStaking contract",
+    "msgs": [
+      {
+        "wasm": {
+          "execute": {
+            "contract_addr": "bbn1jvl8avv45sj92q9x9c84fq2ymddya6dkwv9euf7y365tkzma38zqda76q4",
+            "msg": "eyJhbGxvd19scF90b2tlbiI6eyJscF90b2tlbiI6ImJibjE2a2FjNGpjNmZ6djdsY3Q2MnljNXV4dGY4cHZ5bDhqd2VtNnlnd2toODhobTA4OXJwOWhzYThjMGtwIn19Cg==",
+            "funds": []
+          }
+        }
+      }
+    ]
+  }
+}

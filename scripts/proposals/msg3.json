@@ -1,0 +1,11 @@
+{
+  "add_to_registry": {
+    "new_pool_type_config": {
+      "code_id": 52,
+      "pool_type": { "stable_swap": {} },
+      "default_fee_info": { "total_fee_bps": 50, "protocol_fee_percent": 30 },
+      "allow_instantiation": "only_whitelisted_addresses",
+      "paused": { "swap": false, "deposit": false, "imbalanced_withdraw": false }
+    }
+  }
+}

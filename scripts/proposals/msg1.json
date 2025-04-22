@@ -1,0 +1,17 @@
+{
+  "update_config": {
+    "lp_token_code_id": 50,
+    "fee_collector": "bbn1w50vqkv30lhmkyq4786kgfxezhwstq20rvxjynye9l03vsy89fuq74grp0",
+    "pool_creation_fee": "disabled",
+    "auto_stake_impl": {
+      "multistaking": {
+        "contract_addr": "bbn1jvl8avv45sj92q9x9c84fq2ymddya6dkwv9euf7y365tkzma38zqda76q4"
+      }
+    },
+    "paused": {
+      "swap": false,
+      "deposit": false,
+      "imbalanced_withdraw": false
+    }
+  }
+}

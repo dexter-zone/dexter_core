@@ -1,0 +1,15 @@
+{
+  "create_pool_instance": {
+    "pool_type": { "weighted": {} },
+    "asset_infos": [
+      { "native_token": { "denom": "ibc/632D09C1324B38144BD3B8879EC56303496798209341138900F338CCDBADD970" } },
+      { "native_token": { "denom": "ubbn" } }
+    ],
+    "native_asset_precisions": [
+      { "denom": "ibc/632D09C1324B38144BD3B8879EC56303496798209341138900F338CCDBADD970", "precision": 6 },
+      { "denom": "ubbn", "precision": 6 }
+    ],
+    "init_params": "eyJ3ZWlnaHRzIjpbeyJpbmZvIjp7Im5hdGl2ZV90b2tlbiI6eyJkZW5vbSI6ImliYy82MzJEMDlDMTMyNEIzODE0NEJEM0I4ODc5RUM1NjMwMzQ5Njc5ODIwOTM0MTEzODkwMEYzMzhDQ0RCQUREOTcwIn19LCAiYW1vdW50IjoiMSJ9LHsiaW5mbyI6eyJuYXRpdmVfdG9rZW4iOnsiZGVub20iOiJ1YmJuIn19LCAiYW1vdW50IjoiMSJ9XSwiZXhpdF9mZWUiOiIwIn0K",
+    "fee_info": null
+  }
+}
