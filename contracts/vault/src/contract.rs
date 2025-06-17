@@ -19,7 +19,7 @@ use dexter::asset::{addr_opt_validate, Asset, AssetInfo};
 use dexter::helper::{build_transfer_cw20_from_user_msg, claim_ownership, DEFAULT_LIMIT, drop_ownership_proposal, EventExt, find_sent_native_token_balance, get_lp_token_name, get_lp_token_symbol, MAX_LIMIT, propose_new_owner};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
 use dexter::pool::{FeeStructs, InstantiateMsg as PoolInstantiateMsg};
-use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo};
+use dexter::vault::{AllowPoolInstantiation, AssetFeeBreakup, AutoStakeImpl, Config, ConfigResponse, Cw20HookMsg, ExecuteMsg, FeeInfo, InstantiateMsg, MigrateMsg, PauseInfo, PoolTypeConfigResponse, PoolInfo, PoolInfoResponse, PoolType, PoolTypeConfig, QueryMsg, SingleSwapRequest, TmpPoolInfo, PoolCreationFee, PauseInfoUpdateType, ExitType, NativeAssetPrecisionInfo, DefunctPoolInfo};
 
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
@@ -266,6 +266,14 @@ pub fn execute(
                 Ok(())
             }, CONTRACT_NAME)
             .map_err(|e| e.into())
+        }
+        ExecuteMsg::DefunctPool { pool_id } => {
+            // TODO: Implement in Phase 3
+            Err(ContractError::Std(StdError::generic_err("Not implemented yet")))
+        }
+        ExecuteMsg::ProcessRefundBatch { pool_id, user_addresses } => {
+            // TODO: Implement in Phase 3
+            Err(ContractError::Std(StdError::generic_err("Not implemented yet")))
         }
     }
 }
@@ -1863,6 +1871,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }
         QueryMsg::GetPoolByLpTokenAddress { lp_token_addr } => {
             to_json_binary(&query_pool_by_lp_token_addr(deps, lp_token_addr)?)
+        }
+        QueryMsg::GetDefunctPoolInfo { pool_id } => {
+            // TODO: Implement in Phase 5
+            to_json_binary(&Option::<DefunctPoolInfo>::None)
+        }
+        QueryMsg::IsUserRefunded { pool_id, user } => {
+            // TODO: Implement in Phase 5
+            to_json_binary(&false)
         }
     }
 }

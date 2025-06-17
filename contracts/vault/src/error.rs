@@ -180,6 +180,24 @@ pub enum ContractError {
 
     #[error("Invalid contract name for migration. Expected: {expected}, Actual: {actual}")]
     InvalidContractNameForMigration { expected: String, actual: String },
+
+    #[error("Pool is already defunct")]
+    PoolAlreadyDefunct,
+
+    #[error("Pool is not defunct")]
+    PoolNotDefunct,
+
+    #[error("User has already been refunded from this defunct pool")]
+    UserAlreadyRefunded,
+
+    #[error("Cannot defunct pool with active reward schedules")]
+    PoolHasActiveRewardSchedules,
+
+    #[error("LP token balance mismatch. Expected: {expected}, Found: {found}")]
+    LpTokenBalanceMismatch { expected: Uint128, found: Uint128 },
+
+    #[error("All operations are disabled for defunct pools")]
+    DefunctPoolOperationDisabled,
 }
 
 impl From<OverflowError> for ContractError {
