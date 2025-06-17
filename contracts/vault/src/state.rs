@@ -1,7 +1,7 @@
 use cosmwasm_std::Uint128;
 use cw_storage_plus::{Item, Map};
 use dexter::helper::OwnershipProposal;
-use dexter::vault::{Config, PoolInfo, PoolTypeConfig, TmpPoolInfo};
+use dexter::vault::{Config, PoolInfo, PoolTypeConfig, TmpPoolInfo, DefunctPoolInfo};
 
 // Stores Vault contract's core Configuration parameters in a [`Config`] struct
 pub const CONFIG: Item<Config> = Item::new("config");
@@ -20,3 +20,9 @@ pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_pro
 
 // Temporarily stores the PoolInfo of the Pool which is currently being created in a [`PoolInfo`] struc
 pub const TMP_POOL_INFO: Item<TmpPoolInfo> = Item::new("tmp_pool_info");
+
+// Stores information about defunct pools
+pub const DEFUNCT_POOLS: Map<Uint128, DefunctPoolInfo> = Map::new("defunct_pools");
+
+// Tracks which users have been refunded from defunct pools (pool_id, user_addr) -> bool
+pub const REFUNDED_USERS: Map<(Uint128, &str), bool> = Map::new("refunded_users");
