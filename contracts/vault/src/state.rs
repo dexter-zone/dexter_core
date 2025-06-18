@@ -2,6 +2,7 @@ use cosmwasm_std::Uint128;
 use cw_storage_plus::{Item, Map};
 use dexter::helper::OwnershipProposal;
 use dexter::vault::{Config, PoolInfo, PoolTypeConfig, TmpPoolInfo, DefunctPoolInfo};
+use dexter::asset::AssetInfo;
 
 // Stores Vault contract's core Configuration parameters in a [`Config`] struct
 pub const CONFIG: Item<Config> = Item::new("config");
@@ -26,3 +27,6 @@ pub const DEFUNCT_POOLS: Map<&[u8], DefunctPoolInfo> = Map::new("defunct_pools")
 
 // Tracks which users have been refunded from defunct pools (pool_id, user_addr) -> bool
 pub const REFUNDED_USERS: Map<(&[u8], &str), bool> = Map::new("refunded_users");
+
+// Stores list of assets to check for reward schedules during defunct pool validation
+pub const REWARD_SCHEDULE_VALIDATION_ASSETS: Item<Vec<AssetInfo>> = Item::new("reward_schedule_validation_assets");
