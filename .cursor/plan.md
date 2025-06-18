@@ -244,7 +244,7 @@ This plan implements defunct pool functionality directly in the vault contract. 
 
 **Phase 2: Helper Functions & Validations**
 - [x] Task 2.1: Defunct check helper (implemented as `validate_pool_exists_and_not_defunct`)
-- [ ] Task 2.2: Reward schedule validation (not implemented - simplified approach used)
+- [x] Task 2.2: Reward schedule validation (properly implemented with multistaking query)
 - [x] Task 2.3: LP holdings calculator (implemented as `query_user_direct_lp_balance` + multistaking support)
 - [x] Task 2.4: Asset share calculator (implemented as `calculate_proportional_refund`)
 
