@@ -22,7 +22,7 @@ pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_pro
 pub const TMP_POOL_INFO: Item<TmpPoolInfo> = Item::new("tmp_pool_info");
 
 // Stores information about defunct pools
-pub const DEFUNCT_POOLS: Map<Uint128, DefunctPoolInfo> = Map::new("defunct_pools");
+pub const DEFUNCT_POOLS: Map<&[u8], DefunctPoolInfo> = Map::new("defunct_pools");
 
 // Tracks which users have been refunded from defunct pools (pool_id, user_addr) -> bool
-pub const REFUNDED_USERS: Map<(Uint128, &str), bool> = Map::new("refunded_users");
+pub const REFUNDED_USERS: Map<(&[u8], &str), bool> = Map::new("refunded_users");

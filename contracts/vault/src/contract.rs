@@ -4,6 +4,7 @@ use crate::error::ContractError;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{
     ACTIVE_POOLS, CONFIG, LP_TOKEN_TO_POOL_ID, OWNERSHIP_PROPOSAL, REGISTRY, TMP_POOL_INFO,
+    DEFUNCT_POOLS, REFUNDED_USERS,
 };
 use cosmwasm_std::{
     entry_point, from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut,
@@ -268,12 +269,10 @@ pub fn execute(
             .map_err(|e| e.into())
         }
         ExecuteMsg::DefunctPool { pool_id } => {
-            // TODO: Implement in Phase 3
-            Err(ContractError::Std(StdError::generic_err("Not implemented yet")))
+            execute_defunct_pool(deps, env, info, pool_id)
         }
         ExecuteMsg::ProcessRefundBatch { pool_id, user_addresses } => {
-            // TODO: Implement in Phase 3
-            Err(ContractError::Std(StdError::generic_err("Not implemented yet")))
+            execute_process_refund_batch(deps, env, info, pool_id, user_addresses)
         }
     }
 }
@@ -1048,9 +1047,8 @@ pub fn execute_join_pool(
     let config = CONFIG.load(deps.storage)?;
 
     // Read -  Get PoolInfo {} for the pool to which liquidity is to be provided
-    let mut pool_info = ACTIVE_POOLS
-        .load(deps.storage, pool_id.to_string().as_bytes())
-        .or(Err(ContractError::InvalidPoolId {}))?;
+    // This also validates the pool exists and is not defunct
+    let mut pool_info = validate_pool_exists_and_not_defunct(deps.storage, pool_id)?;
 
     // Read -  Get PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1295,9 +1293,8 @@ pub fn execute_exit_pool(
     let config = CONFIG.load(deps.storage)?;
 
     //  Read -  Get PoolInfo {} for the pool to which liquidity is to be provided
-    let mut pool_info = ACTIVE_POOLS
-        .load(deps.storage, pool_id.to_string().as_bytes())
-        .or(Err(ContractError::InvalidPoolId {}))?;
+    // This also validates the pool exists and is not defunct
+    let mut pool_info = validate_pool_exists_and_not_defunct(deps.storage, pool_id)?;
 
     // Read - Get the PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1637,9 +1634,8 @@ pub fn execute_swap(
     let config = CONFIG.load(deps.storage)?;
 
     //  Read -  Get PoolInfo {} for the pool
-    let mut pool_info = ACTIVE_POOLS
-        .load(deps.storage, swap_request.pool_id.to_string().as_bytes())
-        .or(Err(ContractError::InvalidPoolId {}))?;
+    // This also validates the pool exists and is not defunct
+    let mut pool_info = validate_pool_exists_and_not_defunct(deps.storage, swap_request.pool_id)?;
 
     // Read - Get the PoolConfig {} for the pool
     let pool_config = REGISTRY.load(deps.storage, pool_info.pool_type.to_string())?;
@@ -1873,12 +1869,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_json_binary(&query_pool_by_lp_token_addr(deps, lp_token_addr)?)
         }
         QueryMsg::GetDefunctPoolInfo { pool_id } => {
-            // TODO: Implement in Phase 5
-            to_json_binary(&Option::<DefunctPoolInfo>::None)
+            let defunct_pool_info = DEFUNCT_POOLS
+                .may_load(deps.storage, pool_id.to_string().as_bytes())?;
+            to_json_binary(&defunct_pool_info)
         }
         QueryMsg::IsUserRefunded { pool_id, user } => {
-            // TODO: Implement in Phase 5
-            to_json_binary(&false)
+            let is_refunded = REFUNDED_USERS
+                .has(deps.storage, (pool_id.to_string().as_bytes(), user.as_str()));
+            to_json_binary(&is_refunded)
         }
     }
 }
@@ -2086,4 +2084,335 @@ pub fn build_update_pool_state_msg(
         funds: vec![],
         msg: to_json_binary(&dexter::pool::ExecuteMsg::UpdateLiquidity { assets })?,
     }))
+}
+
+// ----------------x----------------x---------------------x-------------------x----------------x-----
+// ----------------x----------------x  :::: Defunct Pool Execute Functions  ::::  x----------------x---
+// ----------------x----------------x---------------------x-------------------x----------------x-----
+
+/// Makes a pool defunct - stops all operations and captures current state for refunds
+pub fn execute_defunct_pool(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    pool_id: Uint128,
+) -> Result<Response, ContractError> {
+    // Validate caller is authorized
+    validate_authorized_caller(deps.storage, &info.sender)?;
+
+    // Validate pool exists and is not already defunct
+    let pool_info = validate_pool_exists_and_not_defunct(deps.storage, pool_id)?;
+
+    // Query current pool assets from the pool contract
+    let pool_config: dexter::pool::ConfigResponse = deps.querier.query_wasm_smart(
+        &pool_info.pool_addr,
+        &dexter::pool::QueryMsg::Config {},
+    )?;
+    let pool_assets = pool_config.assets;
+
+    // Get total LP token supply
+    let total_lp_supply = query_total_lp_supply(&deps.querier, &pool_info.lp_token_addr)?;
+
+    // Create defunct pool info
+    let defunct_pool_info = DefunctPoolInfo {
+        pool_id,
+        lp_token_addr: pool_info.lp_token_addr.clone(),
+        total_assets_at_defunct: pool_assets,
+        total_lp_supply_at_defunct: total_lp_supply,
+        defunct_timestamp: env.block.time.seconds(),
+        total_refunded_lp_tokens: Uint128::zero(),
+    };
+
+    // Save defunct pool info
+    DEFUNCT_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &defunct_pool_info)?;
+
+    // Remove from active pools
+    ACTIVE_POOLS.remove(deps.storage, pool_id.to_string().as_bytes());
+
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::defunct_pool"), &info)
+        .add_attribute("pool_id", pool_id.to_string())
+        .add_attribute("lp_token_addr", pool_info.lp_token_addr.to_string())
+        .add_attribute("total_lp_supply", total_lp_supply.to_string())
+        .add_attribute("defunct_timestamp", env.block.time.seconds().to_string());
+
+    Ok(Response::new().add_event(event))
+}
+
+/// Processes refunds for a batch of users from a defunct pool
+pub fn execute_process_refund_batch(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    pool_id: Uint128,
+    user_addresses: Vec<String>,
+) -> Result<Response, ContractError> {
+    // Validate caller is authorized
+    validate_authorized_caller(deps.storage, &info.sender)?;
+
+    // Validate pool is defunct
+    let mut defunct_pool_info = validate_pool_is_defunct(deps.storage, pool_id)?;
+
+    // Get config to check for multistaking address
+    let config = CONFIG.load(deps.storage)?;
+    
+    let multistaking_addr = match &config.auto_stake_impl {
+        AutoStakeImpl::Multistaking { contract_addr } => Some(contract_addr),
+        AutoStakeImpl::None => None,
+    };
+
+    let mut messages = Vec::new();
+    let mut refunded_lp_total = Uint128::zero();
+    let mut batch_entries = Vec::new();
+
+    // Process each user
+    for user_addr_str in &user_addresses {
+        let user_addr = deps.api.addr_validate(user_addr_str)?;
+        
+        // Check if user already refunded
+        validate_user_not_refunded(deps.storage, pool_id, user_addr_str)?;
+
+        // Calculate user's total LP tokens (direct + multistaking)
+        let user_total_lp = if let Some(multistaking_addr) = multistaking_addr {
+            calculate_user_total_lp_tokens(
+                &deps.querier,
+                multistaking_addr,
+                &defunct_pool_info.lp_token_addr,
+                &user_addr,
+            )?
+        } else {
+            query_user_direct_lp_balance(&deps.querier, &defunct_pool_info.lp_token_addr, &user_addr)?
+        };
+
+        // Skip users with zero LP tokens
+        if user_total_lp.is_zero() {
+            continue;
+        }
+
+        // Calculate proportional refund
+        let refund_assets = calculate_proportional_refund(
+            defunct_pool_info.total_lp_supply_at_defunct,
+            user_total_lp,
+            &defunct_pool_info.total_assets_at_defunct,
+        )?;
+
+        // Create transfer messages for each asset
+        for asset in &refund_assets {
+            match &asset.info {
+                dexter::asset::AssetInfo::Token { contract_addr } => {
+                    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: contract_addr.to_string(),
+                        funds: vec![],
+                        msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
+                            recipient: user_addr.to_string(),
+                            amount: asset.amount,
+                        })?,
+                    }));
+                }
+                dexter::asset::AssetInfo::NativeToken { denom } => {
+                    messages.push(CosmosMsg::Bank(cosmwasm_std::BankMsg::Send {
+                        to_address: user_addr.to_string(),
+                        amount: vec![cosmwasm_std::Coin {
+                            denom: denom.clone(),
+                            amount: asset.amount,
+                        }],
+                    }));
+                }
+            }
+        }
+
+        // Mark user as refunded
+        REFUNDED_USERS.save(deps.storage, (pool_id.to_string().as_bytes(), user_addr_str), &true)?;
+
+        // Track total refunded LP tokens
+        refunded_lp_total += user_total_lp;
+
+        // Add to batch entries for event
+        batch_entries.push(dexter::vault::RefundBatchEntry {
+            user: user_addr,
+            total_lp_tokens: user_total_lp,
+            refund_assets,
+        });
+    }
+
+    // Update total refunded LP tokens
+    defunct_pool_info.total_refunded_lp_tokens += refunded_lp_total;
+    DEFUNCT_POOLS.save(deps.storage, pool_id.to_string().as_bytes(), &defunct_pool_info)?;
+
+    let event = Event::from_info(concatcp!(CONTRACT_NAME, "::process_refund_batch"), &info)
+        .add_attribute("pool_id", pool_id.to_string())
+        .add_attribute("batch_size", user_addresses.len().to_string())
+        .add_attribute("refunded_lp_tokens", refunded_lp_total.to_string())
+        .add_attribute("total_refunded_lp_tokens", defunct_pool_info.total_refunded_lp_tokens.to_string())
+        .add_attribute("batch_entries", serde_json_wasm::to_string(&batch_entries).unwrap());
+
+    Ok(Response::new().add_messages(messages).add_event(event))
+}
+
+// ----------------x----------------x---------------------x-------------------x----------------x-----
+// ----------------x----------------x  :::: Defunct Pool Helper Functions  ::::  x----------------x---
+// ----------------x----------------x---------------------x-------------------x----------------x-----
+
+/// Validates that a pool exists and is not already defunct
+fn validate_pool_exists_and_not_defunct(
+    storage: &dyn cosmwasm_std::Storage,
+    pool_id: Uint128,
+) -> Result<PoolInfo, ContractError> {
+    // Check if pool is already defunct
+    if DEFUNCT_POOLS.has(storage, pool_id.to_string().as_bytes()) {
+        return Err(ContractError::PoolAlreadyDefunct);
+    }
+
+    // Load pool info (this will fail if pool doesn't exist)
+    let pool_info = ACTIVE_POOLS
+        .load(storage, pool_id.to_string().as_bytes())
+        .map_err(|_| ContractError::InvalidPoolId {})?;
+
+    Ok(pool_info)
+}
+
+/// Validates that a pool is defunct
+fn validate_pool_is_defunct(
+    storage: &dyn cosmwasm_std::Storage,
+    pool_id: Uint128,
+) -> Result<DefunctPoolInfo, ContractError> {
+    DEFUNCT_POOLS
+        .load(storage, pool_id.to_string().as_bytes())
+        .map_err(|_| ContractError::PoolNotDefunct)
+}
+
+/// Validates that the caller is authorized (owner or whitelisted)
+fn validate_authorized_caller(
+    storage: &dyn cosmwasm_std::Storage,
+    caller: &Addr,
+) -> Result<(), ContractError> {
+    let config = CONFIG.load(storage)?;
+    
+    if caller == config.owner || config.whitelisted_addresses.contains(caller) {
+        Ok(())
+    } else {
+        Err(ContractError::Unauthorized {})
+    }
+}
+
+/// Validates that the user has not been refunded yet
+fn validate_user_not_refunded(
+    storage: &dyn cosmwasm_std::Storage,
+    pool_id: Uint128,
+    user: &str,
+) -> Result<(), ContractError> {
+    if REFUNDED_USERS.has(storage, (pool_id.to_string().as_bytes(), user)) {
+        return Err(ContractError::UserAlreadyRefunded);
+    }
+    Ok(())
+}
+
+/// Calculates the proportional refund amount for a user based on their LP token holdings
+fn calculate_proportional_refund(
+    total_lp_tokens: Uint128,
+    user_lp_tokens: Uint128,
+    pool_assets: &[Asset],
+) -> Result<Vec<Asset>, ContractError> {
+    if total_lp_tokens.is_zero() {
+        return Ok(vec![]);
+    }
+
+    let mut refund_assets = Vec::new();
+    
+    for asset in pool_assets {
+        let refund_amount = asset.amount
+            .checked_mul(user_lp_tokens)
+            .map_err(|e| ContractError::Std(StdError::overflow(e)))?
+            .checked_div(total_lp_tokens)
+            .map_err(|e| ContractError::Std(StdError::divide_by_zero(e)))?;
+        
+        if !refund_amount.is_zero() {
+            refund_assets.push(Asset {
+                info: asset.info.clone(),
+                amount: refund_amount,
+            });
+        }
+    }
+    
+    Ok(refund_assets)
+}
+
+/// Queries the multistaking contract for user's bonded LP tokens
+fn query_user_bonded_lp_tokens(
+    querier: &cosmwasm_std::QuerierWrapper,
+    multistaking_addr: &Addr,
+    lp_token: &Addr,
+    user: &Addr,
+) -> Result<Uint128, ContractError> {
+    let bonded_amount: Uint128 = querier.query_wasm_smart(
+        multistaking_addr,
+        &dexter::multi_staking::QueryMsg::BondedLpTokens {
+            lp_token: lp_token.clone(),
+            user: user.clone(),
+        },
+    )?;
+    Ok(bonded_amount)
+}
+
+/// Queries the multistaking contract for user's locked LP tokens (unbonded but still in unlock period)
+fn query_user_locked_lp_tokens(
+    querier: &cosmwasm_std::QuerierWrapper,
+    multistaking_addr: &Addr,
+    lp_token: &Addr,
+    user: &Addr,
+) -> Result<Uint128, ContractError> {
+    let token_lock_info: dexter::multi_staking::TokenLockInfo = querier.query_wasm_smart(
+        multistaking_addr,
+        &dexter::multi_staking::QueryMsg::TokenLocks {
+            lp_token: lp_token.clone(),
+            user: user.clone(),
+            block_time: None,
+        },
+    )?;
+    
+    let locked_amount = token_lock_info.locks
+        .iter()
+        .fold(Uint128::zero(), |acc, lock| acc + lock.amount);
+    
+    Ok(locked_amount + token_lock_info.unlocked_amount)
+}
+
+/// Queries the CW20 contract for user's direct LP token balance
+fn query_user_direct_lp_balance(
+    querier: &cosmwasm_std::QuerierWrapper,
+    lp_token: &Addr,
+    user: &Addr,
+) -> Result<Uint128, ContractError> {
+    let balance: cw20::BalanceResponse = querier.query_wasm_smart(
+        lp_token,
+        &cw20::Cw20QueryMsg::Balance {
+            address: user.to_string(),
+        },
+    )?;
+    Ok(balance.balance)
+}
+
+/// Gets the total LP token supply from the CW20 contract
+fn query_total_lp_supply(
+    querier: &cosmwasm_std::QuerierWrapper,
+    lp_token: &Addr,
+) -> Result<Uint128, ContractError> {
+    let token_info: cw20::TokenInfoResponse = querier.query_wasm_smart(
+        lp_token,
+        &cw20::Cw20QueryMsg::TokenInfo {},
+    )?;
+    Ok(token_info.total_supply)
+}
+
+/// Calculates the total LP tokens a user owns across all states (direct + multistaking)
+fn calculate_user_total_lp_tokens(
+    querier: &cosmwasm_std::QuerierWrapper,
+    multistaking_addr: &Addr,
+    lp_token: &Addr,
+    user: &Addr,
+) -> Result<Uint128, ContractError> {
+    let direct_balance = query_user_direct_lp_balance(querier, lp_token, user)?;
+    let bonded_balance = query_user_bonded_lp_tokens(querier, multistaking_addr, lp_token, user)?;
+    let locked_balance = query_user_locked_lp_tokens(querier, multistaking_addr, lp_token, user)?;
+    
+    Ok(direct_balance + bonded_balance + locked_balance)
 }
