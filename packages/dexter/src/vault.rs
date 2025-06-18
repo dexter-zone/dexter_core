@@ -469,6 +469,11 @@ pub enum MigrateMsg {
 
     V1_1 {
         updated_pool_type_configs: Vec<PoolTypeConfig>,
+    },
+    /// Migration for defunct pool functionality and configurable reward schedule validation assets
+    V1_2 {
+        /// List of reward assets to check when validating reward schedules during defunct operations
+        reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
     }
 }
 

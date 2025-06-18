@@ -193,6 +193,9 @@ pub enum ContractError {
     #[error("Cannot defunct pool with active reward schedules")]
     PoolHasActiveRewardSchedules,
 
+    #[error("Cannot defunct pool with future reward schedules")]
+    PoolHasFutureRewardSchedules,
+
     #[error("LP token balance mismatch. Expected: {expected}, Found: {found}")]
     LpTokenBalanceMismatch { expected: Uint128, found: Uint128 },
 
