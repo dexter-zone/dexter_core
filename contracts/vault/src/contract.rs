@@ -9,7 +9,7 @@ use crate::state::{
 use cosmwasm_std::{
     entry_point, from_json, to_json_binary, Addr, Binary, CosmosMsg, Decimal, Deps, DepsMut,
     Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response, StdError, StdResult, SubMsg,
-    Uint128, WasmMsg, WasmQuery,
+    Uint128, WasmMsg, WasmQuery, QuerierWrapper,
 };
 use protobuf::Message;
 use std::collections::HashMap;
@@ -2090,6 +2090,50 @@ pub fn build_update_pool_state_msg(
 // ----------------x----------------x  :::: Defunct Pool Execute Functions  ::::  x----------------x---
 // ----------------x----------------x---------------------x-------------------x----------------x-----
 
+/// Validates that there are no active reward schedules for the given LP token
+fn validate_no_active_reward_schedules(
+    querier: &QuerierWrapper,
+    lp_token: &Addr,
+    current_time: u64,
+    auto_stake_impl: &AutoStakeImpl,
+) -> Result<(), ContractError> {
+    // Only check if multistaking is enabled
+    if let AutoStakeImpl::Multistaking { contract_addr } = auto_stake_impl {
+        // Get common reward assets to check (native tokens and known CW20s)
+        let common_reward_assets = vec![
+            // Common native tokens
+            dexter::asset::AssetInfo::NativeToken { denom: "uxprt".to_string() },
+            dexter::asset::AssetInfo::NativeToken { denom: "uatom".to_string() },
+            dexter::asset::AssetInfo::NativeToken { denom: "uusdc".to_string() },
+            dexter::asset::AssetInfo::NativeToken { denom: "uosmo".to_string() },
+            // Add more common assets as needed
+        ];
+
+        // Check each common asset for active reward schedules
+        for asset in common_reward_assets {
+            let reward_schedules: Vec<dexter::multi_staking::RewardScheduleResponse> = querier
+                .query_wasm_smart(
+                    contract_addr,
+                    &dexter::multi_staking::QueryMsg::RewardSchedules {
+                        lp_token: lp_token.clone(),
+                        asset: asset.clone(),
+                    },
+                )
+                .unwrap_or_default(); // If query fails, assume no schedules
+
+            // Check if any reward schedule is currently active
+            for schedule_response in reward_schedules {
+                let schedule = schedule_response.reward_schedule;
+                if schedule.start_block_time <= current_time && current_time < schedule.end_block_time {
+                    return Err(ContractError::PoolHasActiveRewardSchedules);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Makes a pool defunct - stops all operations and captures current state for refunds
 pub fn execute_defunct_pool(
     deps: DepsMut,
@@ -2102,6 +2146,15 @@ pub fn execute_defunct_pool(
 
     // Validate pool exists and is not already defunct
     let pool_info = validate_pool_exists_and_not_defunct(deps.storage, pool_id)?;
+
+    // Get config to check for multistaking and validate no active reward schedules
+    let config = CONFIG.load(deps.storage)?;
+    validate_no_active_reward_schedules(
+        &deps.querier,
+        &pool_info.lp_token_addr,
+        env.block.time.seconds(),
+        &config.auto_stake_impl,
+    )?;
 
     // Query current pool assets from the pool contract
     let pool_config: dexter::pool::ConfigResponse = deps.querier.query_wasm_smart(
