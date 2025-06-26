@@ -22,6 +22,7 @@ crate-type = ["cdylib", "rlib"]
 # for more explicit tests, cargo test --features=backtraces
 backtraces = ["cosmwasm-std/backtraces"]
 library = []
+test-tube = ["dep:persistence-test-tube"]
 
 [dependencies]
 dexter = { version = "1.4.0", path = "../../packages/dexter", default-features = false }
@@ -37,6 +38,7 @@ protobuf = { version = "2", features = ["with-bytes"] }
 serde-json-wasm = "0.5.0"
 cosmwasm-schema = "1.5.0"
 const_format = "0.2.30"
+persistence-test-tube = { version = "1.0.0", optional = true }
 
 [dev-dependencies]
 dexter-stable-pool = { path = "../pools/stable_pool" }
@@ -46,3 +48,8 @@ dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.16.2"
 cw20 = "1.0.1"
+
+[[test]]
+name = "test_tube_x"
+path = "tests/test-tube-x/defunct_pool.rs"
+required-features = ["test-tube"]
