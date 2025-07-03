@@ -381,6 +381,18 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim(approve) new owner proposal, thus changing contract's owner
     ClaimOwnership {},
+    /// Makes a pool completely defunct - stops all operations and prepares for user refunds
+    DefunctPool { 
+        pool_id: Uint128 
+    },
+    /// Processes refunds for a batch of users from a defunct pool
+    ProcessRefundBatch { 
+        pool_id: Uint128,
+        user_addresses: Vec<String>,
+    },
+    UpdateRewardScheduleValidationAssets {
+        assets: Vec<AssetInfo>,
+    }
 }
 
 /// ## Description
@@ -446,6 +458,15 @@ pub enum QueryMsg {
     /// Returns the current stored state of the Pool in custom [`PoolInfoResponse`] struct
     #[returns(PoolInfoResponse)]
     GetPoolByLpTokenAddress { lp_token_addr: String },
+    /// Returns information about a defunct pool
+    #[returns(Option<DefunctPoolInfo>)]
+    GetDefunctPoolInfo { pool_id: Uint128 },
+    /// Checks if a user has been refunded from a defunct pool
+    #[returns(bool)]
+    IsUserRefunded { pool_id: Uint128, user: String },
+    /// Reward schedule validation assets
+    #[returns(Vec<AssetInfo>)]
+    RewardScheduleValidationAssets {},
 }
 
 /// ## Description -  This struct describes a migration message.
@@ -454,6 +475,11 @@ pub enum MigrateMsg {
 
     V1_1 {
         updated_pool_type_configs: Vec<PoolTypeConfig>,
+    },
+    /// Migration for defunct pool functionality and configurable reward schedule validation assets
+    V1_2 {
+        /// List of reward assets to check when validating reward schedules during defunct operations
+        reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
     }
 }
 
@@ -482,3 +508,28 @@ pub type PoolTypeConfigResponse = Option<PoolTypeConfig>;
 /// assets - The current asset balances of the pool
 /// pool_type - The type of the pool
 pub type PoolInfoResponse = PoolInfo;
+
+/// Information about a defunct pool
+#[cw_serde]
+pub struct DefunctPoolInfo {
+    pub pool_id: Uint128,
+    pub lp_token_addr: Addr,
+    /// Total LP token supply at the moment of defuncting
+    pub total_lp_supply_at_defunct: Uint128,
+    /// Total assets in the pool at the moment of defuncting. This is a snapshot and does not change.
+    pub total_assets_at_defunct: Vec<Asset>,
+    /// Current asset balances in the defunct pool. This is updated as refunds are processed.
+    pub current_assets_in_pool: Vec<Asset>,
+    /// Timestamp when the pool was made defunct
+    pub defunct_timestamp: u64,
+    /// Total number of LP tokens that have been refunded so far
+    pub total_refunded_lp_tokens: Uint128,
+}
+
+/// Entry for processing a user's refund from a defunct pool
+#[cw_serde]
+pub struct RefundBatchEntry {
+    pub user: Addr,
+    pub total_lp_tokens: Uint128,  // All LP tokens user owns (direct + multistaking)
+    pub refund_assets: Vec<Asset>, // Calculated proportional refund
+}

@@ -9,7 +9,7 @@ use dexter::{
     vault::{FeeInfo, NativeAssetPrecisionInfo, PoolCreationFee, PoolInfoResponse},
 };
 use persistence_std::types::cosmos::gov::v1::VoteOption;
-use persistence_test_tube::{Account, Module, PersistenceTestApp, SigningAccount, Wasm};
+use persistence_test_tube::{Account, Module, PersistenceTestApp, SigningAccount, Wasm, Runner};
 use utils::GovAdminTestSetup;
 use dexter_weighted_pool::state::WeightedParams;
 
@@ -55,6 +55,7 @@ struct CreatePoolTestSuite<'a> {
 impl<'a> CreatePoolTestSuite<'a> {
     fn new(test_setup: &'a GovAdminTestSetup) -> Self {
         let persistence_test_app = &test_setup.persistence_test_app;
+
         let admin = &test_setup.accs[0];
 
         let validator = test_setup
