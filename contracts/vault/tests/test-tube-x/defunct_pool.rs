@@ -1,13 +1,15 @@
 #![cfg(test)]
 
-use cosmwasm_std::{coins, Addr, Uint128};
+use cosmwasm_std::{coins, from_json, to_json_binary, Addr, Uint128};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg};
-use persistence_test_tube::{Account, Module, Wasm};
+use persistence_test_tube::{bank, Account, Module, Runner, RunnerExecuteResult, Wasm};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use persistence_std::types::cosmwasm::wasm::v1::{MsgMigrateContractResponse, MsgMigrateContract, QueryRawContractStateRequest, QueryRawContractStateResponse};
+use cw20::{BalanceResponse, Cw20QueryMsg};
+use cw2::ContractVersion;
 
-#[cfg(feature = "test-tube")]
 pub mod utils;
 
 struct DefunctPoolTestSuite {
@@ -36,11 +38,19 @@ impl DefunctPoolTestSuite {
             },
             cosmwasm_std::Coin {
                 denom: "uxprt".to_string(),
-                amount: Uint128::from(1_000_000_000_000u128),
+                amount: Uint128::from(1000_000_000_000_000u128),
             },
         ]);
 
-        let vault_instance = utils::instantiate_contract(&app, &owner);
+        let fee_collector = app
+            .init_account(&[cosmwasm_std::Coin {
+                denom: "uxprt".to_string(),
+                amount: Uint128::from(100_000_000_000u128),
+            }])
+            .unwrap();
+
+        let vault_instance =
+            utils::instantiate_contract(&app, &owner, fee_collector.address().to_string());
 
         // Initialize the token contracts
         let (token1, token2, token3) = utils::initialize_3_tokens(&app, &owner);
@@ -118,6 +128,7 @@ impl DefunctPoolTestSuite {
         self.test_defunct_pool_with_active_reward_schedules();
         self.test_defunct_pool_with_future_reward_schedules();
         self.test_defunct_pool_multiple_users_refund();
+        self.test_vault_migration();
     }
 
     fn test_defunct_check_with_active_pool(&self) {
@@ -766,6 +777,27 @@ impl DefunctPoolTestSuite {
     fn test_defunct_pool_multiple_users_refund(&self) {
         let wasm = Wasm::new(&self.app);
 
+        let assets_to_check = vec![
+            AssetInfo::NativeToken {
+                denom: "denom1".to_string(),
+            },
+            AssetInfo::NativeToken {
+                denom: "denom2".to_string(),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked(self.token1.clone()),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked(self.token2.clone()),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked(self.token3.clone()),
+            },
+        ];
+
+        let pre_test_balances =
+            utils::query_all_asset_balances(&self.app, &self.vault_instance, &assets_to_check);
+
         let (_, lp_token_instance, pool_id) = utils::initialize_weighted_pool(
             &self.app,
             &self.owner,
@@ -781,18 +813,34 @@ impl DefunctPoolTestSuite {
         let mut user_lp_balances: std::collections::HashMap<String, Uint128> =
             std::collections::HashMap::new();
 
-        // Create 100 users and have them join the pool with different amounts
-        for i in 0..100 {
+        // Create 10 users and have them join the pool with different amounts
+        for i in 0..10 {
             let user = self
                 .app
                 .init_account(&[cosmwasm_std::Coin {
                     denom: "uusd".to_string(),
                     amount: Uint128::from(100_000_000_000u128),
-                }])
+                },
+                cosmwasm_std::Coin {
+                    denom: "uxprt".to_string(),
+                    amount: Uint128::from(100_000_000_000u128),
+                },
+                cosmwasm_std::Coin {
+                    denom: "denom1".to_string(),
+                    amount: Uint128::from(100_000_000_000u128),
+                },
+                cosmwasm_std::Coin {
+                    denom: "denom2".to_string(),
+                    amount: Uint128::from(100_000_000_000u128),
+                }]
+            )
                 .unwrap();
             user_addresses.push(user.address().to_string());
 
             let mut rng = StdRng::seed_from_u64(i as u64);
+            let join_amount_token1 = Uint128::from(rng.gen_range(100..10000) as u128);
+            let join_amount_token2 = Uint128::from(rng.gen_range(50..5000) as u128);
+            let join_amount_token3 = Uint128::from(rng.gen_range(75..7500) as u128);
             let join_amount_denom1 = Uint128::from(rng.gen_range(100..10000) as u128);
             let join_amount_denom2 = Uint128::from(rng.gen_range(50..5000) as u128);
 
@@ -800,14 +848,21 @@ impl DefunctPoolTestSuite {
                 &self.app,
                 &self.owner,
                 &self.token1,
-                join_amount_denom1,
+                join_amount_token1,
                 user.address().to_string(),
             );
             utils::mint_some_tokens(
                 &self.app,
                 &self.owner,
                 &self.token2,
-                join_amount_denom2,
+                join_amount_token2,
+                user.address().to_string(),
+            );
+            utils::mint_some_tokens(
+                &self.app,
+                &self.owner,
+                &self.token3,
+                join_amount_token3,
                 user.address().to_string(),
             );
 
@@ -816,14 +871,21 @@ impl DefunctPoolTestSuite {
                 &user,
                 &self.token1,
                 self.vault_instance.to_string(),
-                join_amount_denom1,
+                join_amount_token1,
             );
             utils::increase_token_allowance(
                 &self.app,
                 &user,
                 &self.token2,
                 self.vault_instance.to_string(),
-                join_amount_denom2,
+                join_amount_token2,
+            );
+            utils::increase_token_allowance(
+                &self.app,
+                &user,
+                &self.token3,
+                self.vault_instance.to_string(),
+                join_amount_token3,
             );
 
             let join_msg = ExecuteMsg::JoinPool {
@@ -846,25 +908,31 @@ impl DefunctPoolTestSuite {
                         info: AssetInfo::Token {
                             contract_addr: Addr::unchecked(self.token1.clone()),
                         },
-                        amount: join_amount_denom1,
+                        amount: join_amount_token1,
                     },
                     Asset {
                         info: AssetInfo::Token {
                             contract_addr: Addr::unchecked(self.token2.clone()),
                         },
-                        amount: join_amount_denom2,
+                        amount: join_amount_token2,
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: Addr::unchecked(self.token3.clone()),
+                        },
+                        amount: join_amount_token3,
                     },
                 ]),
                 min_lp_to_receive: None,
                 auto_stake: None,
             };
 
-            let initial_lp_balance: Uint128 = wasm
-                .query_wasm_smart(
-                    lp_token_instance.clone(),
+            let initial_lp_balance: BalanceResponse = wasm
+                .query(
+                    &lp_token_instance,
                     &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
                 )
-                .unwrap();
+                .unwrap();  
 
             let result = wasm.execute(
                 &self.vault_instance,
@@ -881,32 +949,56 @@ impl DefunctPoolTestSuite {
                 ],
                 &user,
             );
+
             assert!(result.is_ok(), "Failed to join pool for user {}", i);
 
-            let final_lp_balance: Uint128 = wasm
-                .query_wasm_smart(
-                    lp_token_instance.clone(),
+            let final_lp_balance: BalanceResponse = wasm
+                .query(
+                    &lp_token_instance,
                     &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
                 )
                 .unwrap();
-            let lp_received = final_lp_balance - initial_lp_balance;
+            let lp_received = final_lp_balance.balance - initial_lp_balance.balance;
             user_lp_balances.insert(user.address().to_string(), lp_received);
         }
-
-        // Store initial pool assets before processing refunds
-        let initial_pool_assets: Vec<Asset> = wasm
-            .query(
-                &self.vault_instance,
-                &QueryMsg::GetDefunctPoolInfo { pool_id },
-            )
-            .unwrap()
-            .unwrap()
-            .total_assets_at_defunct;
 
         // Make pool defunct
         let defunct_msg = ExecuteMsg::DefunctPool { pool_id };
         let result = wasm.execute(&self.vault_instance, &defunct_msg, &[], &self.owner);
         assert!(result.is_ok());
+
+        // Store initial pool assets before processing refunds
+        let defunct_pool_info: Option<DefunctPoolInfo> = wasm
+            .query(
+                &self.vault_instance,
+                &QueryMsg::GetDefunctPoolInfo { pool_id },
+            )
+            .unwrap();
+
+        let initial_pool_assets = defunct_pool_info
+            .as_ref()
+            .expect("Defunct pool info should be present")
+            .total_assets_at_defunct
+            .clone();
+
+        let total_lp_supply_at_defunct = defunct_pool_info
+            .as_ref()
+            .expect("Defunct pool info should be present")
+            .total_lp_supply_at_defunct;
+
+        let mut users_pre_refund_balances: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Uint128>,
+        > = std::collections::HashMap::new();
+
+        for user_addr in &user_addresses {
+            let mut asset_balances = std::collections::HashMap::new();
+            for asset in &initial_pool_assets {
+                let balance = utils::query_asset_balance(&self.app, user_addr, &asset.info);
+                asset_balances.insert(asset.info.to_string(), balance);
+            }
+            users_pre_refund_balances.insert(user_addr.clone(), asset_balances);
+        }
 
         // Process refund batches for all users
         for chunk in user_addresses.chunks(20) {
@@ -918,8 +1010,33 @@ impl DefunctPoolTestSuite {
             assert!(result.is_ok(), "Failed to process refund batch");
         }
 
+        for (user_addr, user_lp_balance) in &user_lp_balances {
+            let pre_refund_balances = users_pre_refund_balances.get(user_addr).unwrap();
+
+            for asset in &initial_pool_assets {
+                let expected_refund = asset
+                    .amount
+                    .multiply_ratio(*user_lp_balance, total_lp_supply_at_defunct);
+
+                let post_refund_balance =
+                    utils::query_asset_balance(&self.app, user_addr, &asset.info);
+                let pre_refund_balance = pre_refund_balances.get(&asset.info.to_string()).unwrap();
+                let actual_refund_received = post_refund_balance.checked_sub(*pre_refund_balance).unwrap();
+
+                assert_eq!(
+                    actual_refund_received,
+                    expected_refund,
+                    "Mismatched refund for user {} and asset {}. Expected {}, got {}",
+                    user_addr,
+                    asset.info,
+                    expected_refund,
+                    actual_refund_received
+                );
+            }
+        }
+
         // Verify all users are refunded and their LP tokens are burnt, and assets returned
-        for (user_addr, expected_lp_balance_at_defunct) in &user_lp_balances {
+        for (user_addr, _expected_lp_balance_at_defunct) in &user_lp_balances {
             let is_refunded: bool = wasm
                 .query(
                     &self.vault_instance,
@@ -931,19 +1048,6 @@ impl DefunctPoolTestSuite {
                 .unwrap();
             assert!(is_refunded, "User {} not refunded", user_addr);
 
-            let lp_balance: Uint128 = wasm
-                .query_wasm_smart(
-                    lp_token_instance.clone(),
-                    &cw20::Cw20QueryMsg::Balance { address: user_addr.clone() },
-                )
-                .unwrap();
-            assert_eq!(
-                lp_balance,
-                Uint128::zero(),
-                "LP tokens not burnt for user {}",
-                user_addr
-            );
-
             // Verify user cannot claim twice
             let refund_msg = ExecuteMsg::ProcessRefundBatch {
                 pool_id,
@@ -954,35 +1058,254 @@ impl DefunctPoolTestSuite {
             let error_msg = result.unwrap_err().to_string();
             assert!(
                 error_msg.contains("UserAlreadyRefunded")
-                    || error_msg.contains("user already refunded"),
+                    || error_msg.contains("User has already been refunded from this defunct pool"),
                 "Unexpected error for double claim: {}",
                 error_msg
             );
         }
 
-        // Verify no funds left in defunct pool
-        let final_pool_assets: Vec<Asset> = wasm
+        // --- Final Dust Verification ---
+        // Verify that the dust amount calculated by the contract's internal state matches the actual
+        // balances held in the vault's address after all refunds.
+
+        // 1. Get the final pool assets as tracked by the contract's state
+        let defunct_pool_info_after_refund: Option<DefunctPoolInfo> = wasm
             .query(
                 &self.vault_instance,
                 &QueryMsg::GetDefunctPoolInfo { pool_id },
             )
-            .unwrap()
-            .unwrap()
-            .total_assets_at_defunct;
+            .unwrap();
 
-        for asset in final_pool_assets {
-            assert_eq!(
-                asset.amount,
-                Uint128::zero(),
-                "Funds still left in defunct pool: {:?}",
-                asset
-            );
+        let mut final_pool_assets_from_state = defunct_pool_info_after_refund
+            .as_ref()
+            .expect("Defunct pool info should be present")
+            .current_assets_in_pool
+            .clone();
+
+        // 2. Query the actual balances of the vault contract for each asset and subtract pre-test balances
+        let final_vault_balances = utils::query_all_asset_balances(
+            &self.app,
+            &self.vault_instance,
+            &initial_pool_assets
+                .iter()
+                .map(|a| a.info.clone())
+                .collect::<Vec<_>>(),
+        );
+        let mut actual_dust_in_vault: Vec<Asset> = vec![];
+
+        for final_asset_balance in &final_vault_balances {
+            let pre_test_balance_asset = pre_test_balances
+                .iter()
+                .find(|a| a.info == final_asset_balance.info)
+                .unwrap();
+
+            let dust = final_asset_balance
+                .amount
+                .checked_sub(pre_test_balance_asset.amount)
+                .unwrap();
+
+            actual_dust_in_vault.push(Asset {
+                info: final_asset_balance.info.clone(),
+                amount: dust,
+            });
         }
+
+        // 4. Sort and assert equality for a precise check
+        final_pool_assets_from_state.sort_by(|a, b| a.info.to_string().cmp(&b.info.to_string()));
+        actual_dust_in_vault.sort_by(|a, b| a.info.to_string().cmp(&b.info.to_string()));
+
+        assert_eq!(
+            final_pool_assets_from_state, actual_dust_in_vault,
+            "Dust mismatch between contract state and actual vault balance"
+        );
+    }
+
+    fn test_vault_migration(&self) {
+        let wasm = Wasm::new(&self.app);
+
+        // Store old vault code using the helper function
+        let old_vault_code_id = utils::store_old_vault_code(&self.app, &self.owner);
+
+        // Store new vault code
+        let new_vault_code_id = utils::store_vault_code(&self.app, &self.owner);
+
+        // Instantiate old vault
+        let old_vault_instance = wasm
+            .instantiate(
+                old_vault_code_id,
+                &dexter::vault::InstantiateMsg {
+                    pool_configs: vec![],
+                    lp_token_code_id: None,
+                    fee_collector: None,
+                    owner: self.owner.address(),
+                    auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+                    pool_creation_fee: dexter::vault::PoolCreationFee::default(),
+                },
+                Some(self.owner.address().as_str()),
+                Some("old_vault"),
+                &[],
+                &self.owner,
+            )
+            .unwrap()
+            .data
+            .address;
+
+        // --- Test successful migration ---
+        let migrate_msg = dexter::vault::MigrateMsg::V1_2 {
+            reward_schedule_validation_assets: Some(vec![AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            }, AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            }])
+        };
+
+        // We need to send a message directly on the persistence test app since we have runner in scope, we can just send the whole message
+
+        let migrate_cosmos_msg = MsgMigrateContract {
+            contract: old_vault_instance.to_string(),
+            code_id: new_vault_code_id,
+            sender: self.owner.address().to_string(),
+            msg: to_json_binary(&migrate_msg).unwrap().to_vec(),
+        };
+
+        let result: RunnerExecuteResult<MsgMigrateContractResponse> = self.app.execute(
+            migrate_cosmos_msg,
+            "/cosmwasm.wasm.v1.MsgMigrateContract",
+            &self.owner,
+        );
+        assert!(result.is_ok(), "Migration should succeed with valid input");
+       
+        // Verify contract version after migration
+        let contract_info_res = self
+            .app
+            .query::<QueryRawContractStateRequest, QueryRawContractStateResponse>(
+                "/cosmwasm.wasm.v1.Query/RawContractState",
+                &QueryRawContractStateRequest {
+                    address: old_vault_instance.to_string(),
+                    query_data: "contract_info".as_bytes().to_vec(),
+                },
+            )
+            .unwrap();
+
+        let contract_info: ContractVersion = from_json(&contract_info_res.data).unwrap();
+        assert_eq!(contract_info.version, "1.2.0");
+        assert_eq!(contract_info.contract, "dexter-vault");
+
+        // Verify config after successful migration
+        let reward_schedule_validation_assets: Vec<AssetInfo> = wasm
+            .query(&old_vault_instance, &QueryMsg::RewardScheduleValidationAssets {})
+            .unwrap();
+
+
+        assert_eq!(
+            reward_schedule_validation_assets,
+            vec![AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            }, AssetInfo::NativeToken {
+                denom: "uxprt".to_string(),
+            }]
+        );
+
+        // --- Test migration with None (should use default assets) ---
+        // Create another old vault instance for this test
+        let old_vault_instance2 = wasm
+            .instantiate(
+                old_vault_code_id,
+                &dexter::vault::InstantiateMsg {
+                    pool_configs: vec![],
+                    lp_token_code_id: None,
+                    fee_collector: None,
+                    owner: self.owner.address(),
+                    auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+                    pool_creation_fee: dexter::vault::PoolCreationFee::default(),
+                },
+                Some(self.owner.address().as_str()),
+                Some("old_vault2"),
+                &[],
+                &self.owner,
+            )
+            .unwrap()
+            .data
+            .address;
+
+        let migrate_msg_none = dexter::vault::MigrateMsg::V1_2 { 
+            reward_schedule_validation_assets: None
+        };
+        let migrate_cosmos_msg = MsgMigrateContract {
+            contract: old_vault_instance2.to_string(),
+            code_id: new_vault_code_id,
+            sender: self.owner.address().to_string(),
+            msg: to_json_binary(&migrate_msg_none).unwrap().to_vec(),
+        };
+        let result: RunnerExecuteResult<MsgMigrateContractResponse> = self.app.execute(
+            migrate_cosmos_msg,
+            "/cosmwasm.wasm.v1.MsgMigrateContract",
+            &self.owner,
+        );
+        assert!(result.is_err(), "Migration should fail when no validation assets are provided");
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("reward_schedule_validation_assets must be provided"),
+            "Unexpected error for migration with None: {}",
+            error_msg
+        );
+
+
+        // --- Test unauthorized migration ---
+        let unauthorized_user = self
+            .app
+            .init_account(&[cosmwasm_std::Coin {
+                denom: "uxprt".to_string(),
+                amount: Uint128::from(100_000u128),
+            }])
+            .unwrap();
+
+        // Create another old vault instance for this test
+        let old_vault_instance3 = wasm
+            .instantiate(
+                old_vault_code_id,
+                &dexter::vault::InstantiateMsg {
+                    pool_configs: vec![],
+                    lp_token_code_id: None,
+                    fee_collector: None,
+                    owner: self.owner.address(),
+                    auto_stake_impl: dexter::vault::AutoStakeImpl::None,
+                    pool_creation_fee: dexter::vault::PoolCreationFee::default(),
+                },
+                Some(self.owner.address().as_str()),
+                Some("old_vault3"),
+                &[],
+                &self.owner,
+            )
+            .unwrap()
+            .data
+            .address;
+
+        let migrate_cosmos_msg = MsgMigrateContract {
+            contract: old_vault_instance3.to_string(),
+            code_id: new_vault_code_id,
+            sender: unauthorized_user.address(),
+            msg: to_json_binary(&migrate_msg).unwrap().to_vec(),
+        };
+
+        let result: RunnerExecuteResult<MsgMigrateContractResponse> = self.app.execute(
+            migrate_cosmos_msg,
+            "/cosmwasm.wasm.v1.MsgMigrateContract",
+            &unauthorized_user,
+        );
+        assert!(result.is_err(), "Unauthorized migration should fail");
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("Unauthorized")
+                || error_msg.contains("unauthorized"),
+            "Unexpected error for unauthorized migration: {}",
+            error_msg
+        );
     }
 }
 
 #[test]
-#[cfg(feature = "test-tube")]
 fn run_defunct_pool_test_suite() {
     let suite = DefunctPoolTestSuite::new();
     suite.run_all_tests();

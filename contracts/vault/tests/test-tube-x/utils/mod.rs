@@ -1,6 +1,5 @@
-#![cfg(feature = "test-tube")]
 use cosmwasm_std::{to_json_binary, Addr, Coin, Uint128};
-use cw20::MinterResponse;
+use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 
 use dexter::asset::{Asset, AssetInfo};
 use dexter::lp_token::InstantiateMsg as TokenInstantiateMsg;
@@ -23,6 +22,7 @@ fn get_wasm_bytes(contract_name: &str) -> Vec<u8> {
 
 pub fn mock_app(init_coins: Vec<Coin>) -> (PersistenceTestApp, SigningAccount) {
     let app = PersistenceTestApp::new();
+
     let signer = app
         .init_account(&init_coins)
         .expect("Default account initialization failed");
@@ -32,6 +32,18 @@ pub fn mock_app(init_coins: Vec<Coin>) -> (PersistenceTestApp, SigningAccount) {
 
 pub fn store_vault_code(app: &PersistenceTestApp, signer: &SigningAccount) -> u64 {
     let wasm_bytes = get_wasm_bytes("dexter_vault");
+    Wasm::new(app)
+        .store_code(&wasm_bytes, None, signer)
+        .unwrap()
+        .data
+        .code_id
+}
+
+pub fn store_old_vault_code(app: &PersistenceTestApp, signer: &SigningAccount) -> u64 {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let old_vault_path = manifest_dir
+        .join("../../artifacts/old_version_artifacts/dexter_vault_v1.1.0.wasm");
+    let wasm_bytes = std::fs::read(old_vault_path).unwrap();
     Wasm::new(app)
         .store_code(&wasm_bytes, None, signer)
         .unwrap()
@@ -67,7 +79,11 @@ pub fn store_weighted_pool_code(app: &PersistenceTestApp, signer: &SigningAccoun
 }
 
 // Initialize a vault with StableSwap, Weighted pools
-pub fn instantiate_contract(app: &PersistenceTestApp, signer: &SigningAccount) -> String {
+pub fn instantiate_contract(
+    app: &PersistenceTestApp,
+    signer: &SigningAccount,
+    fee_collector_address: String,
+) -> String {
     let wasm = Wasm::new(app);
     let weighted_pool_code_id = store_weighted_pool_code(app, signer);
     let stable5_pool_code_id = store_stable5_pool_code(app, signer);
@@ -101,7 +117,7 @@ pub fn instantiate_contract(app: &PersistenceTestApp, signer: &SigningAccount) -
     let vault_init_msg = InstantiateMsg {
         pool_configs: pool_configs.clone(),
         lp_token_code_id: Some(token_code_id),
-        fee_collector: None,
+        fee_collector: Some(fee_collector_address),
         owner: signer.address(),
         auto_stake_impl: dexter::vault::AutoStakeImpl::None,
         pool_creation_fee: PoolCreationFee::default(),
@@ -111,7 +127,7 @@ pub fn instantiate_contract(app: &PersistenceTestApp, signer: &SigningAccount) -
         .instantiate(
             vault_code_id,
             &vault_init_msg,
-            None,
+            Some(&signer.address()),
             Some("vault"),
             &[],
             signer,
@@ -546,4 +562,55 @@ pub fn set_keeper_contract_in_config(
 pub fn query_vault_config(app: &PersistenceTestApp, vault_addr: &str) -> ConfigResponse {
     let wasm = Wasm::new(app);
     wasm.query(vault_addr, &QueryMsg::Config {}).unwrap()
+}
+
+pub fn query_asset_balance(
+    app: &PersistenceTestApp,
+    address: &str,
+    asset_info: &AssetInfo,
+) -> Uint128 {
+    match asset_info {
+        AssetInfo::NativeToken { denom } => {
+            let bank = persistence_test_tube::Bank::new(app);
+            bank.query_balance(
+                &persistence_std::types::cosmos::bank::v1beta1::QueryBalanceRequest {
+                    address: address.to_string(),
+                    denom: denom.clone(),
+                },
+            )
+            .unwrap()
+            .balance
+            .unwrap()
+            .amount
+            .parse::<u128>()
+            .unwrap()
+            .into()
+        }
+        AssetInfo::Token { contract_addr } => {
+            let wasm = Wasm::new(app);
+            let balance: BalanceResponse = wasm
+                .query(
+                    contract_addr.as_str(),
+                    &Cw20QueryMsg::Balance {
+                        address: address.to_string(),
+                    },
+                )
+                .unwrap();
+            balance.balance
+        }
+    }
+}
+
+pub fn query_all_asset_balances(
+    app: &PersistenceTestApp,
+    address: &str,
+    asset_infos: &[AssetInfo],
+) -> Vec<Asset> {
+    asset_infos
+        .iter()
+        .map(|asset_info| Asset {
+            info: asset_info.clone(),
+            amount: query_asset_balance(app, address, asset_info),
+        })
+        .collect()
 }

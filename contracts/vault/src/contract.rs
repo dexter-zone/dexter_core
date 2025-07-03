@@ -41,6 +41,7 @@ const CONTRACT_NAME: &str = "dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CONTRACT_VERSION_V1: &str = "1.0.0";
+const CONTRACT_VERSION_V1_1: &str = "1.1.0";
 
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_LP_REPLY_ID: u64 = 1;
@@ -1973,6 +1974,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
                 (pool_id.to_string().as_bytes(), user.as_str()),
             );
             to_json_binary(&is_refunded)
+        },
+        QueryMsg::RewardScheduleValidationAssets {} => {
+            let reward_schedule_validation_assets = REWARD_SCHEDULE_VALIDATION_ASSETS.load(deps.storage)?;
+            to_json_binary(&reward_schedule_validation_assets)
         }
     }
 }
@@ -2123,13 +2128,14 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
             }
 
             // validate that current version is v1.1
-            if contract_version.version != "1.1" {
+            if contract_version.version != CONTRACT_VERSION_V1_1 {
                 return Err(ContractError::InvalidContractVersionForUpgrade {
                     upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: "1.1".to_string(),
+                    expected: CONTRACT_VERSION_V1_1.to_string(),
                     actual: contract_version.version,
                 });
             }
+            
 
             // Expect reward_schedule_validation_assets to be non-empty on migrate
             let validation_assets = reward_schedule_validation_assets
@@ -2310,7 +2316,8 @@ pub fn execute_defunct_pool(
     let defunct_pool_info = DefunctPoolInfo {
         pool_id,
         lp_token_addr: pool_info.lp_token_addr.clone(),
-        total_assets_at_defunct: pool_assets,
+        total_assets_at_defunct: pool_assets.clone(),
+        current_assets_in_pool: pool_assets,
         total_lp_supply_at_defunct: total_lp_supply,
         defunct_timestamp: env.block.time.seconds(),
         total_refunded_lp_tokens: Uint128::zero(),
@@ -2398,6 +2405,14 @@ pub fn execute_process_refund_batch(
 
         // Create transfer messages for each asset
         for asset in &refund_assets {
+            // Update current assets in pool
+            for current_asset in &mut defunct_pool_info.current_assets_in_pool {
+                if current_asset.info == asset.info {
+                    current_asset.amount = current_asset.amount.checked_sub(asset.amount)?;
+                    break;
+                }
+            }
+
             match &asset.info {
                 dexter::asset::AssetInfo::Token { contract_addr } => {
                     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {

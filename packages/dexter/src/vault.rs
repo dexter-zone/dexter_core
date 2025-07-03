@@ -461,6 +461,9 @@ pub enum QueryMsg {
     /// Checks if a user has been refunded from a defunct pool
     #[returns(bool)]
     IsUserRefunded { pool_id: Uint128, user: String },
+    /// Reward schedule validation assets
+    #[returns(Vec<AssetInfo>)]
+    RewardScheduleValidationAssets {},
 }
 
 /// ## Description -  This struct describes a migration message.
@@ -508,9 +511,15 @@ pub type PoolInfoResponse = PoolInfo;
 pub struct DefunctPoolInfo {
     pub pool_id: Uint128,
     pub lp_token_addr: Addr,
-    pub total_assets_at_defunct: Vec<Asset>,
+    /// Total LP token supply at the moment of defuncting
     pub total_lp_supply_at_defunct: Uint128,
+    /// Total assets in the pool at the moment of defuncting. This is a snapshot and does not change.
+    pub total_assets_at_defunct: Vec<Asset>,
+    /// Current asset balances in the defunct pool. This is updated as refunds are processed.
+    pub current_assets_in_pool: Vec<Asset>,
+    /// Timestamp when the pool was made defunct
     pub defunct_timestamp: u64,
+    /// Total number of LP tokens that have been refunded so far
     pub total_refunded_lp_tokens: Uint128,
 }
 
