@@ -48,6 +48,7 @@ dexter-multi-staking = { path = "../multi_staking"}
 
 cw-multi-test = "0.16.2"
 cw20 = "1.0.1"
+rand = "0.8.5"
 
 [[test]]
 name = "test_tube_x"

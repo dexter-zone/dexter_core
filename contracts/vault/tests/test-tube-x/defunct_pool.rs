@@ -4,6 +4,8 @@ use cosmwasm_std::{coins, Addr, Uint128};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg};
 use persistence_test_tube::{Account, Module, Wasm};
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 
 #[cfg(feature = "test-tube")]
 pub mod utils;
@@ -115,6 +117,7 @@ impl DefunctPoolTestSuite {
         self.test_process_refund_batch_non_defunct_pool();
         self.test_defunct_pool_with_active_reward_schedules();
         self.test_defunct_pool_with_future_reward_schedules();
+        self.test_defunct_pool_multiple_users_refund();
     }
 
     fn test_defunct_check_with_active_pool(&self) {
@@ -208,6 +211,7 @@ impl DefunctPoolTestSuite {
         // First, make the pool defunct
         let defunct_msg = ExecuteMsg::DefunctPool { pool_id };
         let result = wasm.execute(&self.vault_instance, &defunct_msg, &[], &self.owner);
+
         assert!(result.is_ok());
 
         // Now try to join the defunct pool - should fail
@@ -757,6 +761,223 @@ impl DefunctPoolTestSuite {
 
         // This should succeed because there are no future reward schedules in our test environment
         assert!(result.is_ok());
+    }
+
+    fn test_defunct_pool_multiple_users_refund(&self) {
+        let wasm = Wasm::new(&self.app);
+
+        let (_, lp_token_instance, pool_id) = utils::initialize_weighted_pool(
+            &self.app,
+            &self.owner,
+            &self.vault_instance,
+            self.token1.clone(),
+            self.token2.clone(),
+            self.token3.clone(),
+            "denom1".to_string(),
+            "denom2".to_string(),
+        );
+
+        let mut user_addresses = vec![];
+        let mut user_lp_balances: std::collections::HashMap<String, Uint128> =
+            std::collections::HashMap::new();
+
+        // Create 100 users and have them join the pool with different amounts
+        for i in 0..100 {
+            let user = self
+                .app
+                .init_account(&[cosmwasm_std::Coin {
+                    denom: "uusd".to_string(),
+                    amount: Uint128::from(100_000_000_000u128),
+                }])
+                .unwrap();
+            user_addresses.push(user.address().to_string());
+
+            let mut rng = StdRng::seed_from_u64(i as u64);
+            let join_amount_denom1 = Uint128::from(rng.gen_range(100..10000) as u128);
+            let join_amount_denom2 = Uint128::from(rng.gen_range(50..5000) as u128);
+
+            utils::mint_some_tokens(
+                &self.app,
+                &self.owner,
+                &self.token1,
+                join_amount_denom1,
+                user.address().to_string(),
+            );
+            utils::mint_some_tokens(
+                &self.app,
+                &self.owner,
+                &self.token2,
+                join_amount_denom2,
+                user.address().to_string(),
+            );
+
+            utils::increase_token_allowance(
+                &self.app,
+                &user,
+                &self.token1,
+                self.vault_instance.to_string(),
+                join_amount_denom1,
+            );
+            utils::increase_token_allowance(
+                &self.app,
+                &user,
+                &self.token2,
+                self.vault_instance.to_string(),
+                join_amount_denom2,
+            );
+
+            let join_msg = ExecuteMsg::JoinPool {
+                pool_id,
+                recipient: None,
+                assets: Some(vec![
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: "denom1".to_string(),
+                        },
+                        amount: join_amount_denom1,
+                    },
+                    Asset {
+                        info: AssetInfo::NativeToken {
+                            denom: "denom2".to_string(),
+                        },
+                        amount: join_amount_denom2,
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: Addr::unchecked(self.token1.clone()),
+                        },
+                        amount: join_amount_denom1,
+                    },
+                    Asset {
+                        info: AssetInfo::Token {
+                            contract_addr: Addr::unchecked(self.token2.clone()),
+                        },
+                        amount: join_amount_denom2,
+                    },
+                ]),
+                min_lp_to_receive: None,
+                auto_stake: None,
+            };
+
+            let initial_lp_balance: Uint128 = wasm
+                .query_wasm_smart(
+                    lp_token_instance.clone(),
+                    &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
+                )
+                .unwrap();
+
+            let result = wasm.execute(
+                &self.vault_instance,
+                &join_msg,
+                &[
+                    cosmwasm_std::Coin {
+                        denom: "denom1".to_string(),
+                        amount: join_amount_denom1,
+                    },
+                    cosmwasm_std::Coin {
+                        denom: "denom2".to_string(),
+                        amount: join_amount_denom2,
+                    },
+                ],
+                &user,
+            );
+            assert!(result.is_ok(), "Failed to join pool for user {}", i);
+
+            let final_lp_balance: Uint128 = wasm
+                .query_wasm_smart(
+                    lp_token_instance.clone(),
+                    &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
+                )
+                .unwrap();
+            let lp_received = final_lp_balance - initial_lp_balance;
+            user_lp_balances.insert(user.address().to_string(), lp_received);
+        }
+
+        // Store initial pool assets before processing refunds
+        let initial_pool_assets: Vec<Asset> = wasm
+            .query(
+                &self.vault_instance,
+                &QueryMsg::GetDefunctPoolInfo { pool_id },
+            )
+            .unwrap()
+            .unwrap()
+            .total_assets_at_defunct;
+
+        // Make pool defunct
+        let defunct_msg = ExecuteMsg::DefunctPool { pool_id };
+        let result = wasm.execute(&self.vault_instance, &defunct_msg, &[], &self.owner);
+        assert!(result.is_ok());
+
+        // Process refund batches for all users
+        for chunk in user_addresses.chunks(20) {
+            let refund_msg = ExecuteMsg::ProcessRefundBatch {
+                pool_id,
+                user_addresses: chunk.to_vec(),
+            };
+            let result = wasm.execute(&self.vault_instance, &refund_msg, &[], &self.owner);
+            assert!(result.is_ok(), "Failed to process refund batch");
+        }
+
+        // Verify all users are refunded and their LP tokens are burnt, and assets returned
+        for (user_addr, expected_lp_balance_at_defunct) in &user_lp_balances {
+            let is_refunded: bool = wasm
+                .query(
+                    &self.vault_instance,
+                    &QueryMsg::IsUserRefunded {
+                        pool_id,
+                        user: user_addr.clone(),
+                    },
+                )
+                .unwrap();
+            assert!(is_refunded, "User {} not refunded", user_addr);
+
+            let lp_balance: Uint128 = wasm
+                .query_wasm_smart(
+                    lp_token_instance.clone(),
+                    &cw20::Cw20QueryMsg::Balance { address: user_addr.clone() },
+                )
+                .unwrap();
+            assert_eq!(
+                lp_balance,
+                Uint128::zero(),
+                "LP tokens not burnt for user {}",
+                user_addr
+            );
+
+            // Verify user cannot claim twice
+            let refund_msg = ExecuteMsg::ProcessRefundBatch {
+                pool_id,
+                user_addresses: vec![user_addr.clone()],
+            };
+            let result = wasm.execute(&self.vault_instance, &refund_msg, &[], &self.owner);
+            assert!(result.is_err(), "User {} could claim twice", user_addr);
+            let error_msg = result.unwrap_err().to_string();
+            assert!(
+                error_msg.contains("UserAlreadyRefunded")
+                    || error_msg.contains("user already refunded"),
+                "Unexpected error for double claim: {}",
+                error_msg
+            );
+        }
+
+        // Verify no funds left in defunct pool
+        let final_pool_assets: Vec<Asset> = wasm
+            .query(
+                &self.vault_instance,
+                &QueryMsg::GetDefunctPoolInfo { pool_id },
+            )
+            .unwrap()
+            .unwrap()
+            .total_assets_at_defunct;
+
+        for asset in final_pool_assets {
+            assert_eq!(
+                asset.amount,
+                Uint128::zero(),
+                "Funds still left in defunct pool: {:?}",
+                asset
+            );
+        }
     }
 }
 
