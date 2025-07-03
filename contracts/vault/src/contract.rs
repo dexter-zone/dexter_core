@@ -2239,23 +2239,8 @@ fn validate_no_active_reward_schedules(
     if let AutoStakeImpl::Multistaking { contract_addr } = auto_stake_impl {
         // Get reward assets to check from storage, fallback to defaults if not set
         let reward_assets = REWARD_SCHEDULE_VALIDATION_ASSETS
-            .may_load(storage)?
-            .unwrap_or_else(|| {
-                vec![
-                    dexter::asset::AssetInfo::NativeToken {
-                        denom: "uxprt".to_string(),
-                    },
-                    dexter::asset::AssetInfo::NativeToken {
-                        denom: "uatom".to_string(),
-                    },
-                    dexter::asset::AssetInfo::NativeToken {
-                        denom: "uusdc".to_string(),
-                    },
-                    dexter::asset::AssetInfo::NativeToken {
-                        denom: "uosmo".to_string(),
-                    },
-                ]
-            });
+            .load(storage)
+            .map_err(|_| ContractError::NoRewardScheduleValidationAssetsConfigured)?;
 
         // Check each reward asset for active reward schedules
         for asset in reward_assets {

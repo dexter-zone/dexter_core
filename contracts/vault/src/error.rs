@@ -201,6 +201,9 @@ pub enum ContractError {
 
     #[error("All operations are disabled for defunct pools")]
     DefunctPoolOperationDisabled,
+
+    #[error("No reward schedule validation assets configured")]
+    NoRewardScheduleValidationAssetsConfigured,
 }
 
 impl From<OverflowError> for ContractError {
