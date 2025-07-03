@@ -3,11 +3,11 @@
 use cosmwasm_std::{coins, from_json, to_json_binary, Addr, Uint128};
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg};
-use persistence_test_tube::{bank, Account, Module, Runner, RunnerExecuteResult, Wasm};
+use persistence_test_tube::{Account, Module, Runner, RunnerExecuteResult, Wasm};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use persistence_std::types::cosmwasm::wasm::v1::{MsgMigrateContractResponse, MsgMigrateContract, QueryRawContractStateRequest, QueryRawContractStateResponse};
-use cw20::{BalanceResponse, Cw20QueryMsg};
+use cw20::BalanceResponse;
 use cw2::ContractVersion;
 
 pub mod utils;
