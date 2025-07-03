@@ -390,6 +390,9 @@ pub enum ExecuteMsg {
         pool_id: Uint128,
         user_addresses: Vec<String>,
     },
+    UpdateRewardScheduleValidationAssets {
+        assets: Vec<AssetInfo>,
+    }
 }
 
 /// ## Description

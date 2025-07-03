@@ -190,7 +190,10 @@ pub enum ContractError {
     #[error("User has already been refunded from this defunct pool")]
     UserAlreadyRefunded,
 
-    #[error("Cannot defunct pool with active reward schedules")]
+    #[error("Cannot process a refund directly to the multistaking contract")]
+    CannotRefundToMultistakingContract,
+
+    #[error("Pool has active reward schedules and cannot be made defunct")]
     PoolHasActiveRewardSchedules,
 
     #[error("Cannot defunct pool with future reward schedules")]

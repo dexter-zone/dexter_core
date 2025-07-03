@@ -295,6 +295,9 @@ pub fn execute(
             pool_id,
             user_addresses,
         } => execute_process_refund_batch(deps, env, info, pool_id, user_addresses),
+        ExecuteMsg::UpdateRewardScheduleValidationAssets { assets } => {
+            execute_update_reward_schedule_validation_assets(deps, info, assets)
+        }
     }
 }
 
@@ -2372,6 +2375,13 @@ pub fn execute_process_refund_batch(
     for user_addr_str in &user_addresses {
         let user_addr = deps.api.addr_validate(user_addr_str)?;
 
+        // A critical check to ensure that the multistaking contract address is never processed as a user
+        if let Some(ms_addr) = multistaking_addr {
+            if &user_addr == ms_addr {
+                return Err(ContractError::CannotRefundToMultistakingContract);
+            }
+        }
+
         // Check if user already refunded
         validate_user_not_refunded(deps.storage, pool_id, user_addr_str)?;
 
@@ -2476,6 +2486,18 @@ pub fn execute_process_refund_batch(
         );
 
     Ok(Response::new().add_messages(messages).add_event(event))
+}
+
+fn execute_update_reward_schedule_validation_assets(
+    deps: DepsMut,
+    info: MessageInfo,
+    assets: Vec<AssetInfo>,
+) -> Result<Response, ContractError> {
+    validate_authorized_caller(deps.storage, &info.sender)?;
+
+    REWARD_SCHEDULE_VALIDATION_ASSETS.save(deps.storage, &assets)?;
+
+    Ok(Response::new())
 }
 
 // ----------------x----------------x---------------------x-------------------x----------------x-----
