@@ -551,6 +551,7 @@ impl<'a> CreatePoolTestSuite<'a> {
             }),
             auto_stake_impl: None,
             paused: None,
+            reward_schedule_validation_assets: None,
         };
 
         let cosmos_msg = CosmosMsg::Wasm(cosmwasm_std::WasmMsg::Execute {
@@ -689,6 +690,7 @@ impl<'a> CreatePoolTestSuite<'a> {
             }),
             auto_stake_impl: None,
             paused: None,
+            reward_schedule_validation_assets: None,
         };
 
         let cosmos_msg = CosmosMsg::Wasm(cosmwasm_std::WasmMsg::Execute {

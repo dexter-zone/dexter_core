@@ -223,14 +223,20 @@ fn test_execute_defunct_pool_successful() {
             contract_addr: multistaking_instance.clone(),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 
     // add validation assets
-    let update_msg = ExecuteMsg::UpdateRewardScheduleValidationAssets {
-        assets: vec![
+    let update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+        reward_schedule_validation_assets: Some(vec![
             AssetInfo::NativeToken { denom: "uxprt".to_string() },
-        ],
+        ]),
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 
@@ -842,18 +848,23 @@ fn test_defunct_pool_with_active_reward_schedules_fails() {
             contract_addr: multistaking_instance.clone(),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[])
         .unwrap();
 
     // add validation assets
-    let update_msg = ExecuteMsg::UpdateRewardScheduleValidationAssets {
-        assets: vec![AssetInfo::NativeToken {
-            denom: "uxprt".to_string(),
-        }],
+    let update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+        reward_schedule_validation_assets: Some(vec![
+            AssetInfo::NativeToken { denom: "uxprt".to_string() },
+        ]),
     };
-    app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[])
-        .unwrap();
+    app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 
     let (token1, token2, token3) = utils::initialize_3_tokens(&mut app, &owner);
 
@@ -952,15 +963,21 @@ fn test_defunct_pool_with_bonded_lp_tokens_refund() {
             contract_addr: multistaking_instance.clone(),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[])
         .unwrap();
 
     // add validation assets
-    let update_msg = ExecuteMsg::UpdateRewardScheduleValidationAssets {
-        assets: vec![
+    let update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+        reward_schedule_validation_assets: Some(vec![
             AssetInfo::NativeToken { denom: "uusd".to_string() },
-        ],
+        ]),
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 
@@ -1091,15 +1108,21 @@ fn test_defunct_pool_refund_with_various_lock_states() {
             contract_addr: multistaking_instance.clone(),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[])
         .unwrap();
 
     // Add validation assets
-    let update_msg = ExecuteMsg::UpdateRewardScheduleValidationAssets {
-        assets: vec![
+    let update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+        reward_schedule_validation_assets: Some(vec![
             AssetInfo::NativeToken { denom: "uusd".to_string() },
-        ],
+        ]),
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 
@@ -1305,15 +1328,21 @@ fn test_defunct_pool_refund_includes_unclaimed_rewards() {
             contract_addr: multistaking_instance.clone(),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[])
         .unwrap();
 
     // Add validation assets - use uusd since we're not creating reward schedules for it
-    let update_msg = ExecuteMsg::UpdateRewardScheduleValidationAssets {
-        assets: vec![
+    let update_msg = ExecuteMsg::UpdateConfig {
+        lp_token_code_id: None,
+        fee_collector: None,
+        pool_creation_fee: None,
+        auto_stake_impl: None,
+        paused: None,
+        reward_schedule_validation_assets: Some(vec![
             AssetInfo::NativeToken { denom: "uusd".to_string() },
-        ],
+        ]),
     };
     app.execute_contract(owner.clone(), vault_instance.clone(), &update_msg, &[]).unwrap();
 

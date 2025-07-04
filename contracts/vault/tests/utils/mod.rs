@@ -525,7 +525,8 @@ pub fn set_keeper_contract_in_config(app: &mut App, owner: Addr, vault_addr: Add
         fee_collector: Some("fee_collector".to_string()),
         pool_creation_fee: None,
         auto_stake_impl: None,
-        paused: None 
+        paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     app.execute_contract(

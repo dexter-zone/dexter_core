@@ -410,6 +410,7 @@ pub fn setup_test_contracts() -> GovAdminTestSetup {
         pool_creation_fee: None,
         auto_stake_impl: None,
         paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     let cosmos_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {

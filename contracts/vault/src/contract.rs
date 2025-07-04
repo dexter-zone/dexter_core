@@ -162,6 +162,7 @@ pub fn execute(
             pool_creation_fee,
             auto_stake_impl,
             paused,
+            reward_schedule_validation_assets,
         } => execute_update_config(
             deps,
             info,
@@ -170,6 +171,7 @@ pub fn execute(
             pool_creation_fee,
             auto_stake_impl,
             paused,
+            reward_schedule_validation_assets,
         ),
         ExecuteMsg::UpdatePauseInfo {
             update_type,
@@ -295,9 +297,6 @@ pub fn execute(
             pool_id,
             user_addresses,
         } => execute_process_refund_batch(deps, env, info, pool_id, user_addresses),
-        ExecuteMsg::UpdateRewardScheduleValidationAssets { assets } => {
-            execute_update_reward_schedule_validation_assets(deps, info, assets)
-        }
     }
 }
 
@@ -361,6 +360,7 @@ pub fn execute_update_config(
     pool_creation_fee: Option<PoolCreationFee>,
     auto_stake_impl: Option<AutoStakeImpl>,
     paused: Option<PauseInfo>,
+    reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
 ) -> Result<Response, ContractError> {
     let mut config: Config = CONFIG.load(deps.storage)?;
 
@@ -417,6 +417,14 @@ pub fn execute_update_config(
     if let Some(paused) = paused {
         event = event.add_attribute("paused", serde_json_wasm::to_string(&paused).unwrap());
         config.paused = paused;
+    }
+
+    if let Some(assets) = reward_schedule_validation_assets {
+        REWARD_SCHEDULE_VALIDATION_ASSETS.save(deps.storage, &assets)?;
+        event = event.add_attribute(
+            "reward_schedule_validation_assets",
+            serde_json_wasm::to_string(&assets).unwrap(),
+        );
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -2486,18 +2494,6 @@ pub fn execute_process_refund_batch(
         );
 
     Ok(Response::new().add_messages(messages).add_event(event))
-}
-
-fn execute_update_reward_schedule_validation_assets(
-    deps: DepsMut,
-    info: MessageInfo,
-    assets: Vec<AssetInfo>,
-) -> Result<Response, ContractError> {
-    validate_authorized_caller(deps.storage, &info.sender)?;
-
-    REWARD_SCHEDULE_VALIDATION_ASSETS.save(deps.storage, &assets)?;
-
-    Ok(Response::new())
 }
 
 // ----------------x----------------x---------------------x-------------------x----------------x-----

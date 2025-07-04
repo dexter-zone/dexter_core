@@ -555,6 +555,7 @@ pub fn set_keeper_contract_in_config(
             contract_addr: Addr::unchecked(keeper_addr.to_string()),
         }),
         paused: None,
+        reward_schedule_validation_assets: None,
     };
     wasm.execute(vault_addr, &msg, &[], signer).unwrap();
 }

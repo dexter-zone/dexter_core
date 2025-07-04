@@ -112,6 +112,7 @@ pub fn instantiate_contracts(
         pool_creation_fee: None,
         auto_stake_impl: None,
         paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     // send the message

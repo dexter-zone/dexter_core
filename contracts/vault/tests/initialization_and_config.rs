@@ -413,6 +413,7 @@ fn update_config() {
         auto_stake_impl: Some(AutoStakeImpl::Multistaking { contract_addr: Addr::unchecked("multistaking_address") }),
         pool_creation_fee: None,
         paused: Some(pause_info.clone()),
+        reward_schedule_validation_assets: None,
     };
 
     app.execute_contract(

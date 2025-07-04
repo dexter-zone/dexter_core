@@ -126,6 +126,7 @@ fn test_swap() {
         auto_stake_impl: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: true, imbalanced_withdraw: false}),
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
@@ -307,6 +308,7 @@ fn test_swap() {
         auto_stake_impl: None,
         pool_creation_fee: None,
         paused: Some(PauseInfo{deposit: false, swap: false, imbalanced_withdraw: false}),
+        reward_schedule_validation_assets: None,
     };
     app.execute_contract(
         Addr::unchecked(owner.clone()),
