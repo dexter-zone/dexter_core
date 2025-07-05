@@ -24,3 +24,7 @@ codegen-units = 1
 panic = 'abort'
 incremental = false
 overflow-checks = true
+
+
+[patch.'https://github.com/rust-lang/crates.io-index']
+base64ct = { git = "https://github.com/RustCrypto/formats", tag = "base64ct/v1.6.0" }

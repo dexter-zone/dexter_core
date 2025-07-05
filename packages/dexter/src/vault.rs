@@ -297,17 +297,21 @@ pub enum PauseInfoUpdateType {
 /// This struct describes the functions that can be executed in this contract.
 #[cw_serde]
 pub enum ExecuteMsg {
-    // Receives LP Tokens when removing Liquidity
+    /// ## Description
+    /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template
     Receive(Cw20ReceiveMsg),
-    /// Executable only by `config.owner`. Facilitates updating parameters like `config.fee_collector`,
-    /// `config.lp_token_code_id`, etc.
+    /// ## Description
+    /// Updates the configuration of the contract.
+    ///
+    /// ## Executor
+    /// Only the owner can execute this message.
     UpdateConfig {
         lp_token_code_id: Option<u64>,
         fee_collector: Option<String>,
-        // Fee required for creating a new pool.
         pool_creation_fee: Option<PoolCreationFee>,
         auto_stake_impl: Option<AutoStakeImpl>,
         paused: Option<PauseInfo>,
+        reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
     },
     AddAddressToWhitelist { 
         address: String 
@@ -315,8 +319,11 @@ pub enum ExecuteMsg {
     RemoveAddressFromWhitelist { 
         address: String 
     },
-    /// Allows updating pause info of pools to whitelisted addresses.
-    /// Pools can be paused based on a know pool_id or pool_type.
+    /// ## Description
+    /// Updates the pause information for a specific pool or pool type.
+    ///
+    /// ## Executor
+    /// Only the owner can execute this message.
     UpdatePauseInfo {
         update_type: PauseInfoUpdateType,
         pause_info: PauseInfo,
@@ -390,9 +397,6 @@ pub enum ExecuteMsg {
         pool_id: Uint128,
         user_addresses: Vec<String>,
     },
-    UpdateRewardScheduleValidationAssets {
-        assets: Vec<AssetInfo>,
-    }
 }
 
 /// ## Description

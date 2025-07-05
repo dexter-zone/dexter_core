@@ -249,6 +249,7 @@ fn test_pool_creation_whitelist() {
         }),
         auto_stake_impl: None,
         paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     app.execute_contract(
@@ -509,6 +510,7 @@ fn test_pool_creation_fee() {
         }),
         auto_stake_impl: None,
         paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     app.execute_contract(
@@ -557,6 +559,7 @@ fn test_pool_creation_fee() {
         pool_creation_fee: None,
         auto_stake_impl: None,
         paused: None,
+        reward_schedule_validation_assets: None,
     };
 
     app.execute_contract(
