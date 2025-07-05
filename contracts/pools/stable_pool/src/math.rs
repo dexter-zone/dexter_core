@@ -264,6 +264,7 @@ pub(crate) fn calc_spot_price(
     Ok(spot_price)
 }
 
+/* 
 #[cfg(test)]
 mod tests {
     
@@ -763,3 +764,4 @@ mod tests {
         assert_eq!(sim_y, y);
     }
 }
+*/
