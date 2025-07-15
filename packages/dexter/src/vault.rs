@@ -484,7 +484,9 @@ pub enum MigrateMsg {
     V1_2 {
         /// List of reward assets to check when validating reward schedules during defunct operations
         reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
-    }
+    },
+    /// Migration for overflow fix in defunct pool refund calculations
+    V1_2_1 {}
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
