@@ -42,6 +42,7 @@ const CONTRACT_NAME: &str = "dexter-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V1_1: &str = "1.1.0";
+const CONTRACT_VERSION_V1_2: &str = "1.2.0";
 
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_LP_REPLY_ID: u64 = 1;
@@ -2157,6 +2158,27 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
         }
+        MigrateMsg::V1_2_1 {} => {
+            // validate contract name
+            if contract_version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractNameForMigration {
+                    expected: CONTRACT_NAME.to_string(),
+                    actual: contract_version.contract,
+                });
+            }
+
+            // validate that current version is v1.2
+            if contract_version.version != CONTRACT_VERSION_V1_2 {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1_2.to_string(),
+                    actual: contract_version.version,
+                });
+            }
+
+            // No state changes needed for this migration - just the overflow fix in calculate_proportional_refund
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        }
     }
 
     Ok(Response::new()
@@ -2567,12 +2589,7 @@ fn calculate_proportional_refund(
     let mut refund_assets = Vec::new();
 
     for asset in pool_assets {
-        let refund_amount = asset
-            .amount
-            .checked_mul(user_lp_tokens)
-            .map_err(|e| ContractError::Std(StdError::overflow(e)))?
-            .checked_div(total_lp_tokens)
-            .map_err(|e| ContractError::Std(StdError::divide_by_zero(e)))?;
+        let refund_amount = asset.amount.multiply_ratio(user_lp_tokens, total_lp_tokens);
 
         if !refund_amount.is_zero() {
             refund_assets.push(Asset {

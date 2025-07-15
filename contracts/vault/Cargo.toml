@@ -1,6 +1,6 @@
 [package]
 name = "dexter-vault"
-version = "1.2.0"
+version = "1.2.1"
 authors = ["Persistence Labs"]
 edition = "2021"
 description = "Dexter Factory contract - entry point to create new pools. Maintains directory for all pools"

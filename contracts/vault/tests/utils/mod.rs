@@ -229,6 +229,71 @@ pub fn initialize_3_tokens(app: &mut App, owner: &Addr) -> (Addr, Addr, Addr) {
     (token_instance0, token_instance2, token_instance3)
 }
 
+pub fn initialize_3_tokens_with_decimals(app: &mut App, owner: &Addr, decimals: u8) -> (Addr, Addr, Addr) {
+    let token_code_id = store_token_code(app);
+    let token_instance0 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &TokenInstantiateMsg {
+                name: "x_token".to_string(),
+                symbol: "X-Tok".to_string(),
+                decimals,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: owner.to_string(),
+                    cap: None,
+                }),
+                marketing: None,
+            },
+            &[],
+            "x_token",
+            None,
+        )
+        .unwrap();
+    let token_instance1 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &TokenInstantiateMsg {
+                name: "y_token".to_string(),
+                symbol: "y-Tok".to_string(),
+                decimals,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: owner.to_string(),
+                    cap: None,
+                }),
+                marketing: None,
+            },
+            &[],
+            "y_token",
+            None,
+        )
+        .unwrap();
+    let token_instance2 = app
+        .instantiate_contract(
+            token_code_id,
+            Addr::unchecked(owner.clone()),
+            &TokenInstantiateMsg {
+                name: "z_token".to_string(),
+                symbol: "z-Tok".to_string(),
+                decimals,
+                initial_balances: vec![],
+                mint: Some(MinterResponse {
+                    minter: owner.to_string(),
+                    cap: None,
+                }),
+                marketing: None,
+            },
+            &[],
+            "z_token",
+            None,
+        )
+        .unwrap();
+    (token_instance0, token_instance1, token_instance2)
+}
+
 // Mints some Tokens to "to" recipient
 pub fn mint_some_tokens(
     app: &mut App,

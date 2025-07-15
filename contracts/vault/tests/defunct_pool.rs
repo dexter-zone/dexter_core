@@ -1,7 +1,10 @@
 use cosmwasm_std::{coins, Addr, Uint128};
 use cw_multi_test::Executor;
 use dexter::asset::{Asset, AssetInfo};
-use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg};
+use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg, ConfigResponse, PoolInfoResponse, PoolType};
+use dexter::uint128_with_precision;
+use cosmwasm_std::Decimal;
+use cosmwasm_std::to_json_binary;
 
 pub mod utils;
 
@@ -1542,5 +1545,301 @@ fn test_defunct_pool_refund_includes_unclaimed_rewards() {
     println!("✅ CONFIRMED: Pool refunds and unclaimed rewards are properly separated");
     println!("   - Pool refunds: Based on LP token proportions of pool assets");
     println!("   - Unclaimed rewards: Remain in multistaking and must be withdrawn separately");
+}
+
+#[test]
+fn test_defunct_pool_refund_with_large_18_decimal_values() {
+    let owner = Addr::unchecked("owner");
+    let mut app = utils::mock_app(owner.clone(), vec![
+        cosmwasm_std::Coin {
+            denom: "denom1".to_string(),
+            amount: Uint128::from(100_000_000_000u128),
+        },
+        cosmwasm_std::Coin {
+            denom: "denom2".to_string(),
+            amount: Uint128::from(100_000_000_000u128),
+        },
+        cosmwasm_std::Coin {
+            denom: "uusd".to_string(),
+            amount: Uint128::from(100_000_000_000u128),
+        },
+    ]);
+    let vault_instance = utils::instantiate_contract(&mut app, &owner);
+
+    // Initialize the token contracts first
+    let (token1, token2, token3) = utils::initialize_3_tokens(&mut app, &owner);
+
+    // Mint tokens with reasonable amounts for testing
+    let mint_amount = Uint128::from(1_000_000_000_000u128); // 1e12
+    
+    utils::mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token1.clone(),
+        mint_amount,
+        owner.to_string(),
+    );
+    utils::mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token2.clone(),
+        mint_amount,
+        owner.to_string(),
+    );
+    utils::mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        token3.clone(),
+        mint_amount,
+        owner.to_string(),
+    );
+
+    utils::increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token1.clone(),
+        vault_instance.to_string(),
+        mint_amount,
+    );
+    utils::increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token2.clone(),
+        vault_instance.to_string(),
+        mint_amount,
+    );
+    utils::increase_token_allowance(
+        &mut app,
+        owner.clone(),
+        token3.clone(),
+        vault_instance.to_string(),
+        mint_amount,
+    );
+
+    let (_, lp_token_instance, pool_id) = utils::initialize_weighted_pool(
+        &mut app,
+        &owner,
+        vault_instance.clone(),
+        token1.clone(),
+        token2.clone(),
+        token3.clone(),
+        "denom1".to_string(),
+        "denom2".to_string(),
+    );
+
+    // Join pool with reasonable amounts
+    let join_amount = Uint128::from(1_000_000u128); // 1e6
+    let join_msg = ExecuteMsg::JoinPool {
+        pool_id,
+        recipient: None,
+        assets: Some(vec![
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "denom1".to_string(),
+                },
+                amount: join_amount,
+            },
+            Asset {
+                info: AssetInfo::NativeToken {
+                    denom: "denom2".to_string(),
+                },
+                amount: join_amount,
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token2.clone(),
+                },
+                amount: join_amount,
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token1.clone(),
+                },
+                amount: join_amount,
+            },
+            Asset {
+                info: AssetInfo::Token {
+                    contract_addr: token3.clone(),
+                },
+                amount: join_amount,
+            },
+        ]),
+        min_lp_to_receive: None,
+        auto_stake: None,
+    };
+
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &join_msg, &[
+        cosmwasm_std::Coin {
+            denom: "denom1".to_string(),
+            amount: join_amount,
+        },
+        cosmwasm_std::Coin {
+            denom: "denom2".to_string(),
+            amount: join_amount,
+        },
+    ]);
+    assert!(result.is_ok(), "Join pool should succeed");
+
+    // Make the pool defunct
+    let defunct_msg = ExecuteMsg::DefunctPool { pool_id };
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &defunct_msg, &[]);
+    assert!(result.is_ok(), "Defunct pool should succeed");
+
+    // Create a user with a large LP token balance that would cause overflow in the old implementation
+    let user = Addr::unchecked("user_with_large_balance");
+    
+    // Use the exact values from the production error
+    let user_lp_balance = Uint128::from(49542085906941706126u128); // The exact amount from the error
+    let _asset_amount = Uint128::from(3751295874309656386815u128); // The exact asset amount from the error
+    
+    // Mint LP tokens to the user
+    utils::mint_some_tokens(
+        &mut app,
+        owner.clone(),
+        lp_token_instance.clone(),
+        user_lp_balance,
+        user.to_string(),
+    );
+
+    // Process refund batch with the user who has large LP tokens
+    // This should NOT overflow with the multiply_ratio fix
+    let refund_msg = ExecuteMsg::ProcessRefundBatch {
+        pool_id,
+        user_addresses: vec![user.to_string()],
+    };
+
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &refund_msg, &[]);
+    
+    // This should succeed with the multiply_ratio fix, but would fail with overflow in the old implementation
+    assert!(result.is_ok(), "Refund batch should succeed with large values: {:?}", result.unwrap_err());
+    
+    // Verify the user is marked as refunded
+    let is_refunded: bool = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::IsUserRefunded {
+                pool_id,
+                user: user.to_string(),
+            },
+        )
+        .unwrap();
+    
+    assert!(is_refunded, "User should be marked as refunded");
+
+    // Verify the refund amounts are reasonable (not zero, not overflowed)
+    let defunct_pool_info: Option<DefunctPoolInfo> = app
+        .wrap()
+        .query_wasm_smart(&vault_instance, &QueryMsg::GetDefunctPoolInfo { pool_id })
+        .unwrap();
+
+    let defunct_pool_info = defunct_pool_info.unwrap();
+    
+    // Check that some assets were refunded (current assets should be less than total assets)
+    for (total_asset, current_asset) in defunct_pool_info.total_assets_at_defunct.iter()
+        .zip(defunct_pool_info.current_assets_in_pool.iter()) {
+        assert!(current_asset.amount < total_asset.amount, 
+                "Current asset amount should be less than total asset amount after refund");
+        assert!(!current_asset.amount.is_zero(), 
+                "Current asset amount should not be zero after refund");
+    }
+}
+
+#[test]
+fn test_defunct_pool_refund_with_large_18_decimal_values_18dec() {
+    let owner = Addr::unchecked("owner");
+    let mut app = utils::mock_app(owner.clone(), vec![]);
+    let vault_instance = utils::instantiate_contract(&mut app, &owner);
+
+    // Initialize 3 tokens with 18 decimals
+    let token_decimals = 18u8;
+    let (token1, token2, token3) = utils::initialize_3_tokens_with_decimals(&mut app, &owner, token_decimals);
+
+    // Mint large 18-decimal amounts to owner
+    let mint_amount = uint128_with_precision!(1_000_000u128, 18); // 1 million tokens
+    utils::mint_some_tokens(&mut app, owner.clone(), token1.clone(), mint_amount, owner.to_string());
+    utils::mint_some_tokens(&mut app, owner.clone(), token2.clone(), mint_amount, owner.to_string());
+    utils::mint_some_tokens(&mut app, owner.clone(), token3.clone(), mint_amount, owner.to_string());
+
+    utils::increase_token_allowance(&mut app, owner.clone(), token1.clone(), vault_instance.to_string(), mint_amount);
+    utils::increase_token_allowance(&mut app, owner.clone(), token2.clone(), vault_instance.to_string(), mint_amount);
+    utils::increase_token_allowance(&mut app, owner.clone(), token3.clone(), vault_instance.to_string(), mint_amount);
+
+    // Create a weighted pool with only CW20 tokens (no native)
+    let asset_infos = vec![
+        AssetInfo::Token { contract_addr: token1.clone() },
+        AssetInfo::Token { contract_addr: token2.clone() },
+        AssetInfo::Token { contract_addr: token3.clone() },
+    ];
+    let asset_weights = vec![
+        Asset { info: AssetInfo::Token { contract_addr: token1.clone() }, amount: uint128_with_precision!(20u128, 18) },
+        Asset { info: AssetInfo::Token { contract_addr: token2.clone() }, amount: uint128_with_precision!(20u128, 18) },
+        Asset { info: AssetInfo::Token { contract_addr: token3.clone() }, amount: uint128_with_precision!(20u128, 18) },
+    ];
+    let vault_config_res: ConfigResponse = app.wrap().query_wasm_smart(vault_instance.clone(), &QueryMsg::Config {}).unwrap();
+    let next_pool_id = vault_config_res.next_pool_id;
+    let msg = ExecuteMsg::CreatePoolInstance {
+        pool_type: PoolType::Weighted {},
+        asset_infos: asset_infos.clone(),
+        native_asset_precisions: vec![],
+        init_params: Some(
+            to_json_binary(&dexter_weighted_pool::state::WeightedParams {
+                weights: asset_weights,
+                exit_fee: Some(Decimal::from_ratio(1u128, 100u128)),
+            }).unwrap(),
+        ),
+        fee_info: None,
+    };
+    app.execute_contract(owner.clone(), vault_instance.clone(), &msg, &[]).unwrap();
+    let pool_info_res: PoolInfoResponse = app.wrap().query_wasm_smart(vault_instance.clone(), &QueryMsg::GetPoolById { pool_id: next_pool_id }).unwrap();
+    let lp_token_instance = pool_info_res.lp_token_addr;
+    let pool_id = pool_info_res.pool_id;
+
+    // Join pool with 18 decimal assets
+    let join_amount = uint128_with_precision!(1_000u128, 18);
+    let join_msg = ExecuteMsg::JoinPool {
+        pool_id,
+        recipient: None,
+        assets: Some(vec![
+            Asset { info: AssetInfo::Token { contract_addr: token1.clone() }, amount: join_amount },
+            Asset { info: AssetInfo::Token { contract_addr: token2.clone() }, amount: join_amount },
+            Asset { info: AssetInfo::Token { contract_addr: token3.clone() }, amount: join_amount },
+        ]),
+        min_lp_to_receive: None,
+        auto_stake: None,
+    };
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &join_msg, &[]);
+    assert!(result.is_ok(), "Join pool should succeed");
+
+    // Make the pool defunct
+    let defunct_msg = ExecuteMsg::DefunctPool { pool_id };
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &defunct_msg, &[]);
+    assert!(result.is_ok(), "Defunct pool should succeed");
+
+    // Mint a large 18-decimal LP balance to a user (simulate prod overflow)
+    let user = Addr::unchecked("user_with_large_balance");
+    let user_lp_balance = uint128_with_precision!(49_542_085_906_941_706_126u128, 0); // as in prod error
+    utils::mint_some_tokens(&mut app, vault_instance.clone(), lp_token_instance.clone(), user_lp_balance, user.to_string());
+
+    // Process refund batch for the user
+    let refund_msg = ExecuteMsg::ProcessRefundBatch {
+        pool_id,
+        user_addresses: vec![user.to_string()],
+    };
+    let result = app.execute_contract(owner.clone(), vault_instance.clone(), &refund_msg, &[]);
+    assert!(result.is_ok(), "Refund batch should succeed with large values");
+
+    // Verify the user is marked as refunded
+    let is_refunded: bool = app
+        .wrap()
+        .query_wasm_smart(
+            &vault_instance,
+            &QueryMsg::IsUserRefunded {
+                pool_id,
+                user: user.to_string(),
+            },
+        )
+        .unwrap();
+    assert!(is_refunded, "User should be marked as refunded");
 }
 
