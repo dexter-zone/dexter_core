@@ -1985,9 +1985,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
                 (pool_id.to_string().as_bytes(), user.as_str()),
             );
             to_json_binary(&is_refunded)
-        },
+        }
         QueryMsg::RewardScheduleValidationAssets {} => {
-            let reward_schedule_validation_assets = REWARD_SCHEDULE_VALIDATION_ASSETS.load(deps.storage)?;
+            let reward_schedule_validation_assets =
+                REWARD_SCHEDULE_VALIDATION_ASSETS.load(deps.storage)?;
             to_json_binary(&reward_schedule_validation_assets)
         }
     }
@@ -2028,15 +2029,23 @@ pub fn query_pools(
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
     let start = start_after.unwrap_or_default().u128() + 1u128;
 
-    let mut end = start + Uint128::from(limit).u128();
-    if end > config.next_pool_id.u128() {
-        end = config.next_pool_id.u128();
-    }
-
     let mut response: Vec<PoolInfoResponse> = vec![];
-    for pool_id in start..end {
-        response
-            .push(ACTIVE_POOLS.load(deps.storage, Uint128::from(pool_id).to_string().as_bytes())?);
+    let mut collected = 0;
+
+    for pool_id in start..config.next_pool_id.u128() {
+        if collected >= limit as usize {
+            break;
+        }
+
+        // Try to load from ACTIVE_POOLS, skip if not found (could be defunct)
+        if let Ok(maybe_pool_info) =
+            ACTIVE_POOLS.may_load(deps.storage, Uint128::from(pool_id).to_string().as_bytes())
+        {
+            if let Some(pool_info) = maybe_pool_info {
+                response.push(pool_info);
+                collected += 1;
+            }
+        }
     }
 
     Ok(response)
@@ -2146,7 +2155,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
                     actual: contract_version.version,
                 });
             }
-            
 
             // Expect reward_schedule_validation_assets to be non-empty on migrate
             let validation_assets = reward_schedule_validation_assets
