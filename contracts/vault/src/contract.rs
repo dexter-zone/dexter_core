@@ -42,6 +42,7 @@ const CONTRACT_NAME: &str = "dexter-vault";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CONTRACT_VERSION_V1: &str = "1.0.0";
 const CONTRACT_VERSION_V1_1: &str = "1.1.0";
+const CONTRACT_VERSION_V1_2_1: &str = "1.2.1";
 
 /// A `reply` call code ID of sub-message.
 const INSTANTIATE_LP_REPLY_ID: u64 = 1;
@@ -2162,6 +2163,28 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
 
             // Store the reward schedule validation assets
             REWARD_SCHEDULE_VALIDATION_ASSETS.save(deps.storage, &validation_assets)?;
+
+            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+        }
+        MigrateMsg::V1_2_2 {} => {
+            // This migration includes the query_pools fix for defunct pools
+
+            // validate contract name
+            if contract_version.contract != CONTRACT_NAME {
+                return Err(ContractError::InvalidContractNameForMigration {
+                    expected: CONTRACT_NAME.to_string(),
+                    actual: contract_version.contract,
+                });
+            }
+
+            // validate that current version is v1.2.1
+            if contract_version.version != CONTRACT_VERSION_V1_2_1 {
+                return Err(ContractError::InvalidContractVersionForUpgrade {
+                    upgrade_version: CONTRACT_VERSION.to_string(),
+                    expected: CONTRACT_VERSION_V1_2_1.to_string(),
+                    actual: contract_version.version,
+                });
+            }
 
             set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
         }
