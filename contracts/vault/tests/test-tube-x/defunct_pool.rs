@@ -1188,7 +1188,7 @@ impl DefunctPoolTestSuite {
             .unwrap();
 
         let contract_info: ContractVersion = from_json(&contract_info_res.data).unwrap();
-        assert_eq!(contract_info.version, "1.2.0");
+        assert_eq!(contract_info.version, "1.2.2");
         assert_eq!(contract_info.contract, "dexter-vault");
 
         // Verify config after successful migration
