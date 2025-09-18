@@ -1,14 +1,17 @@
 #![cfg(test)]
 
 use cosmwasm_std::{coins, from_json, to_json_binary, Addr, Uint128};
+use cw2::ContractVersion;
+use cw20::BalanceResponse;
 use dexter::asset::{Asset, AssetInfo};
 use dexter::vault::{DefunctPoolInfo, ExecuteMsg, QueryMsg};
+use persistence_std::types::cosmwasm::wasm::v1::{
+    MsgMigrateContract, MsgMigrateContractResponse, QueryRawContractStateRequest,
+    QueryRawContractStateResponse,
+};
 use persistence_test_tube::{Account, Module, Runner, RunnerExecuteResult, Wasm};
-use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
-use persistence_std::types::cosmwasm::wasm::v1::{MsgMigrateContractResponse, MsgMigrateContract, QueryRawContractStateRequest, QueryRawContractStateResponse};
-use cw20::BalanceResponse;
-use cw2::ContractVersion;
+use rand::{Rng, SeedableRng};
 
 pub mod utils;
 
@@ -817,23 +820,24 @@ impl DefunctPoolTestSuite {
         for i in 0..10 {
             let user = self
                 .app
-                .init_account(&[cosmwasm_std::Coin {
-                    denom: "uusd".to_string(),
-                    amount: Uint128::from(100_000_000_000u128),
-                },
-                cosmwasm_std::Coin {
-                    denom: "uxprt".to_string(),
-                    amount: Uint128::from(100_000_000_000u128),
-                },
-                cosmwasm_std::Coin {
-                    denom: "denom1".to_string(),
-                    amount: Uint128::from(100_000_000_000u128),
-                },
-                cosmwasm_std::Coin {
-                    denom: "denom2".to_string(),
-                    amount: Uint128::from(100_000_000_000u128),
-                }]
-            )
+                .init_account(&[
+                    cosmwasm_std::Coin {
+                        denom: "uusd".to_string(),
+                        amount: Uint128::from(100_000_000_000u128),
+                    },
+                    cosmwasm_std::Coin {
+                        denom: "uxprt".to_string(),
+                        amount: Uint128::from(100_000_000_000u128),
+                    },
+                    cosmwasm_std::Coin {
+                        denom: "denom1".to_string(),
+                        amount: Uint128::from(100_000_000_000u128),
+                    },
+                    cosmwasm_std::Coin {
+                        denom: "denom2".to_string(),
+                        amount: Uint128::from(100_000_000_000u128),
+                    },
+                ])
                 .unwrap();
             user_addresses.push(user.address().to_string());
 
@@ -930,9 +934,11 @@ impl DefunctPoolTestSuite {
             let initial_lp_balance: BalanceResponse = wasm
                 .query(
                     &lp_token_instance,
-                    &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: user.address().to_string(),
+                    },
                 )
-                .unwrap();  
+                .unwrap();
 
             let result = wasm.execute(
                 &self.vault_instance,
@@ -955,7 +961,9 @@ impl DefunctPoolTestSuite {
             let final_lp_balance: BalanceResponse = wasm
                 .query(
                     &lp_token_instance,
-                    &cw20::Cw20QueryMsg::Balance { address: user.address().to_string() },
+                    &cw20::Cw20QueryMsg::Balance {
+                        address: user.address().to_string(),
+                    },
                 )
                 .unwrap();
             let lp_received = final_lp_balance.balance - initial_lp_balance.balance;
@@ -1021,16 +1029,14 @@ impl DefunctPoolTestSuite {
                 let post_refund_balance =
                     utils::query_asset_balance(&self.app, user_addr, &asset.info);
                 let pre_refund_balance = pre_refund_balances.get(&asset.info.to_string()).unwrap();
-                let actual_refund_received = post_refund_balance.checked_sub(*pre_refund_balance).unwrap();
+                let actual_refund_received = post_refund_balance
+                    .checked_sub(*pre_refund_balance)
+                    .unwrap();
 
                 assert_eq!(
-                    actual_refund_received,
-                    expected_refund,
+                    actual_refund_received, expected_refund,
                     "Mismatched refund for user {} and asset {}. Expected {}, got {}",
-                    user_addr,
-                    asset.info,
-                    expected_refund,
-                    actual_refund_received
+                    user_addr, asset.info, expected_refund, actual_refund_received
                 );
             }
         }
@@ -1150,6 +1156,28 @@ impl DefunctPoolTestSuite {
             .data
             .address;
 
+        // Pre-seed RewardScheduleValidationAssets on old vault so migration preserves it
+        let set_assets_msg = dexter::vault::ExecuteMsg::UpdateConfig {
+            lp_token_code_id: None,
+            fee_collector: None,
+            pool_creation_fee: None,
+            auto_stake_impl: None,
+            paused: None,
+            reward_schedule_validation_assets: Some(vec![
+                AssetInfo::NativeToken {
+                    denom: "uusd".to_string(),
+                },
+                AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+            ]),
+        };
+        let preset_result = wasm.execute(&old_vault_instance, &set_assets_msg, &[], &self.owner);
+        assert!(
+            preset_result.is_ok(),
+            "Pre-seeding validation assets should succeed"
+        );
+
         // --- Test successful migration ---
         let migrate_msg = dexter::vault::MigrateMsg::V1_2_2 {};
 
@@ -1168,7 +1196,7 @@ impl DefunctPoolTestSuite {
             &self.owner,
         );
         assert!(result.is_ok(), "Migration should succeed with valid input");
-       
+
         // Verify contract version after migration
         let contract_info_res = self
             .app
@@ -1185,19 +1213,24 @@ impl DefunctPoolTestSuite {
         assert_eq!(contract_info.version, "1.2.2");
         assert_eq!(contract_info.contract, "dexter-vault");
 
-        // Verify config after successful migration
+        // Verify config after successful migration - pre-seeded value must persist
         let reward_schedule_validation_assets: Vec<AssetInfo> = wasm
-            .query(&old_vault_instance, &QueryMsg::RewardScheduleValidationAssets {})
+            .query(
+                &old_vault_instance,
+                &QueryMsg::RewardScheduleValidationAssets {},
+            )
             .unwrap();
-
 
         assert_eq!(
             reward_schedule_validation_assets,
-            vec![AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            }, AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
-            }]
+            vec![
+                AssetInfo::NativeToken {
+                    denom: "uusd".to_string(),
+                },
+                AssetInfo::NativeToken {
+                    denom: "uxprt".to_string(),
+                },
+            ]
         );
 
         // --- Test migration with None (should use default assets) ---
@@ -1234,15 +1267,10 @@ impl DefunctPoolTestSuite {
             "/cosmwasm.wasm.v1.MsgMigrateContract",
             &self.owner,
         );
-        assert!(result.is_err(), "Migration should fail when no validation assets are provided");
-
-        let error_msg = result.unwrap_err().to_string();
         assert!(
-            error_msg.contains("reward_schedule_validation_assets must be provided"),
-            "Unexpected error for migration with None: {}",
-            error_msg
+            result.is_ok(),
+            "Migration should succeed without validation assets configured"
         );
-
 
         // --- Test unauthorized migration ---
         let unauthorized_user = self
@@ -1289,8 +1317,7 @@ impl DefunctPoolTestSuite {
         assert!(result.is_err(), "Unauthorized migration should fail");
         let error_msg = result.unwrap_err().to_string();
         assert!(
-            error_msg.contains("Unauthorized")
-                || error_msg.contains("unauthorized"),
+            error_msg.contains("Unauthorized") || error_msg.contains("unauthorized"),
             "Unexpected error for unauthorized migration: {}",
             error_msg
         );

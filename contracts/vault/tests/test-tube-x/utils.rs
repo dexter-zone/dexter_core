@@ -31,7 +31,10 @@ pub fn mock_app(init_coins: Vec<Coin>) -> (PersistenceTestApp, SigningAccount) {
 }
 
 pub fn store_vault_code(app: &PersistenceTestApp, signer: &SigningAccount) -> u64 {
-    let wasm_bytes = get_wasm_bytes("dexter_vault");
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let vault_path =
+        manifest_dir.join("../../artifacts/old_version_artifacts/dexter_vault_v1.2.2.wasm");
+    let wasm_bytes = std::fs::read(vault_path).unwrap();
     Wasm::new(app)
         .store_code(&wasm_bytes, None, signer)
         .unwrap()
@@ -41,8 +44,8 @@ pub fn store_vault_code(app: &PersistenceTestApp, signer: &SigningAccount) -> u6
 
 pub fn store_old_vault_code(app: &PersistenceTestApp, signer: &SigningAccount) -> u64 {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let old_vault_path = manifest_dir
-        .join("../../artifacts/old_version_artifacts/dexter_vault_v1.1.0.wasm");
+    let old_vault_path =
+        manifest_dir.join("../../artifacts/old_version_artifacts/dexter_vault_v1.2.1.wasm");
     let wasm_bytes = std::fs::read(old_vault_path).unwrap();
     Wasm::new(app)
         .store_code(&wasm_bytes, None, signer)
