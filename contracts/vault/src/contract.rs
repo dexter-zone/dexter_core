@@ -40,8 +40,6 @@ use dexter::pool;
 const CONTRACT_NAME: &str = "dexter-vault";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const CONTRACT_VERSION_V1: &str = "1.0.0";
-const CONTRACT_VERSION_V1_1: &str = "1.1.0";
 const CONTRACT_VERSION_V1_2_1: &str = "1.2.1";
 
 /// A `reply` call code ID of sub-message.
@@ -2097,75 +2095,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
     let contract_version = get_contract_version(deps.storage)?;
 
     match msg {
-        MigrateMsg::V1_1 {
-            updated_pool_type_configs,
-        } => {
-            // validate contract name
-            if contract_version.contract != CONTRACT_NAME {
-                return Err(ContractError::InvalidContractNameForMigration {
-                    expected: CONTRACT_NAME.to_string(),
-                    actual: contract_version.contract,
-                });
-            }
-
-            // validate that current version is v1.0
-            if contract_version.version != CONTRACT_VERSION_V1 {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V1.to_string(),
-                    actual: contract_version.version,
-                });
-            }
-
-            // update pool type configs to new values. This makes sure we instantiate new pools with the new configs particularly the
-            // Code ID for each pool type which has been updated to a new value with the new version of the pool contracts
-            for pool_type_config in updated_pool_type_configs {
-                // Check if code id is valid
-                if pool_type_config.code_id == 0 {
-                    return Err(ContractError::InvalidCodeId {});
-                }
-                // validate fee bps limits
-                if !pool_type_config.default_fee_info.valid_fee_info() {
-                    return Err(ContractError::InvalidFeeInfo {});
-                }
-                REGISTRY.save(
-                    deps.storage,
-                    pool_type_config.pool_type.to_string(),
-                    &pool_type_config,
-                )?;
-            }
-
-            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-        }
-        MigrateMsg::V1_2 {
-            reward_schedule_validation_assets,
-        } => {
-            // validate contract name
-            if contract_version.contract != CONTRACT_NAME {
-                return Err(ContractError::InvalidContractNameForMigration {
-                    expected: CONTRACT_NAME.to_string(),
-                    actual: contract_version.contract,
-                });
-            }
-
-            // validate that current version is v1.1
-            if contract_version.version != CONTRACT_VERSION_V1_1 {
-                return Err(ContractError::InvalidContractVersionForUpgrade {
-                    upgrade_version: CONTRACT_VERSION.to_string(),
-                    expected: CONTRACT_VERSION_V1_1.to_string(),
-                    actual: contract_version.version,
-                });
-            }
-
-            // Expect reward_schedule_validation_assets to be non-empty on migrate
-            let validation_assets = reward_schedule_validation_assets
-                .expect("reward_schedule_validation_assets must be provided");
-
-            // Store the reward schedule validation assets
-            REWARD_SCHEDULE_VALIDATION_ASSETS.save(deps.storage, &validation_assets)?;
-
-            set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-        }
         MigrateMsg::V1_2_2 {} => {
             // This migration includes the query_pools fix for defunct pools
 
