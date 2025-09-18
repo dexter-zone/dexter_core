@@ -1151,13 +1151,7 @@ impl DefunctPoolTestSuite {
             .address;
 
         // --- Test successful migration ---
-        let migrate_msg = dexter::vault::MigrateMsg::V1_2 {
-            reward_schedule_validation_assets: Some(vec![AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            }, AssetInfo::NativeToken {
-                denom: "uxprt".to_string(),
-            }])
-        };
+        let migrate_msg = dexter::vault::MigrateMsg::V1_2_2 {};
 
         // We need to send a message directly on the persistence test app since we have runner in scope, we can just send the whole message
 
@@ -1228,9 +1222,7 @@ impl DefunctPoolTestSuite {
             .data
             .address;
 
-        let migrate_msg_none = dexter::vault::MigrateMsg::V1_2 { 
-            reward_schedule_validation_assets: None
-        };
+        let migrate_msg_none = dexter::vault::MigrateMsg::V1_2_2 {};
         let migrate_cosmos_msg = MsgMigrateContract {
             contract: old_vault_instance2.to_string(),
             code_id: new_vault_code_id,
