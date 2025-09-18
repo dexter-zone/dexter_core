@@ -476,15 +476,8 @@ pub enum QueryMsg {
 /// ## Description -  This struct describes a migration message.
 #[cw_serde]
 pub enum MigrateMsg {
-
-    V1_1 {
-        updated_pool_type_configs: Vec<PoolTypeConfig>,
-    },
-    /// Migration for defunct pool functionality and configurable reward schedule validation assets
-    V1_2 {
-        /// List of reward assets to check when validating reward schedules during defunct operations
-        reward_schedule_validation_assets: Option<Vec<AssetInfo>>,
-    }
+    /// Migration from V1_2_1 to V1_2_2 - includes query_pools fix for defunct pools
+    V1_2_2 {},
 }
 
 // ----------------x----------------x----------------x----------------x----------------x----------------
